@@ -1,12 +1,14 @@
 {
   "name": "wsrpc",
-  "description": "It's like tRPC but... with JSON Schema Support, bidirectional streaming and support for service multiplexing... all over WebSockets",
+  "description": "It's like tRPC but... with JSON Schema Support, bidirectional streaming and support for service multiplexing. Transport agnostic!",
   "version": "1.0.0",
   "main": "dist/index.js",
   "type": "module",
   "devDependencies": {
     "@types/jest": "^29.5.4",
+    "@types/ws": "^8.5.5",
     "jest": "^29.6.4",
+    "prettier": "^3.0.3",
     "ts-jest": "^29.1.1",
     "tsup": "^7.2.0",
     "typescript": "^5.2.2"
@@ -22,5 +24,20 @@
     "jsonschema"
   ],
   "author": "Jacky Zhao",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@sinclair/typebox": "^0.31.8",
+    "ws": "^8.13.0"
+  },
+  "prettier": {
+    "printWidth": 100,
+    "tabWidth": 2,
+    "singleQuote": true,
+    "trailingComma": "all",
+    "bracketSpacing": true,
+    "semi": true,
+    "useTabs": false,
+    "parser": "typescript",
+    "arrowParens": "always"
+  }
 }
