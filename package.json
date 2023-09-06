@@ -27,6 +27,7 @@
   "license": "MIT",
   "dependencies": {
     "@sinclair/typebox": "^0.31.8",
+    "it-pushable": "^3.2.1",
     "ws": "^8.13.0"
   },
   "prettier": {
