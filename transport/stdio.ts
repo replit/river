@@ -1,5 +1,4 @@
 import { NaiveJsonCodec } from '../codec/json';
-import { Codec } from '../codec/types';
 import { OpaqueTransportMessage, TransportClientId } from './message';
 import { Transport } from './types';
 import readline from 'readline';

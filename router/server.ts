@@ -11,8 +11,9 @@ export interface Server<Services extends Record<string, Service>> {
 }
 
 interface ProcStream {
-  incoming: AsyncIterable<Record<string, unknown>>;
-  outgoing: Pushable<Record<string, unknown>>;
+  incoming: Pushable<Static<TransportMessage<TObject>>>;
+  outgoing: Pushable<Static<TransportMessage<TObject>>>;
+  doneCtx: Promise<unknown>;
 }
 
 export async function createServer<Services extends Record<string, Service>>(
@@ -25,20 +26,24 @@ export async function createServer<Services extends Record<string, Service>>(
     for (const [procedureName, proc] of Object.entries(service.procedures)) {
       const procedure = proc as Procedure<object, 'stream' | 'rpc', TObject, TObject>;
       if (procedure.type === 'stream') {
+        const incoming: ProcStream['incoming'] = pushable({ objectMode: true });
+        const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
         const procStream: ProcStream = {
-          incoming: pushable<Record<string, unknown>>({ objectMode: true }),
-          outgoing: pushable<Record<string, unknown>>({ objectMode: true }),
+          incoming,
+          outgoing,
+          doneCtx: Promise.all([
+            // processing the actual procedure
+            procedure.handler(service.state, incoming, outgoing),
+            // sending outgoing messages back to client
+            (async () => {
+              for await (const response of outgoing) {
+                transport.send(response);
+              }
+            })(),
+          ]),
         };
 
         streamMap.set(`${serviceName}:${procedureName}`, procStream);
-        const responseStream = await procedure.handler(
-          service.state,
-          procStream.incoming,
-          procStream.outgoing,
-        );
-        for await (const response of responseStream) {
-          transport.send(response);
-        }
       }
     }
   }
@@ -59,16 +64,17 @@ export async function createServer<Services extends Record<string, Service>>(
           TObject
         >;
 
-        if (procedure.type === 'rpc' && Value.Check(procedure.input, msg.payload)) {
+        const inputMessage = msg as Static<TransportMessage<(typeof procedure)['input']>>;
+        if (procedure.type === 'rpc' && Value.Check(procedure.input, inputMessage.payload)) {
           // synchronous rpc
-          const response = await procedure.handler(
-            service.state,
-            msg as Static<TransportMessage<(typeof procedure)['input']>>,
-          );
+          const response = await procedure.handler(service.state, inputMessage);
 
           transport.send(response);
           return;
-        } else if (procedure.type === 'stream' && Value.Check(procedure.input, msg.payload)) {
+        } else if (
+          procedure.type === 'stream' &&
+          Value.Check(procedure.input, inputMessage.payload)
+        ) {
           // async stream, push to associated stream. code above handles sending responses
           // back to the client
           const streams = streamMap.get(`${msg.serviceName}:${msg.procedureName}`);
@@ -77,7 +83,7 @@ export async function createServer<Services extends Record<string, Service>>(
             return;
           }
 
-          streams.outgoing.push(msg.payload);
+          streams.incoming.push(inputMessage);
           return;
         } else {
           // TODO: log invalid payload
@@ -90,8 +96,15 @@ export async function createServer<Services extends Record<string, Service>>(
   return {
     services,
     async close() {
-      streamMap.forEach((stream) => stream.end());
+      // remove listener
       transport.removeMessageListener(handler);
+
+      // end all existing streams
+      for (const [_, stream] of streamMap) {
+        stream.incoming.end();
+        stream.outgoing.end();
+        await stream.doneCtx;
+      }
     },
   };
 }

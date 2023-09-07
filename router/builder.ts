@@ -5,7 +5,10 @@ import { TransportMessage } from '../transport/message';
 export interface Service<
   Name extends string = string,
   State extends object = object,
-  Procs extends Record<string, unknown> = Record<string, unknown>,
+  Procs extends Record<string, unknown> = Record<
+    string,
+    Procedure<object, 'stream' | 'rpc', TObject, TObject>
+  >,
 > {
   name: Name;
   state: State;

@@ -4,6 +4,12 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "type": "module",
+  "dependencies": {
+    "@sinclair/typebox": "^0.31.8",
+    "it-pushable": "^3.2.1",
+    "nanoid": "^4.0.2",
+    "ws": "^8.13.0"
+  },
   "devDependencies": {
     "@types/ws": "^8.5.5",
     "prettier": "^3.0.3",
@@ -23,12 +29,6 @@
   ],
   "author": "Jacky Zhao",
   "license": "MIT",
-  "dependencies": {
-    "@sinclair/typebox": "^0.31.8",
-    "it-pushable": "^3.2.1",
-    "nanoid": "^4.0.2",
-    "ws": "^8.13.0"
-  },
   "prettier": {
     "printWidth": 100,
     "tabWidth": 2,
