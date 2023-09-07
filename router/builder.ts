@@ -1,10 +1,11 @@
 import { TObject, Static } from '@sinclair/typebox';
 import { Pushable } from 'it-pushable';
+import { TransportMessage } from '../transport/message';
 
-interface Service<
-  Name extends string,
-  State extends object,
-  Procs extends Record<string, unknown>,
+export interface Service<
+  Name extends string = string,
+  State extends object = object,
+  Procs extends Record<string, unknown> = Record<string, unknown>,
 > {
   name: Name;
   state: State;
@@ -13,21 +14,29 @@ interface Service<
 
 export type Procedure<
   State extends Object,
+  Ty extends 'stream' | 'rpc',
   I extends TObject,
   O extends TObject,
-  SI extends TObject,
-  SO extends TObject,
-> = {
-  input?: I;
-  output?: O;
-  streamInput?: SI;
-  streamOutput?: SO;
-  rpcHandler?: (prevState: State, input: Static<I>) => Promise<Static<O>>;
-  streamHandler?: (
-    prevState: State,
-    input: AsyncIterable<Static<SI>>,
-  ) => Promise<Pushable<Static<SO>>>;
-};
+> = Ty extends 'rpc'
+  ? {
+      input: I;
+      output: O;
+      handler: (
+        state: State,
+        input: Static<TransportMessage<I>>,
+      ) => Promise<Static<TransportMessage<O>>>;
+      type: 'rpc';
+    }
+  : {
+      input: I;
+      output: O;
+      handler: (
+        state: State,
+        input: AsyncIterable<Static<TransportMessage<I>>>,
+        output: Pushable<Static<TransportMessage<O>>>,
+      ) => Promise<void>;
+      type: 'stream';
+    };
 
 export class ServiceBuilder<T extends Service<string, object, Record<string, unknown>>> {
   private readonly schema: T;
@@ -54,14 +63,13 @@ export class ServiceBuilder<T extends Service<string, object, Record<string, unk
 
   defineProcedure<
     ProcName extends string,
+    Ty extends 'stream' | 'rpc',
     I extends TObject,
     O extends TObject,
-    SI extends TObject,
-    SO extends TObject,
-    ProcEntry = { [k in ProcName]: Procedure<T['state'], I, O, SI, SO> },
+    ProcEntry = { [k in ProcName]: Procedure<T['state'], Ty, I, O> },
   >(
     procName: ProcName,
-    procDef: Procedure<T['state'], I, O, SI, SO>,
+    procDef: Procedure<T['state'], Ty, I, O>,
   ): ServiceBuilder<{
     name: T['name'];
     state: T['state'];
@@ -84,7 +92,7 @@ export class ServiceBuilder<T extends Service<string, object, Record<string, unk
     });
   }
 
-  static register<Name extends string>(
+  static create<Name extends string>(
     name: Name,
   ): ServiceBuilder<{
     name: Name;

@@ -1,11 +1,7 @@
-import type WebSocket from "ws";
-import {
-  type MessageId,
-  Transport,
-  type TransportClientId,
-  type TransportMessage,
-} from "./types";
-import { NaiveJsonCodec } from "../codec/json";
+import type WebSocket from 'ws';
+import { Transport } from './types';
+import { NaiveJsonCodec } from '../codec/json';
+import { MessageId, OpaqueTransportMessage, TransportClientId } from './message';
 
 // TODO should answer:
 // - how do we handle graceful client disconnects? (i.e. close tab)
@@ -18,10 +14,10 @@ export class WebSocketTransport extends Transport {
   constructor(ws: WebSocket, clientId: TransportClientId) {
     super(NaiveJsonCodec, clientId);
     this.ws = ws;
-    ws.on("message", (msg) => this.onMessage(msg.toString()));
+    ws.on('message', (msg) => this.onMessage(msg.toString()));
   }
 
-  send(msg: TransportMessage): MessageId {
+  send(msg: OpaqueTransportMessage): MessageId {
     const id = msg.id;
     this.ws.send(this.codec.toStringBuf(msg));
     return id;

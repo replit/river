@@ -1,22 +1,20 @@
 {
-  "name": "wsrpc",
+  "name": "river",
   "description": "It's like tRPC but... with JSON Schema Support, bidirectional streaming and support for service multiplexing. Transport agnostic!",
   "version": "1.0.0",
   "main": "dist/index.js",
   "type": "module",
   "devDependencies": {
-    "@types/jest": "^29.5.4",
     "@types/ws": "^8.5.5",
-    "jest": "^29.6.4",
     "prettier": "^3.0.3",
-    "ts-jest": "^29.1.1",
     "tsup": "^7.2.0",
-    "typescript": "^5.2.2"
+    "typescript": "^5.2.2",
+    "vitest": "^0.34.3"
   },
   "scripts": {
     "dev": "tsup index.ts --watch --onSuccess \"node dist/index.js\"",
     "build": "tsup index.ts --minify",
-    "test": "jest"
+    "test": "vitest"
   },
   "keywords": [
     "rpc",
@@ -28,6 +26,7 @@
   "dependencies": {
     "@sinclair/typebox": "^0.31.8",
     "it-pushable": "^3.2.1",
+    "nanoid": "^4.0.2",
     "ws": "^8.13.0"
   },
   "prettier": {

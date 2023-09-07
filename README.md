@@ -1,4 +1,4 @@
-# wsrpc - WebSocket Remote Procedure Calls
+# river - Streaming Remote Procedure Calls
 
 It's like tRPC but...
 - with JSON Schema Support

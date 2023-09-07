@@ -1,33 +1,20 @@
-import { type Static, Type } from "@sinclair/typebox";
-import { Codec } from "../codec/types";
-import { Value } from "@sinclair/typebox/value";
-
-// look at https://github.com/websockets/ws#use-the-nodejs-streams-api for a duplex stream we can use
-export const TransportMessageSchema = Type.Object({
-  id: Type.String(),
-  from: Type.String(),
-  to: Type.Union([Type.String(), Type.Literal("broadcast")]),
-  serviceName: Type.String(),
-  procedureName: Type.String(),
-  payload: Type.Unknown(), // this is generic but gets narrowed at the service level
-});
-
-export type MessageId = string;
-
-export type TransportMessage = Static<typeof TransportMessageSchema>;
-export type TransportClientId = "SERVER" | string;
-export const TransportAckSchema = Type.Object({
-  from: Type.String(),
-  replyTo: Type.String(),
-});
-
-export type TransportMessageAck = Static<typeof TransportAckSchema>;
+import { Codec } from '../codec/types';
+import { Value } from '@sinclair/typebox/value';
+import {
+  MessageId,
+  OpaqueTransportMessage,
+  OpaqueTransportMessageSchema,
+  TransportAckSchema,
+  TransportClientId,
+  TransportMessageAck,
+  ack,
+} from './message';
 
 export abstract class Transport {
   codec: Codec;
   clientId: TransportClientId;
-  handlers: Set<(msg: TransportMessage) => void>;
-  sendBuffer: Map<MessageId, TransportMessage>;
+  handlers: Set<(msg: OpaqueTransportMessage) => void>;
+  sendBuffer: Map<MessageId, OpaqueTransportMessage>;
 
   constructor(codec: Codec, clientId: TransportClientId) {
     this.handlers = new Set();
@@ -43,9 +30,9 @@ export abstract class Transport {
       if (this.sendBuffer.has(parsedMsg.replyTo)) {
         this.sendBuffer.delete(parsedMsg.replyTo);
       }
-    } else if (Value.Check(TransportMessageSchema, parsedMsg)) {
+    } else if (Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
       // ignore if not for us
-      if (parsedMsg.to !== this.clientId && parsedMsg.to !== "broadcast") {
+      if (parsedMsg.to !== this.clientId && parsedMsg.to !== 'broadcast') {
         return;
       }
 
@@ -54,24 +41,18 @@ export abstract class Transport {
         handler(parsedMsg);
       }
 
-      // send ack
-      const ack: TransportMessageAck = {
-        from: this.clientId,
-        replyTo: parsedMsg.id,
-      };
-
-      this.send(ack);
+      this.send(ack(parsedMsg));
     }
   }
 
-  addMessageListener(handler: (msg: TransportMessage) => void): void {
+  addMessageListener(handler: (msg: OpaqueTransportMessage) => void): void {
     this.handlers.add(handler);
   }
 
-  removeMessageListener(handler: (msg: TransportMessage) => void): void {
+  removeMessageListener(handler: (msg: OpaqueTransportMessage) => void): void {
     this.handlers.delete(handler);
   }
 
-  abstract send(msg: TransportMessage | TransportMessageAck): MessageId;
+  abstract send(msg: OpaqueTransportMessage | TransportMessageAck): MessageId;
   abstract close(): Promise<void>;
 }
