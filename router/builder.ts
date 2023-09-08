@@ -1,4 +1,4 @@
-import { TObject, Static } from '@sinclair/typebox';
+import { TObject, Static, Type } from '@sinclair/typebox';
 import { Pushable } from 'it-pushable';
 import { TransportMessage } from '../transport/message';
 
@@ -15,6 +15,25 @@ export interface Service<
   name: Name;
   state: State;
   procedures: Procs;
+}
+
+export function serializeService(s: Service): object {
+  return {
+    name: s.name,
+    state: s.state,
+    procedures: Object.fromEntries(
+      Object.entries<Procedure<object, ValidProcType, TObject, TObject>>(s.procedures).map(
+        ([procName, procDef]) => [
+          procName,
+          {
+            input: Type.Strict(procDef.input),
+            output: Type.Strict(procDef.output),
+            type: procDef.type,
+          },
+        ],
+      ),
+    ),
+  };
 }
 
 // extract helpers
