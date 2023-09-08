@@ -2,22 +2,42 @@ import { TObject, Static } from '@sinclair/typebox';
 import { Pushable } from 'it-pushable';
 import { TransportMessage } from '../transport/message';
 
+export type ValidProcType = 'stream' | 'rpc';
+export type ProcListing = Record<string, Procedure<object, ValidProcType, TObject, TObject>>;
 export interface Service<
   Name extends string = string,
   State extends object = object,
-  Procs extends Record<string, unknown> = Record<
-    string,
-    Procedure<object, 'stream' | 'rpc', TObject, TObject>
-  >,
+  // nested record (service listing contains services which have proc listings)
+  // this means we lose type specificity on our procedures here so we maintain it by using
+  // any on the default type
+  Procs extends ProcListing = Record<string, any>,
 > {
   name: Name;
   state: State;
   procedures: Procs;
 }
 
+// extract helpers
+export type ProcHandler<
+  S extends Service,
+  ProcName extends keyof S['procedures'],
+> = S['procedures'][ProcName]['handler'];
+export type ProcInput<
+  S extends Service,
+  ProcName extends keyof S['procedures'],
+> = S['procedures'][ProcName]['input'];
+export type ProcOutput<
+  S extends Service,
+  ProcName extends keyof S['procedures'],
+> = S['procedures'][ProcName]['output'];
+export type ProcType<
+  S extends Service,
+  ProcName extends keyof S['procedures'],
+> = S['procedures'][ProcName]['type'];
+
 export type Procedure<
-  State extends Object,
-  Ty extends 'stream' | 'rpc',
+  State extends object | unknown,
+  Ty extends ValidProcType,
   I extends TObject,
   O extends TObject,
 > = Ty extends 'rpc'
@@ -26,22 +46,22 @@ export type Procedure<
       output: O;
       handler: (
         state: State,
-        input: Static<TransportMessage<I>>,
-      ) => Promise<Static<TransportMessage<O>>>;
-      type: 'rpc';
+        input: TransportMessage<Static<I>>,
+      ) => Promise<TransportMessage<Static<O>>>;
+      type: Ty;
     }
   : {
       input: I;
       output: O;
       handler: (
         state: State,
-        input: AsyncIterable<Static<TransportMessage<I>>>,
-        output: Pushable<Static<TransportMessage<O>>>,
+        input: AsyncIterable<TransportMessage<Static<I>>>,
+        output: Pushable<TransportMessage<Static<O>>>,
       ) => Promise<void>;
-      type: 'stream';
+      type: Ty;
     };
 
-export class ServiceBuilder<T extends Service<string, object, Record<string, unknown>>> {
+export class ServiceBuilder<T extends Service<string, object, ProcListing>> {
   private readonly schema: T;
   private constructor(schema: T) {
     this.schema = schema;
@@ -66,7 +86,7 @@ export class ServiceBuilder<T extends Service<string, object, Record<string, unk
 
   defineProcedure<
     ProcName extends string,
-    Ty extends 'stream' | 'rpc',
+    Ty extends ValidProcType,
     I extends TObject,
     O extends TObject,
     ProcEntry = { [k in ProcName]: Procedure<T['state'], Ty, I, O> },

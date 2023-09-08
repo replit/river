@@ -1,18 +1,18 @@
 import { Static, TObject } from '@sinclair/typebox';
 import { Transport } from '../transport/types';
-import { Procedure, Service } from './builder';
+import { Procedure, Service, ValidProcType } from './builder';
 import { Value } from '@sinclair/typebox/value';
 import { Pushable, pushable } from 'it-pushable';
 import { OpaqueTransportMessage, TransportMessage } from '../transport/message';
 
-export interface Server<Services extends Record<string, Service>> {
+export interface Server<Services> {
   services: Services;
   close(): Promise<void>;
 }
 
 interface ProcStream {
-  incoming: Pushable<Static<TransportMessage<TObject>>>;
-  outgoing: Pushable<Static<TransportMessage<TObject>>>;
+  incoming: Pushable<TransportMessage>;
+  outgoing: Pushable<TransportMessage>;
   doneCtx: Promise<unknown>;
 }
 
@@ -24,7 +24,7 @@ export async function createServer<Services extends Record<string, Service>>(
   const streamMap: Map<string, ProcStream> = new Map();
   for (const [serviceName, service] of Object.entries(services)) {
     for (const [procedureName, proc] of Object.entries(service.procedures)) {
-      const procedure = proc as Procedure<object, 'stream' | 'rpc', TObject, TObject>;
+      const procedure = proc as Procedure<object, ValidProcType, TObject, TObject>;
       if (procedure.type === 'stream') {
         const incoming: ProcStream['incoming'] = pushable({ objectMode: true });
         const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
@@ -50,7 +50,7 @@ export async function createServer<Services extends Record<string, Service>>(
 
   const handler = async (msg: OpaqueTransportMessage) => {
     // TODO: log msgs received
-    if (msg.to !== 'server') {
+    if (msg.to !== 'SERVER') {
       return;
     }
 
@@ -64,11 +64,10 @@ export async function createServer<Services extends Record<string, Service>>(
           TObject
         >;
 
-        const inputMessage = msg as Static<TransportMessage<(typeof procedure)['input']>>;
+        const inputMessage = msg as TransportMessage<(typeof procedure)['input']>;
         if (procedure.type === 'rpc' && Value.Check(procedure.input, inputMessage.payload)) {
           // synchronous rpc
           const response = await procedure.handler(service.state, inputMessage);
-
           transport.send(response);
           return;
         } else if (

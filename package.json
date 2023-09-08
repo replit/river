@@ -1,6 +1,6 @@
 {
   "name": "river",
-  "description": "It's like tRPC but... with JSON Schema Support, bidirectional streaming and support for service multiplexing. Transport agnostic!",
+  "description": "It's like tRPC but... with JSON Schema Support, duplex streaming and support for service multiplexing. Transport agnostic!",
   "version": "1.0.0",
   "main": "dist/index.js",
   "type": "module",
@@ -18,6 +18,7 @@
     "vitest": "^0.34.3"
   },
   "scripts": {
+    "check": "tsc --noEmit",
     "dev": "tsup index.ts --watch --onSuccess \"node dist/index.js\"",
     "build": "tsup index.ts --minify",
     "test": "vitest"

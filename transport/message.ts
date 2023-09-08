@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid';
 export const TransportMessageSchema = <T extends TSchema>(t: T) =>
   Type.Object({
     id: Type.String(),
+    replyTo: Type.Optional(Type.String()),
     from: Type.String(),
     to: Type.String(),
     serviceName: Type.String(),
@@ -13,17 +14,24 @@ export const TransportMessageSchema = <T extends TSchema>(t: T) =>
   });
 
 export const OpaqueTransportMessageSchema = TransportMessageSchema(Type.Unknown());
-export type TransportMessage<Payload extends TSchema> = ReturnType<
-  typeof TransportMessageSchema<Payload>
->;
+export type TransportMessage<
+  Payload extends Record<string, unknown> | unknown = Record<string, unknown>,
+> = {
+  id: string;
+  replyTo?: string;
+  from: string;
+  to: string;
+  serviceName: string;
+  procedureName: string;
+  payload: Payload;
+};
 
 export type MessageId = string;
-
-export type OpaqueTransportMessage = Static<typeof OpaqueTransportMessageSchema>;
+export type OpaqueTransportMessage = TransportMessage<unknown>;
 export type TransportClientId = 'SERVER' | string;
 export const TransportAckSchema = Type.Object({
   from: Type.String(),
-  replyTo: Type.String(),
+  ack: Type.String(),
 });
 
 export type TransportMessageAck = Static<typeof TransportAckSchema>;
@@ -45,10 +53,14 @@ export function msg<Payload extends object>(
   } satisfies OpaqueTransportMessage;
 }
 
+export function payloadToTransportMessage<Payload extends object>(payload: Payload) {
+  return msg('client', 'SERVER', 'service', 'procedure', payload);
+}
+
 export function ack(msg: OpaqueTransportMessage): TransportMessageAck {
   return {
     from: msg.to,
-    replyTo: msg.id,
+    ack: msg.id,
   };
 }
 
@@ -56,6 +68,7 @@ export function reply<Payload extends object>(msg: OpaqueTransportMessage, respo
   return {
     ...msg,
     id: nanoid(),
+    replyTo: msg.id,
     to: msg.from,
     from: msg.to,
     payload: response,

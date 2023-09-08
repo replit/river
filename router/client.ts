@@ -1,7 +1,28 @@
 import { Transport } from '../transport/types';
-import { Service } from './builder';
-import { Pushable } from 'it-pushable';
+import { ProcInput, ProcOutput, ProcType, Service } from './builder';
+import { Pushable, pushable } from 'it-pushable';
 import { Server } from './server';
+import { OpaqueTransportMessage, msg } from '../transport/message';
+import { Static } from '@sinclair/typebox';
+import { waitForMessage } from '../transport/ws.util';
+
+type ServiceClient<Router extends Service> = {
+  [ProcName in keyof Router['procedures']]: ProcType<Router, ProcName> extends 'rpc'
+    ? // rpc case
+      (input: Static<ProcInput<Router, ProcName>>) => Promise<Static<ProcOutput<Router, ProcName>>>
+    : // get stream case
+      () => Promise<
+        [
+          Pushable<Static<ProcInput<Router, ProcName>>>, // input
+          AsyncIterator<Static<ProcOutput<Router, ProcName>>>, // output
+          () => void, // close handle
+        ]
+      >;
+};
+
+export type ServerClient<Srv extends Server<Record<string, Service>>> = {
+  [SvcName in keyof Srv['services']]: ServiceClient<Srv['services'][SvcName]>;
+};
 
 interface ProxyCallbackOptions {
   path: string[];
@@ -9,36 +30,15 @@ interface ProxyCallbackOptions {
 }
 
 type ProxyCallback = (opts: ProxyCallbackOptions) => unknown;
-
 const noop = () => {};
 
-type IterableToPushable<T> = T extends AsyncIterable<infer U> ? Pushable<U> : never;
-type PushableToIterable<T> = T extends Pushable<infer U> ? AsyncIterable<U> : never;
-
-type ServiceClient<Router extends Service> = {
-  [ProcName in keyof Router['procedures']]: Router['procedures'][ProcName]['type'] extends 'rpc'
-    ? // rpc case
-      (
-        input: Parameters<Router['procedures'][ProcName]['handler']>[1],
-      ) => Promise<ReturnType<Router['procedures'][ProcName]['handler']>>
-    : // stream case
-      (
-        input: IterableToPushable<Parameters<Router['procedures'][ProcName]['handler']>[1]>,
-      ) => Promise<PushableToIterable<Parameters<Router['procedures'][ProcName]['handler']>[2]>>;
-};
-
-export type ServerClient<Srv extends Server<Record<string, Service>>> = {
-  [SvcName in keyof Srv['services']]: ServiceClient<Srv['services'][SvcName]>;
-};
-
-// should only be called internally
 function _createRecursiveProxy(callback: ProxyCallback, path: string[]): unknown {
   const proxy: unknown = new Proxy(noop, {
     get(_obj, key) {
       if (typeof key !== 'string') return undefined;
       return _createRecursiveProxy(callback, [...path, key]);
     },
-    apply(_1, _2, args) {
+    apply(_target, _this, args) {
       return callback({
         path,
         args,
@@ -49,14 +49,45 @@ function _createRecursiveProxy(callback: ProxyCallback, path: string[]): unknown
   return proxy;
 }
 
-export const createClient = <Srv extends Server<Record<string, Service>>>(
-  transport: Transport,
-  server: Srv,
-) =>
+export const createClient = <Srv extends Server<Record<string, Service>>>(transport: Transport) =>
   _createRecursiveProxy(async (opts) => {
     const [serviceName, procName] = [...opts.path];
-    const dotPath = path.join('.');
-
     const [input] = opts.args;
-    // send this shit over transport
+
+    if (input === undefined) {
+      // stream case
+      const i = pushable({ objectMode: true });
+      const o = pushable({ objectMode: true });
+
+      // i -> transport
+      // this gets cleaned up on i.end() which is called by closeHandler
+      (async () => {
+        for await (const rawIn of i) {
+          transport.send(msg(transport.clientId, 'SERVER', serviceName, procName, rawIn as object));
+        }
+      })();
+
+      // transport -> o
+      const listener = (msg: OpaqueTransportMessage) => {
+        if (msg.serviceName === serviceName && msg.procedureName === procName) {
+          o.push(msg.payload);
+        }
+      };
+
+      transport.addMessageListener(listener);
+      const closeHandler = () => {
+        i.end();
+        o.end();
+        transport.removeMessageListener(listener);
+      };
+
+      return [i, o, closeHandler];
+    } else {
+      // rpc case
+      const id = transport.send(
+        msg(transport.clientId, 'SERVER', serviceName, procName, input as object),
+      );
+
+      return waitForMessage(transport, (msg) => msg.replyTo === id);
+    }
   }, []) as ServerClient<Srv>;

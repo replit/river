@@ -2,7 +2,7 @@
 
 It's like tRPC but...
 - with JSON Schema Support
-- with bidirectional streaming
+- with full-duplex streaming
 - with support for service multiplexing
 - over WebSockets
 
@@ -10,3 +10,6 @@ It's like tRPC but...
 - Router
 - Service
 - Procedure
+
+## TODO
+- support broadcast

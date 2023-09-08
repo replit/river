@@ -1,47 +1,21 @@
 import http from 'http';
-import WebSocket, { WebSocketServer } from 'ws';
+import { WebSocketServer } from 'ws';
 import { WebSocketTransport } from './ws';
-import { Transport } from './types';
-import { OpaqueTransportMessage } from './message';
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
-
-async function createWebSocketServer(port: number) {
-  const server = http.createServer();
-  const wss = new WebSocketServer({ server });
-  return new Promise<[http.Server, WebSocketServer]>((resolve) => {
-    server.listen(port, () => resolve([server, wss]));
-  });
-}
-
-async function waitForSocketReady(socket: WebSocket) {
-  return new Promise<void>((resolve) => {
-    socket.addEventListener('open', () => resolve());
-  });
-}
-
-async function createWebSocketClient(port: number) {
-  const client = new WebSocket(`ws://localhost:${port}`);
-  await waitForSocketReady(client);
-  return client;
-}
-
-async function waitForMessage(t: Transport) {
-  return new Promise((resolve, _reject) => {
-    function onMessage(msg: OpaqueTransportMessage) {
-      resolve(msg.payload);
-      t.removeMessageListener(onMessage);
-    }
-
-    t.addMessageListener(onMessage);
-  });
-}
+import {
+  createWebSocketClient,
+  createWebSocketServer,
+  onServerReady,
+  waitForMessage,
+} from './ws.util';
 
 const port = 3000;
 describe('sending and receiving across websockets works', () => {
-  let server: http.Server;
+  const server = http.createServer();
   let wss: WebSocketServer;
   beforeAll(async () => {
-    [server, wss] = await createWebSocketServer(port);
+    await onServerReady(server, port);
+    wss = await createWebSocketServer(server);
   });
 
   afterAll(() => {
@@ -54,7 +28,7 @@ describe('sending and receiving across websockets works', () => {
   test('basic send/receive', async () => {
     let serverTransport: WebSocketTransport | undefined;
     wss.on('connection', (conn) => {
-      serverTransport = new WebSocketTransport(conn, 'server');
+      serverTransport = new WebSocketTransport(conn, 'SERVER');
     });
 
     const clientSoc = await createWebSocketClient(port);
@@ -68,7 +42,7 @@ describe('sending and receiving across websockets works', () => {
     clientTransport.send({
       id: '1',
       from: 'client',
-      to: 'server',
+      to: 'SERVER',
       serviceName: 'test',
       procedureName: 'test',
       payload: msg,

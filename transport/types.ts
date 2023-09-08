@@ -27,8 +27,8 @@ export abstract class Transport {
     const parsedMsg = this.codec.fromStringBuf(msg.toString());
     if (Value.Check(TransportAckSchema, parsedMsg)) {
       // process ack
-      if (this.sendBuffer.has(parsedMsg.replyTo)) {
-        this.sendBuffer.delete(parsedMsg.replyTo);
+      if (this.sendBuffer.has(parsedMsg.ack)) {
+        this.sendBuffer.delete(parsedMsg.ack);
       }
     } else if (Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
       // ignore if not for us

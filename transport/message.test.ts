@@ -6,7 +6,7 @@ describe('message helpers', () => {
     const m = msg('a', 'b', 'svc', 'proc', { test: 1 });
     const resp = ack(m);
     expect(resp.from).toBe('b');
-    expect(resp).toHaveProperty('replyTo');
+    expect(resp).toHaveProperty('ack');
   });
 
   test('reply', () => {
