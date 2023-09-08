@@ -19,8 +19,6 @@
   },
   "scripts": {
     "check": "tsc --noEmit",
-    "dev": "tsup index.ts --watch --onSuccess \"node dist/index.js\"",
-    "build": "tsup index.ts --minify",
     "test": "vitest"
   },
   "keywords": [
