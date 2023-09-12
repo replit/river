@@ -1,10 +1,12 @@
 {
   "name": "@replit/river",
   "description": "It's like tRPC but... with JSON Schema Support, duplex streaming and support for service multiplexing. Transport agnostic!",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "files": [
-    "/dist"
+    "dist"
   ],
   "dependencies": {
     "@sinclair/typebox": "^0.31.8",
