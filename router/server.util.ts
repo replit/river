@@ -1,7 +1,8 @@
 import { Static, TObject } from '@sinclair/typebox';
 import { Procedure, ValidProcType } from './builder';
 import { TransportMessage, payloadToTransportMessage } from '../transport/message';
-import { Pushable, pushable } from 'it-pushable';
+import { pushable } from 'it-pushable';
+import type { Pushable } from 'it-pushable';
 
 export function asClientRpc<State extends object | unknown, I extends TObject, O extends TObject>(
   state: State,

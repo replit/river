@@ -1,5 +1,5 @@
 import { TObject, Static, Type } from '@sinclair/typebox';
-import { Pushable } from 'it-pushable';
+import type { Pushable } from 'it-pushable';
 import { TransportMessage } from '../transport/message';
 
 export type ValidProcType = 'stream' | 'rpc';

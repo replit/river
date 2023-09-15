@@ -1,8 +1,9 @@
-import { Static, TObject } from '@sinclair/typebox';
+import { TObject } from '@sinclair/typebox';
 import { Transport } from '../transport/types';
 import { Procedure, Service, ValidProcType } from './builder';
 import { Value } from '@sinclair/typebox/value';
-import { Pushable, pushable } from 'it-pushable';
+import { pushable } from 'it-pushable';
+import type { Pushable } from 'it-pushable';
 import { OpaqueTransportMessage, TransportMessage } from '../transport/message';
 
 export interface Server<Services> {

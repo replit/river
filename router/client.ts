@@ -1,6 +1,7 @@
 import { Transport } from '../transport/types';
 import { ProcInput, ProcOutput, ProcType, Service } from './builder';
-import { Pushable, pushable } from 'it-pushable';
+import { pushable } from 'it-pushable';
+import type { Pushable } from 'it-pushable';
 import { Server } from './server';
 import { OpaqueTransportMessage, msg } from '../transport/message';
 import { Static } from '@sinclair/typebox';
