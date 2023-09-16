@@ -12,7 +12,7 @@ export class StdioTransport extends Transport {
       output: stdout,
     });
 
-    rl.on('line', this.onMessage);
+    rl.on('line', (msg) => this.onMessage(msg));
   }
 
   send(msg: OpaqueTransportMessage): string {
