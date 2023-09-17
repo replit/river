@@ -1,5 +1,6 @@
 import http from 'http';
-import WebSocket, { WebSocketServer } from 'ws';
+import WebSocket from 'isomorphic-ws';
+import { WebSocketServer } from 'ws';
 import { Transport } from './types';
 import { OpaqueTransportMessage } from './message';
 import { WebSocketTransport } from './ws';

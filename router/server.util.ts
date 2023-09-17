@@ -1,5 +1,5 @@
 import { Static, TObject } from '@sinclair/typebox';
-import { Procedure, ValidProcType } from './builder';
+import { Procedure } from './builder';
 import { TransportMessage, payloadToTransportMessage } from '../transport/message';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';

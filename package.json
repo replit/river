@@ -10,6 +10,7 @@
   ],
   "dependencies": {
     "@sinclair/typebox": "^0.31.8",
+    "isomorphic-ws": "^5.0.0",
     "it-pushable": "^3.2.1",
     "nanoid": "^4.0.2",
     "ws": "^8.13.0"
