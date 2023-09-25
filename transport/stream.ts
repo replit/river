@@ -4,13 +4,17 @@ import { Transport } from './types';
 import readline from 'readline';
 
 export class StreamTransport extends Transport {
-  input: NodeJS.ReadableStream
-  output: NodeJS.WritableStream
+  input: NodeJS.ReadableStream;
+  output: NodeJS.WritableStream;
 
-  constructor(clientId: TransportClientId, input: NodeJS.ReadableStream = process.stdin, output: NodeJS.WritableStream = process.stdout) {
+  constructor(
+    clientId: TransportClientId,
+    input: NodeJS.ReadableStream = process.stdin,
+    output: NodeJS.WritableStream = process.stdout,
+  ) {
     super(NaiveJsonCodec, clientId);
-    this.input = input
-    this.output = output
+    this.input = input;
+    this.output = output;
     const rl = readline.createInterface({
       input: this.input,
     });
@@ -20,7 +24,7 @@ export class StreamTransport extends Transport {
 
   send(msg: OpaqueTransportMessage): string {
     const id = msg.id;
-    this.output.write(this.codec.toStringBuf(msg) + "\n");
+    this.output.write(this.codec.toStringBuf(msg) + '\n');
     return id;
   }
 

@@ -25,7 +25,12 @@ export async function createServer<Services extends Record<string, Service>>(
   const streamMap: Map<string, ProcStream> = new Map();
   for (const [serviceName, service] of Object.entries(services)) {
     for (const [procedureName, proc] of Object.entries(service.procedures)) {
-      const procedure = proc as Procedure<object, ValidProcType, TObject, TObject>;
+      const procedure = proc as Procedure<
+        object,
+        ValidProcType,
+        TObject,
+        TObject
+      >;
       if (procedure.type === 'stream') {
         const incoming: ProcStream['incoming'] = pushable({ objectMode: true });
         const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
@@ -65,8 +70,13 @@ export async function createServer<Services extends Record<string, Service>>(
           TObject
         >;
 
-        const inputMessage = msg as TransportMessage<(typeof procedure)['input']>;
-        if (procedure.type === 'rpc' && Value.Check(procedure.input, inputMessage.payload)) {
+        const inputMessage = msg as TransportMessage<
+          (typeof procedure)['input']
+        >;
+        if (
+          procedure.type === 'rpc' &&
+          Value.Check(procedure.input, inputMessage.payload)
+        ) {
           // synchronous rpc
           const response = await procedure.handler(service.state, inputMessage);
           transport.send(response);
@@ -77,7 +87,9 @@ export async function createServer<Services extends Record<string, Service>>(
         ) {
           // async stream, push to associated stream. code above handles sending responses
           // back to the client
-          const streams = streamMap.get(`${msg.serviceName}:${msg.procedureName}`);
+          const streams = streamMap.get(
+            `${msg.serviceName}:${msg.procedureName}`,
+          );
           if (!streams) {
             // this should never happen but log here if we get here
             return;

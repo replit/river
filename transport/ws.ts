@@ -1,7 +1,11 @@
 import type WebSocket from 'isomorphic-ws';
 import { Transport } from './types';
 import { NaiveJsonCodec } from '../codec/json';
-import { MessageId, OpaqueTransportMessage, TransportClientId } from './message';
+import {
+  MessageId,
+  OpaqueTransportMessage,
+  TransportClientId,
+} from './message';
 
 // TODO should answer:
 // - how do we handle graceful client disconnects? (i.e. close tab)

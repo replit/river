@@ -1,15 +1,21 @@
 import { Static, TObject } from '@sinclair/typebox';
 import { Procedure } from './builder';
-import { TransportMessage, payloadToTransportMessage } from '../transport/message';
+import {
+  TransportMessage,
+  payloadToTransportMessage,
+} from '../transport/message';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 
-export function asClientRpc<State extends object | unknown, I extends TObject, O extends TObject>(
-  state: State,
-  proc: Procedure<State, 'rpc', I, O>,
-) {
+export function asClientRpc<
+  State extends object | unknown,
+  I extends TObject,
+  O extends TObject,
+>(state: State, proc: Procedure<State, 'rpc', I, O>) {
   return (msg: Static<I>) =>
-    proc.handler(state, payloadToTransportMessage(msg)).then((res) => res.payload);
+    proc
+      .handler(state, payloadToTransportMessage(msg))
+      .then((res) => res.payload);
 }
 
 export function asClientStream<

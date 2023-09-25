@@ -8,9 +8,14 @@ import { Static } from '@sinclair/typebox';
 import { waitForMessage } from '../transport/util';
 
 type ServiceClient<Router extends Service> = {
-  [ProcName in keyof Router['procedures']]: ProcType<Router, ProcName> extends 'rpc'
+  [ProcName in keyof Router['procedures']]: ProcType<
+    Router,
+    ProcName
+  > extends 'rpc'
     ? // rpc case
-      (input: Static<ProcInput<Router, ProcName>>) => Promise<Static<ProcOutput<Router, ProcName>>>
+      (
+        input: Static<ProcInput<Router, ProcName>>,
+      ) => Promise<Static<ProcOutput<Router, ProcName>>>
     : // get stream case
       () => Promise<
         [
@@ -33,7 +38,10 @@ interface ProxyCallbackOptions {
 type ProxyCallback = (opts: ProxyCallbackOptions) => unknown;
 const noop = () => {};
 
-function _createRecursiveProxy(callback: ProxyCallback, path: string[]): unknown {
+function _createRecursiveProxy(
+  callback: ProxyCallback,
+  path: string[],
+): unknown {
   const proxy: unknown = new Proxy(noop, {
     get(_obj, key) {
       if (typeof key !== 'string') return undefined;
@@ -50,7 +58,9 @@ function _createRecursiveProxy(callback: ProxyCallback, path: string[]): unknown
   return proxy;
 }
 
-export const createClient = <Srv extends Server<Record<string, Service>>>(transport: Transport) =>
+export const createClient = <Srv extends Server<Record<string, Service>>>(
+  transport: Transport,
+) =>
   _createRecursiveProxy(async (opts) => {
     const [serviceName, procName] = [...opts.path];
     const [input] = opts.args;
@@ -64,7 +74,15 @@ export const createClient = <Srv extends Server<Record<string, Service>>>(transp
       // this gets cleaned up on i.end() which is called by closeHandler
       (async () => {
         for await (const rawIn of i) {
-          transport.send(msg(transport.clientId, 'SERVER', serviceName, procName, rawIn as object));
+          transport.send(
+            msg(
+              transport.clientId,
+              'SERVER',
+              serviceName,
+              procName,
+              rawIn as object,
+            ),
+          );
         }
       })();
 
@@ -86,7 +104,13 @@ export const createClient = <Srv extends Server<Record<string, Service>>>(transp
     } else {
       // rpc case
       const id = transport.send(
-        msg(transport.clientId, 'SERVER', serviceName, procName, input as object),
+        msg(
+          transport.clientId,
+          'SERVER',
+          serviceName,
+          procName,
+          input as object,
+        ),
       );
 
       return waitForMessage(transport, (msg) => msg.replyTo === id);

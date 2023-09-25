@@ -4,12 +4,19 @@ import { Type } from '@sinclair/typebox';
 import { ServiceBuilder, serializeService } from '../router/builder';
 import { reply } from '../transport/message';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { createWebSocketServer, createWsTransports, onServerReady } from '../transport/util';
+import {
+  createWebSocketServer,
+  createWsTransports,
+  onServerReady,
+} from '../transport/util';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { asClientRpc, asClientStream } from '../router/server.util';
 
-export const EchoRequest = Type.Object({ msg: Type.String(), ignore: Type.Boolean() });
+export const EchoRequest = Type.Object({
+  msg: Type.String(),
+  ignore: Type.Boolean(),
+});
 export const EchoResponse = Type.Object({ response: Type.String() });
 
 export const TestServiceConstructor = () =>
@@ -109,8 +116,12 @@ describe('server-side test', () => {
     i.push({ msg: 'ghi', ignore: false });
     i.end();
 
-    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({ response: 'abc' });
-    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({ response: 'ghi' });
+    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({
+      response: 'abc',
+    });
+    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({
+      response: 'ghi',
+    });
     expect(o.readableLength).toBe(0);
   });
 });
@@ -137,7 +148,9 @@ describe('client <-> server integration test', () => {
     const serviceDefs = { test: TestServiceConstructor() };
     const server = await createServer(st, serviceDefs);
     const client = createClient<typeof server>(ct);
-    await expect(client.test.add({ n: 3 })).resolves.toStrictEqual({ result: 3 });
+    await expect(client.test.add({ n: 3 })).resolves.toStrictEqual({
+      result: 3,
+    });
   });
 
   test('stream', async () => {
@@ -152,8 +165,12 @@ describe('client <-> server integration test', () => {
     i.push({ msg: 'ghi', ignore: false });
     i.end();
 
-    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({ response: 'abc' });
-    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({ response: 'ghi' });
+    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({
+      response: 'abc',
+    });
+    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({
+      response: 'ghi',
+    });
     close();
   });
 });

@@ -4,12 +4,16 @@ import { describe, test, expect } from 'vitest';
 describe('naive json codec', () => {
   test('empty object', () => {
     const msg = {};
-    expect(NaiveJsonCodec.fromStringBuf(NaiveJsonCodec.toStringBuf(msg))).toStrictEqual(msg);
+    expect(
+      NaiveJsonCodec.fromStringBuf(NaiveJsonCodec.toStringBuf(msg)),
+    ).toStrictEqual(msg);
   });
 
   test('simple test', () => {
     const msg = { abc: 123, def: 'cool' };
-    expect(NaiveJsonCodec.fromStringBuf(NaiveJsonCodec.toStringBuf(msg))).toStrictEqual(msg);
+    expect(
+      NaiveJsonCodec.fromStringBuf(NaiveJsonCodec.toStringBuf(msg)),
+    ).toStrictEqual(msg);
   });
 
   test('deeply nested test', () => {
@@ -21,6 +25,8 @@ describe('naive json codec', () => {
         },
       },
     };
-    expect(NaiveJsonCodec.fromStringBuf(NaiveJsonCodec.toStringBuf(msg))).toStrictEqual(msg);
+    expect(
+      NaiveJsonCodec.fromStringBuf(NaiveJsonCodec.toStringBuf(msg)),
+    ).toStrictEqual(msg);
   });
 });

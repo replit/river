@@ -13,7 +13,9 @@ export const TransportMessageSchema = <T extends TSchema>(t: T) =>
     payload: t,
   });
 
-export const OpaqueTransportMessageSchema = TransportMessageSchema(Type.Unknown());
+export const OpaqueTransportMessageSchema = TransportMessageSchema(
+  Type.Unknown(),
+);
 export type TransportMessage<
   Payload extends Record<string, unknown> | unknown = Record<string, unknown>,
 > = {
@@ -53,7 +55,9 @@ export function msg<Payload extends object>(
   } satisfies OpaqueTransportMessage;
 }
 
-export function payloadToTransportMessage<Payload extends object>(payload: Payload) {
+export function payloadToTransportMessage<Payload extends object>(
+  payload: Payload,
+) {
   return msg('client', 'SERVER', 'service', 'procedure', payload);
 }
 
@@ -64,7 +68,10 @@ export function ack(msg: OpaqueTransportMessage): TransportMessageAck {
   };
 }
 
-export function reply<Payload extends object>(msg: OpaqueTransportMessage, response: Payload) {
+export function reply<Payload extends object>(
+  msg: OpaqueTransportMessage,
+  response: Payload,
+) {
   return {
     ...msg,
     id: nanoid(),
