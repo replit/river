@@ -56,4 +56,3 @@ export abstract class Transport {
   abstract send(msg: OpaqueTransportMessage | TransportMessageAck): MessageId;
   abstract close(): Promise<void>;
 }
-

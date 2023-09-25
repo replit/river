@@ -17,13 +17,14 @@
   },
   "devDependencies": {
     "@types/ws": "^8.5.5",
-    "prettier": "^3.0.3",
+    "prettier": "^3.0.0",
     "tsup": "^7.2.0",
     "typescript": "^5.2.2",
     "vitest": "^0.34.3"
   },
   "scripts": {
     "check": "tsc --noEmit",
+    "format": "npx prettier . --write",
     "build": "tsc",
     "prepack": "npm run build",
     "release": "npm publish --access public",
@@ -38,16 +39,5 @@
     "jsonschema"
   ],
   "author": "Jacky Zhao",
-  "license": "MIT",
-  "prettier": {
-    "printWidth": 100,
-    "tabWidth": 2,
-    "singleQuote": true,
-    "trailingComma": "all",
-    "bracketSpacing": true,
-    "semi": true,
-    "useTabs": false,
-    "parser": "typescript",
-    "arrowParens": "always"
-  }
+  "license": "MIT"
 }

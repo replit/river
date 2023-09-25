@@ -3,7 +3,10 @@ import type { Pushable } from 'it-pushable';
 import { TransportMessage } from '../transport/message';
 
 export type ValidProcType = 'stream' | 'rpc';
-export type ProcListing = Record<string, Procedure<object, ValidProcType, TObject, TObject>>;
+export type ProcListing = Record<
+  string,
+  Procedure<object, ValidProcType, TObject, TObject>
+>;
 export interface Service<
   Name extends string = string,
   State extends object = object,
@@ -22,16 +25,16 @@ export function serializeService(s: Service): object {
     name: s.name,
     state: s.state,
     procedures: Object.fromEntries(
-      Object.entries<Procedure<object, ValidProcType, TObject, TObject>>(s.procedures).map(
-        ([procName, procDef]) => [
-          procName,
-          {
-            input: Type.Strict(procDef.input),
-            output: Type.Strict(procDef.output),
-            type: procDef.type,
-          },
-        ],
-      ),
+      Object.entries<Procedure<object, ValidProcType, TObject, TObject>>(
+        s.procedures,
+      ).map(([procName, procDef]) => [
+        procName,
+        {
+          input: Type.Strict(procDef.input),
+          output: Type.Strict(procDef.output),
+          type: procDef.type,
+        },
+      ]),
     ),
   };
 }
@@ -118,7 +121,8 @@ export class ServiceBuilder<T extends Service<string, object, ProcListing>> {
     procedures: {
       // we do this weird keyof thing to simplify the intersection type to something more readable
       // this is basically equivalent to `T['procedures'] & ProcEntry`
-      [Key in keyof (T['procedures'] & ProcEntry)]: (T['procedures'] & ProcEntry)[Key];
+      [Key in keyof (T['procedures'] & ProcEntry)]: (T['procedures'] &
+        ProcEntry)[Key];
     };
   }> {
     const newProcedure = { [procName]: procDef } as ProcEntry;
@@ -126,7 +130,8 @@ export class ServiceBuilder<T extends Service<string, object, ProcListing>> {
       ...this.schema.procedures,
       ...newProcedure,
     } as {
-      [Key in keyof (T['procedures'] & ProcEntry)]: (T['procedures'] & ProcEntry)[Key];
+      [Key in keyof (T['procedures'] & ProcEntry)]: (T['procedures'] &
+        ProcEntry)[Key];
     };
     return new ServiceBuilder({
       ...this.schema,

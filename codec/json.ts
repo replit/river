@@ -1,4 +1,4 @@
-import { Codec } from "./types";
+import { Codec } from './types';
 
 export const NaiveJsonCodec: Codec = {
   toStringBuf: JSON.stringify,

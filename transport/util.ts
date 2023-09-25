@@ -9,7 +9,10 @@ export async function createWebSocketServer(server: http.Server) {
   return new WebSocketServer({ server });
 }
 
-export async function onServerReady(server: http.Server, port: number): Promise<void> {
+export async function onServerReady(
+  server: http.Server,
+  port: number,
+): Promise<void> {
   return new Promise((resolve) => {
     server.listen(port, resolve);
   });
