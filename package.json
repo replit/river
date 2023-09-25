@@ -23,7 +23,7 @@
     "vitest": "^0.34.3"
   },
   "scripts": {
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && npx prettier . --check",
     "format": "npx prettier . --write",
     "build": "tsc",
     "prepack": "npm run build",
