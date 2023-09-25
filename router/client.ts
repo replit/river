@@ -1,5 +1,5 @@
 import { Transport } from '../transport/types';
-import { ProcInput, ProcOutput, ProcType, Service } from './builder';
+import { AnyService, ProcInput, ProcOutput, ProcType } from './builder';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 import { Server } from './server';
@@ -7,7 +7,7 @@ import { OpaqueTransportMessage, msg } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { waitForMessage } from '../transport/util';
 
-type ServiceClient<Router extends Service> = {
+type ServiceClient<Router extends AnyService> = {
   [ProcName in keyof Router['procedures']]: ProcType<
     Router,
     ProcName
@@ -26,7 +26,7 @@ type ServiceClient<Router extends Service> = {
       >;
 };
 
-export type ServerClient<Srv extends Server<Record<string, Service>>> = {
+export type ServerClient<Srv extends Server<Record<string, AnyService>>> = {
   [SvcName in keyof Srv['services']]: ServiceClient<Srv['services'][SvcName]>;
 };
 
@@ -58,7 +58,7 @@ function _createRecursiveProxy(
   return proxy;
 }
 
-export const createClient = <Srv extends Server<Record<string, Service>>>(
+export const createClient = <Srv extends Server<Record<string, AnyService>>>(
   transport: Transport,
 ) =>
   _createRecursiveProxy(async (opts) => {

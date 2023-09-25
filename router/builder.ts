@@ -8,19 +8,20 @@ export type ProcListing = Record<
   Procedure<object, ValidProcType, TObject, TObject>
 >;
 export interface Service<
-  Name extends string = string,
-  State extends object = object,
+  Name extends string,
+  State extends object,
   // nested record (service listing contains services which have proc listings)
   // this means we lose type specificity on our procedures here so we maintain it by using
   // any on the default type
-  Procs extends ProcListing = Record<string, any>,
+  Procs extends ProcListing,
 > {
   name: Name;
   state: State;
   procedures: Procs;
 }
+export type AnyService = Service<string, object, any>;
 
-export function serializeService(s: Service): object {
+export function serializeService(s: AnyService): object {
   return {
     name: s.name,
     state: s.state,
@@ -41,19 +42,19 @@ export function serializeService(s: Service): object {
 
 // extract helpers
 export type ProcHandler<
-  S extends Service,
+  S extends AnyService,
   ProcName extends keyof S['procedures'],
 > = S['procedures'][ProcName]['handler'];
 export type ProcInput<
-  S extends Service,
+  S extends AnyService,
   ProcName extends keyof S['procedures'],
 > = S['procedures'][ProcName]['input'];
 export type ProcOutput<
-  S extends Service,
+  S extends AnyService,
   ProcName extends keyof S['procedures'],
 > = S['procedures'][ProcName]['output'];
 export type ProcType<
-  S extends Service,
+  S extends AnyService,
   ProcName extends keyof S['procedures'],
 > = S['procedures'][ProcName]['type'];
 
@@ -111,27 +112,24 @@ export class ServiceBuilder<T extends Service<string, object, ProcListing>> {
     Ty extends ValidProcType,
     I extends TObject,
     O extends TObject,
-    ProcEntry = { [k in ProcName]: Procedure<T['state'], Ty, I, O> },
   >(
     procName: ProcName,
     procDef: Procedure<T['state'], Ty, I, O>,
   ): ServiceBuilder<{
     name: T['name'];
     state: T['state'];
-    procedures: {
-      // we do this weird keyof thing to simplify the intersection type to something more readable
-      // this is basically equivalent to `T['procedures'] & ProcEntry`
-      [Key in keyof (T['procedures'] & ProcEntry)]: (T['procedures'] &
-        ProcEntry)[Key];
+    procedures: T['procedures'] & {
+      [k in ProcName]: Procedure<T['state'], Ty, I, O>;
     };
   }> {
-    const newProcedure = { [procName]: procDef } as ProcEntry;
+    type ProcListing = { [k in ProcName]: Procedure<T['state'], Ty, I, O> };
+    const newProcedure = { [procName]: procDef } as ProcListing;
     const procedures = {
       ...this.schema.procedures,
       ...newProcedure,
     } as {
-      [Key in keyof (T['procedures'] & ProcEntry)]: (T['procedures'] &
-        ProcEntry)[Key];
+      [Key in keyof (T['procedures'] & ProcListing)]: (T['procedures'] &
+        ProcListing)[Key];
     };
     return new ServiceBuilder({
       ...this.schema,

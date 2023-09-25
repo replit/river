@@ -1,6 +1,6 @@
 import { TObject } from '@sinclair/typebox';
 import { Transport } from '../transport/types';
-import { Procedure, Service, ValidProcType } from './builder';
+import { AnyService, Procedure, ValidProcType } from './builder';
 import { Value } from '@sinclair/typebox/value';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
@@ -17,7 +17,7 @@ interface ProcStream {
   doneCtx: Promise<unknown>;
 }
 
-export async function createServer<Services extends Record<string, Service>>(
+export async function createServer<Services extends Record<string, AnyService>>(
   transport: Transport,
   services: Services,
 ): Promise<Server<Services>> {
