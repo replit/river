@@ -4,7 +4,7 @@ import { Type } from '@sinclair/typebox';
 import { ServiceBuilder, serializeService } from '../router/builder';
 import { reply } from '../transport/message';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { createWebSocketServer, createWsTransports, onServerReady } from '../transport/ws.util';
+import { createWebSocketServer, createWsTransports, onServerReady } from '../transport/util';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { asClientRpc, asClientStream } from '../router/server.util';

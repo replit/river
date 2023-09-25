@@ -3,13 +3,16 @@ import { OpaqueTransportMessage, TransportClientId } from './message';
 import { Transport } from './types';
 import readline from 'readline';
 
-export class StdioTransport extends Transport {
-  constructor(clientId: TransportClientId) {
+export class StreamTransport extends Transport {
+  input: NodeJS.ReadableStream
+  output: NodeJS.WritableStream
+
+  constructor(clientId: TransportClientId, input: NodeJS.ReadableStream = process.stdin, output: NodeJS.WritableStream = process.stdout) {
     super(NaiveJsonCodec, clientId);
-    const { stdin, stdout } = process;
+    this.input = input
+    this.output = output
     const rl = readline.createInterface({
-      input: stdin,
-      output: stdout,
+      input: this.input,
     });
 
     rl.on('line', (msg) => this.onMessage(msg));
@@ -17,7 +20,7 @@ export class StdioTransport extends Transport {
 
   send(msg: OpaqueTransportMessage): string {
     const id = msg.id;
-    process.stdout.write(this.codec.toStringBuf(msg));
+    this.output.write(this.codec.toStringBuf(msg) + "\n");
     return id;
   }
 

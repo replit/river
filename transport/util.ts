@@ -2,8 +2,8 @@ import http from 'http';
 import WebSocket from 'isomorphic-ws';
 import { WebSocketServer } from 'ws';
 import { Transport } from './types';
-import { OpaqueTransportMessage } from './message';
 import { WebSocketTransport } from './ws';
+import { OpaqueTransportMessage } from './message';
 
 export async function createWebSocketServer(server: http.Server) {
   return new WebSocketServer({ server });

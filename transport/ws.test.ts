@@ -7,7 +7,7 @@ import {
   createWebSocketServer,
   onServerReady,
   waitForMessage,
-} from './ws.util';
+} from './util';
 
 const port = 3000;
 describe('sending and receiving across websockets works', () => {

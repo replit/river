@@ -35,7 +35,7 @@ export type {
   TransportMessageAck,
 } from './transport/message';
 
-export { StdioTransport } from './transport/stdio';
+export { StreamTransport } from './transport/stream';
 export { WebSocketTransport } from './transport/ws';
 export {
   createWebSocketServer,
@@ -44,4 +44,4 @@ export {
   waitForMessage,
   waitForSocketReady,
   createWebSocketClient,
-} from './transport/ws.util';
+} from './transport/util';
