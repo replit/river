@@ -6,6 +6,7 @@ import { createServer } from '../router/server';
 import { Transport } from '../transport/types';
 import { NaiveJsonCodec } from '../codec/json';
 import { createClient } from '../router/client';
+import { createTestEnvironment } from '../environment/util';
 
 const fnBody: Procedure<{}, 'rpc', TObject, TObject> = {
   type: 'rpc',
@@ -97,7 +98,11 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
       c: svc(),
       d: svc(),
     };
-    const server = await createServer(new MockTransport('SERVER'), listing);
+    const server = await createServer(
+      createTestEnvironment(),
+      new MockTransport('SERVER'),
+      listing,
+    );
     const client = createClient<typeof server>(new MockTransport('client'));
     expect(server).toBeTruthy();
     expect(client).toBeTruthy();

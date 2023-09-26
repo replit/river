@@ -12,6 +12,7 @@ import {
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { asClientRpc, asClientStream } from '../router/server.util';
+import { createTestEnvironment } from '../environment/util';
 
 export const EchoRequest = Type.Object({
   msg: Type.String(),
@@ -28,17 +29,17 @@ export const TestServiceConstructor = () =>
       type: 'rpc',
       input: Type.Object({ n: Type.Number() }),
       output: Type.Object({ result: Type.Number() }),
-      async handler(state, msg) {
+      async handler(ctx, msg) {
         const { n } = msg.payload;
-        state.count += n;
-        return reply(msg, { result: state.count });
+        ctx.state.count += n;
+        return reply(msg, { result: ctx.state.count });
       },
     })
     .defineProcedure('echo', {
       type: 'stream',
       input: EchoRequest,
       output: EchoResponse,
-      async handler(_state, msgStream, returnStream) {
+      async handler(_ctx, msgStream, returnStream) {
         for await (const msg of msgStream) {
           const req = msg.payload;
           if (!req.ignore) {
@@ -99,17 +100,20 @@ describe('server-side test', () => {
   const initialState = { count: 0 };
 
   test('rpc basic', async () => {
-    const add = asClientRpc(initialState, service.procedures.add);
+    const env = createTestEnvironment();
+    const add = asClientRpc(env, initialState, service.procedures.add);
     await expect(add({ n: 3 })).resolves.toStrictEqual({ result: 3 });
   });
 
   test('rpc initial state', async () => {
-    const add = asClientRpc({ count: 5 }, service.procedures.add);
+    const env = createTestEnvironment();
+    const add = asClientRpc(env, { count: 5 }, service.procedures.add);
     await expect(add({ n: 6 })).resolves.toStrictEqual({ result: 11 });
   });
 
   test('stream basic', async () => {
-    const [i, o] = asClientStream(initialState, service.procedures.echo);
+    const env = createTestEnvironment();
+    const [i, o] = asClientStream(env, initialState, service.procedures.echo);
 
     i.push({ msg: 'abc', ignore: false });
     i.push({ msg: 'def', ignore: true });
@@ -144,9 +148,10 @@ describe('client <-> server integration test', () => {
   });
 
   test('rpc', async () => {
+    const env = createTestEnvironment();
     const [ct, st] = await createWsTransports(port, wss);
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(st, serviceDefs);
+    const server = await createServer(env, st, serviceDefs);
     const client = createClient<typeof server>(ct);
     await expect(client.test.add({ n: 3 })).resolves.toStrictEqual({
       result: 3,
@@ -154,9 +159,10 @@ describe('client <-> server integration test', () => {
   });
 
   test('stream', async () => {
+    const env = createTestEnvironment();
     const [ct, st] = await createWsTransports(port, wss);
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(st, serviceDefs);
+    const server = await createServer(env, st, serviceDefs);
     const client = createClient<typeof server>(ct);
 
     const [i, o, close] = await client.test.echo();

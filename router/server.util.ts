@@ -6,15 +6,20 @@ import {
 } from '../transport/message';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
+import { IsomorphicEnvironment } from '../environment/types';
 
 export function asClientRpc<
   State extends object | unknown,
   I extends TObject,
   O extends TObject,
->(state: State, proc: Procedure<State, 'rpc', I, O>) {
+>(
+  environment: IsomorphicEnvironment,
+  state: State,
+  proc: Procedure<State, 'rpc', I, O>,
+) {
   return (msg: Static<I>) =>
     proc
-      .handler(state, payloadToTransportMessage(msg))
+      .handler({ environment, state }, payloadToTransportMessage(msg))
       .then((res) => res.payload);
 }
 
@@ -23,6 +28,7 @@ export function asClientStream<
   I extends TObject,
   O extends TObject,
 >(
+  environment: IsomorphicEnvironment,
   state: State,
   proc: Procedure<State, 'stream', I, O>,
 ): [Pushable<Static<I>>, Pushable<Static<O>>] {
@@ -49,7 +55,7 @@ export function asClientStream<
 
   // handle
   (async () => {
-    await proc.handler(state, ri, ro);
+    await proc.handler({ environment, state }, ri, ro);
     ro.end();
   })();
 
