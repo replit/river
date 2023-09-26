@@ -4,7 +4,7 @@
  *
  * You should use declaration merging to extend this interface
  * with whatever you need. For example, if you need to access
- * a database, you can do:
+ * a database, you could do:
  * ```ts
  * declare module '@replit/river' {
  *   interface IsomorphicEnvironment {
