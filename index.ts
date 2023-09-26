@@ -45,3 +45,5 @@ export {
   waitForSocketReady,
   createWebSocketClient,
 } from './transport/util';
+
+export type { IsomorphicEnvironment } from './environment/types';

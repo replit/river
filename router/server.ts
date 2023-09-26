@@ -1,10 +1,16 @@
 import { TObject } from '@sinclair/typebox';
 import { Transport } from '../transport/types';
-import { AnyService, Procedure, ValidProcType } from './builder';
+import {
+  AnyService,
+  Procedure,
+  ProcedureContext,
+  ValidProcType,
+} from './builder';
 import { Value } from '@sinclair/typebox/value';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 import { OpaqueTransportMessage, TransportMessage } from '../transport/message';
+import { IsomorphicEnvironment } from '../environment/types';
 
 export interface Server<Services> {
   services: Services;
@@ -18,12 +24,18 @@ interface ProcStream {
 }
 
 export async function createServer<Services extends Record<string, AnyService>>(
+  environment: IsomorphicEnvironment,
   transport: Transport,
   services: Services,
 ): Promise<Server<Services>> {
   // create streams for every stream procedure
   const streamMap: Map<string, ProcStream> = new Map();
   for (const [serviceName, service] of Object.entries(services)) {
+    const context: ProcedureContext<object> = {
+      environment,
+      state: service.state,
+    };
+
     for (const [procedureName, proc] of Object.entries(service.procedures)) {
       const procedure = proc as Procedure<
         object,
@@ -39,7 +51,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
           outgoing,
           doneCtx: Promise.all([
             // processing the actual procedure
-            procedure.handler(service.state, incoming, outgoing),
+            procedure.handler(context, incoming, outgoing),
             // sending outgoing messages back to client
             (async () => {
               for await (const response of outgoing) {
@@ -78,7 +90,11 @@ export async function createServer<Services extends Record<string, AnyService>>(
           Value.Check(procedure.input, inputMessage.payload)
         ) {
           // synchronous rpc
-          const response = await procedure.handler(service.state, inputMessage);
+          const context: ProcedureContext<object> = {
+            environment,
+            state: service.state,
+          };
+          const response = await procedure.handler(context, inputMessage);
           transport.send(response);
           return;
         } else if (
