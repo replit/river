@@ -28,14 +28,24 @@ export async function createServer<Services extends Record<string, AnyService>>(
   transport: Transport,
   services: Services,
 ): Promise<Server<Services>> {
-  // create streams for every stream procedure
+  const contextMap: Map<AnyService, ProcedureContext<object>> = new Map();
   const streamMap: Map<string, ProcStream> = new Map();
-  for (const [serviceName, service] of Object.entries(services)) {
-    const context: ProcedureContext<object> = {
-      environment,
-      state: service.state,
-    };
 
+  function getContext(service: AnyService) {
+    const context = contextMap.get(service);
+
+    if (!context) {
+      throw new Error(`No context found for ${service.name}`);
+    }
+
+    return context;
+  }
+
+  for (const [serviceName, service] of Object.entries(services)) {
+    // populate the context map
+    contextMap.set(service, { environment, state: service.state });
+
+    // create streams for every stream procedure
     for (const [procedureName, proc] of Object.entries(service.procedures)) {
       const procedure = proc as Procedure<
         object,
@@ -51,7 +61,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
           outgoing,
           doneCtx: Promise.all([
             // processing the actual procedure
-            procedure.handler(context, incoming, outgoing),
+            procedure.handler(getContext(service), incoming, outgoing),
             // sending outgoing messages back to client
             (async () => {
               for await (const response of outgoing) {
@@ -89,12 +99,10 @@ export async function createServer<Services extends Record<string, AnyService>>(
           procedure.type === 'rpc' &&
           Value.Check(procedure.input, inputMessage.payload)
         ) {
-          // synchronous rpc
-          const context: ProcedureContext<object> = {
-            environment,
-            state: service.state,
-          };
-          const response = await procedure.handler(context, inputMessage);
+          const response = await procedure.handler(
+            getContext(service),
+            inputMessage,
+          );
           transport.send(response);
           return;
         } else if (
