@@ -46,5 +46,4 @@ export {
   createWebSocketClient,
 } from './transport/util';
 
-export { createTestEnvironment } from './environment/util';
 export type { IsomorphicEnvironment } from './environment/types';

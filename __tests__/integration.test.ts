@@ -12,7 +12,6 @@ import {
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { asClientRpc, asClientStream } from '../router/server.util';
-import { createTestEnvironment } from '../environment/util';
 
 export const EchoRequest = Type.Object({
   msg: Type.String(),
@@ -100,20 +99,17 @@ describe('server-side test', () => {
   const initialState = { count: 0 };
 
   test('rpc basic', async () => {
-    const env = createTestEnvironment();
-    const add = asClientRpc(env, initialState, service.procedures.add);
+    const add = asClientRpc({}, initialState, service.procedures.add);
     await expect(add({ n: 3 })).resolves.toStrictEqual({ result: 3 });
   });
 
   test('rpc initial state', async () => {
-    const env = createTestEnvironment();
-    const add = asClientRpc(env, { count: 5 }, service.procedures.add);
+    const add = asClientRpc({}, { count: 5 }, service.procedures.add);
     await expect(add({ n: 6 })).resolves.toStrictEqual({ result: 11 });
   });
 
   test('stream basic', async () => {
-    const env = createTestEnvironment();
-    const [i, o] = asClientStream(env, initialState, service.procedures.echo);
+    const [i, o] = asClientStream({}, initialState, service.procedures.echo);
 
     i.push({ msg: 'abc', ignore: false });
     i.push({ msg: 'def', ignore: true });
@@ -148,10 +144,9 @@ describe('client <-> server integration test', () => {
   });
 
   test('rpc', async () => {
-    const env = createTestEnvironment();
     const [ct, st] = await createWsTransports(port, wss);
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(env, st, serviceDefs);
+    const server = await createServer({}, st, serviceDefs);
     const client = createClient<typeof server>(ct);
     await expect(client.test.add({ n: 3 })).resolves.toStrictEqual({
       result: 3,
@@ -159,10 +154,9 @@ describe('client <-> server integration test', () => {
   });
 
   test('stream', async () => {
-    const env = createTestEnvironment();
     const [ct, st] = await createWsTransports(port, wss);
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(env, st, serviceDefs);
+    const server = await createServer({}, st, serviceDefs);
     const client = createClient<typeof server>(ct);
 
     const [i, o, close] = await client.test.echo();
