@@ -21,7 +21,7 @@ interface ProcStream {
 export async function createServer<Services extends Record<string, AnyService>>(
   transport: Transport,
   services: Services,
-  extendedContext?: ServiceContext,
+  extendedContext?: Omit<ServiceContext, 'state'>,
 ): Promise<Server<Services>> {
   const contextMap: Map<
     AnyService,
