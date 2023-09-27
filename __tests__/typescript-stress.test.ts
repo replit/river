@@ -97,7 +97,7 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
       c: svc(),
       d: svc(),
     };
-    const server = await createServer({}, new MockTransport('SERVER'), listing);
+    const server = await createServer(new MockTransport('SERVER'), listing);
     const client = createClient<typeof server>(new MockTransport('client'));
     expect(server).toBeTruthy();
     expect(client).toBeTruthy();

@@ -6,20 +6,20 @@ import {
 } from '../transport/message';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
-import { IsomorphicEnvironment } from '../environment/types';
+import { ServiceContext } from './context';
 
 export function asClientRpc<
   State extends object | unknown,
   I extends TObject,
   O extends TObject,
 >(
-  environment: IsomorphicEnvironment,
   state: State,
   proc: Procedure<State, 'rpc', I, O>,
+  extendedContext?: ServiceContext,
 ) {
   return (msg: Static<I>) =>
     proc
-      .handler({ environment, state }, payloadToTransportMessage(msg))
+      .handler({ ...extendedContext, state }, payloadToTransportMessage(msg))
       .then((res) => res.payload);
 }
 
@@ -28,9 +28,9 @@ export function asClientStream<
   I extends TObject,
   O extends TObject,
 >(
-  environment: IsomorphicEnvironment,
   state: State,
   proc: Procedure<State, 'stream', I, O>,
+  extendedContext?: ServiceContext,
 ): [Pushable<Static<I>>, Pushable<Static<O>>] {
   const i = pushable<Static<I>>({ objectMode: true });
   const o = pushable<Static<O>>({ objectMode: true });
@@ -55,7 +55,7 @@ export function asClientStream<
 
   // handle
   (async () => {
-    await proc.handler({ environment, state }, ri, ro);
+    await proc.handler({ ...extendedContext, state }, ri, ro);
     ro.end();
   })();
 

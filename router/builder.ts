@@ -1,7 +1,7 @@
 import { TObject, Static, Type } from '@sinclair/typebox';
 import type { Pushable } from 'it-pushable';
 import { TransportMessage } from '../transport/message';
-import { IsomorphicEnvironment } from '../environment/types';
+import { ServiceContextWithState } from './context';
 
 export type ValidProcType = 'stream' | 'rpc';
 export type ProcListing = Record<
@@ -59,11 +59,6 @@ export type ProcType<
   ProcName extends keyof S['procedures'],
 > = S['procedures'][ProcName]['type'];
 
-export interface ProcedureContext<State extends object | unknown> {
-  environment: IsomorphicEnvironment;
-  state: State;
-}
-
 export type Procedure<
   State extends object | unknown,
   Ty extends ValidProcType,
@@ -74,7 +69,7 @@ export type Procedure<
       input: I;
       output: O;
       handler: (
-        context: ProcedureContext<State>,
+        context: ServiceContextWithState<State>,
         input: TransportMessage<Static<I>>,
       ) => Promise<TransportMessage<Static<O>>>;
       type: Ty;
@@ -83,7 +78,7 @@ export type Procedure<
       input: I;
       output: O;
       handler: (
-        context: ProcedureContext<State>,
+        context: ServiceContextWithState<State>,
         input: AsyncIterable<TransportMessage<Static<I>>>,
         output: Pushable<TransportMessage<Static<O>>>,
       ) => Promise<void>;

@@ -1,16 +1,11 @@
 import { TObject } from '@sinclair/typebox';
 import { Transport } from '../transport/types';
-import {
-  AnyService,
-  Procedure,
-  ProcedureContext,
-  ValidProcType,
-} from './builder';
+import { AnyService, Procedure, ValidProcType } from './builder';
 import { Value } from '@sinclair/typebox/value';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 import { OpaqueTransportMessage, TransportMessage } from '../transport/message';
-import { IsomorphicEnvironment } from '../environment/types';
+import { ServiceContext, ServiceContextWithState } from './context';
 
 export interface Server<Services> {
   services: Services;
@@ -24,11 +19,14 @@ interface ProcStream {
 }
 
 export async function createServer<Services extends Record<string, AnyService>>(
-  environment: IsomorphicEnvironment,
   transport: Transport,
   services: Services,
+  extendedContext?: ServiceContext,
 ): Promise<Server<Services>> {
-  const contextMap: Map<AnyService, ProcedureContext<object>> = new Map();
+  const contextMap: Map<
+    AnyService,
+    ServiceContextWithState<object>
+  > = new Map();
   const streamMap: Map<string, ProcStream> = new Map();
 
   function getContext(service: AnyService) {
@@ -43,7 +41,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
 
   for (const [serviceName, service] of Object.entries(services)) {
     // populate the context map
-    contextMap.set(service, { environment, state: service.state });
+    contextMap.set(service, { ...extendedContext, state: service.state });
 
     // create streams for every stream procedure
     for (const [procedureName, proc] of Object.entries(service.procedures)) {
