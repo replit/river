@@ -28,17 +28,17 @@ export const TestServiceConstructor = () =>
       type: 'rpc',
       input: Type.Object({ n: Type.Number() }),
       output: Type.Object({ result: Type.Number() }),
-      async handler(state, msg) {
+      async handler(ctx, msg) {
         const { n } = msg.payload;
-        state.count += n;
-        return reply(msg, { result: state.count });
+        ctx.state.count += n;
+        return reply(msg, { result: ctx.state.count });
       },
     })
     .defineProcedure('echo', {
       type: 'stream',
       input: EchoRequest,
       output: EchoResponse,
-      async handler(_state, msgStream, returnStream) {
+      async handler(_ctx, msgStream, returnStream) {
         for await (const msg of msgStream) {
           const req = msg.payload;
           if (!req.ignore) {

@@ -16,6 +16,7 @@ export type { ServerClient } from './router/client';
 export { createServer } from './router/server';
 export { asClientRpc, asClientStream } from './router/server.util';
 export type { Server } from './router/server';
+export type { ServiceContext, ServiceContextWithState } from './router/context';
 
 export { Transport } from './transport/types';
 export {

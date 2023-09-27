@@ -1,6 +1,7 @@
 import { TObject, Static, Type } from '@sinclair/typebox';
 import type { Pushable } from 'it-pushable';
 import { TransportMessage } from '../transport/message';
+import { ServiceContextWithState } from './context';
 
 export type ValidProcType = 'stream' | 'rpc';
 export type ProcListing = Record<
@@ -68,7 +69,7 @@ export type Procedure<
       input: I;
       output: O;
       handler: (
-        state: State,
+        context: ServiceContextWithState<State>,
         input: TransportMessage<Static<I>>,
       ) => Promise<TransportMessage<Static<O>>>;
       type: Ty;
@@ -77,7 +78,7 @@ export type Procedure<
       input: I;
       output: O;
       handler: (
-        state: State,
+        context: ServiceContextWithState<State>,
         input: AsyncIterable<TransportMessage<Static<I>>>,
         output: Pushable<TransportMessage<Static<O>>>,
       ) => Promise<void>;
