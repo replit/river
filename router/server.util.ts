@@ -15,7 +15,7 @@ export function asClientRpc<
 >(
   state: State,
   proc: Procedure<State, 'rpc', I, O>,
-  extendedContext?: ServiceContext,
+  extendedContext?: Omit<ServiceContext, 'state'>,
 ) {
   return (msg: Static<I>) =>
     proc
@@ -30,7 +30,7 @@ export function asClientStream<
 >(
   state: State,
   proc: Procedure<State, 'stream', I, O>,
-  extendedContext?: ServiceContext,
+  extendedContext?: Omit<ServiceContext, 'state'>,
 ): [Pushable<Static<I>>, Pushable<Static<O>>] {
   const i = pushable<Static<I>>({ objectMode: true });
   const o = pushable<Static<O>>({ objectMode: true });
