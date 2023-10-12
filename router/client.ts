@@ -20,7 +20,7 @@ type ServiceClient<Router extends AnyService> = {
       () => Promise<
         [
           Pushable<Static<ProcInput<Router, ProcName>>>, // input
-          AsyncIterator<Static<ProcOutput<Router, ProcName>>>, // output
+          AsyncIterableIterator<Static<ProcOutput<Router, ProcName>>>, // output
           () => void, // close handle
         ]
       >;
