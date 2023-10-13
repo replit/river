@@ -53,6 +53,8 @@ export abstract class Transport {
     this.handlers.delete(handler);
   }
 
-  abstract send(msg: OpaqueTransportMessage | TransportMessageAck): MessageId;
+  abstract send(
+    msg: OpaqueTransportMessage | TransportMessageAck,
+  ): Promise<MessageId>;
   abstract close(): Promise<void>;
 }

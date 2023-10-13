@@ -32,6 +32,7 @@ export type MessageId = string;
 export type OpaqueTransportMessage = TransportMessage<unknown>;
 export type TransportClientId = 'SERVER' | string;
 export const TransportAckSchema = Type.Object({
+  id: Type.String(),
   from: Type.String(),
   ack: Type.String(),
 });
@@ -63,6 +64,7 @@ export function payloadToTransportMessage<Payload extends object>(
 
 export function ack(msg: OpaqueTransportMessage): TransportMessageAck {
   return {
+    id: nanoid(),
     from: msg.to,
     ack: msg.id,
   };

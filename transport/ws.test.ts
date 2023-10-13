@@ -3,7 +3,7 @@ import { WebSocketServer } from 'ws';
 import { WebSocketTransport } from './ws';
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import {
-  createWebSocketClient,
+  createLocalWebSocketClient,
   createWebSocketServer,
   onServerReady,
   waitForMessage,
@@ -28,18 +28,22 @@ describe('sending and receiving across websockets works', () => {
   test('basic send/receive', async () => {
     let serverTransport: WebSocketTransport | undefined;
     wss.on('connection', (conn) => {
-      serverTransport = new WebSocketTransport(conn, 'SERVER');
+      serverTransport = new WebSocketTransport(
+        () => Promise.resolve(conn),
+        'SERVER',
+      );
     });
-
-    const clientSoc = await createWebSocketClient(port);
-    const clientTransport = new WebSocketTransport(clientSoc, 'client');
+    const clientTransport = new WebSocketTransport(
+      () => createLocalWebSocketClient(port),
+      'client',
+    );
 
     const msg = {
       msg: 'cool',
       test: 123,
     };
 
-    clientTransport.send({
+    await clientTransport.send({
       id: '1',
       from: 'client',
       to: 'SERVER',

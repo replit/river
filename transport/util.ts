@@ -18,31 +18,23 @@ export async function onServerReady(
   });
 }
 
+export async function createLocalWebSocketClient(port: number) {
+  return new WebSocket(`ws://localhost:${port}`);
+}
+
 export async function createWsTransports(
   port: number,
   wss: WebSocketServer,
 ): Promise<[Transport, Transport]> {
   return new Promise((resolve) => {
-    const clientSockPromise = createWebSocketClient(port);
+    const clientSockPromise = createLocalWebSocketClient(port);
     wss.on('connection', async (serverSock) => {
       resolve([
-        new WebSocketTransport(await clientSockPromise, 'client'),
-        new WebSocketTransport(serverSock, 'SERVER'),
+        new WebSocketTransport(() => clientSockPromise, 'client'),
+        new WebSocketTransport(() => Promise.resolve(serverSock), 'SERVER'),
       ]);
     });
   });
-}
-
-export async function waitForSocketReady(socket: WebSocket) {
-  return new Promise<void>((resolve) => {
-    socket.addEventListener('open', () => resolve());
-  });
-}
-
-export async function createWebSocketClient(port: number) {
-  const client = new WebSocket(`ws://localhost:${port}`);
-  await waitForSocketReady(client);
-  return client;
 }
 
 export async function waitForMessage(

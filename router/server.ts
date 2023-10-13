@@ -63,7 +63,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
             // sending outgoing messages back to client
             (async () => {
               for await (const response of outgoing) {
-                transport.send(response);
+                await transport.send(response);
               }
             })(),
           ]),
@@ -101,7 +101,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
             getContext(service),
             inputMessage,
           );
-          transport.send(response);
+          await transport.send(response);
           return;
         } else if (
           procedure.type === 'stream' &&

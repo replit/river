@@ -22,7 +22,7 @@ export class StreamTransport extends Transport {
     rl.on('line', (msg) => this.onMessage(msg));
   }
 
-  send(msg: OpaqueTransportMessage): string {
+  async send(msg: OpaqueTransportMessage): Promise<string> {
     const id = msg.id;
     this.output.write(this.codec.toStringBuf(msg) + '\n');
     return id;

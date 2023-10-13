@@ -77,7 +77,7 @@ export class MockTransport extends Transport {
     super(NaiveJsonCodec, clientId);
   }
 
-  send(msg: OpaqueTransportMessage): MessageId {
+  async send(msg: OpaqueTransportMessage): Promise<MessageId> {
     const id = msg.id;
     return id;
   }
