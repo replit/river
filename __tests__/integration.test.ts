@@ -126,7 +126,7 @@ describe('server-side test', () => {
   });
 });
 
-const port = 3001;
+const port = 4445;
 describe('client <-> server integration test', () => {
   const server = http.createServer();
   let wss: WebSocketServer;

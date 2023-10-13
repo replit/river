@@ -18,7 +18,7 @@ export class WebSocketTransport extends Transport {
   constructor(ws: WebSocket, clientId: TransportClientId) {
     super(NaiveJsonCodec, clientId);
     this.ws = ws;
-    ws.on('message', (msg) => this.onMessage(msg.toString()));
+    ws.onmessage = (msg) => this.onMessage(msg.data.toString());
   }
 
   send(msg: OpaqueTransportMessage): MessageId {

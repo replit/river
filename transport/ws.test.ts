@@ -9,7 +9,7 @@ import {
   waitForMessage,
 } from './util';
 
-const port = 3000;
+const port = 4444;
 describe('sending and receiving across websockets works', () => {
   const server = http.createServer();
   let wss: WebSocketServer;
