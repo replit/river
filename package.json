@@ -28,7 +28,7 @@
     "format": "npx prettier . --write",
     "build": "tsc",
     "prepack": "npm run build",
-    "release": "npm publish --access public dist",
+    "release": "npm publish --access public",
     "test": "vitest"
   },
   "engines": {
