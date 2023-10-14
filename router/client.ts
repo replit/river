@@ -74,7 +74,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       // this gets cleaned up on i.end() which is called by closeHandler
       (async () => {
         for await (const rawIn of i) {
-          await transport.send(
+          transport.send(
             msg(
               transport.clientId,
               'SERVER',
@@ -103,7 +103,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       return [i, o, closeHandler];
     } else {
       // rpc case
-      const id = await transport.send(
+      const id = transport.send(
         msg(
           transport.clientId,
           'SERVER',

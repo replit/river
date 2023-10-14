@@ -109,68 +109,85 @@ describe('server-side test', () => {
   });
 
   test('stream basic', async () => {
-    const [i, o] = asClientStream(initialState, service.procedures.echo);
+    const [input, output] = asClientStream(
+      initialState,
+      service.procedures.echo,
+    );
 
-    i.push({ msg: 'abc', ignore: false });
-    i.push({ msg: 'def', ignore: true });
-    i.push({ msg: 'ghi', ignore: false });
-    i.end();
+    input.push({ msg: 'abc', ignore: false });
+    input.push({ msg: 'def', ignore: true });
+    input.push({ msg: 'ghi', ignore: false });
+    input.end();
 
-    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({
-      response: 'abc',
-    });
-    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({
-      response: 'ghi',
-    });
-    expect(o.readableLength).toBe(0);
+    await expect(output.next().then((res) => res.value)).resolves.toStrictEqual(
+      {
+        response: 'abc',
+      },
+    );
+    await expect(output.next().then((res) => res.value)).resolves.toStrictEqual(
+      {
+        response: 'ghi',
+      },
+    );
+    expect(output.readableLength).toBe(0);
   });
 });
 
 const port = 4445;
 describe('client <-> server integration test', () => {
   const server = http.createServer();
-  let wss: WebSocketServer;
+  let webSocketServer: WebSocketServer;
 
   beforeAll(async () => {
     await onServerReady(server, port);
-    wss = await createWebSocketServer(server);
+    webSocketServer = await createWebSocketServer(server);
   });
 
   afterAll(() => {
-    wss.clients.forEach((socket) => {
+    webSocketServer.clients.forEach((socket) => {
       socket.close();
     });
     server.close();
   });
 
   test('rpc', async () => {
-    const [ct, st] = await createWsTransports(port, wss);
+    const [clientTransport, serverTransport] = await createWsTransports(
+      port,
+      webSocketServer,
+    );
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(st, serviceDefs);
-    const client = createClient<typeof server>(ct);
+    const server = await createServer(serverTransport, serviceDefs);
+    const client = createClient<typeof server>(clientTransport);
     await expect(client.test.add({ n: 3 })).resolves.toStrictEqual({
       result: 3,
     });
   });
 
   test('stream', async () => {
-    const [ct, st] = await createWsTransports(port, wss);
+    const [clientTransport, serverTransport] = await createWsTransports(
+      port,
+      webSocketServer,
+    );
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(st, serviceDefs);
-    const client = createClient<typeof server>(ct);
+    const server = await createServer(serverTransport, serviceDefs);
+    const client = createClient<typeof server>(clientTransport);
 
-    const [i, o, close] = await client.test.echo();
-    i.push({ msg: 'abc', ignore: false });
-    i.push({ msg: 'def', ignore: true });
-    i.push({ msg: 'ghi', ignore: false });
-    i.end();
+    const [input, output, close] = await client.test.echo();
+    input.push({ msg: 'abc', ignore: false });
+    input.push({ msg: 'def', ignore: true });
+    input.push({ msg: 'ghi', ignore: false });
+    input.end();
 
-    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({
-      response: 'abc',
-    });
-    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({
-      response: 'ghi',
-    });
+    await expect(output.next().then((res) => res.value)).resolves.toStrictEqual(
+      {
+        response: 'abc',
+      },
+    );
+    await expect(output.next().then((res) => res.value)).resolves.toStrictEqual(
+      {
+        response: 'ghi',
+      },
+    );
     close();
   });
 });

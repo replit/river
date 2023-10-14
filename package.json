@@ -29,7 +29,8 @@
     "build": "tsc",
     "prepack": "npm run build",
     "release": "npm publish --access public",
-    "test": "vitest"
+    "test": "vitest",
+    "bench": "vitest bench"
   },
   "engines": {
     "node": ">=16"

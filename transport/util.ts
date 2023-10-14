@@ -25,7 +25,7 @@ export async function createLocalWebSocketClient(port: number) {
 export async function createWsTransports(
   port: number,
   wss: WebSocketServer,
-): Promise<[Transport, Transport]> {
+): Promise<[WebSocketTransport, WebSocketTransport]> {
   return new Promise((resolve) => {
     const clientSockPromise = createLocalWebSocketClient(port);
     wss.on('connection', async (serverSock) => {

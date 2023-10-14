@@ -63,7 +63,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
             // sending outgoing messages back to client
             (async () => {
               for await (const response of outgoing) {
-                await transport.send(response);
+                transport.send(response);
               }
             })(),
           ]),
@@ -93,6 +93,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
         const inputMessage = msg as TransportMessage<
           (typeof procedure)['input']
         >;
+
         if (
           procedure.type === 'rpc' &&
           Value.Check(procedure.input, inputMessage.payload)
@@ -101,7 +102,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
             getContext(service),
             inputMessage,
           );
-          await transport.send(response);
+          transport.send(response);
           return;
         } else if (
           procedure.type === 'stream' &&

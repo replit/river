@@ -1,10 +1,9 @@
 import http from 'http';
 import { WebSocketServer } from 'ws';
-import { WebSocketTransport } from './ws';
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import {
-  createLocalWebSocketClient,
   createWebSocketServer,
+  createWsTransports,
   onServerReady,
   waitForMessage,
 } from './util';
@@ -26,24 +25,16 @@ describe('sending and receiving across websockets works', () => {
   });
 
   test('basic send/receive', async () => {
-    let serverTransport: WebSocketTransport | undefined;
-    wss.on('connection', (conn) => {
-      serverTransport = new WebSocketTransport(
-        () => Promise.resolve(conn),
-        'SERVER',
-      );
-    });
-    const clientTransport = new WebSocketTransport(
-      () => createLocalWebSocketClient(port),
-      'client',
+    const [clientTransport, serverTransport] = await createWsTransports(
+      port,
+      wss,
     );
-
     const msg = {
       msg: 'cool',
       test: 123,
     };
 
-    await clientTransport.send({
+    clientTransport.send({
       id: '1',
       from: 'client',
       to: 'SERVER',
@@ -52,7 +43,6 @@ describe('sending and receiving across websockets works', () => {
       payload: msg,
     });
 
-    expect(serverTransport).toBeTruthy();
-    return expect(waitForMessage(serverTransport!)).resolves.toStrictEqual(msg);
+    return expect(waitForMessage(serverTransport)).resolves.toStrictEqual(msg);
   });
 });
