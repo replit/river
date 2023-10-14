@@ -30,7 +30,7 @@
     "prepack": "npm run build",
     "release": "npm publish --access public",
     "test": "vitest",
-    "bench": "vitest bench --reporter='verbose'"
+    "bench": "vitest bench"
   },
   "engines": {
     "node": ">=16"
