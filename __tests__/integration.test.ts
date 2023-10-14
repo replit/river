@@ -188,6 +188,7 @@ describe('client <-> server integration test', () => {
         response: 'ghi',
       },
     );
+
     close();
   });
 });
