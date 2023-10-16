@@ -60,12 +60,11 @@ export class WebSocketTransport extends Transport {
         });
 
       if (this.ws) {
-        // constructed ws but not open
+        // resolve on open
         if (this.ws.readyState === this.ws.OPEN) {
           return resolve(this.ws);
         }
 
-        // resolve on open
         this.ws.onopen = (evt) => {
           return resolve(evt.target);
         };
@@ -103,8 +102,8 @@ export class WebSocketTransport extends Transport {
 
   private tickSendLoop() {
     if (this.ws && this.ws.readyState === this.ws.OPEN) {
-      const id = this.sendQueue.shift()!;
-      if (id) {
+      const id = this.sendQueue.shift();
+      if (id !== undefined) {
         const msg = this.sendBuffer.get(id);
         if (msg) {
           this.ws.send(this.codec.toStringBuf(msg));
