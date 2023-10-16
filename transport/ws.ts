@@ -12,7 +12,7 @@ interface Options {
 }
 
 const defaultOptions: Options = {
-  retryIntervalMs: 0,
+  retryIntervalMs: 200,
 };
 
 // TODO should answer:
@@ -38,7 +38,7 @@ export class WebSocketTransport extends Transport {
     this.destroyed = false;
     this.reconnecting = false;
     this.wsGetter = wsGetter;
-    this.lastRetryEpoch = Date.now();
+    this.lastRetryEpoch = 0;
     this.options = { ...defaultOptions, ...options };
     this.sendQueue = [];
     this.tickSendLoop();
@@ -58,9 +58,20 @@ export class WebSocketTransport extends Transport {
           return reject('ws is closing or closed');
         }
 
-        ws.onopen = () => resolve(ws);
-        ws.onerror = (err) => reject(err);
-        ws.onclose = (_evt) => reject(_evt.reason);
+        ws.addEventListener('open', function onOpen() {
+          ws.removeEventListener('open', onOpen);
+          resolve(ws);
+        });
+
+        ws.addEventListener('error', function onError(err) {
+          ws.removeEventListener('error', onError);
+          reject(err);
+        });
+
+        ws.addEventListener('close', function onClose(evt) {
+          ws.removeEventListener('close', onClose);
+          reject(evt.reason);
+        });
       });
 
       this.ws = resolvedWs;
@@ -88,6 +99,8 @@ export class WebSocketTransport extends Transport {
     }
 
     if (this.ws && this.ws.readyState === this.ws.OPEN) {
+      // TODO; probably just send the whole queue lol
+      // take something off of the queue and send it
       const id = this.sendQueue.shift();
       if (id !== undefined) {
         const msg = this.sendBuffer.get(id);
