@@ -48,7 +48,7 @@ export class WebSocketTransport extends Transport {
 
   // postcondition: ws is concretely a WebSocket
   private async waitForSocketReady(retryCount = 0): Promise<WebSocket> {
-    return new Promise<WebSocket>((resolve, reject) => {
+    const ws = await new Promise<WebSocket>((resolve, reject) => {
       if (this.destroyed) {
         return reject(new Error('ws is destroyed'));
       }
@@ -87,10 +87,10 @@ export class WebSocketTransport extends Transport {
         // ws not constructed, init and try again
         return retry();
       }
-    }).then((ws) => {
-      ws.onmessage = (msg) => this.onMessage(msg.data.toString());
-      return ws;
     });
+
+    ws.onmessage = (msg) => this.onMessage(msg.data.toString());
+    return ws;
   }
 
   send(msg: OpaqueTransportMessage): MessageId {
@@ -110,7 +110,9 @@ export class WebSocketTransport extends Transport {
         }
       }
     } else {
-      this.waitForSocketReady().catch();
+      this.waitForSocketReady()
+        .then(ws => this.ws = ws)
+        .catch();
     }
 
     if (!this.destroyed) {
