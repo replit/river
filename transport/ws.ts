@@ -99,8 +99,6 @@ export class WebSocketTransport extends Transport {
     }
 
     if (this.ws && this.ws.readyState === this.ws.OPEN) {
-      // TODO; probably just send the whole queue lol
-      // take something off of the queue and send it
       const id = this.sendQueue.shift();
       if (id !== undefined) {
         const msg = this.sendBuffer.get(id);
