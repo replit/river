@@ -8,18 +8,12 @@ import {
 } from './message';
 
 interface Options {
-  retryCountLimit: number;
   retryIntervalMs: number;
 }
 
 const defaultOptions: Options = {
-  retryCountLimit: 5,
-  retryIntervalMs: 200,
+  retryIntervalMs: 0,
 };
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 // TODO should answer:
 // - how do we handle graceful client disconnects? (i.e. close tab)
@@ -30,6 +24,8 @@ export class WebSocketTransport extends Transport {
   wsGetter: () => Promise<WebSocket>;
   ws?: WebSocket;
   destroyed: boolean;
+  reconnecting: boolean;
+  lastRetryEpoch: number;
   options: Options;
   sendQueue: Array<MessageId>;
 
@@ -40,57 +36,40 @@ export class WebSocketTransport extends Transport {
   ) {
     super(NaiveJsonCodec, clientId);
     this.destroyed = false;
+    this.reconnecting = false;
     this.wsGetter = wsGetter;
+    this.lastRetryEpoch = Date.now();
     this.options = { ...defaultOptions, ...options };
     this.sendQueue = [];
     this.tickSendLoop();
   }
 
   // postcondition: ws is concretely a WebSocket
-  private async waitForSocketReady(retryCount = 0): Promise<WebSocket> {
-    const ws = await new Promise<WebSocket>((resolve, reject) => {
-      if (this.destroyed) {
-        return reject(new Error('ws is destroyed'));
-      }
+  private async waitForSocketReady() {
+    const ws = this.ws ?? (await this.wsGetter());
 
-      const retry = () =>
-        this.wsGetter().then((ws) => {
-          this.ws = ws;
-          return this.waitForSocketReady(retryCount + 1);
-        });
-
-      if (this.ws) {
-        // resolve on open
-        if (this.ws.readyState === this.ws.OPEN) {
-          return resolve(this.ws);
+    try {
+      const resolvedWs = await new Promise<WebSocket>((resolve, reject) => {
+        if (ws.readyState === ws.OPEN) {
+          return resolve(ws);
         }
 
-        this.ws.onopen = (evt) => {
-          return resolve(evt.target);
-        };
+        if (ws.readyState === ws.CLOSING || ws.readyState === ws.CLOSED) {
+          return reject('ws is closing or closed');
+        }
 
-        this.ws.onerror = (err) => {
-          // reject if retry limit reached
-          if (retryCount === this.options.retryCountLimit) {
-            err.message = `ws still failing after ${this.options.retryCountLimit} tries: ${err.message}`;
-            return reject(err);
-          }
+        ws.onopen = () => resolve(ws);
+        ws.onerror = (err) => reject(err);
+        ws.onclose = (_evt) => reject(_evt.reason);
+      });
 
-          // otherwise, retry
-          return delay(this.options.retryIntervalMs).then(() => retry());
-        };
+      this.ws = resolvedWs;
+      this.ws.onmessage = (msg) => this.onMessage(msg.data.toString());
+    } catch (e) {
+      this.ws = undefined;
+    }
 
-        this.ws.onclose = (evt) => {
-          // TODO: logging here
-        };
-      } else {
-        // ws not constructed, init and try again
-        return retry();
-      }
-    });
-
-    ws.onmessage = (msg) => this.onMessage(msg.data.toString());
-    return ws;
+    this.reconnecting = false;
   }
 
   send(msg: OpaqueTransportMessage): MessageId {
@@ -100,7 +79,14 @@ export class WebSocketTransport extends Transport {
     return id;
   }
 
+  // Didn't want to make `send()` async but we also wanted to keep message send order in the face of
+  // async (and possibly failing) sends. Easiest way to solve this ended up being a send queue that
+  // gets polled on. This is what the Node event loop does anyways so hooking into that isn't terrible lol (?)
   private tickSendLoop() {
+    if (this.destroyed) {
+      return;
+    }
+
     if (this.ws && this.ws.readyState === this.ws.OPEN) {
       const id = this.sendQueue.shift();
       if (id !== undefined) {
@@ -109,15 +95,16 @@ export class WebSocketTransport extends Transport {
           this.ws.send(this.codec.toStringBuf(msg));
         }
       }
-    } else {
-      this.waitForSocketReady()
-        .then(ws => this.ws = ws)
-        .catch();
+    } else if (
+      !this.reconnecting &&
+      Date.now() - this.lastRetryEpoch > this.options.retryIntervalMs
+    ) {
+      this.lastRetryEpoch = Date.now();
+      this.reconnecting = true;
+      this.waitForSocketReady().catch();
     }
 
-    if (!this.destroyed) {
-      setImmediate(() => this.tickSendLoop());
-    }
+    setImmediate(() => this.tickSendLoop());
   }
 
   async close() {
