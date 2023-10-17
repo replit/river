@@ -34,7 +34,8 @@ const dummyPayloadLarge = () => ({
   payload: largePayload,
 });
 
-describe('transport level bandwidth', async () => {
+const BENCH_DURATION = 1000;
+describe.only('transport level bandwidth', async () => {
   const port = 4444;
   const server = http.createServer();
   await onServerReady(server, port);
@@ -44,17 +45,25 @@ describe('transport level bandwidth', async () => {
     webSocketServer,
   );
 
-  bench('send and recv (small payload)', async () => {
-    const id = clientTransport.send(dummyPayloadSmall());
-    await waitForMessage(serverTransport, (msg) => msg.id === id);
-    return;
-  });
+  bench(
+    'send and recv (small payload)',
+    async () => {
+      const id = clientTransport.send(dummyPayloadSmall());
+      await waitForMessage(serverTransport, (msg) => msg.id === id);
+      return;
+    },
+    { time: BENCH_DURATION },
+  );
 
-  bench('send and recv (large payload)', async () => {
-    const id = clientTransport.send(dummyPayloadLarge());
-    await waitForMessage(serverTransport, (msg) => msg.id === id);
-    return;
-  });
+  bench(
+    'send and recv (large payload)',
+    async () => {
+      const id = clientTransport.send(dummyPayloadLarge());
+      await waitForMessage(serverTransport, (msg) => msg.id === id);
+      return;
+    },
+    { time: BENCH_DURATION },
+  );
 });
 
 describe('simple router level bandwidth', async () => {
@@ -70,19 +79,31 @@ describe('simple router level bandwidth', async () => {
   const server = await createServer(serverTransport, serviceDefs);
   const client = createClient<typeof server>(clientTransport);
 
-  bench('rpc (wait for response)', async () => {
-    await client.test.add({ n: 1 });
-  });
+  bench(
+    'rpc (wait for response)',
+    async () => {
+      await client.test.add({ n: 1 });
+    },
+    { time: BENCH_DURATION },
+  );
 
   const [input, output] = await client.test.echo();
-  bench('stream (wait for response)', async () => {
-    input.push({ msg: 'abc', ignore: false });
-    await output.next();
-  });
+  bench(
+    'stream (wait for response)',
+    async () => {
+      input.push({ msg: 'abc', ignore: false });
+      await output.next();
+    },
+    { time: BENCH_DURATION },
+  );
 
-  bench('stream', async () => {
-    input.push({ msg: 'abc', ignore: false });
-  });
+  bench(
+    'stream',
+    async () => {
+      input.push({ msg: 'abc', ignore: false });
+    },
+    { time: BENCH_DURATION },
+  );
 });
 
 describe('complex (50 procedures) router level bandwidth', async () => {
@@ -104,7 +125,11 @@ describe('complex (50 procedures) router level bandwidth', async () => {
   const server = await createServer(serverTransport, serviceDefs);
   const client = createClient<typeof server>(clientTransport);
 
-  bench('rpc (wait for response)', async () => {
-    await client.b.f35({ a: 1 });
-  });
+  bench(
+    'rpc (wait for response)',
+    async () => {
+      await client.b.f35({ a: 1 });
+    },
+    { time: BENCH_DURATION },
+  );
 });

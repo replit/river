@@ -41,7 +41,7 @@ export class WebSocketTransport extends Transport {
   private async tryConnect() {
     const ws = await (this.reconnectPromise ?? this.wsGetter());
 
-    // wait until it's ready
+    // wait until it's ready or we get an error
     const res = await new Promise<WebSocketResult>((resolve) => {
       if (ws.readyState === ws.OPEN) {
         return resolve({ ws });
@@ -69,7 +69,6 @@ export class WebSocketTransport extends Transport {
 
     if ('err' in res) {
       // TODO: logging
-      console.log('retry');
       setTimeout(() => this.tryConnect(), this.options.retryIntervalMs);
     } else {
       this.ws = res.ws;
