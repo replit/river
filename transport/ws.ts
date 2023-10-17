@@ -25,7 +25,7 @@ export class WebSocketTransport extends Transport {
   ws?: WebSocket;
   destroyed: boolean;
   reconnecting: boolean;
-  lastRetryEpoch: number;
+  lastRetryTime: number;
   options: Options;
   sendQueue: Array<MessageId>;
 
@@ -38,14 +38,16 @@ export class WebSocketTransport extends Transport {
     this.destroyed = false;
     this.reconnecting = false;
     this.wsGetter = wsGetter;
-    this.lastRetryEpoch = 0;
+    this.lastRetryTime = 0;
     this.options = { ...defaultOptions, ...options };
     this.sendQueue = [];
     this.tickSendLoop();
   }
 
   // postcondition: ws is concretely a WebSocket
-  private async waitForSocketReady() {
+  private async startReconnect() {
+    this.lastRetryTime = Date.now();
+    this.reconnecting = true;
     const ws = this.ws ?? (await this.wsGetter());
 
     try {
@@ -55,7 +57,7 @@ export class WebSocketTransport extends Transport {
         }
 
         if (ws.readyState === ws.CLOSING || ws.readyState === ws.CLOSED) {
-          return reject('ws is closing or closed');
+          return reject(new Error('ws is closing or closed'));
         }
 
         ws.addEventListener('open', function onOpen() {
@@ -70,7 +72,7 @@ export class WebSocketTransport extends Transport {
 
         ws.addEventListener('close', function onClose(evt) {
           ws.removeEventListener('close', onClose);
-          reject(evt.reason);
+          reject(new Error(evt.reason));
         });
       });
 
@@ -99,6 +101,7 @@ export class WebSocketTransport extends Transport {
     }
 
     if (this.ws && this.ws.readyState === this.ws.OPEN) {
+      // only send one at a time to minimize chance of ws dying between message sends
       const id = this.sendQueue.shift();
       if (id !== undefined) {
         const msg = this.sendBuffer.get(id);
@@ -108,14 +111,13 @@ export class WebSocketTransport extends Transport {
       }
     } else if (
       !this.reconnecting &&
-      Date.now() - this.lastRetryEpoch > this.options.retryIntervalMs
+      Date.now() - this.lastRetryTime > this.options.retryIntervalMs
     ) {
-      this.lastRetryEpoch = Date.now();
-      this.reconnecting = true;
-      this.waitForSocketReady().catch();
+      // we dont do anything even if it fails, we can try again next tick
+      this.startReconnect().catch();
     }
 
-    setImmediate(() => this.tickSendLoop());
+    setTimeout(() => this.tickSendLoop(), 0);
   }
 
   async close() {

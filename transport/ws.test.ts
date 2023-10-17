@@ -46,3 +46,10 @@ describe('sending and receiving across websockets works', () => {
     return expect(waitForMessage(serverTransport)).resolves.toStrictEqual(msg);
   });
 });
+
+describe('retry logic', () => {
+  test('ws transport is recreated after disconnect', () => {});
+
+  test('ws transport is not recreated after manually closing', () => {});
+  test('message order is preserved in the face of disconnects', () => {});
+});
