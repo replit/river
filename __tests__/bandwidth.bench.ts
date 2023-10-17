@@ -35,7 +35,7 @@ const dummyPayloadLarge = () => ({
 });
 
 const BENCH_DURATION = 1000;
-describe.only('transport level bandwidth', async () => {
+describe('transport level bandwidth', async () => {
   const port = 4444;
   const server = http.createServer();
   await onServerReady(server, port);
