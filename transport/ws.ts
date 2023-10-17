@@ -15,17 +15,12 @@ const defaultOptions: Options = {
   retryIntervalMs: 200,
 };
 
-// TODO should answer:
-// - how do we handle graceful client disconnects? (i.e. close tab)
-// - how do we handle graceful service disconnects (i.e. a fuck off message)?
-// - how do we handle forceful client disconnects? (i.e. broken connection, offline)
-// - how do we handle forceful service disconnects (i.e. a crash)?
+type WebSocketResult = { ws: WebSocket } | { err: string };
 export class WebSocketTransport extends Transport {
   wsGetter: () => Promise<WebSocket>;
   ws?: WebSocket;
   destroyed: boolean;
-  reconnecting: boolean;
-  lastRetryTime: number;
+  reconnectPromise?: Promise<WebSocket>;
   options: Options;
   sendQueue: Array<MessageId>;
 
@@ -36,88 +31,75 @@ export class WebSocketTransport extends Transport {
   ) {
     super(NaiveJsonCodec, clientId);
     this.destroyed = false;
-    this.reconnecting = false;
     this.wsGetter = wsGetter;
-    this.lastRetryTime = 0;
     this.options = { ...defaultOptions, ...options };
     this.sendQueue = [];
-    this.tickSendLoop();
+    this.tryConnect();
   }
 
   // postcondition: ws is concretely a WebSocket
-  private async startReconnect() {
-    this.lastRetryTime = Date.now();
-    this.reconnecting = true;
-    const ws = this.ws ?? (await this.wsGetter());
+  private async tryConnect() {
+    const ws = await (this.reconnectPromise ?? this.wsGetter());
 
-    try {
-      const resolvedWs = await new Promise<WebSocket>((resolve, reject) => {
-        if (ws.readyState === ws.OPEN) {
-          return resolve(ws);
-        }
+    // wait until it's ready
+    const res = await new Promise<WebSocketResult>((resolve) => {
+      if (ws.readyState === ws.OPEN) {
+        return resolve({ ws });
+      }
 
-        if (ws.readyState === ws.CLOSING || ws.readyState === ws.CLOSED) {
-          return reject(new Error('ws is closing or closed'));
-        }
+      if (ws.readyState === ws.CLOSING || ws.readyState === ws.CLOSED) {
+        return resolve({ err: 'ws is closing or closed' });
+      }
 
-        ws.addEventListener('open', function onOpen() {
-          ws.removeEventListener('open', onOpen);
-          resolve(ws);
-        });
-
-        ws.addEventListener('error', function onError(err) {
-          ws.removeEventListener('error', onError);
-          reject(err);
-        });
-
-        ws.addEventListener('close', function onClose(evt) {
-          ws.removeEventListener('close', onClose);
-          reject(new Error(evt.reason));
-        });
+      ws.addEventListener('open', function onOpen() {
+        ws.removeEventListener('open', onOpen);
+        resolve({ ws });
       });
 
-      this.ws = resolvedWs;
+      ws.addEventListener('error', function onError(err) {
+        ws.removeEventListener('error', onError);
+        resolve({ err: err.message });
+      });
+
+      ws.addEventListener('close', function onClose(evt) {
+        ws.removeEventListener('close', onClose);
+        resolve({ err: evt.reason });
+      });
+    });
+
+    if ('err' in res) {
+      // TODO: logging
+      console.log('retry');
+      setTimeout(() => this.tryConnect(), this.options.retryIntervalMs);
+    } else {
+      this.ws = res.ws;
       this.ws.onmessage = (msg) => this.onMessage(msg.data.toString());
-    } catch (e) {
-      this.ws = undefined;
-    }
 
-    this.reconnecting = false;
-  }
-
-  send(msg: OpaqueTransportMessage): MessageId {
-    const id = msg.id;
-    this.sendQueue.push(id);
-    this.sendBuffer.set(id, msg);
-    return id;
-  }
-
-  // Didn't want to make `send()` async but we also wanted to keep message send order in the face of
-  // async (and possibly failing) sends. Easiest way to solve this ended up being a send queue that
-  // gets polled on. This is what the Node event loop does anyways so hooking into that isn't terrible lol (?)
-  private tickSendLoop() {
-    if (this.destroyed) {
-      return;
-    }
-
-    if (this.ws && this.ws.readyState === this.ws.OPEN) {
-      // only send one at a time to minimize chance of ws dying between message sends
-      const id = this.sendQueue.shift();
-      if (id !== undefined) {
+      // send outstanding
+      for (const id of this.sendQueue) {
         const msg = this.sendBuffer.get(id);
         if (msg) {
           this.ws.send(this.codec.toStringBuf(msg));
         }
       }
-    } else if (
-      !this.reconnecting &&
-      Date.now() - this.lastRetryTime > this.options.retryIntervalMs
-    ) {
-      // we dont do anything even if it fails, we can try again next tick
-      this.startReconnect().catch();
+    }
+  }
+
+  send(msg: OpaqueTransportMessage): MessageId {
+    const id = msg.id;
+    if (this.destroyed) {
+      return id;
     }
 
-    setTimeout(() => this.tickSendLoop(), 0);
+    this.sendBuffer.set(id, msg);
+    if (this.ws && this.ws.readyState === this.ws.OPEN) {
+      this.ws.send(this.codec.toStringBuf(msg));
+    } else {
+      this.sendQueue.push(id);
+      this.tryConnect().catch();
+    }
+
+    return id;
   }
 
   async close() {
