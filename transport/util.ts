@@ -9,12 +9,16 @@ export async function createWebSocketServer(server: http.Server) {
   return new WebSocketServer({ server });
 }
 
-export async function onServerReady(
-  server: http.Server,
-  port: number,
-): Promise<void> {
-  return new Promise((resolve) => {
-    server.listen(port, resolve);
+export async function onServerReady(server: http.Server): Promise<number> {
+  return new Promise((resolve, reject) => {
+    server.listen(() => {
+      const addr = server.address();
+      if (typeof addr === 'object' && addr) {
+        resolve(addr.port);
+      } else {
+        reject(new Error("couldn't find a port to allocate"));
+      }
+    });
   });
 }
 

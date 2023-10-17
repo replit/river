@@ -1,9 +1,8 @@
 import http from 'http';
-import { WebSocketServer } from 'ws';
 import { Type } from '@sinclair/typebox';
 import { ServiceBuilder, serializeService } from '../router/builder';
 import { reply } from '../transport/message';
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, describe, expect, test } from 'vitest';
 import {
   createWebSocketServer,
   createWsTransports,
@@ -133,15 +132,10 @@ describe('server-side test', () => {
   });
 });
 
-const port = 4445;
-describe('client <-> server integration test', () => {
+describe('client <-> server integration test', async () => {
   const server = http.createServer();
-  let webSocketServer: WebSocketServer;
-
-  beforeAll(async () => {
-    await onServerReady(server, port);
-    webSocketServer = await createWebSocketServer(server);
-  });
+  const port = await onServerReady(server);
+  const webSocketServer = await createWebSocketServer(server);
 
   afterAll(() => {
     webSocketServer.clients.forEach((socket) => {
