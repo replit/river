@@ -20,7 +20,7 @@ export class WebSocketTransport extends Transport {
   wsGetter: () => Promise<WebSocket>;
   ws?: WebSocket;
   destroyed: boolean;
-  reconnectPromise?: Promise<WebSocket>;
+  reconnectPromise?: Promise<WebSocketResult>;
   options: Options;
   sendQueue: Array<MessageId>;
 
@@ -39,10 +39,9 @@ export class WebSocketTransport extends Transport {
 
   // postcondition: ws is concretely a WebSocket
   private async tryConnect() {
-    const ws = await (this.reconnectPromise ?? this.wsGetter());
-
     // wait until it's ready or we get an error
-    const res = await new Promise<WebSocketResult>((resolve) => {
+    this.reconnectPromise ??= new Promise<WebSocketResult>(async (resolve) => {
+      const ws = await this.wsGetter();
       if (ws.readyState === ws.OPEN) {
         return resolve({ ws });
       }
@@ -67,6 +66,7 @@ export class WebSocketTransport extends Transport {
       });
     });
 
+    const res = await this.reconnectPromise;
     if ('err' in res) {
       // TODO: logging
       setTimeout(() => this.tryConnect(), this.options.retryIntervalMs);
@@ -84,6 +84,8 @@ export class WebSocketTransport extends Transport {
         this.ws.send(this.codec.toStringBuf(msg));
       }
     }
+
+    this.reconnectPromise = undefined;
   }
 
   send(msg: OpaqueTransportMessage): MessageId {
