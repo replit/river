@@ -1,7 +1,7 @@
 import http from 'http';
 import { Type } from '@sinclair/typebox';
 import { ServiceBuilder, serializeService } from '../router/builder';
-import { reply } from '../transport/message';
+import { TransportMessage, reply } from '../transport/message';
 import { afterAll, describe, expect, test } from 'vitest';
 import {
   createWebSocketServer,
@@ -11,6 +11,7 @@ import {
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { asClientRpc, asClientStream } from '../router/server.util';
+import { nanoid } from 'nanoid';
 
 export const EchoRequest = Type.Object({
   msg: Type.String(),
@@ -44,6 +45,31 @@ export const TestServiceConstructor = () =>
             returnStream.push(reply(msg, { response: req.msg }));
           }
         }
+      },
+    })
+    .finalize();
+
+const OrderingServiceConstructor = () =>
+  ServiceBuilder.create('test')
+    .initialState({
+      msgs: [] as number[],
+    })
+    .defineProcedure('add', {
+      type: 'rpc',
+      input: Type.Object({ n: Type.Number() }),
+      output: Type.Object({ ok: Type.Boolean() }),
+      async handler(ctx, msg) {
+        const { n } = msg.payload;
+        ctx.state.msgs.push(n);
+        return reply(msg, { ok: true });
+      },
+    })
+    .defineProcedure('getAll', {
+      type: 'rpc',
+      input: Type.Object({}),
+      output: Type.Object({ msgs: Type.Array(Type.Number()) }),
+      async handler(ctx, msg) {
+        return reply(msg, { msgs: ctx.state.msgs });
       },
     })
     .finalize();
@@ -184,5 +210,35 @@ describe('client <-> server integration test', async () => {
     );
 
     close();
+  });
+
+  test('message order is preserved in the face of disconnects', async () => {
+    const [clientTransport, serverTransport] = createWsTransports(
+      port,
+      webSocketServer,
+    );
+    const serviceDefs = { test: OrderingServiceConstructor() };
+    const server = await createServer(serverTransport, serviceDefs);
+    const client = createClient<typeof server>(clientTransport);
+
+    const expected: number[] = [];
+    for (let i = 0; i < 50; i++) {
+      expected.push(i);
+
+      if (i == 10) {
+        clientTransport.ws?.close();
+      }
+
+      if (i == 42) {
+        clientTransport.ws?.terminate();
+      }
+
+      await client.test.add({
+        n: i,
+      });
+    }
+
+    const res = await client.test.getAll({});
+    return expect(res.msgs).toStrictEqual(expected);
   });
 });
