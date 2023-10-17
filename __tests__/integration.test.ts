@@ -145,7 +145,7 @@ describe('client <-> server integration test', async () => {
   });
 
   test('rpc', async () => {
-    const [clientTransport, serverTransport] = await createWsTransports(
+    const [clientTransport, serverTransport] = createWsTransports(
       port,
       webSocketServer,
     );
@@ -158,7 +158,7 @@ describe('client <-> server integration test', async () => {
   });
 
   test('stream', async () => {
-    const [clientTransport, serverTransport] = await createWsTransports(
+    const [clientTransport, serverTransport] = createWsTransports(
       port,
       webSocketServer,
     );

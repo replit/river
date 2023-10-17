@@ -39,7 +39,7 @@ describe('transport level bandwidth', async () => {
   const server = http.createServer();
   const port = await onServerReady(server);
   const webSocketServer = await createWebSocketServer(server);
-  const [clientTransport, serverTransport] = await createWsTransports(
+  const [clientTransport, serverTransport] = createWsTransports(
     port,
     webSocketServer,
   );
@@ -69,7 +69,7 @@ describe('simple router level bandwidth', async () => {
   const httpServer = http.createServer();
   const port = await onServerReady(httpServer);
   const webSocketServer = await createWebSocketServer(httpServer);
-  const [clientTransport, serverTransport] = await createWsTransports(
+  const [clientTransport, serverTransport] = createWsTransports(
     port,
     webSocketServer,
   );
@@ -108,7 +108,7 @@ describe('complex (50 procedures) router level bandwidth', async () => {
   const httpServer = http.createServer();
   const port = await onServerReady(httpServer);
   const webSocketServer = await createWebSocketServer(httpServer);
-  const [clientTransport, serverTransport] = await createWsTransports(
+  const [clientTransport, serverTransport] = createWsTransports(
     port,
     webSocketServer,
   );

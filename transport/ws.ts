@@ -12,7 +12,7 @@ interface Options {
 }
 
 const defaultOptions: Options = {
-  retryIntervalMs: 200,
+  retryIntervalMs: 250,
 };
 
 type WebSocketResult = { ws: WebSocket } | { err: string };
@@ -65,14 +65,16 @@ export class WebSocketTransport extends Transport {
         resolve({ err: evt.reason });
       });
     });
-
     const res = await this.reconnectPromise;
-    if ('err' in res) {
-      // TODO: logging
-      setTimeout(() => this.tryConnect(), this.options.retryIntervalMs);
-    } else {
+
+    // only send if we resolved a valid websocket
+    if ('ws' in res && res.ws.readyState === res.ws.OPEN) {
       this.ws = res.ws;
       this.ws.onmessage = (msg) => this.onMessage(msg.data.toString());
+      this.ws.onclose = () => {
+        this.reconnectPromise = undefined;
+        this.tryConnect().catch();
+      };
 
       // send outstanding
       for (const id of this.sendQueue) {
@@ -83,9 +85,14 @@ export class WebSocketTransport extends Transport {
 
         this.ws.send(this.codec.toStringBuf(msg));
       }
+
+      this.sendQueue = [];
+      return;
     }
 
+    // otherwise try and reconnect again
     this.reconnectPromise = undefined;
+    setTimeout(() => this.tryConnect(), this.options.retryIntervalMs);
   }
 
   send(msg: OpaqueTransportMessage): MessageId {

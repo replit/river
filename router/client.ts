@@ -67,13 +67,13 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
 
     if (input === undefined) {
       // stream case
-      const i = pushable({ objectMode: true });
-      const o = pushable({ objectMode: true });
+      const inputStream = pushable({ objectMode: true });
+      const outputStream = pushable({ objectMode: true });
 
-      // i -> transport
+      // input -> transport
       // this gets cleaned up on i.end() which is called by closeHandler
       (async () => {
-        for await (const rawIn of i) {
+        for await (const rawIn of inputStream) {
           transport.send(
             msg(
               transport.clientId,
@@ -86,21 +86,21 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
         }
       })();
 
-      // transport -> o
+      // transport -> output
       const listener = (msg: OpaqueTransportMessage) => {
         if (msg.serviceName === serviceName && msg.procedureName === procName) {
-          o.push(msg.payload);
+          outputStream.push(msg.payload);
         }
       };
 
       transport.addMessageListener(listener);
       const closeHandler = () => {
-        i.end();
-        o.end();
+        inputStream.end();
+        outputStream.end();
         transport.removeMessageListener(listener);
       };
 
-      return [i, o, closeHandler];
+      return [inputStream, outputStream, closeHandler];
     } else {
       // rpc case
       const id = transport.send(
