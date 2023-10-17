@@ -78,9 +78,7 @@ export class WebSocketTransport extends Transport {
       for (const id of this.sendQueue) {
         const msg = this.sendBuffer.get(id);
         if (!msg) {
-          return Promise.reject(
-            'tried to resend a message we received an ack for',
-          );
+          throw new Error('tried to resend a message we received an ack for');
         }
 
         this.ws.send(this.codec.toStringBuf(msg));
