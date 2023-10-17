@@ -77,9 +77,13 @@ export class WebSocketTransport extends Transport {
       // send outstanding
       for (const id of this.sendQueue) {
         const msg = this.sendBuffer.get(id);
-        if (msg) {
-          this.ws.send(this.codec.toStringBuf(msg));
+        if (!msg) {
+          return Promise.reject(
+            'tried to resend a message we received an ack for',
+          );
         }
+
+        this.ws.send(this.codec.toStringBuf(msg));
       }
     }
   }
@@ -87,7 +91,7 @@ export class WebSocketTransport extends Transport {
   send(msg: OpaqueTransportMessage): MessageId {
     const id = msg.id;
     if (this.destroyed) {
-      return id;
+      throw new Error('ws is destroyed, cant send');
     }
 
     this.sendBuffer.set(id, msg);
