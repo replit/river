@@ -1,9 +1,8 @@
 import http from 'http';
-import { WebSocketServer } from 'ws';
 import { Type } from '@sinclair/typebox';
 import { ServiceBuilder, serializeService } from '../router/builder';
-import { reply } from '../transport/message';
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import { TransportMessage, reply } from '../transport/message';
+import { afterAll, describe, expect, test } from 'vitest';
 import {
   createWebSocketServer,
   createWsTransports,
@@ -12,6 +11,7 @@ import {
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { asClientRpc, asClientStream } from '../router/server.util';
+import { nanoid } from 'nanoid';
 
 export const EchoRequest = Type.Object({
   msg: Type.String(),
@@ -45,6 +45,31 @@ export const TestServiceConstructor = () =>
             returnStream.push(reply(msg, { response: req.msg }));
           }
         }
+      },
+    })
+    .finalize();
+
+const OrderingServiceConstructor = () =>
+  ServiceBuilder.create('test')
+    .initialState({
+      msgs: [] as number[],
+    })
+    .defineProcedure('add', {
+      type: 'rpc',
+      input: Type.Object({ n: Type.Number() }),
+      output: Type.Object({ ok: Type.Boolean() }),
+      async handler(ctx, msg) {
+        const { n } = msg.payload;
+        ctx.state.msgs.push(n);
+        return reply(msg, { ok: true });
+      },
+    })
+    .defineProcedure('getAll', {
+      type: 'rpc',
+      input: Type.Object({}),
+      output: Type.Object({ msgs: Type.Array(Type.Number()) }),
+      async handler(ctx, msg) {
+        return reply(msg, { msgs: ctx.state.msgs });
       },
     })
     .finalize();
@@ -109,68 +134,111 @@ describe('server-side test', () => {
   });
 
   test('stream basic', async () => {
-    const [i, o] = asClientStream(initialState, service.procedures.echo);
+    const [input, output] = asClientStream(
+      initialState,
+      service.procedures.echo,
+    );
 
-    i.push({ msg: 'abc', ignore: false });
-    i.push({ msg: 'def', ignore: true });
-    i.push({ msg: 'ghi', ignore: false });
-    i.end();
+    input.push({ msg: 'abc', ignore: false });
+    input.push({ msg: 'def', ignore: true });
+    input.push({ msg: 'ghi', ignore: false });
+    input.end();
 
-    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({
-      response: 'abc',
-    });
-    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({
-      response: 'ghi',
-    });
-    expect(o.readableLength).toBe(0);
+    await expect(output.next().then((res) => res.value)).resolves.toStrictEqual(
+      {
+        response: 'abc',
+      },
+    );
+    await expect(output.next().then((res) => res.value)).resolves.toStrictEqual(
+      {
+        response: 'ghi',
+      },
+    );
+    expect(output.readableLength).toBe(0);
   });
 });
 
-const port = 4445;
-describe('client <-> server integration test', () => {
+describe('client <-> server integration test', async () => {
   const server = http.createServer();
-  let wss: WebSocketServer;
-
-  beforeAll(async () => {
-    await onServerReady(server, port);
-    wss = await createWebSocketServer(server);
-  });
+  const port = await onServerReady(server);
+  const webSocketServer = await createWebSocketServer(server);
 
   afterAll(() => {
-    wss.clients.forEach((socket) => {
+    webSocketServer.clients.forEach((socket) => {
       socket.close();
     });
     server.close();
   });
 
   test('rpc', async () => {
-    const [ct, st] = await createWsTransports(port, wss);
+    const [clientTransport, serverTransport] = createWsTransports(
+      port,
+      webSocketServer,
+    );
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(st, serviceDefs);
-    const client = createClient<typeof server>(ct);
+    const server = await createServer(serverTransport, serviceDefs);
+    const client = createClient<typeof server>(clientTransport);
     await expect(client.test.add({ n: 3 })).resolves.toStrictEqual({
       result: 3,
     });
   });
 
   test('stream', async () => {
-    const [ct, st] = await createWsTransports(port, wss);
+    const [clientTransport, serverTransport] = createWsTransports(
+      port,
+      webSocketServer,
+    );
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(st, serviceDefs);
-    const client = createClient<typeof server>(ct);
+    const server = await createServer(serverTransport, serviceDefs);
+    const client = createClient<typeof server>(clientTransport);
 
-    const [i, o, close] = await client.test.echo();
-    i.push({ msg: 'abc', ignore: false });
-    i.push({ msg: 'def', ignore: true });
-    i.push({ msg: 'ghi', ignore: false });
-    i.end();
+    const [input, output, close] = await client.test.echo();
+    input.push({ msg: 'abc', ignore: false });
+    input.push({ msg: 'def', ignore: true });
+    input.push({ msg: 'ghi', ignore: false });
+    input.end();
 
-    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({
-      response: 'abc',
-    });
-    await expect(o.next().then((res) => res.value)).resolves.toStrictEqual({
-      response: 'ghi',
-    });
+    await expect(output.next().then((res) => res.value)).resolves.toStrictEqual(
+      {
+        response: 'abc',
+      },
+    );
+    await expect(output.next().then((res) => res.value)).resolves.toStrictEqual(
+      {
+        response: 'ghi',
+      },
+    );
+
     close();
+  });
+
+  test('message order is preserved in the face of disconnects', async () => {
+    const [clientTransport, serverTransport] = createWsTransports(
+      port,
+      webSocketServer,
+    );
+    const serviceDefs = { test: OrderingServiceConstructor() };
+    const server = await createServer(serverTransport, serviceDefs);
+    const client = createClient<typeof server>(clientTransport);
+
+    const expected: number[] = [];
+    for (let i = 0; i < 50; i++) {
+      expected.push(i);
+
+      if (i == 10) {
+        clientTransport.ws?.close();
+      }
+
+      if (i == 42) {
+        clientTransport.ws?.terminate();
+      }
+
+      await client.test.add({
+        n: i,
+      });
+    }
+
+    const res = await client.test.getAll({});
+    return expect(res.msgs).toStrictEqual(expected);
   });
 });

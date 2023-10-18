@@ -1,16 +1,18 @@
 import { describe, expect, test } from 'vitest';
 import { Procedure, ServiceBuilder, serializeService } from '../router/builder';
-import { TObject, Type } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import { MessageId, OpaqueTransportMessage, reply } from '../transport/message';
 import { createServer } from '../router/server';
 import { Transport } from '../transport/types';
 import { NaiveJsonCodec } from '../codec/json';
 import { createClient } from '../router/client';
 
-const fnBody: Procedure<{}, 'rpc', TObject, TObject> = {
+const input = Type.Object({ a: Type.Number() });
+const output = Type.Object({ b: Type.Number() });
+const fnBody: Procedure<{}, 'rpc', typeof input, typeof output> = {
   type: 'rpc',
-  input: Type.Object({ a: Type.Number() }),
-  output: Type.Object({ b: Type.Number() }),
+  input,
+  output,
   async handler(_state, msg) {
     return reply(msg, { b: msg.payload.a });
   },
@@ -18,7 +20,7 @@ const fnBody: Procedure<{}, 'rpc', TObject, TObject> = {
 
 // typescript is limited to max 50 constraints
 // see: https://github.com/microsoft/TypeScript/issues/33541
-const svc = () =>
+export const StupidlyLargeService = () =>
   ServiceBuilder.create('test')
     .defineProcedure('f1', fnBody)
     .defineProcedure('f2', fnBody)
@@ -87,15 +89,15 @@ export class MockTransport extends Transport {
 
 describe("ensure typescript doesn't give up trying to infer the types for large services", () => {
   test('service with many procedures hits typescript limit', () => {
-    expect(serializeService(svc())).toBeTruthy();
+    expect(serializeService(StupidlyLargeService())).toBeTruthy();
   });
 
   test('serverclient should support many services with many procedures', async () => {
     const listing = {
-      a: svc(),
-      b: svc(),
-      c: svc(),
-      d: svc(),
+      a: StupidlyLargeService(),
+      b: StupidlyLargeService(),
+      c: StupidlyLargeService(),
+      d: StupidlyLargeService(),
     };
     const server = await createServer(new MockTransport('SERVER'), listing);
     const client = createClient<typeof server>(new MockTransport('client'));

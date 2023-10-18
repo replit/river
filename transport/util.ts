@@ -9,40 +9,40 @@ export async function createWebSocketServer(server: http.Server) {
   return new WebSocketServer({ server });
 }
 
-export async function onServerReady(
-  server: http.Server,
-  port: number,
-): Promise<void> {
-  return new Promise((resolve) => {
-    server.listen(port, resolve);
-  });
-}
-
-export async function createWsTransports(
-  port: number,
-  wss: WebSocketServer,
-): Promise<[Transport, Transport]> {
-  return new Promise((resolve) => {
-    const clientSockPromise = createWebSocketClient(port);
-    wss.on('connection', async (serverSock) => {
-      resolve([
-        new WebSocketTransport(await clientSockPromise, 'client'),
-        new WebSocketTransport(serverSock, 'SERVER'),
-      ]);
+export async function onServerReady(server: http.Server): Promise<number> {
+  return new Promise((resolve, reject) => {
+    server.listen(() => {
+      const addr = server.address();
+      if (typeof addr === 'object' && addr) {
+        resolve(addr.port);
+      } else {
+        reject(new Error("couldn't find a port to allocate"));
+      }
     });
   });
 }
 
-export async function waitForSocketReady(socket: WebSocket) {
-  return new Promise<void>((resolve) => {
-    socket.addEventListener('open', () => resolve());
-  });
+export async function createLocalWebSocketClient(port: number) {
+  return new WebSocket(`ws://localhost:${port}`);
 }
 
-export async function createWebSocketClient(port: number) {
-  const client = new WebSocket(`ws://localhost:${port}`);
-  await waitForSocketReady(client);
-  return client;
+export function createWsTransports(
+  port: number,
+  wss: WebSocketServer,
+): [WebSocketTransport, WebSocketTransport] {
+  return [
+    new WebSocketTransport(async () => {
+      return createLocalWebSocketClient(port);
+    }, 'client'),
+    new WebSocketTransport(async () => {
+      return new Promise<WebSocket>((resolve) => {
+        wss.on('connection', async function onConnect(serverSock) {
+          wss.removeListener('connection', onConnect);
+          resolve(serverSock);
+        });
+      });
+    }, 'SERVER'),
+  ];
 }
 
 export async function waitForMessage(

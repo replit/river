@@ -1,22 +1,29 @@
 import http from 'http';
-import { WebSocketServer } from 'ws';
-import { WebSocketTransport } from './ws';
-import { describe, test, expect, beforeAll, afterAll } from 'vitest';
+import { describe, test, expect, afterAll } from 'vitest';
 import {
-  createWebSocketClient,
   createWebSocketServer,
+  createWsTransports,
   onServerReady,
   waitForMessage,
 } from './util';
+import { nanoid } from 'nanoid';
 
-const port = 4444;
-describe('sending and receiving across websockets works', () => {
+const getMsg = () => ({
+  id: nanoid(),
+  from: 'client',
+  to: 'SERVER',
+  serviceName: 'test',
+  procedureName: 'test',
+  payload: {
+    msg: 'cool',
+    test: Math.random(),
+  },
+});
+
+describe('sending and receiving across websockets works', async () => {
   const server = http.createServer();
-  let wss: WebSocketServer;
-  beforeAll(async () => {
-    await onServerReady(server, port);
-    wss = await createWebSocketServer(server);
-  });
+  const port = await onServerReady(server);
+  const wss = await createWebSocketServer(server);
 
   afterAll(() => {
     wss.clients.forEach((socket) => {
@@ -26,29 +33,79 @@ describe('sending and receiving across websockets works', () => {
   });
 
   test('basic send/receive', async () => {
-    let serverTransport: WebSocketTransport | undefined;
-    wss.on('connection', (conn) => {
-      serverTransport = new WebSocketTransport(conn, 'SERVER');
+    const [clientTransport, serverTransport] = createWsTransports(port, wss);
+
+    const msg = getMsg();
+    clientTransport.send(msg);
+    return expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg.id),
+    ).resolves.toStrictEqual(msg.payload);
+  });
+});
+
+describe('retry logic', async () => {
+  const server = http.createServer();
+  const port = await onServerReady(server);
+  const wss = await createWebSocketServer(server);
+
+  afterAll(() => {
+    wss.clients.forEach((socket) => {
+      socket.close();
     });
+    server.close();
+  });
 
-    const clientSoc = await createWebSocketClient(port);
-    const clientTransport = new WebSocketTransport(clientSoc, 'client');
+  // TODO: right now, we only test client-side disconnects, we probably
+  // need to also write tests for server-side crashes (but this involves clearing/restoring state)
+  // not going to worry about this rn but for future
 
-    const msg = {
-      msg: 'cool',
-      test: 123,
-    };
+  test('ws transport is recreated after clean disconnect', async () => {
+    const [clientTransport, serverTransport] = createWsTransports(port, wss);
+    const msg1 = getMsg();
+    const msg2 = getMsg();
 
-    clientTransport.send({
-      id: '1',
-      from: 'client',
-      to: 'SERVER',
-      serviceName: 'test',
-      procedureName: 'test',
-      payload: msg,
-    });
+    clientTransport.send(msg1);
+    await expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg1.id),
+    ).resolves.toStrictEqual(msg1.payload);
 
-    expect(serverTransport).toBeTruthy();
-    return expect(waitForMessage(serverTransport!)).resolves.toStrictEqual(msg);
+    clientTransport.ws?.close();
+    clientTransport.send(msg2);
+    return expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg2.id),
+    ).resolves.toStrictEqual(msg2.payload);
+  });
+
+  test('ws transport is recreated after unclean disconnect', async () => {
+    const [clientTransport, serverTransport] = createWsTransports(port, wss);
+    const msg1 = getMsg();
+    const msg2 = getMsg();
+
+    clientTransport.send(msg1);
+    await expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg1.id),
+    ).resolves.toStrictEqual(msg1.payload);
+
+    clientTransport.ws?.terminate();
+    clientTransport.send(msg2);
+    return expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg2.id),
+    ).resolves.toStrictEqual(msg2.payload);
+  });
+
+  test('ws transport is not recreated after manually closing', async () => {
+    const [clientTransport, serverTransport] = createWsTransports(port, wss);
+    const msg1 = getMsg();
+    const msg2 = getMsg();
+
+    clientTransport.send(msg1);
+    await expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg1.id),
+    ).resolves.toStrictEqual(msg1.payload);
+
+    clientTransport.close();
+    return expect(() => clientTransport.send(msg2)).toThrow(
+      new Error('ws is destroyed, cant send'),
+    );
   });
 });

@@ -24,7 +24,9 @@ export abstract class Transport {
   }
 
   onMessage(msg: string) {
+    // TODO: try catch from string buf
     const parsedMsg = this.codec.fromStringBuf(msg.toString());
+
     if (Value.Check(TransportAckSchema, parsedMsg)) {
       // process ack
       if (this.sendBuffer.has(parsedMsg.ack)) {
@@ -42,6 +44,8 @@ export abstract class Transport {
       }
 
       this.send(ack(parsedMsg));
+    } else {
+      // TODO: warn on malformed
     }
   }
 

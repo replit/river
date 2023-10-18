@@ -93,6 +93,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
         const inputMessage = msg as TransportMessage<
           (typeof procedure)['input']
         >;
+
         if (
           procedure.type === 'rpc' &&
           Value.Check(procedure.input, inputMessage.payload)

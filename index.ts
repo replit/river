@@ -43,6 +43,5 @@ export {
   onServerReady,
   createWsTransports,
   waitForMessage,
-  waitForSocketReady,
-  createWebSocketClient,
+  createLocalWebSocketClient,
 } from './transport/util';
