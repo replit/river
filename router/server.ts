@@ -6,6 +6,7 @@ import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 import { OpaqueTransportMessage, TransportMessage } from '../transport/message';
 import { ServiceContext, ServiceContextWithState } from './context';
+import { log } from '../logging';
 
 export interface Server<Services> {
   services: Services;
@@ -33,7 +34,9 @@ export async function createServer<Services extends Record<string, AnyService>>(
     const context = contextMap.get(service);
 
     if (!context) {
-      throw new Error(`No context found for ${service.name}`);
+      const err = `No context found for ${service.name}`;
+      log?.error(err);
+      throw new Error(err);
     }
 
     return context;
@@ -75,7 +78,6 @@ export async function createServer<Services extends Record<string, AnyService>>(
   }
 
   const handler = async (msg: OpaqueTransportMessage) => {
-    // TODO: log msgs received
     if (msg.to !== 'SERVER') {
       return;
     }
@@ -121,10 +123,16 @@ export async function createServer<Services extends Record<string, AnyService>>(
           streams.incoming.push(inputMessage);
           return;
         } else {
-          // TODO: log invalid payload
+          log?.error(
+            `${transport.clientId} -- procedure ${msg.serviceName}.${msg.procedureName} received invalid payload: ${inputMessage.payload}`,
+          );
         }
       }
     }
+
+    log?.warn(
+      `${transport.clientId} -- couldn't find a matching procedure for ${msg.serviceName}.${msg.procedureName}`,
+    );
   };
 
   transport.addMessageListener(handler);

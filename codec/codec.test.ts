@@ -29,4 +29,11 @@ describe('naive json codec', () => {
       NaiveJsonCodec.fromStringBuf(NaiveJsonCodec.toStringBuf(msg)),
     ).toStrictEqual(msg);
   });
+
+  test('invalid json returns null', () => {
+    expect(NaiveJsonCodec.fromStringBuf('')).toBeNull();
+    expect(NaiveJsonCodec.fromStringBuf('[')).toBeNull();
+    expect(NaiveJsonCodec.fromStringBuf('[{}')).toBeNull();
+    expect(NaiveJsonCodec.fromStringBuf('{"a":1}[]')).toBeNull();
+  });
 });

@@ -1,7 +1,7 @@
 import http from 'http';
 import { Type } from '@sinclair/typebox';
 import { ServiceBuilder, serializeService } from '../router/builder';
-import { TransportMessage, reply } from '../transport/message';
+import { reply } from '../transport/message';
 import { afterAll, describe, expect, test } from 'vitest';
 import {
   createWebSocketServer,
@@ -11,7 +11,7 @@ import {
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { asClientRpc, asClientStream } from '../router/server.util';
-import { nanoid } from 'nanoid';
+import { bindLogger, log, setLevel } from '../logging';
 
 export const EchoRequest = Type.Object({
   msg: Type.String(),

@@ -9,6 +9,7 @@ import {
   TransportMessageAck,
   ack,
 } from './message';
+import { log } from '../logging';
 
 export abstract class Transport {
   codec: Codec;
@@ -24,15 +25,21 @@ export abstract class Transport {
   }
 
   onMessage(msg: string) {
-    // TODO: try catch from string buf
-    const parsedMsg = this.codec.fromStringBuf(msg.toString());
+    const parsedMsg = this.codec.fromStringBuf(msg);
+    if (parsedMsg === null) {
+      log?.warn(`${this.clientId} -- received malformed msg: ${msg}`);
+      return;
+    }
 
     if (Value.Check(TransportAckSchema, parsedMsg)) {
       // process ack
+      log?.info(`${this.clientId} -- received ack: ${msg}`);
       if (this.sendBuffer.has(parsedMsg.ack)) {
         this.sendBuffer.delete(parsedMsg.ack);
       }
     } else if (Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
+      log?.info(`${this.clientId} -- received msg: ${msg}`);
+
       // ignore if not for us
       if (parsedMsg.to !== this.clientId && parsedMsg.to !== 'broadcast') {
         return;
@@ -43,9 +50,11 @@ export abstract class Transport {
         handler(parsedMsg);
       }
 
-      this.send(ack(parsedMsg));
+      const ackMsg = ack(parsedMsg);
+      ackMsg.from = this.clientId;
+      this.send(ackMsg);
     } else {
-      // TODO: warn on malformed
+      log?.warn(`${this.clientId} -- received invalid transport msg: ${msg}`);
     }
   }
 

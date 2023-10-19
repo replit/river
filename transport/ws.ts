@@ -6,6 +6,7 @@ import {
   OpaqueTransportMessage,
   TransportClientId,
 } from './message';
+import { log } from '../logging';
 
 interface Options {
   retryIntervalMs: number;
@@ -41,6 +42,7 @@ export class WebSocketTransport extends Transport {
   private async tryConnect() {
     // wait until it's ready or we get an error
     this.reconnectPromise ??= new Promise<WebSocketResult>(async (resolve) => {
+      log?.info(`${this.clientId} -- establishing a new websocket`);
       const ws = await this.wsGetter();
       if (ws.readyState === ws.OPEN) {
         return resolve({ ws });
@@ -69,6 +71,8 @@ export class WebSocketTransport extends Transport {
 
     // only send if we resolved a valid websocket
     if ('ws' in res && res.ws.readyState === res.ws.OPEN) {
+      log?.info(`${this.clientId} -- websocket ok`);
+
       this.ws = res.ws;
       this.ws.onmessage = (msg) => this.onMessage(msg.data.toString());
       this.ws.onclose = () => {
@@ -80,9 +84,12 @@ export class WebSocketTransport extends Transport {
       for (const id of this.sendQueue) {
         const msg = this.sendBuffer.get(id);
         if (!msg) {
-          throw new Error('tried to resend a message we received an ack for');
+          const err = 'tried to resend a message we received an ack for';
+          log?.error(err);
+          throw new Error(err);
         }
 
+        log?.info(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
         this.ws.send(this.codec.toStringBuf(msg));
       }
 
@@ -91,6 +98,9 @@ export class WebSocketTransport extends Transport {
     }
 
     // otherwise try and reconnect again
+    log?.warn(
+      `${this.clientId} -- websocket failed, trying again in ${this.options.retryIntervalMs}ms`,
+    );
     this.reconnectPromise = undefined;
     setTimeout(() => this.tryConnect(), this.options.retryIntervalMs);
   }
@@ -98,13 +108,21 @@ export class WebSocketTransport extends Transport {
   send(msg: OpaqueTransportMessage): MessageId {
     const id = msg.id;
     if (this.destroyed) {
-      throw new Error('ws is destroyed, cant send');
+      const err = 'ws is destroyed, cant send';
+      log?.error(err);
+      throw new Error(err);
     }
 
     this.sendBuffer.set(id, msg);
     if (this.ws && this.ws.readyState === this.ws.OPEN) {
+      log?.info(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
       this.ws.send(this.codec.toStringBuf(msg));
     } else {
+      log?.info(
+        `${this.clientId} -- transport not ready, queuing ${JSON.stringify(
+          msg,
+        )}`,
+      );
       this.sendQueue.push(id);
       this.tryConnect().catch();
     }
@@ -113,6 +131,7 @@ export class WebSocketTransport extends Transport {
   }
 
   async close() {
+    log?.info('manually closed ws');
     this.destroyed = true;
     return this.ws?.close();
   }
