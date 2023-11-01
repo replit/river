@@ -11,7 +11,6 @@ import {
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { asClientRpc, asClientStream } from '../router/server.util';
-import { bindLogger, log, setLevel } from '../logging';
 
 export const EchoRequest = Type.Object({
   msg: Type.String(),
