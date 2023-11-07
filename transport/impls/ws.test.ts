@@ -4,9 +4,9 @@ import {
   createWebSocketServer,
   createWsTransports,
   onServerReady,
-  waitForMessage,
-} from './util';
+} from '../../testUtils';
 import { nanoid } from 'nanoid';
+import { waitForMessage } from '..';
 
 const getMsg = () => ({
   id: nanoid(),

@@ -7,10 +7,11 @@ import {
   createWebSocketServer,
   createWsTransports,
   onServerReady,
-} from '../transport/util';
+  asClientRpc,
+  asClientStream,
+} from '../testUtils';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
-import { asClientRpc, asClientStream } from '../router/server.util';
 
 export const EchoRequest = Type.Object({
   msg: Type.String(),

@@ -1,12 +1,12 @@
 import WebSocket from 'isomorphic-ws';
-import { Transport } from './types';
-import { NaiveJsonCodec } from '../codec/json';
+import { Transport } from '../types';
+import { NaiveJsonCodec } from '../../codec/json';
 import {
   MessageId,
   OpaqueTransportMessage,
   TransportClientId,
-} from './message';
-import { log } from '../logging';
+} from '../message';
+import { log } from '../../logging';
 
 interface Options {
   retryIntervalMs: number;

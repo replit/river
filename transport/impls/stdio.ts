@@ -1,9 +1,9 @@
-import { NaiveJsonCodec } from '../codec/json';
-import { OpaqueTransportMessage, TransportClientId } from './message';
-import { Transport } from './types';
+import { NaiveJsonCodec } from '../../codec/json';
+import { OpaqueTransportMessage, TransportClientId } from '../message';
+import { Transport } from '../types';
 import readline from 'readline';
 
-export class StreamTransport extends Transport {
+export class StdioTransport extends Transport {
   input: NodeJS.ReadableStream;
   output: NodeJS.WritableStream;
 

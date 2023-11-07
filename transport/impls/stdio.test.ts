@@ -1,18 +1,18 @@
 import { describe, test, expect } from 'vitest';
 import stream from 'node:stream';
-import { StreamTransport } from './stream';
-import { waitForMessage } from './util';
+import { StdioTransport } from './stdio';
+import { waitForMessage } from '..';
 
 describe('sending and receiving across node streams works', () => {
   test('basic send/receive', async () => {
     const clientToServer = new stream.PassThrough();
     const serverToClient = new stream.PassThrough();
-    const serverTransport = new StreamTransport(
+    const serverTransport = new StdioTransport(
       'SERVER',
       clientToServer,
       serverToClient,
     );
-    const clientTransport = new StreamTransport(
+    const clientTransport = new StdioTransport(
       'client',
       serverToClient,
       clientToServer,
