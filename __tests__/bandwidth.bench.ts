@@ -4,13 +4,13 @@ import {
   createWebSocketServer,
   createWsTransports,
   onServerReady,
-  waitForMessage,
-} from '../transport/util';
+} from '../testUtils';
 import largePayload from './largePayload.json';
 import { TestServiceConstructor } from './integration.test';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { StupidlyLargeService } from './typescript-stress.test';
+import { waitForMessage } from '../transport';
 
 let smallId = 0;
 let largeId = 0;

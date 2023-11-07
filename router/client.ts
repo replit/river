@@ -5,7 +5,7 @@ import type { Pushable } from 'it-pushable';
 import { Server } from './server';
 import { OpaqueTransportMessage, msg } from '../transport/message';
 import { Static } from '@sinclair/typebox';
-import { waitForMessage } from '../transport/util';
+import { waitForMessage } from '../transport';
 
 type ServiceClient<Router extends AnyService> = {
   [ProcName in keyof Router['procedures']]: ProcType<
