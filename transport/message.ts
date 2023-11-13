@@ -1,18 +1,29 @@
-import { type Static, Type, TSchema } from '@sinclair/typebox';
+import { Type, TSchema } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
+
+// bit masks for control flags
+export const AckBit = 0b0001;
+export const StreamOpenBit = 0b0010;
+export const StreamClosedBit = 0b0100;
 
 // look at https://github.com/websockets/ws#use-the-nodejs-streams-api for a duplex stream we can use
 export const TransportMessageSchema = <T extends TSchema>(t: T) =>
   Type.Object({
     id: Type.String(),
-    replyTo: Type.Optional(Type.String()),
     from: Type.String(),
     to: Type.String(),
     serviceName: Type.String(),
     procedureName: Type.String(),
+    streamId: Type.String(),
+    controlFlags: Type.Integer(),
     payload: t,
   });
 
+export const TransportAckSchema = TransportMessageSchema(
+  Type.Object({
+    ack: Type.String(),
+  }),
+);
 export const OpaqueTransportMessageSchema = TransportMessageSchema(
   Type.Unknown(),
 );
@@ -20,66 +31,60 @@ export type TransportMessage<
   Payload extends Record<string, unknown> | unknown = Record<string, unknown>,
 > = {
   id: string;
-  replyTo?: string;
   from: string;
   to: string;
   serviceName: string;
   procedureName: string;
+  streamId: string;
+  controlFlags: number;
   payload: Payload;
 };
 
 export type MessageId = string;
 export type OpaqueTransportMessage = TransportMessage<unknown>;
 export type TransportClientId = 'SERVER' | string;
-export const TransportAckSchema = Type.Object({
-  id: Type.String(),
-  from: Type.String(),
-  ack: Type.String(),
-});
-
-export type TransportMessageAck = Static<typeof TransportAckSchema>;
 
 export function msg<Payload extends object>(
   from: string,
   to: string,
   service: string,
   proc: string,
+  stream: string,
   payload: Payload,
-) {
+): TransportMessage<Payload> {
   return {
     id: nanoid(),
     to,
     from,
     serviceName: service,
     procedureName: proc,
+    streamId: stream,
+    controlFlags: 0,
     payload,
-  } satisfies OpaqueTransportMessage;
-}
-
-export function payloadToTransportMessage<Payload extends object>(
-  payload: Payload,
-) {
-  return msg('client', 'SERVER', 'service', 'procedure', payload);
-}
-
-export function ack(msg: OpaqueTransportMessage): TransportMessageAck {
-  return {
-    id: nanoid(),
-    from: msg.to,
-    ack: msg.id,
   };
 }
 
 export function reply<Payload extends object>(
   msg: OpaqueTransportMessage,
   response: Payload,
-) {
+): TransportMessage<Payload> {
   return {
     ...msg,
     id: nanoid(),
-    replyTo: msg.id,
     to: msg.from,
     from: msg.to,
     payload: response,
-  } satisfies OpaqueTransportMessage;
+  };
+}
+
+export function isAck(controlFlag: number): boolean {
+  return (controlFlag & AckBit) === AckBit;
+}
+
+export function isStreamOpen(controlFlag: number): boolean {
+  return (controlFlag & StreamOpenBit) === StreamOpenBit;
+}
+
+export function isStreamClose(controlFlag: number): boolean {
+  return (controlFlag & StreamClosedBit) === StreamClosedBit;
 }

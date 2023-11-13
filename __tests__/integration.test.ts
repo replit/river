@@ -241,4 +241,8 @@ describe('client <-> server integration test', async () => {
     const res = await client.test.getAll({});
     return expect(res.msgs).toStrictEqual(expected);
   });
+
+  test('concurrent rpcs', async () => {});
+
+  test('concurrent streams', async () => {});
 });

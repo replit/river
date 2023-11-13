@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest';
 import stream from 'node:stream';
 import { StdioTransport } from './stdio';
 import { waitForMessage } from '..';
+import { payloadToTransportMessage } from '../../testUtils';
 
 describe('sending and receiving across node streams works', () => {
   test('basic send/receive', async () => {
@@ -24,14 +25,7 @@ describe('sending and receiving across node streams works', () => {
     };
 
     const p = waitForMessage(serverTransport);
-    clientTransport.send({
-      id: '1',
-      from: 'client',
-      to: 'SERVER',
-      serviceName: 'test',
-      procedureName: 'test',
-      payload: msg,
-    });
+    clientTransport.send(payloadToTransportMessage(msg));
 
     await expect(p).resolves.toStrictEqual(msg);
   });

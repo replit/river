@@ -1,13 +1,14 @@
 import { Codec } from '../codec/types';
 import { Value } from '@sinclair/typebox/value';
 import {
+  AckBit,
   MessageId,
   OpaqueTransportMessage,
   OpaqueTransportMessageSchema,
   TransportAckSchema,
   TransportClientId,
-  TransportMessageAck,
-  ack,
+  isAck,
+  reply,
 } from './message';
 import { log } from '../logging';
 
@@ -15,6 +16,8 @@ export abstract class Transport {
   codec: Codec;
   clientId: TransportClientId;
   handlers: Set<(msg: OpaqueTransportMessage) => void>;
+
+  // TODO; we can do much better here on retry (maybe resending the sendBuffer on fixed interval)
   sendBuffer: Map<MessageId, OpaqueTransportMessage>;
 
   constructor(codec: Codec, clientId: TransportClientId) {
@@ -31,13 +34,17 @@ export abstract class Transport {
       return;
     }
 
-    if (Value.Check(TransportAckSchema, parsedMsg)) {
+    if (
+      Value.Check(TransportAckSchema, parsedMsg) &&
+      isAck(parsedMsg.controlFlags)
+    ) {
       // process ack
       log?.info(`${this.clientId} -- received ack: ${msg}`);
-      if (this.sendBuffer.has(parsedMsg.ack)) {
-        this.sendBuffer.delete(parsedMsg.ack);
+      if (this.sendBuffer.has(parsedMsg.payload.ack)) {
+        this.sendBuffer.delete(parsedMsg.payload.ack);
       }
     } else if (Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
+      // regular river message
       log?.info(`${this.clientId} -- received msg: ${msg}`);
 
       // ignore if not for us
@@ -50,7 +57,8 @@ export abstract class Transport {
         handler(parsedMsg);
       }
 
-      const ackMsg = ack(parsedMsg);
+      const ackMsg = reply(parsedMsg, { ack: parsedMsg.id });
+      ackMsg.controlFlags = AckBit;
       ackMsg.from = this.clientId;
       this.send(ackMsg);
     } else {
@@ -66,6 +74,6 @@ export abstract class Transport {
     this.handlers.delete(handler);
   }
 
-  abstract send(msg: OpaqueTransportMessage | TransportMessageAck): MessageId;
+  abstract send(msg: OpaqueTransportMessage): MessageId;
   abstract close(): Promise<void>;
 }

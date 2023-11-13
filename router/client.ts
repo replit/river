@@ -3,9 +3,15 @@ import { AnyService, ProcInput, ProcOutput, ProcType } from './builder';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 import { Server } from './server';
-import { OpaqueTransportMessage, msg } from '../transport/message';
+import {
+  OpaqueTransportMessage,
+  StreamClosedBit,
+  StreamOpenBit,
+  msg,
+} from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { waitForMessage } from '../transport';
+import { nanoid } from 'nanoid';
 
 type ServiceClient<Router extends AnyService> = {
   [ProcName in keyof Router['procedures']]: ProcType<
@@ -64,6 +70,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
   _createRecursiveProxy(async (opts) => {
     const [serviceName, procName] = [...opts.path];
     const [input] = opts.args;
+    const streamId = nanoid();
 
     if (input === undefined) {
       // stream case
@@ -74,21 +81,29 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       // this gets cleaned up on i.end() which is called by closeHandler
       (async () => {
         for await (const rawIn of inputStream) {
-          transport.send(
-            msg(
-              transport.clientId,
-              'SERVER',
-              serviceName,
-              procName,
-              rawIn as object,
-            ),
+          const m = msg(
+            transport.clientId,
+            'SERVER',
+            serviceName,
+            procName,
+            streamId,
+            rawIn as object,
           );
+
+          m.controlFlags |= StreamOpenBit;
+          transport.send(m);
         }
       })();
 
       // transport -> output
       const listener = (msg: OpaqueTransportMessage) => {
-        if (msg.serviceName === serviceName && msg.procedureName === procName) {
+        // stream id is enough to guarantee uniqueness
+        // but let's enforce extra invariants here
+        if (
+          msg.streamId === streamId &&
+          msg.serviceName === serviceName &&
+          msg.procedureName === procName
+        ) {
           outputStream.push(msg.payload);
         }
       };
@@ -97,22 +112,41 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       const closeHandler = () => {
         inputStream.end();
         outputStream.end();
+        const closeMessage = msg(
+          transport.clientId,
+          'SERVER',
+          serviceName,
+          procName,
+          streamId,
+          {},
+        );
+        closeMessage.controlFlags |= StreamClosedBit;
+
+        transport.send(closeMessage);
         transport.removeMessageListener(listener);
       };
 
       return [inputStream, outputStream, closeHandler];
     } else {
       // rpc case
-      const id = transport.send(
-        msg(
-          transport.clientId,
-          'SERVER',
-          serviceName,
-          procName,
-          input as object,
-        ),
+      const m = msg(
+        transport.clientId,
+        'SERVER',
+        serviceName,
+        procName,
+        streamId,
+        input as object,
       );
 
-      return waitForMessage(transport, (msg) => msg.replyTo === id);
+      m.controlFlags |= StreamOpenBit;
+      m.controlFlags |= StreamClosedBit;
+      transport.send(m);
+      return waitForMessage(
+        transport,
+        (msg) =>
+          msg.streamId === streamId &&
+          msg.serviceName === serviceName &&
+          msg.procedureName === procName,
+      );
     }
   }, []) as ServerClient<Srv>;

@@ -3,22 +3,10 @@ import { describe, test, expect, afterAll } from 'vitest';
 import {
   createWebSocketServer,
   createWsTransports,
+  createDummyTransportMessage,
   onServerReady,
 } from '../../testUtils';
-import { nanoid } from 'nanoid';
 import { waitForMessage } from '..';
-
-const getMsg = () => ({
-  id: nanoid(),
-  from: 'client',
-  to: 'SERVER',
-  serviceName: 'test',
-  procedureName: 'test',
-  payload: {
-    msg: 'cool',
-    test: Math.random(),
-  },
-});
 
 describe('sending and receiving across websockets works', async () => {
   const server = http.createServer();
@@ -34,8 +22,7 @@ describe('sending and receiving across websockets works', async () => {
 
   test('basic send/receive', async () => {
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
-
-    const msg = getMsg();
+    const msg = createDummyTransportMessage();
     clientTransport.send(msg);
     return expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg.id),
@@ -61,8 +48,8 @@ describe('retry logic', async () => {
 
   test('ws transport is recreated after clean disconnect', async () => {
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
-    const msg1 = getMsg();
-    const msg2 = getMsg();
+    const msg1 = createDummyTransportMessage();
+    const msg2 = createDummyTransportMessage();
 
     clientTransport.send(msg1);
     await expect(
@@ -78,8 +65,8 @@ describe('retry logic', async () => {
 
   test('ws transport is recreated after unclean disconnect', async () => {
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
-    const msg1 = getMsg();
-    const msg2 = getMsg();
+    const msg1 = createDummyTransportMessage();
+    const msg2 = createDummyTransportMessage();
 
     clientTransport.send(msg1);
     await expect(
@@ -95,8 +82,8 @@ describe('retry logic', async () => {
 
   test('ws transport is not recreated after manually closing', async () => {
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
-    const msg1 = getMsg();
-    const msg2 = getMsg();
+    const msg1 = createDummyTransportMessage();
+    const msg2 = createDummyTransportMessage();
 
     clientTransport.send(msg1);
     await expect(

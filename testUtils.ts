@@ -4,7 +4,7 @@ import http from 'http';
 import { WebSocketTransport } from './transport/impls/ws';
 import { Static, TObject } from '@sinclair/typebox';
 import { Procedure, ServiceContext } from './router';
-import { TransportMessage, payloadToTransportMessage } from './transport';
+import { OpaqueTransportMessage, TransportMessage, msg } from './transport';
 import { Pushable, pushable } from 'it-pushable';
 
 export async function createWebSocketServer(server: http.Server) {
@@ -107,4 +107,25 @@ export function asClientStream<
   })();
 
   return [rawInput, rawOutput];
+}
+
+export function payloadToTransportMessage<Payload extends object>(
+  payload: Payload,
+  streamId?: string,
+) {
+  return msg(
+    'client',
+    'SERVER',
+    'service',
+    'procedure',
+    streamId ?? 'stream',
+    payload,
+  );
+}
+
+export function createDummyTransportMessage(): OpaqueTransportMessage {
+  return payloadToTransportMessage({
+    msg: 'cool',
+    test: Math.random(),
+  });
 }

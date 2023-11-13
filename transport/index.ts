@@ -6,10 +6,7 @@ export { Transport } from './types';
 export {
   TransportMessageSchema,
   OpaqueTransportMessageSchema,
-  TransportAckSchema,
   msg,
-  payloadToTransportMessage,
-  ack,
   reply,
 } from './message';
 export type {
@@ -17,7 +14,6 @@ export type {
   MessageId,
   OpaqueTransportMessage,
   TransportClientId,
-  TransportMessageAck,
 } from './message';
 
 export async function waitForMessage(
