@@ -49,10 +49,12 @@ function _createRecursiveProxy(
   path: string[],
 ): unknown {
   const proxy: unknown = new Proxy(noop, {
+    // property access, recurse and add field to path
     get(_obj, key) {
       if (typeof key !== 'string') return undefined;
       return _createRecursiveProxy(callback, [...path, key]);
     },
+    // hit the end, let's invoke the handler
     apply(_target, _this, args) {
       return callback({
         path,
@@ -72,8 +74,16 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
     const [input] = opts.args;
     const streamId = nanoid();
 
+    function belongsToSameStream(msg: OpaqueTransportMessage) {
+      return (
+        msg.streamId === streamId &&
+        msg.serviceName === serviceName &&
+        msg.procedureName === procName
+      );
+    }
+
     if (input === undefined) {
-      // stream case
+      // stream case (stream methods are called with zero arguments)
       const inputStream = pushable({ objectMode: true });
       const outputStream = pushable({ objectMode: true });
 
@@ -97,13 +107,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
 
       // transport -> output
       const listener = (msg: OpaqueTransportMessage) => {
-        // stream id is enough to guarantee uniqueness
-        // but let's enforce extra invariants here
-        if (
-          msg.streamId === streamId &&
-          msg.serviceName === serviceName &&
-          msg.procedureName === procName
-        ) {
+        if (belongsToSameStream(msg)) {
           outputStream.push(msg.payload);
         }
       };
@@ -121,7 +125,6 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
           {},
         );
         closeMessage.controlFlags |= StreamClosedBit;
-
         transport.send(closeMessage);
         transport.removeMessageListener(listener);
       };
@@ -138,15 +141,8 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
         input as object,
       );
 
-      m.controlFlags |= StreamOpenBit;
-      m.controlFlags |= StreamClosedBit;
+      m.controlFlags |= StreamOpenBit | StreamClosedBit;
       transport.send(m);
-      return waitForMessage(
-        transport,
-        (msg) =>
-          msg.streamId === streamId &&
-          msg.serviceName === serviceName &&
-          msg.procedureName === procName,
-      );
+      return waitForMessage(transport, belongsToSameStream);
     }
   }, []) as ServerClient<Srv>;

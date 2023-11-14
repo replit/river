@@ -39,9 +39,8 @@ export async function createServer<Services extends Record<string, AnyService>>(
 
   function getContext(service: AnyService) {
     const context = contextMap.get(service);
-
     if (!context) {
-      const err = `No context found for ${service.name}`;
+      const err = `${transport.clientId} -- no context found for ${service.name}`;
       log?.error(err);
       throw new Error(err);
     }
@@ -70,6 +69,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
     }
 
     const service = services[msg.serviceName];
+    const serviceContext = getContext(service);
     if (!(msg.procedureName in service.procedures)) {
       log?.warn(
         `${transport.clientId} -- couldn't find a matching procedure for ${msg.serviceName}.${msg.procedureName}`,
@@ -107,14 +107,14 @@ export async function createServer<Services extends Record<string, AnyService>>(
       // pump incoming message stream -> handler -> outgoing message stream
       if (procedure.type === 'stream') {
         openPromises.push(
-          procedure.handler(getContext(service), incoming, outgoing),
+          procedure.handler(serviceContext, incoming, outgoing),
         );
       } else if (procedure.type === 'rpc') {
         openPromises.push(
           (async () => {
             for await (const inputMessage of incoming) {
               const outputMessage = await procedure.handler(
-                getContext(service),
+                serviceContext,
                 inputMessage,
               );
               outgoing.push(outputMessage);
@@ -123,16 +123,11 @@ export async function createServer<Services extends Record<string, AnyService>>(
         );
       }
 
-      const procStream: ProcStream = {
+      streamMap.set(`${msg.serviceName}.${msg.procedureName}:${msg.streamId}`, {
         incoming,
         outgoing,
         openPromises,
-      };
-
-      streamMap.set(
-        `${msg.serviceName}.${msg.procedureName}:${msg.streamId}`,
-        procStream,
-      );
+      });
     }
 
     const procStream = streamMap.get(

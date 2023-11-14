@@ -38,7 +38,6 @@ export class WebSocketTransport extends Transport {
     this.tryConnect();
   }
 
-  // postcondition: ws is concretely a WebSocket
   private async tryConnect() {
     // wait until it's ready or we get an error
     this.reconnectPromise ??= new Promise<WebSocketResult>(async (resolve) => {
