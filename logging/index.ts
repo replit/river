@@ -11,9 +11,17 @@ export type Logger = {
   [key in LoggingLevel]: (msg: string) => void;
 };
 
+/**
+ * The global River logger instance.
+ */
 export let log: Logger | undefined;
 const defaultLoggingLevel: LoggingLevel = 'warn';
 
+/**
+ * Binds the given write function to River's logger {@link log}.
+ * @param write - The function to write log messages.
+ * @param color - Whether to use colored log levels.
+ */
 export function bindLogger(write: (msg: string) => void, color?: boolean) {
   const info = color ? '\u001b[37minfo\u001b[0m' : 'info';
   const warn = color ? '\u001b[33mwarn\u001b[0m' : 'warn';
@@ -36,6 +44,10 @@ export function bindLogger(write: (msg: string) => void, color?: boolean) {
   };
 }
 
+/**
+ * Sets the minimum logging level for the logger.
+ * @param level - The minimum logging level to set.
+ */
 export function setLevel(level: LoggingLevel) {
   if (log) {
     log.minLevel = level;

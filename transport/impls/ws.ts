@@ -17,14 +17,44 @@ const defaultOptions: Options = {
 };
 
 type WebSocketResult = { ws: WebSocket } | { err: string };
+
+/**
+ * A transport implementation that uses a WebSocket connection with automatic reconnection.
+ * @class
+ * @extends Transport
+ */
 export class WebSocketTransport extends Transport {
+  /**
+   * A function that returns a Promise that resolves to a WebSocket instance.
+   */
   wsGetter: () => Promise<WebSocket>;
   ws?: WebSocket;
-  destroyed: boolean;
-  reconnectPromise?: Promise<WebSocketResult>;
   options: Options;
+
+  /**
+   * A flag indicating whether the transport has been destroyed.
+   * A destroyed transport will not attempt to reconnect and cannot be used again.
+   */
+  destroyed: boolean;
+
+  /**
+   * An ongoing reconnect attempt if it exists. When the attempt finishes, it contains a
+   * {@link WebSocketResult} object when a connection is established or an error occurs.
+   */
+  reconnectPromise?: Promise<WebSocketResult>;
+
+  /**
+   * An array of message IDs that are waiting to be sent over the WebSocket connection.
+   * This builds up if the WebSocket is down for a period of time.
+   */
   sendQueue: Array<MessageId>;
 
+  /**
+   * Creates a new WebSocketTransport instance.
+   * @param wsGetter A function that returns a Promise that resolves to a WebSocket instance.
+   * @param clientId The ID of the client using the transport.
+   * @param options An optional object containing configuration options for the transport.
+   */
   constructor(
     wsGetter: () => Promise<WebSocket>,
     clientId: TransportClientId,
@@ -38,6 +68,9 @@ export class WebSocketTransport extends Transport {
     this.tryConnect();
   }
 
+  /**
+   * Begins a new attempt to establish a WebSocket connection.
+   */
   private async tryConnect() {
     // wait until it's ready or we get an error
     this.reconnectPromise ??= new Promise<WebSocketResult>(async (resolve) => {
@@ -104,6 +137,12 @@ export class WebSocketTransport extends Transport {
     setTimeout(() => this.tryConnect(), this.options.retryIntervalMs);
   }
 
+  /**
+   * Sends a message over the WebSocket connection. If the WebSocket connection is
+   * not healthy, it will queue until the connection is successful.
+   * @param msg The message to send.
+   * @returns The ID of the sent message.
+   */
   send(msg: OpaqueTransportMessage): MessageId {
     const id = msg.id;
     if (this.destroyed) {
@@ -129,6 +168,9 @@ export class WebSocketTransport extends Transport {
     return id;
   }
 
+  /**
+   * Destroys the WebSocket transport and marks it as unusable.
+   */
   async close() {
     log?.info('manually closed ws');
     this.destroyed = true;
