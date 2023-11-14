@@ -5,8 +5,7 @@ import type { Pushable } from 'it-pushable';
 import { Server } from './server';
 import {
   OpaqueTransportMessage,
-  StreamClosedBit,
-  StreamOpenBit,
+  ControlFlags,
   msg,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
@@ -100,7 +99,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
             rawIn as object,
           );
 
-          m.controlFlags |= StreamOpenBit;
+          m.controlFlags |= ControlFlags.StreamOpenBit;
           transport.send(m);
         }
       })();
@@ -124,7 +123,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
           streamId,
           {},
         );
-        closeMessage.controlFlags |= StreamClosedBit;
+        closeMessage.controlFlags |= ControlFlags.StreamClosedBit;
         transport.send(closeMessage);
         transport.removeMessageListener(listener);
       };
@@ -141,7 +140,8 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
         input as object,
       );
 
-      m.controlFlags |= StreamOpenBit | StreamClosedBit;
+      m.controlFlags |=
+        ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit;
       transport.send(m);
       return waitForMessage(transport, belongsToSameStream);
     }

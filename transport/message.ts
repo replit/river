@@ -2,9 +2,11 @@ import { Type, TSchema } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 
 // bit masks for control flags
-export const AckBit = 0b0001;
-export const StreamOpenBit = 0b0010;
-export const StreamClosedBit = 0b0100;
+export const enum ControlFlags {
+  AckBit = 0b0001,
+  StreamOpenBit = 0b0010,
+  StreamClosedBit = 0b0100,
+}
 
 // look at https://github.com/websockets/ws#use-the-nodejs-streams-api for a duplex stream we can use
 export const TransportMessageSchema = <T extends TSchema>(t: T) =>
@@ -78,13 +80,18 @@ export function reply<Payload extends object>(
 }
 
 export function isAck(controlFlag: number): boolean {
-  return (controlFlag & AckBit) === AckBit;
+  return (controlFlag & ControlFlags.AckBit) === ControlFlags.AckBit;
 }
 
 export function isStreamOpen(controlFlag: number): boolean {
-  return (controlFlag & StreamOpenBit) === StreamOpenBit;
+  return (
+    (controlFlag & ControlFlags.StreamOpenBit) === ControlFlags.StreamOpenBit
+  );
 }
 
 export function isStreamClose(controlFlag: number): boolean {
-  return (controlFlag & StreamClosedBit) === StreamClosedBit;
+  return (
+    (controlFlag & ControlFlags.StreamClosedBit) ===
+    ControlFlags.StreamClosedBit
+  );
 }

@@ -1,7 +1,7 @@
 import { Codec } from '../codec/types';
 import { Value } from '@sinclair/typebox/value';
 import {
-  AckBit,
+  ControlFlags,
   MessageId,
   OpaqueTransportMessage,
   OpaqueTransportMessageSchema,
@@ -58,7 +58,7 @@ export abstract class Transport {
       }
 
       const ackMsg = reply(parsedMsg, { ack: parsedMsg.id });
-      ackMsg.controlFlags = AckBit;
+      ackMsg.controlFlags = ControlFlags.AckBit;
       ackMsg.from = this.clientId;
       this.send(ackMsg);
     } else {
