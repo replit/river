@@ -3,6 +3,10 @@ import { nanoid } from 'nanoid';
 
 /**
  * Control flags for transport messages.
+ * An RPC message is coded with StreamOpenBit | StreamClosedBit.
+ * Streams are expected to start with StreamOpenBit sent and the client SHOULD send an empty
+ * message with StreamClosedBit to close the stream handler on the server, indicating that
+ * it will not be using the stream anymore.
  */
 export const enum ControlFlags {
   AckBit = 0b0001,
