@@ -57,11 +57,11 @@ const OrderingServiceConstructor = () =>
     .defineProcedure('add', {
       type: 'rpc',
       input: Type.Object({ n: Type.Number() }),
-      output: Type.Object({ ok: Type.Boolean() }),
+      output: Type.Object({ n: Type.Number() }),
       async handler(ctx, msg) {
         const { n } = msg.payload;
         ctx.state.msgs.push(n);
-        return reply(msg, { ok: true });
+        return reply(msg, { n });
       },
     })
     .defineProcedure('getAll', {
@@ -240,5 +240,65 @@ describe('client <-> server integration test', async () => {
 
     const res = await client.test.getAll({});
     return expect(res.msgs).toStrictEqual(expected);
+  });
+
+  const CONCURRENCY = 10;
+  test('concurrent rpcs', async () => {
+    const [clientTransport, serverTransport] = createWsTransports(
+      port,
+      webSocketServer,
+    );
+    const serviceDefs = { test: OrderingServiceConstructor() };
+    const server = await createServer(serverTransport, serviceDefs);
+    const client = createClient<typeof server>(clientTransport);
+
+    const promises = [];
+    for (let i = 0; i < CONCURRENCY; i++) {
+      promises.push(client.test.add({ n: i }));
+    }
+
+    for (let i = 0; i < CONCURRENCY; i++) {
+      await expect(promises[i]).resolves.toStrictEqual({ n: i });
+    }
+  });
+
+  test('concurrent streams', async () => {
+    const [clientTransport, serverTransport] = createWsTransports(
+      port,
+      webSocketServer,
+    );
+    const serviceDefs = { test: TestServiceConstructor() };
+    const server = await createServer(serverTransport, serviceDefs);
+    const client = createClient<typeof server>(clientTransport);
+
+    const openStreams = [];
+    for (let i = 0; i < CONCURRENCY; i++) {
+      const streamHandle = await client.test.echo();
+      const input = streamHandle[0];
+      input.push({ msg: `${i}-1`, ignore: false });
+      input.push({ msg: `${i}-2`, ignore: false });
+      openStreams.push(streamHandle);
+    }
+
+    for (let i = 0; i < CONCURRENCY; i++) {
+      const output = openStreams[i][1];
+      await expect(
+        output.next().then((res) => res.value),
+      ).resolves.toStrictEqual({
+        response: `${i}-1`,
+      });
+      await expect(
+        output.next().then((res) => res.value),
+      ).resolves.toStrictEqual({
+        response: `${i}-2`,
+      });
+    }
+
+    // cleanup
+    for (let i = 0; i < CONCURRENCY; i++) {
+      const [input, _output, close] = openStreams[i];
+      input.end();
+      close();
+    }
   });
 });

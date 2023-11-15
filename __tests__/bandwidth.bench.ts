@@ -20,6 +20,8 @@ const dummyPayloadSmall = () => ({
   to: 'SERVER',
   serviceName: 'test',
   procedureName: 'test',
+  streamId: 'test',
+  controlFlags: 0,
   payload: {
     msg: 'cool',
   },
@@ -31,6 +33,8 @@ const dummyPayloadLarge = () => ({
   to: 'SERVER',
   serviceName: 'test',
   procedureName: 'test',
+  streamId: 'test',
+  controlFlags: 0,
   payload: largePayload,
 });
 
