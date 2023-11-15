@@ -13,6 +13,10 @@ import { ServiceContext, ServiceContextWithState } from './context';
 import { log } from '../logging';
 import { Value } from '@sinclair/typebox/value';
 
+/**
+ * Represents a server with a set of services. Use {@link createServer} to create it.
+ * @template Services - The type of services provided by the server.
+ */
 export interface Server<Services> {
   services: Services;
   close(): Promise<void>;
@@ -25,6 +29,14 @@ interface ProcStream {
   // TODO: abort controller probably goes here
 }
 
+/**
+ * Creates a server instance that listens for incoming messages from a transport and routes them to the appropriate service and procedure.
+ * The server tracks the state of each service along with open streams and the extended context object.
+ * @param transport - The transport to listen to.
+ * @param services - An object containing all the services to be registered on the server.
+ * @param extendedContext - An optional object containing additional context to be passed to all services.
+ * @returns A promise that resolves to a server instance with the registered services.
+ */
 export async function createServer<Services extends Record<string, AnyService>>(
   transport: Transport,
   services: Services,
