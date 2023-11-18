@@ -19,7 +19,7 @@ import { waitForMessage } from '../transport';
 import { nanoid } from 'nanoid';
 import { Result } from './result';
 
-// helper to make next, yield, and return all are the same time
+// helper to make next, yield, and return all the same type 
 type AsyncIter<T> = AsyncGenerator<T, T, T>;
 
 /**
