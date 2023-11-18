@@ -1,6 +1,6 @@
-import { TObject } from '@sinclair/typebox';
+import { Static, TObject } from '@sinclair/typebox';
 import { Transport } from '../transport/types';
-import { AnyService, Procedure, ValidProcType } from './builder';
+import { AnyProcedure, AnyService } from './builder';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 import {
@@ -8,10 +8,12 @@ import {
   TransportMessage,
   isStreamClose,
   isStreamOpen,
+  reply,
 } from '../transport/message';
 import { ServiceContext, ServiceContextWithState } from './context';
 import { log } from '../logging';
 import { Value } from '@sinclair/typebox/value';
+import { Err, Result, RiverUncaughtSchema, UNCAUGHT_ERROR } from './result';
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -24,7 +26,9 @@ export interface Server<Services> {
 
 interface ProcStream {
   incoming: Pushable<TransportMessage>;
-  outgoing: Pushable<TransportMessage>;
+  outgoing: Pushable<
+    TransportMessage<Result<Static<TObject>, Static<TObject>>>
+  >;
   openPromises: Array<Promise<unknown>>;
   // TODO: abort controller probably goes here
 }
@@ -89,13 +93,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
       return;
     }
 
-    const procedure = service.procedures[msg.procedureName] as Procedure<
-      object,
-      ValidProcType,
-      TObject,
-      TObject
-    >;
-
+    const procedure = service.procedures[msg.procedureName] as AnyProcedure;
     if (!Value.Check(procedure.input, msg.payload)) {
       log?.error(
         `${transport.clientId} -- procedure ${msg.serviceName}.${msg.procedureName} received invalid payload: ${msg.payload}`,
@@ -116,20 +114,43 @@ export async function createServer<Services extends Record<string, AnyService>>(
         })(),
       ];
 
+      function errorHandler(err: unknown) {
+        const errorMsg =
+          err instanceof Error ? err.message : `[coerced to error] ${err}`;
+        log?.error(
+          `${transport.clientId} -- procedure ${msg.serviceName}.${msg.procedureName}:${msg.streamId} threw an error: ${errorMsg}`,
+        );
+        outgoing.push(
+          reply(
+            msg,
+            Err({
+              code: UNCAUGHT_ERROR,
+              message: errorMsg,
+            } satisfies Static<typeof RiverUncaughtSchema>),
+          ),
+        );
+      }
+
       // pump incoming message stream -> handler -> outgoing message stream
       if (procedure.type === 'stream') {
         openPromises.push(
-          procedure.handler(serviceContext, incoming, outgoing),
+          procedure
+            .handler(serviceContext, incoming, outgoing)
+            .catch(errorHandler),
         );
       } else if (procedure.type === 'rpc') {
         openPromises.push(
           (async () => {
             for await (const inputMessage of incoming) {
-              const outputMessage = await procedure.handler(
-                serviceContext,
-                inputMessage,
-              );
-              outgoing.push(outputMessage);
+              try {
+                const outputMessage = await procedure.handler(
+                  serviceContext,
+                  inputMessage,
+                );
+                outgoing.push(outputMessage);
+              } catch (err) {
+                errorHandler(err);
+              }
             }
           })(),
         );

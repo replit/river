@@ -2,10 +2,21 @@ import WebSocket from 'isomorphic-ws';
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import { WebSocketTransport } from './transport/impls/ws';
-import { Static, TObject } from '@sinclair/typebox';
+import { Static, TNever, TObject, TUnion } from '@sinclair/typebox';
 import { Procedure, ServiceContext } from './router';
-import { OpaqueTransportMessage, TransportMessage, msg } from './transport';
+import {
+  OpaqueTransportMessage,
+  TransportMessage,
+  msg,
+  reply,
+} from './transport';
 import { Pushable, pushable } from 'it-pushable';
+import {
+  Err,
+  Result,
+  RiverUncaughtSchema,
+  UNCAUGHT_ERROR,
+} from './router/result';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -87,15 +98,28 @@ export function asClientRpc<
   State extends object | unknown,
   I extends TObject,
   O extends TObject,
+  E extends TUnion<TObject[]> | TObject | TNever,
 >(
   state: State,
-  proc: Procedure<State, 'rpc', I, O>,
+  proc: Procedure<State, 'rpc', I, O, E>,
   extendedContext?: Omit<ServiceContext, 'state'>,
 ) {
-  return (msg: Static<I>) =>
+  return (
+    msg: Static<I>,
+  ): Promise<
+    Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>
+  > =>
     proc
       .handler({ ...extendedContext, state }, payloadToTransportMessage(msg))
-      .then((res) => res.payload);
+      .then((res) => res.payload)
+      .catch((err) => {
+        const errorMsg =
+          err instanceof Error ? err.message : `[coerced to error] ${err}`;
+        return Err({
+          code: UNCAUGHT_ERROR,
+          message: errorMsg,
+        });
+      });
 }
 
 /**
@@ -114,18 +138,26 @@ export function asClientStream<
   State extends object | unknown,
   I extends TObject,
   O extends TObject,
+  E extends TUnion<TObject[]> | TObject | TNever,
 >(
   state: State,
-  proc: Procedure<State, 'stream', I, O>,
+  proc: Procedure<State, 'stream', I, O, E>,
   extendedContext?: Omit<ServiceContext, 'state'>,
-): [Pushable<Static<I>>, Pushable<Static<O>>] {
+): [
+  Pushable<Static<I>>,
+  Pushable<Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>>,
+] {
   const rawInput = pushable<Static<I>>({ objectMode: true });
-  const rawOutput = pushable<Static<O>>({ objectMode: true });
+  const rawOutput = pushable<Result<Static<O>, Static<E>>>({
+    objectMode: true,
+  });
 
   const transportInput = pushable<TransportMessage<Static<I>>>({
     objectMode: true,
   });
-  const transportOutput = pushable<TransportMessage<Static<O>>>({
+  const transportOutput = pushable<
+    TransportMessage<Result<Static<O>, Static<E>>>
+  >({
     objectMode: true,
   });
 
@@ -146,11 +178,25 @@ export function asClientStream<
 
   // handle
   (async () => {
-    await proc.handler(
-      { ...extendedContext, state },
-      transportInput,
-      transportOutput,
-    );
+    try {
+      await proc.handler(
+        { ...extendedContext, state },
+        transportInput,
+        transportOutput,
+      );
+    } catch (err) {
+      const errorMsg =
+        err instanceof Error ? err.message : `[coerced to error] ${err}`;
+      transportOutput.push(
+        reply(
+          payloadToTransportMessage({}),
+          Err({
+            code: UNCAUGHT_ERROR,
+            message: errorMsg,
+          }),
+        ),
+      );
+    }
     transportOutput.end();
   })();
 
