@@ -1,5 +1,11 @@
 import { Transport } from '../transport/types';
-import { AnyService, ProcInput, ProcOutput, ProcType } from './builder';
+import {
+  AnyService,
+  ProcErrors,
+  ProcInput,
+  ProcOutput,
+  ProcType,
+} from './builder';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 import { Server } from './server';
@@ -11,6 +17,10 @@ import {
 import { Static } from '@sinclair/typebox';
 import { waitForMessage } from '../transport';
 import { nanoid } from 'nanoid';
+import { Result } from './result';
+
+// helper to make next, yield, and return all the same type
+type AsyncIter<T> = AsyncGenerator<T, T, T>;
 
 /**
  * A helper type to transform an actual service type into a type
@@ -25,12 +35,22 @@ type ServiceClient<Router extends AnyService> = {
     ? // rpc case
       (
         input: Static<ProcInput<Router, ProcName>>,
-      ) => Promise<Static<ProcOutput<Router, ProcName>>>
+      ) => Promise<
+        Result<
+          Static<ProcOutput<Router, ProcName>>,
+          Static<ProcErrors<Router, ProcName>>
+        >
+      >
     : // get stream case
       () => Promise<
         [
           Pushable<Static<ProcInput<Router, ProcName>>>, // input
-          AsyncIterableIterator<Static<ProcOutput<Router, ProcName>>>, // output
+          AsyncIter<
+            Result<
+              Static<ProcOutput<Router, ProcName>>,
+              Static<ProcErrors<Router, ProcName>>
+            >
+          >, // output
           () => void, // close handle
         ]
       >;

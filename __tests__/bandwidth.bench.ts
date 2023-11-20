@@ -1,12 +1,12 @@
 import http from 'http';
-import { bench, describe } from 'vitest';
+import { assert, bench, describe } from 'vitest';
 import {
   createWebSocketServer,
   createWsTransports,
   onServerReady,
 } from '../testUtils';
 import largePayload from './largePayload.json';
-import { TestServiceConstructor } from './integration.test';
+import { TestServiceConstructor } from './fixtures';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { StupidlyLargeService } from './typescript-stress.test';
@@ -84,7 +84,8 @@ describe('simple router level bandwidth', async () => {
   bench(
     'rpc (wait for response)',
     async () => {
-      await client.test.add({ n: 1 });
+      const result = await client.test.add({ n: 1 });
+      assert(result.ok);
     },
     { time: BENCH_DURATION },
   );
@@ -94,7 +95,8 @@ describe('simple router level bandwidth', async () => {
     'stream (wait for response)',
     async () => {
       input.push({ msg: 'abc', ignore: false });
-      await output.next();
+      const result = await output.next();
+      assert(result.value && result.value.ok);
     },
     { time: BENCH_DURATION },
   );
@@ -129,7 +131,8 @@ describe('complex (50 procedures) router level bandwidth', async () => {
   bench(
     'rpc (wait for response)',
     async () => {
-      await client.b.f35({ a: 1 });
+      const result = await client.b.f35({ a: 1 });
+      assert(result.ok);
     },
     { time: BENCH_DURATION },
   );

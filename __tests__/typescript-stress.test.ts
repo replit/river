@@ -6,17 +6,30 @@ import { createServer } from '../router/server';
 import { Transport } from '../transport/types';
 import { NaiveJsonCodec } from '../codec/json';
 import { createClient } from '../router/client';
+import { Ok } from '../router/result';
 
 const input = Type.Object({ a: Type.Number() });
 const output = Type.Object({ b: Type.Number() });
-const fnBody: Procedure<{}, 'rpc', typeof input, typeof output> = {
-  type: 'rpc',
-  input,
-  output,
-  async handler(_state, msg) {
-    return reply(msg, { b: msg.payload.a });
-  },
-};
+const errors = Type.Union([
+  Type.Object({
+    code: Type.Literal('ERROR1'),
+    message: Type.String(),
+  }),
+  Type.Object({
+    code: Type.Literal('ERROR2'),
+    message: Type.String(),
+  }),
+]);
+const fnBody: Procedure<{}, 'rpc', typeof input, typeof output, typeof errors> =
+  {
+    type: 'rpc',
+    input,
+    output,
+    errors,
+    async handler(_state, msg) {
+      return reply(msg, Ok({ b: msg.payload.a }));
+    },
+  };
 
 // typescript is limited to max 50 constraints
 // see: https://github.com/microsoft/TypeScript/issues/33541

@@ -1,7 +1,8 @@
-import { TObject, Static, Type } from '@sinclair/typebox';
+import { TObject, Static, Type, TUnion } from '@sinclair/typebox';
 import type { Pushable } from 'it-pushable';
 import { TransportMessage } from '../transport/message';
 import { ServiceContextWithState } from './context';
+import { Result, RiverError, RiverUncaughtSchema } from './result';
 
 /**
  * The valid {@link Procedure} types.
@@ -13,10 +14,7 @@ export type ValidProcType = 'stream' | 'rpc';
  * and the values are the {@link Procedure} definitions. This is not meant to
  * be constructed directly, use the {@link ServiceBuilder} class instead.
  */
-export type ProcListing = Record<
-  string,
-  Procedure<object, ValidProcType, TObject, TObject>
->;
+export type ProcListing = Record<string, AnyProcedure>;
 
 /**
  * Represents a service with a name, state, and procedures.
@@ -49,13 +47,12 @@ export function serializeService(s: AnyService): object {
     name: s.name,
     state: s.state,
     procedures: Object.fromEntries(
-      Object.entries<Procedure<object, ValidProcType, TObject, TObject>>(
-        s.procedures,
-      ).map(([procName, procDef]) => [
+      Object.entries<AnyProcedure>(s.procedures).map(([procName, procDef]) => [
         procName,
         {
           input: Type.Strict(procDef.input),
           output: Type.Strict(procDef.output),
+          errors: Type.Strict(procDef.errors),
           type: procDef.type,
         },
       ]),
@@ -94,6 +91,16 @@ export type ProcOutput<
 > = S['procedures'][ProcName]['output'];
 
 /**
+ * Helper to get the type definition for the procedure errors of a service.
+ * @template S - The service.
+ * @template ProcName - The name of the procedure.
+ */
+export type ProcErrors<
+  S extends AnyService,
+  ProcName extends keyof S['procedures'],
+> = TUnion<[S['procedures'][ProcName]['errors'], typeof RiverUncaughtSchema]>;
+
+/**
  * Helper to get the type of procedure in a service.
  * @template S - The service.
  * @template ProcName - The name of the procedure.
@@ -115,26 +122,36 @@ export type Procedure<
   Ty extends ValidProcType,
   I extends TObject,
   O extends TObject,
+  E extends RiverError,
 > = Ty extends 'rpc'
   ? {
       input: I;
       output: O;
+      errors: E;
       handler: (
         context: ServiceContextWithState<State>,
         input: TransportMessage<Static<I>>,
-      ) => Promise<TransportMessage<Static<O>>>;
+      ) => Promise<TransportMessage<Result<Static<O>, Static<E>>>>;
       type: Ty;
     }
   : {
       input: I;
       output: O;
+      errors: E;
       handler: (
         context: ServiceContextWithState<State>,
         input: AsyncIterable<TransportMessage<Static<I>>>,
-        output: Pushable<TransportMessage<Static<O>>>,
+        output: Pushable<TransportMessage<Result<Static<O>, Static<E>>>>,
       ) => Promise<void>;
       type: Ty;
     };
+export type AnyProcedure = Procedure<
+  object,
+  ValidProcType,
+  TObject,
+  TObject,
+  RiverError
+>;
 
 /**
  * A builder class for creating River Services.
@@ -185,17 +202,18 @@ export class ServiceBuilder<T extends Service<string, object, ProcListing>> {
     Ty extends ValidProcType,
     I extends TObject,
     O extends TObject,
+    E extends RiverError,
   >(
     procName: ProcName,
-    procDef: Procedure<T['state'], Ty, I, O>,
+    procDef: Procedure<T['state'], Ty, I, O, E>,
   ): ServiceBuilder<{
     name: T['name'];
     state: T['state'];
     procedures: T['procedures'] & {
-      [k in ProcName]: Procedure<T['state'], Ty, I, O>;
+      [k in ProcName]: Procedure<T['state'], Ty, I, O, E>;
     };
   }> {
-    type ProcListing = { [k in ProcName]: Procedure<T['state'], Ty, I, O> };
+    type ProcListing = { [k in ProcName]: Procedure<T['state'], Ty, I, O, E> };
     const newProcedure = { [procName]: procDef } as ProcListing;
     const procedures = {
       ...this.schema.procedures,
