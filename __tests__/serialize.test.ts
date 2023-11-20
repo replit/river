@@ -76,8 +76,17 @@ describe('serialize service to jsonschema', () => {
             properties: {
               code: { const: 'DIV_BY_ZERO', type: 'string' },
               message: { type: 'string' },
+              extras: {
+                properties: {
+                  test: {
+                    type: 'string',
+                  },
+                },
+                required: ['test'],
+                type: 'object',
+              },
             },
-            required: ['code', 'message'],
+            required: ['code', 'message', 'extras'],
             type: 'object',
           },
           type: 'rpc',

@@ -81,6 +81,7 @@ export const FallibleServiceConstructor = () =>
         Type.Object({
           code: Type.Literal(DIV_BY_ZERO),
           message: Type.String(),
+          extras: Type.Object({ test: Type.String() }),
         }),
       ]),
       async handler(_ctx, msg) {
@@ -88,7 +89,11 @@ export const FallibleServiceConstructor = () =>
         if (b === 0) {
           return reply(msg, {
             ok: false,
-            payload: { code: DIV_BY_ZERO, message: 'Cannot divide by zero' },
+            payload: {
+              code: DIV_BY_ZERO,
+              message: 'Cannot divide by zero',
+              extras: { test: 'abc' },
+            },
           });
         } else {
           return reply(msg, Ok({ result: a / b }));

@@ -2,15 +2,22 @@ import {
   TLiteralString,
   TNever,
   TObject,
+  TSchema,
   TString,
   TUnion,
   Type,
 } from '@sinclair/typebox';
 
-export type RiverErrorSchema = TObject<{
-  code: TLiteralString;
-  message: TLiteralString | TString;
-}>;
+export type RiverErrorSchema =
+  | TObject<{
+      code: TLiteralString;
+      message: TLiteralString | TString;
+    }>
+  | TObject<{
+      code: TLiteralString;
+      message: TLiteralString | TString;
+      extras: TSchema;
+    }>;
 export type RiverError = TUnion<RiverErrorSchema[]> | RiverErrorSchema | TNever;
 
 export const UNCAUGHT_ERROR = 'UNCAUGHT_ERROR';

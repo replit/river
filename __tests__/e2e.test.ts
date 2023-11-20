@@ -57,6 +57,9 @@ describe('client <-> server integration test', async () => {
     expect(result2.payload).toStrictEqual({
       code: DIV_BY_ZERO,
       message: 'Cannot divide by zero',
+      extras: {
+        test: 'abc',
+      },
     });
   });
 
