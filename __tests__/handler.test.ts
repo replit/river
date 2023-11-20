@@ -75,7 +75,7 @@ describe('server-side test', () => {
     input.push({ msg: 'def', throwResult: true, throwError: false });
     const result2 = await output.next().then((res) => res.value);
     assert(result2 && !result2.ok);
-    expect(result2.payload).toStrictEqual({ code: STREAM_ERROR });
+    expect(result2.payload.code).toStrictEqual(STREAM_ERROR);
 
     input.push({ msg: 'ghi', throwResult: false, throwError: true });
     const result3 = await output.next().then((res) => res.value);

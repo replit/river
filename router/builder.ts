@@ -1,8 +1,8 @@
-import { TObject, Static, Type, TUnion, TNever } from '@sinclair/typebox';
+import { TObject, Static, Type, TUnion } from '@sinclair/typebox';
 import type { Pushable } from 'it-pushable';
 import { TransportMessage } from '../transport/message';
 import { ServiceContextWithState } from './context';
-import { Result, RiverUncaughtSchema } from './result';
+import { Result, RiverError, RiverUncaughtSchema } from './result';
 
 /**
  * The valid {@link Procedure} types.
@@ -122,7 +122,7 @@ export type Procedure<
   Ty extends ValidProcType,
   I extends TObject,
   O extends TObject,
-  E extends TUnion<TObject[]> | TObject | TNever,
+  E extends RiverError,
 > = Ty extends 'rpc'
   ? {
       input: I;
@@ -150,7 +150,7 @@ export type AnyProcedure = Procedure<
   ValidProcType,
   TObject,
   TObject,
-  TUnion<TObject[]>
+  RiverError
 >;
 
 /**
@@ -202,7 +202,7 @@ export class ServiceBuilder<T extends Service<string, object, ProcListing>> {
     Ty extends ValidProcType,
     I extends TObject,
     O extends TObject,
-    E extends TUnion<TObject[]> | TObject | TNever,
+    E extends RiverError,
   >(
     procName: ProcName,
     procDef: Procedure<T['state'], Ty, I, O, E>,

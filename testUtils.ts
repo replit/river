@@ -2,7 +2,7 @@ import WebSocket from 'isomorphic-ws';
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import { WebSocketTransport } from './transport/impls/ws';
-import { Static, TNever, TObject, TUnion } from '@sinclair/typebox';
+import { Static, TObject } from '@sinclair/typebox';
 import { Procedure, ServiceContext } from './router';
 import {
   OpaqueTransportMessage,
@@ -14,6 +14,7 @@ import { Pushable, pushable } from 'it-pushable';
 import {
   Err,
   Result,
+  RiverError,
   RiverUncaughtSchema,
   UNCAUGHT_ERROR,
 } from './router/result';
@@ -98,7 +99,7 @@ export function asClientRpc<
   State extends object | unknown,
   I extends TObject,
   O extends TObject,
-  E extends TUnion<TObject[]> | TObject | TNever,
+  E extends RiverError,
 >(
   state: State,
   proc: Procedure<State, 'rpc', I, O, E>,
@@ -138,7 +139,7 @@ export function asClientStream<
   State extends object | unknown,
   I extends TObject,
   O extends TObject,
-  E extends TUnion<TObject[]> | TObject | TNever,
+  E extends RiverError,
 >(
   state: State,
   proc: Procedure<State, 'stream', I, O, E>,

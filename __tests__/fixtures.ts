@@ -106,6 +106,7 @@ export const FallibleServiceConstructor = () =>
       errors: Type.Union([
         Type.Object({
           code: Type.Literal(STREAM_ERROR),
+          message: Type.String(),
         }),
       ]),
       async handler(_ctx, msgStream, returnStream) {
@@ -114,7 +115,15 @@ export const FallibleServiceConstructor = () =>
           if (req.throwError) {
             throw new Error('some message');
           } else if (req.throwResult) {
-            returnStream.push(reply(msg, Err({ code: STREAM_ERROR })));
+            returnStream.push(
+              reply(
+                msg,
+                Err({
+                  code: STREAM_ERROR,
+                  message: 'field throwResult was set to true',
+                }),
+              ),
+            );
           } else {
             returnStream.push(reply(msg, Ok({ response: req.msg })));
           }

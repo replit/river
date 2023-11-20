@@ -13,7 +13,13 @@ import {
 import { ServiceContext, ServiceContextWithState } from './context';
 import { log } from '../logging';
 import { Value } from '@sinclair/typebox/value';
-import { Err, Result, RiverUncaughtSchema, UNCAUGHT_ERROR } from './result';
+import {
+  Err,
+  Result,
+  RiverError,
+  RiverUncaughtSchema,
+  UNCAUGHT_ERROR,
+} from './result';
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -27,7 +33,7 @@ export interface Server<Services> {
 interface ProcStream {
   incoming: Pushable<TransportMessage>;
   outgoing: Pushable<
-    TransportMessage<Result<Static<TObject>, Static<TObject>>>
+    TransportMessage<Result<Static<TObject>, Static<RiverError>>>
   >;
   openPromises: Array<Promise<unknown>>;
   // TODO: abort controller probably goes here

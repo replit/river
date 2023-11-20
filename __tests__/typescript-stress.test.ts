@@ -11,8 +11,14 @@ import { Ok } from '../router/result';
 const input = Type.Object({ a: Type.Number() });
 const output = Type.Object({ b: Type.Number() });
 const errors = Type.Union([
-  Type.Object({ c: Type.String() }),
-  Type.Object({ d: Type.String() }),
+  Type.Object({
+    code: Type.Literal('ERROR1'),
+    message: Type.String(),
+  }),
+  Type.Object({
+    code: Type.Literal('ERROR2'),
+    message: Type.String(),
+  }),
 ]);
 const fnBody: Procedure<{}, 'rpc', typeof input, typeof output, typeof errors> =
   {

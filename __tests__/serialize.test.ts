@@ -89,8 +89,11 @@ describe('serialize service to jsonschema', () => {
                 const: 'STREAM_ERROR',
                 type: 'string',
               },
+              message: {
+                type: 'string',
+              },
             },
-            required: ['code'],
+            required: ['code', 'message'],
             type: 'object',
           },
           input: {

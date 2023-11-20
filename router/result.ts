@@ -1,4 +1,17 @@
-import { Type } from '@sinclair/typebox';
+import {
+  TLiteralString,
+  TNever,
+  TObject,
+  TString,
+  TUnion,
+  Type,
+} from '@sinclair/typebox';
+
+export type RiverErrorSchema = TObject<{
+  code: TLiteralString;
+  message: TLiteralString | TString;
+}>;
+export type RiverError = TUnion<RiverErrorSchema[]> | RiverErrorSchema | TNever;
 
 export const UNCAUGHT_ERROR = 'UNCAUGHT_ERROR';
 export const RiverUncaughtSchema = Type.Object({
