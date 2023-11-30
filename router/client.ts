@@ -20,7 +20,7 @@ import { nanoid } from 'nanoid';
 import { Result } from './result';
 
 // helper to make next, yield, and return all the same type
-type AsyncIter<T> = AsyncGenerator<T, T, T>;
+type AsyncIter<T> = AsyncGenerator<T, T, unknown>;
 
 /**
  * A helper type to transform an actual service type into a type
