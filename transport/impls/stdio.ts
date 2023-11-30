@@ -1,7 +1,16 @@
+import { Codec } from '../../codec';
 import { NaiveJsonCodec } from '../../codec/json';
 import { OpaqueTransportMessage, TransportClientId } from '../message';
 import { Transport } from '../types';
 import readline from 'readline';
+
+interface Options {
+  codec: Codec;
+}
+
+const defaultOptions: Options = {
+  codec: NaiveJsonCodec,
+};
 
 /**
  * A transport implementation that uses standard input and output streams.
@@ -27,8 +36,10 @@ export class StdioTransport extends Transport {
     clientId: TransportClientId,
     input: NodeJS.ReadableStream = process.stdin,
     output: NodeJS.WritableStream = process.stdout,
+    providedOptions?: Partial<Options>,
   ) {
-    super(NaiveJsonCodec, clientId);
+    const options = { ...defaultOptions, ...providedOptions };
+    super(options.codec, clientId);
     this.input = input;
     this.output = output;
     const rl = readline.createInterface({

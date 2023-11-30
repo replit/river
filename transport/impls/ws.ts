@@ -7,13 +7,16 @@ import {
   TransportClientId,
 } from '../message';
 import { log } from '../../logging';
+import { type Codec } from '../../codec';
 
 interface Options {
   retryIntervalMs: number;
+  codec: Codec;
 }
 
 const defaultOptions: Options = {
   retryIntervalMs: 250,
+  codec: NaiveJsonCodec,
 };
 
 type WebSocketResult = { ws: WebSocket } | { err: string };
@@ -53,17 +56,18 @@ export class WebSocketTransport extends Transport {
    * Creates a new WebSocketTransport instance.
    * @param wsGetter A function that returns a Promise that resolves to a WebSocket instance.
    * @param clientId The ID of the client using the transport.
-   * @param options An optional object containing configuration options for the transport.
+   * @param providedOptions An optional object containing configuration options for the transport.
    */
   constructor(
     wsGetter: () => Promise<WebSocket>,
     clientId: TransportClientId,
-    options?: Partial<Options>,
+    providedOptions?: Partial<Options>,
   ) {
-    super(NaiveJsonCodec, clientId);
+    const options = { ...defaultOptions, ...providedOptions };
+    super(options.codec, clientId);
     this.destroyed = false;
     this.wsGetter = wsGetter;
-    this.options = { ...defaultOptions, ...options };
+    this.options = options;
     this.sendQueue = [];
     this.tryConnect();
   }
