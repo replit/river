@@ -16,6 +16,7 @@ import {
   TestServiceConstructor,
 } from './fixtures';
 import { UNCAUGHT_ERROR } from '../router/result';
+import { BinaryCodec } from '../codec/binary';
 
 describe('client <-> server integration test', async () => {
   const server = http.createServer();
@@ -224,5 +225,22 @@ describe('client <-> server integration test', async () => {
       input.end();
       close();
     }
+  });
+
+  test('binary codec', async () => {
+    const [clientTransport, serverTransport] = createWsTransports(
+      port,
+      webSocketServer,
+      BinaryCodec,
+    );
+    const serviceDefs = { test: BinaryFileServiceConstructor() };
+    const server = await createServer(serverTransport, serviceDefs);
+    const client = createClient<typeof server>(clientTransport);
+    const result = await client.test.getFile({ file: 'test.py' });
+    assert(result.ok);
+    assert(result.payload.contents instanceof Uint8Array);
+    expect(new TextDecoder().decode(result.payload.contents)).toStrictEqual(
+      'contents for file test.py',
+    );
   });
 });

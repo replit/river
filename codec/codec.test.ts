@@ -1,19 +1,19 @@
+import { BinaryCodec } from './binary';
 import { NaiveJsonCodec } from './json';
 import { describe, test, expect } from 'vitest';
 
-describe('naive json codec', () => {
+describe.each([
+  { name: 'naive', codec: NaiveJsonCodec },
+  { name: 'binary', codec: BinaryCodec },
+])('codec -- $name', ({ codec }) => {
   test('empty object', () => {
     const msg = {};
-    expect(
-      NaiveJsonCodec.fromBuffer(NaiveJsonCodec.toBuffer(msg)),
-    ).toStrictEqual(msg);
+    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
   });
 
   test('simple test', () => {
     const msg = { abc: 123, def: 'cool' };
-    expect(
-      NaiveJsonCodec.fromBuffer(NaiveJsonCodec.toBuffer(msg)),
-    ).toStrictEqual(msg);
+    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
   });
 
   test('deeply nested test', () => {
@@ -26,16 +26,14 @@ describe('naive json codec', () => {
         },
       },
     };
-    expect(
-      NaiveJsonCodec.fromBuffer(NaiveJsonCodec.toBuffer(msg)),
-    ).toStrictEqual(msg);
+    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
   });
 
   test('invalid json returns null', () => {
     const encoder = new TextEncoder();
-    expect(NaiveJsonCodec.fromBuffer(encoder.encode(''))).toBeNull();
-    expect(NaiveJsonCodec.fromBuffer(encoder.encode('['))).toBeNull();
-    expect(NaiveJsonCodec.fromBuffer(encoder.encode('[{}'))).toBeNull();
-    expect(NaiveJsonCodec.fromBuffer(encoder.encode('{"a":1}[]'))).toBeNull();
+    expect(codec.fromBuffer(encoder.encode(''))).toBeNull();
+    expect(codec.fromBuffer(encoder.encode('['))).toBeNull();
+    expect(codec.fromBuffer(encoder.encode('[{}'))).toBeNull();
+    expect(codec.fromBuffer(encoder.encode('{"a":1}[]'))).toBeNull();
   });
 });
