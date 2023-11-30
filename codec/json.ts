@@ -39,9 +39,9 @@ export const NaiveJsonCodec: Codec = {
       }),
     );
   },
-  fromBuffer: (s: Uint8Array) => {
+  fromBuffer: (buff: Uint8Array) => {
     try {
-      return JSON.parse(decoder.decode(s), function reviver(_key, val) {
+      return JSON.parse(decoder.decode(buff), function reviver(_key, val) {
         if (val?.$t) {
           return base64ToUint8Array(val.$t);
         } else {
