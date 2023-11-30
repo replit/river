@@ -1,18 +1,18 @@
 /**
- * Codec interface for encoding and decoding objects to and from string buffers.
+ * Codec interface for encoding and decoding objects to and from Uint8 buffers.
  * Used to prepare messages for use by the transport layer.
  */
 export interface Codec {
   /**
-   * Encodes an object to a string buffer.
+   * Encodes an object to a Uint8 buffer.
    * @param obj - The object to encode.
-   * @returns The encoded string buffer.
+   * @returns The encoded Uint8 buffer.
    */
-  toStringBuf(obj: object): string;
+  toBuffer(obj: object): Uint8Array;
   /**
-   * Decodes an object from a string buffer.
-   * @param buf - The string buffer to decode.
+   * Decodes an object from a Uint8 buffer.
+   * @param buf - The Uint8 buffer to decode.
    * @returns The decoded object, or null if decoding failed.
    */
-  fromStringBuf(buf: string): object | null;
+  fromBuffer(buf: Uint8Array): object | null;
 }

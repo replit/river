@@ -12,6 +12,8 @@ const defaultOptions: Options = {
   codec: NaiveJsonCodec,
 };
 
+const newlineBuff = new TextEncoder().encode('\n');
+
 /**
  * A transport implementation that uses standard input and output streams.
  * @extends Transport
@@ -46,7 +48,8 @@ export class StdioTransport extends Transport {
       input: this.input,
     });
 
-    rl.on('line', (msg) => this.onMessage(msg));
+    const encoder = new TextEncoder();
+    rl.on('line', (msg) => this.onMessage(encoder.encode(msg)));
   }
 
   /**
@@ -56,7 +59,12 @@ export class StdioTransport extends Transport {
    */
   send(msg: OpaqueTransportMessage): string {
     const id = msg.id;
-    this.output.write(this.codec.toStringBuf(msg) + '\n');
+    const payload = this.codec.toBuffer(msg);
+
+    const out = new Uint8Array(payload.length + newlineBuff.length);
+    out.set(payload, 0);
+    out.set(newlineBuff, payload.length);
+    this.output.write(out);
     return id;
   }
 

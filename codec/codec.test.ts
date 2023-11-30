@@ -5,14 +5,14 @@ describe('naive json codec', () => {
   test('empty object', () => {
     const msg = {};
     expect(
-      NaiveJsonCodec.fromStringBuf(NaiveJsonCodec.toStringBuf(msg)),
+      NaiveJsonCodec.fromBuffer(NaiveJsonCodec.toBuffer(msg)),
     ).toStrictEqual(msg);
   });
 
   test('simple test', () => {
     const msg = { abc: 123, def: 'cool' };
     expect(
-      NaiveJsonCodec.fromStringBuf(NaiveJsonCodec.toStringBuf(msg)),
+      NaiveJsonCodec.fromBuffer(NaiveJsonCodec.toBuffer(msg)),
     ).toStrictEqual(msg);
   });
 
@@ -26,14 +26,15 @@ describe('naive json codec', () => {
       },
     };
     expect(
-      NaiveJsonCodec.fromStringBuf(NaiveJsonCodec.toStringBuf(msg)),
+      NaiveJsonCodec.fromBuffer(NaiveJsonCodec.toBuffer(msg)),
     ).toStrictEqual(msg);
   });
 
   test('invalid json returns null', () => {
-    expect(NaiveJsonCodec.fromStringBuf('')).toBeNull();
-    expect(NaiveJsonCodec.fromStringBuf('[')).toBeNull();
-    expect(NaiveJsonCodec.fromStringBuf('[{}')).toBeNull();
-    expect(NaiveJsonCodec.fromStringBuf('{"a":1}[]')).toBeNull();
+    const encoder = new TextEncoder();
+    expect(NaiveJsonCodec.fromBuffer(encoder.encode(''))).toBeNull();
+    expect(NaiveJsonCodec.fromBuffer(encoder.encode('['))).toBeNull();
+    expect(NaiveJsonCodec.fromBuffer(encoder.encode('[{}'))).toBeNull();
+    expect(NaiveJsonCodec.fromBuffer(encoder.encode('{"a":1}[]'))).toBeNull();
   });
 });
