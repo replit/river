@@ -28,22 +28,24 @@ function base64ToUint8Array(base64: string) {
  */
 export const NaiveJsonCodec: Codec = {
   toBuffer: (obj: object) => {
-    return encoder.encode(JSON.stringify(obj, function replacer(key) {
-      let val = this[key]
-      if (val instanceof Uint8Array) {
-        return { $t: uint8ArrayToBase64(val) }
-      } else {
-        return val
-      }
-    }));
+    return encoder.encode(
+      JSON.stringify(obj, function replacer(key) {
+        let val = this[key];
+        if (val instanceof Uint8Array) {
+          return { $t: uint8ArrayToBase64(val) };
+        } else {
+          return val;
+        }
+      }),
+    );
   },
   fromBuffer: (s: Uint8Array) => {
     try {
       return JSON.parse(decoder.decode(s), function reviver(_key, val) {
         if (val?.$t) {
-          return base64ToUint8Array(val.$t)
+          return base64ToUint8Array(val.$t);
         } else {
-          return val
+          return val;
         }
       });
     } catch {
