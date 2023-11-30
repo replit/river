@@ -9,9 +9,9 @@ export const BinaryCodec: Codec = {
   toBuffer: encode,
   fromBuffer: (buff: Uint8Array) => {
     try {
-      const res = decode(buff)
+      const res = decode(buff);
       if (typeof res !== 'object') {
-        return null
+        return null;
       }
 
       return res;
