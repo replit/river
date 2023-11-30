@@ -68,6 +68,22 @@ export const OrderingServiceConstructor = () =>
     })
     .finalize();
 
+export const BinaryFileServiceConstructor = () =>
+  ServiceBuilder.create('bin')
+    .defineProcedure('getFile', {
+      type: 'rpc',
+      input: Type.Object({ file: Type.String() }),
+      output: Type.Object({ contents: Type.Uint8Array() }),
+      errors: Type.Never(),
+      async handler(_ctx, msg) {
+        const bytes: Uint8Array = new TextEncoder().encode(
+          `contents for file ${msg.payload.file}`,
+        );
+        return reply(msg, Ok({ contents: bytes }));
+      },
+    })
+    .finalize();
+
 export const DIV_BY_ZERO = 'DIV_BY_ZERO';
 export const STREAM_ERROR = 'STREAM_ERROR';
 export const FallibleServiceConstructor = () =>

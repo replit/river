@@ -8,6 +8,7 @@ import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import http from 'http';
 import {
+  BinaryFileServiceConstructor,
   DIV_BY_ZERO,
   FallibleServiceConstructor,
   OrderingServiceConstructor,
@@ -61,6 +62,22 @@ describe('client <-> server integration test', async () => {
         test: 'abc',
       },
     });
+  });
+
+  test('rpc with binary (uint8array)', async () => {
+    const [clientTransport, serverTransport] = createWsTransports(
+      port,
+      webSocketServer,
+    );
+    const serviceDefs = { test: BinaryFileServiceConstructor() };
+    const server = await createServer(serverTransport, serviceDefs);
+    const client = createClient<typeof server>(clientTransport);
+    const result = await client.test.getFile({ file: 'test.py' });
+    assert(result.ok);
+    assert(result.payload.contents instanceof Uint8Array);
+    expect(new TextDecoder().decode(result.payload.contents)).toStrictEqual(
+      'contents for file test.py',
+    );
   });
 
   test('stream', async () => {

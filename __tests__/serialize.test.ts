@@ -1,6 +1,10 @@
 import { expect, describe, test } from 'vitest';
 import { serializeService } from '../router/builder';
-import { FallibleServiceConstructor, TestServiceConstructor } from './fixtures';
+import {
+  BinaryFileServiceConstructor,
+  FallibleServiceConstructor,
+  TestServiceConstructor,
+} from './fixtures';
 
 describe('serialize service to jsonschema', () => {
   test('serialize basic service', () => {
@@ -47,6 +51,40 @@ describe('serialize service to jsonschema', () => {
           type: 'stream',
         },
       },
+    });
+  });
+
+  test('serialize service with binary', () => {
+    const service = BinaryFileServiceConstructor();
+    expect(serializeService(service)).toStrictEqual({
+      name: 'bin',
+      procedures: {
+        getFile: {
+          errors: {
+            not: {},
+          },
+          input: {
+            properties: {
+              file: {
+                type: 'string',
+              },
+            },
+            required: ['file'],
+            type: 'object',
+          },
+          output: {
+            properties: {
+              contents: {
+                type: 'Uint8Array',
+              },
+            },
+            required: ['contents'],
+            type: 'object',
+          },
+          type: 'rpc',
+        },
+      },
+      state: {},
     });
   });
 
