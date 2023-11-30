@@ -56,8 +56,8 @@ export abstract class Transport {
    * You generally shouldn't need to override this in downstream transport implementations.
    * @param msg The received message.
    */
-  onMessage(msg: string) {
-    const parsedMsg = this.codec.fromStringBuf(msg);
+  onMessage(msg: Uint8Array) {
+    const parsedMsg = this.codec.fromBuffer(msg);
     if (parsedMsg === null) {
       log?.warn(`${this.clientId} -- received malformed msg: ${msg}`);
       return;

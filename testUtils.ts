@@ -18,6 +18,7 @@ import {
   RiverUncaughtSchema,
   UNCAUGHT_ERROR,
 } from './router/result';
+import { Codec } from './codec';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -68,19 +69,29 @@ export async function createLocalWebSocketClient(port: number) {
 export function createWsTransports(
   port: number,
   wss: WebSocketServer,
+  codec?: Codec,
 ): [WebSocketTransport, WebSocketTransport] {
+  const options = codec ? { codec } : undefined;
   return [
-    new WebSocketTransport(async () => {
-      return createLocalWebSocketClient(port);
-    }, 'client'),
-    new WebSocketTransport(async () => {
-      return new Promise<WebSocket>((resolve) => {
-        wss.on('connection', async function onConnect(serverSock) {
-          wss.removeListener('connection', onConnect);
-          resolve(serverSock);
+    new WebSocketTransport(
+      async () => {
+        return createLocalWebSocketClient(port);
+      },
+      'client',
+      options,
+    ),
+    new WebSocketTransport(
+      async () => {
+        return new Promise<WebSocket>((resolve) => {
+          wss.on('connection', async function onConnect(serverSock) {
+            wss.removeListener('connection', onConnect);
+            resolve(serverSock);
+          });
         });
-      });
-    }, 'SERVER'),
+      },
+      'SERVER',
+      options,
+    ),
   ];
 }
 

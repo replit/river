@@ -12,11 +12,13 @@ import { type Codec } from '../../codec';
 interface Options {
   retryIntervalMs: number;
   codec: Codec;
+  binaryType: 'arraybuffer' | 'blob';
 }
 
 const defaultOptions: Options = {
   retryIntervalMs: 250,
   codec: NaiveJsonCodec,
+  binaryType: 'arraybuffer',
 };
 
 type WebSocketResult = { ws: WebSocket } | { err: string };
@@ -110,7 +112,8 @@ export class WebSocketTransport extends Transport {
       log?.info(`${this.clientId} -- websocket ok`);
 
       this.ws = res.ws;
-      this.ws.onmessage = (msg) => this.onMessage(msg.data.toString());
+      this.ws.binaryType = 'arraybuffer';
+      this.ws.onmessage = (msg) => this.onMessage(msg.data as Uint8Array);
       this.ws.onclose = () => {
         this.reconnectPromise = undefined;
         this.tryConnect().catch();
@@ -126,7 +129,7 @@ export class WebSocketTransport extends Transport {
         }
 
         log?.info(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
-        this.ws.send(this.codec.toStringBuf(msg));
+        this.ws.send(this.codec.toBuffer(msg));
       }
 
       this.sendQueue = [];
@@ -158,7 +161,7 @@ export class WebSocketTransport extends Transport {
     this.sendBuffer.set(id, msg);
     if (this.ws && this.ws.readyState === this.ws.OPEN) {
       log?.info(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
-      this.ws.send(this.codec.toStringBuf(msg));
+      this.ws.send(this.codec.toBuffer(msg));
     } else {
       log?.info(
         `${this.clientId} -- transport not ready, queuing ${JSON.stringify(
