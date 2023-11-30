@@ -19,6 +19,7 @@ describe('naive json codec', () => {
   test('deeply nested test', () => {
     const msg = {
       array: [{ object: true }],
+      buff: Uint8Array.from([0, 42, 100, 255]),
       deeply: {
         nested: {
           nice: null,
