@@ -126,6 +126,27 @@ describe.each(codecs)(
       close();
     });
 
+    test('server-stream', async () => {
+      const [clientTransport, serverTransport] = getTransports();
+      const serviceDefs = { test: TestServiceConstructor() };
+      const server = await createServer(serverTransport, serviceDefs);
+      const client = createClient<typeof server>(clientTransport);
+
+      // TODO: Support the new interface.
+      const [input, output, close] = await client.test.events();
+      await input.push({});
+      await input.end();
+
+      const result = await client.test.add({ n: 3 });
+      assert(result.ok);
+      expect(result.payload).toStrictEqual({ result: 3 });
+      const streamResult = await output.next().then((res) => res.value);
+      assert(streamResult && streamResult.ok);
+      expect(streamResult.payload).toStrictEqual({ value: 3 });
+
+      close();
+    });
+
     test('message order is preserved in the face of disconnects', async () => {
       const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: OrderingServiceConstructor() };

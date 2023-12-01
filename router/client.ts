@@ -41,6 +41,21 @@ type ServiceClient<Router extends AnyService> = {
           Static<ProcErrors<Router, ProcName>>
         >
       >
+    : ProcType<Router, ProcName> extends 'server-stream'
+    ? // server-stream case
+      // TODO: This should have a single input
+      () => Promise<
+        [
+          Pushable<Static<ProcInput<Router, ProcName>>>, // input
+          AsyncIter<
+            Result<
+              Static<ProcOutput<Router, ProcName>>,
+              Static<ProcErrors<Router, ProcName>>
+            >
+          >, // output
+          () => void, // close handle
+        ]
+      >
     : // get stream case
       () => Promise<
         [
@@ -172,6 +187,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
 
       return [inputStream, outputStream, closeHandler];
     } else {
+      // TODO: how do we support server-stream?
       // rpc case
       const m = msg(
         transport.clientId,

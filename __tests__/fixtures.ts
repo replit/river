@@ -2,6 +2,7 @@ import { Type } from '@sinclair/typebox';
 import { ServiceBuilder } from '../router/builder';
 import { reply } from '../transport/message';
 import { Err, Ok } from '../router/result';
+import { EventEmitter } from 'node:events';
 
 export const EchoRequest = Type.Object({
   msg: Type.String(),
@@ -9,10 +10,13 @@ export const EchoRequest = Type.Object({
 });
 export const EchoResponse = Type.Object({ response: Type.String() });
 
+export class NumberEmitter extends EventEmitter {}
+
 export const TestServiceConstructor = () =>
   ServiceBuilder.create('test')
     .initialState({
       count: 0,
+      emitter: new NumberEmitter(),
     })
     .defineProcedure('add', {
       type: 'rpc',
@@ -22,7 +26,20 @@ export const TestServiceConstructor = () =>
       async handler(ctx, msg) {
         const { n } = msg.payload;
         ctx.state.count += n;
+        ctx.state.emitter.emit('add', ctx.state.count);
         return reply(msg, Ok({ result: ctx.state.count }));
+      },
+    })
+    .defineProcedure('events', {
+      type: 'server-stream',
+      input: Type.Object({}),
+      output: Type.Object({ value: Type.Number() }),
+      errors: Type.Never(),
+      async handler(ctx, msg, returnStream) {
+        // TODO: support stream cancellation.
+        ctx.state.emitter.on('add', (n) => {
+          returnStream.push(reply(msg, Ok({ value: n })));
+        });
       },
     })
     .defineProcedure('echo', {

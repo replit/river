@@ -7,7 +7,7 @@ import { Result, RiverError, RiverUncaughtSchema } from './result';
 /**
  * The valid {@link Procedure} types.
  */
-export type ValidProcType = 'stream' | 'rpc';
+export type ValidProcType = 'stream' | 'server-stream' | 'rpc';
 
 /**
  * A generic procedure listing where the keys are the names of the procedures
@@ -111,9 +111,9 @@ export type ProcType<
 > = S['procedures'][ProcName]['type'];
 
 /**
- * Defines a Procedure type that can be either an RPC or a stream procedure.
+ * Defines a Procedure type that can be either an RPC, server-stream, or a stream procedure.
  * @template State - The TypeBox schema of the state object.
- * @template Ty - The type of the procedure, either 'rpc' or 'stream'.
+ * @template Ty - The type of the procedure, either 'rpc', 'server-stream', or 'stream'.
  * @template I - The TypeBox schema of the input object.
  * @template O - The TypeBox schema of the output object.
  */
@@ -132,6 +132,18 @@ export type Procedure<
         context: ServiceContextWithState<State>,
         input: TransportMessage<Static<I>>,
       ) => Promise<TransportMessage<Result<Static<O>, Static<E>>>>;
+      type: Ty;
+    }
+  : Ty extends 'server-stream'
+  ? {
+      input: I;
+      output: O;
+      errors: E;
+      handler: (
+        context: ServiceContextWithState<State>,
+        input: TransportMessage<Static<I>>,
+        output: Pushable<TransportMessage<Result<Static<O>, Static<E>>>>,
+      ) => Promise<void>;
       type: Ty;
     }
   : {

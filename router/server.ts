@@ -144,6 +144,18 @@ export async function createServer<Services extends Record<string, AnyService>>(
             .handler(serviceContext, incoming, outgoing)
             .catch(errorHandler),
         );
+      } else if (procedure.type === 'server-stream') {
+        openPromises.push(
+          (async () => {
+            for await (const inputMessage of incoming) {
+              openPromises.push(
+                procedure
+                  .handler(serviceContext, inputMessage, outgoing)
+                  .catch(errorHandler),
+              );
+            }
+          })(),
+        );
       } else if (procedure.type === 'rpc') {
         openPromises.push(
           (async () => {

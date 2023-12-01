@@ -4,6 +4,7 @@ import {
   BinaryFileServiceConstructor,
   FallibleServiceConstructor,
   TestServiceConstructor,
+  NumberEmitter,
 } from './fixtures';
 
 describe('serialize service to jsonschema', () => {
@@ -11,7 +12,10 @@ describe('serialize service to jsonschema', () => {
     const service = TestServiceConstructor();
     expect(serializeService(service)).toStrictEqual({
       name: 'test',
-      state: { count: 0 },
+      state: {
+        count: 0,
+        emitter: new NumberEmitter(),
+      },
       procedures: {
         add: {
           input: {
@@ -30,6 +34,21 @@ describe('serialize service to jsonschema', () => {
           },
           errors: { not: {} },
           type: 'rpc',
+        },
+        events: {
+          input: {
+            properties: {},
+            type: 'object',
+          },
+          output: {
+            properties: {
+              value: { type: 'number' },
+            },
+            required: ['value'],
+            type: 'object',
+          },
+          errors: { not: {} },
+          type: 'server-stream',
         },
         echo: {
           input: {

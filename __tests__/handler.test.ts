@@ -5,12 +5,13 @@ import {
   FallibleServiceConstructor,
   STREAM_ERROR,
   TestServiceConstructor,
+  NumberEmitter,
 } from './fixtures';
 import { UNCAUGHT_ERROR } from '../router/result';
 
 describe('server-side test', () => {
   const service = TestServiceConstructor();
-  const initialState = { count: 0 };
+  const initialState = { count: 0, emitter: new NumberEmitter() };
 
   test('rpc basic', async () => {
     const add = asClientRpc(initialState, service.procedures.add);
@@ -20,7 +21,10 @@ describe('server-side test', () => {
   });
 
   test('rpc initial state', async () => {
-    const add = asClientRpc({ count: 5 }, service.procedures.add);
+    const add = asClientRpc(
+      { count: 5, emitter: new NumberEmitter() },
+      service.procedures.add,
+    );
     const result = await add({ n: 6 });
     assert(result.ok);
     expect(result.payload).toStrictEqual({ result: 11 });
