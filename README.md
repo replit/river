@@ -12,6 +12,6 @@ It's like tRPC but...
 
 - `npm i` -- install dependencies
 - `npm check` -- lint
-- `npm format` -- format 
+- `npm format` -- format
 - `npm test` -- run tests
 - `npm publish` -- cut a new release (should bump version in package.json first)
