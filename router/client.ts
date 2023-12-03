@@ -117,9 +117,9 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
 
     function belongsToSameStream(msg: OpaqueTransportMessage) {
       return (
-        msg.streamId === streamId &&
         msg.serviceName === serviceName &&
-        msg.procedureName === procName
+        msg.procedureName === procName &&
+        (msg.streamId === streamId || msg.streamId === 'global')
       );
     }
 
