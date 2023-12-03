@@ -58,11 +58,19 @@ export abstract class Transport {
    */
   onMessage(msg: Uint8Array) {
     const parsedMsg = this.codec.fromBuffer(msg);
+
     if (parsedMsg === null) {
       log?.warn(
-        `${this.clientId} -- received malformed msg: ${msg.toString()}`,
+        `${this.clientId} -- received malformed msg: ${new TextDecoder().decode(
+          msg,
+        )}`,
       );
       return;
+    }
+
+    let stringifiedMessage;
+    if (log) {
+      stringifiedMessage = JSON.stringify(parsedMsg);
     }
 
     if (
@@ -70,13 +78,13 @@ export abstract class Transport {
       isAck(parsedMsg.controlFlags)
     ) {
       // process ack
-      log?.info(`${this.clientId} -- received ack: ${msg.toString()}`);
+      log?.info(`${this.clientId} -- received ack: ${stringifiedMessage}`);
       if (this.sendBuffer.has(parsedMsg.payload.ack)) {
         this.sendBuffer.delete(parsedMsg.payload.ack);
       }
     } else if (Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
       // regular river message
-      log?.info(`${this.clientId} -- received msg: ${msg.toString()}`);
+      log?.info(`${this.clientId} -- received msg: ${stringifiedMessage}`);
 
       // ignore if not for us
       if (parsedMsg.to !== this.clientId && parsedMsg.to !== 'broadcast') {
@@ -94,7 +102,7 @@ export abstract class Transport {
       this.send(ackMsg);
     } else {
       log?.warn(
-        `${this.clientId} -- received invalid transport msg: ${msg.toString()}`,
+        `${this.clientId} -- received invalid transport msg: ${stringifiedMessage}`,
       );
     }
   }
