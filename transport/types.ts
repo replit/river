@@ -59,7 +59,9 @@ export abstract class Transport {
   onMessage(msg: Uint8Array) {
     const parsedMsg = this.codec.fromBuffer(msg);
     if (parsedMsg === null) {
-      log?.warn(`${this.clientId} -- received malformed msg: ${msg}`);
+      log?.warn(
+        `${this.clientId} -- received malformed msg: ${msg.toString()}`,
+      );
       return;
     }
 
@@ -68,13 +70,13 @@ export abstract class Transport {
       isAck(parsedMsg.controlFlags)
     ) {
       // process ack
-      log?.info(`${this.clientId} -- received ack: ${msg}`);
+      log?.info(`${this.clientId} -- received ack: ${msg.toString()}`);
       if (this.sendBuffer.has(parsedMsg.payload.ack)) {
         this.sendBuffer.delete(parsedMsg.payload.ack);
       }
     } else if (Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
       // regular river message
-      log?.info(`${this.clientId} -- received msg: ${msg}`);
+      log?.info(`${this.clientId} -- received msg: ${msg.toString()}`);
 
       // ignore if not for us
       if (parsedMsg.to !== this.clientId && parsedMsg.to !== 'broadcast') {
@@ -91,7 +93,9 @@ export abstract class Transport {
       ackMsg.from = this.clientId;
       this.send(ackMsg);
     } else {
-      log?.warn(`${this.clientId} -- received invalid transport msg: ${msg}`);
+      log?.warn(
+        `${this.clientId} -- received invalid transport msg: ${msg.toString()}`,
+      );
     }
   }
 

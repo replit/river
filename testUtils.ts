@@ -57,7 +57,9 @@ export async function onServerReady(server: http.Server): Promise<number> {
  * @returns A Promise that resolves to a WebSocket instance.
  */
 export async function createLocalWebSocketClient(port: number) {
-  return new WebSocket(`ws://localhost:${port}`);
+  const sock = new WebSocket(`ws://localhost:${port}`);
+  sock.binaryType = 'arraybuffer';
+  return sock;
 }
 
 /**
@@ -85,6 +87,7 @@ export function createWsTransports(
         return new Promise<WebSocket>((resolve) => {
           wss.on('connection', async function onConnect(serverSock) {
             wss.removeListener('connection', onConnect);
+            serverSock.binaryType = 'arraybuffer';
             resolve(serverSock);
           });
         });
