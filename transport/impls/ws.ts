@@ -40,7 +40,7 @@ export class WebSocketTransport extends Transport {
    * A flag indicating whether the transport has been destroyed.
    * A destroyed transport will not attempt to reconnect and cannot be used again.
    */
-  destroyed: boolean;
+  state: 'open' | 'closed' | 'destroyed';
 
   /**
    * An ongoing reconnect attempt if it exists. When the attempt finishes, it contains a
@@ -67,7 +67,7 @@ export class WebSocketTransport extends Transport {
   ) {
     const options = { ...defaultOptions, ...providedOptions };
     super(options.codec, clientId);
-    this.destroyed = false;
+    this.state = 'open';
     this.wsGetter = wsGetter;
     this.options = options;
     this.sendQueue = [];
@@ -78,6 +78,10 @@ export class WebSocketTransport extends Transport {
    * Begins a new attempt to establish a WebSocket connection.
    */
   private async tryConnect() {
+    if (this.state !== 'open') {
+      return;
+    }
+
     // wait until it's ready or we get an error
     this.reconnectPromise ??= new Promise<WebSocketResult>(async (resolve) => {
       log?.info(`${this.clientId} -- establishing a new websocket`);
@@ -152,10 +156,13 @@ export class WebSocketTransport extends Transport {
    */
   send(msg: OpaqueTransportMessage): MessageId {
     const id = msg.id;
-    if (this.destroyed) {
+    if (this.state === 'destroyed') {
       const err = 'ws is destroyed, cant send';
-      log?.error(err);
+      log?.error(err + `: ${JSON.stringify(msg)}`);
       throw new Error(err);
+    } else if (this.state === 'closed') {
+      log?.info(`ws is closed, discarding msg: ${JSON.stringify(msg)}`);
+      return msg.id;
     }
 
     this.sendBuffer.set(id, msg);
@@ -176,11 +183,20 @@ export class WebSocketTransport extends Transport {
   }
 
   /**
-   * Destroys the WebSocket transport and marks it as unusable.
+   * Closes the WebSocket transport. Any messages sent while the transport is closed will be silently discarded.
    */
   async close() {
-    log?.info('manually closed ws');
-    this.destroyed = true;
+    log?.info('closed ws transport');
+    this.state = 'closed';
+    return this.ws?.close();
+  }
+
+  /**
+   * Destroys the WebSocket transport. Any messages sent while the transport is closed will throw an error.
+   */
+  async destroy() {
+    log?.info('destroyed ws transport');
+    this.state = 'destroyed';
     return this.ws?.close();
   }
 }

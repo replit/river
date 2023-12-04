@@ -80,7 +80,7 @@ describe('retry logic', async () => {
     ).resolves.toStrictEqual(msg2.payload);
   });
 
-  test('ws transport is not recreated after manually closing', async () => {
+  test('ws transport is not recreated after destroy', async () => {
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
@@ -90,7 +90,7 @@ describe('retry logic', async () => {
       waitForMessage(serverTransport, (recv) => recv.id === msg1.id),
     ).resolves.toStrictEqual(msg1.payload);
 
-    clientTransport.close();
+    clientTransport.destroy();
     return expect(() => clientTransport.send(msg2)).toThrow(
       new Error('ws is destroyed, cant send'),
     );

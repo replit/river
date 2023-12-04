@@ -99,6 +99,7 @@ export abstract class Transport {
       const ackMsg = reply(parsedMsg, { ack: parsedMsg.id });
       ackMsg.controlFlags = ControlFlags.AckBit;
       ackMsg.from = this.clientId;
+
       this.send(ackMsg);
     } else {
       log?.warn(
