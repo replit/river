@@ -13,6 +13,7 @@ import {
   OpaqueTransportMessage,
   ControlFlags,
   msg,
+  TransportClientId,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { waitForMessage } from '../transport';
@@ -109,6 +110,7 @@ function _createRecursiveProxy(
  */
 export const createClient = <Srv extends Server<Record<string, AnyService>>>(
   transport: Transport,
+  serverId: TransportClientId = 'SERVER',
 ) =>
   _createRecursiveProxy(async (opts) => {
     const [serviceName, procName] = [...opts.path];
@@ -134,7 +136,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
         for await (const rawIn of inputStream) {
           const m = msg(
             transport.clientId,
-            'SERVER',
+            serverId,
             serviceName,
             procName,
             streamId,
@@ -159,7 +161,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
         outputStream.end();
         const closeMessage = msg(
           transport.clientId,
-          'SERVER',
+          serverId,
           serviceName,
           procName,
           streamId,
@@ -175,7 +177,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       // rpc case
       const m = msg(
         transport.clientId,
-        'SERVER',
+        serverId,
         serviceName,
         procName,
         streamId,

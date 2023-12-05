@@ -76,7 +76,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
   }
 
   const handler = async (msg: OpaqueTransportMessage) => {
-    if (msg.to !== 'SERVER') {
+    if (msg.to !== transport.clientId) {
       log?.info(
         `${transport.clientId} -- got msg with destination that isn't the server, ignoring`,
       );
