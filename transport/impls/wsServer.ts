@@ -40,11 +40,20 @@ export class WebSocketServerTransport extends Transport {
         log?.warn(`${clientId} -- ws error from client ${from}: ${msg}`);
       });
 
+      ws.on('close', () => {
+        log?.info(`${clientId} -- got connection close from ${from}`);
+        if (from !== 'unknown') {
+          this.connMap.delete(from);
+        }
+      });
+
       ws.onmessage = (msg) =>
         this.onMessage(msg.data as Uint8Array, (parsed) => {
           from = parsed.from;
-          log?.warn(`${clientId} -- new connection from ${from}`);
-          this.connMap.set(from, ws);
+          log?.info(`${clientId} -- new connection from ${from}`);
+          if (from !== 'unknown') {
+            this.connMap.set(from, ws);
+          }
         });
     });
   }
