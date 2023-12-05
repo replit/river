@@ -12,7 +12,7 @@ import { type Codec } from '../../codec';
 interface Options {
   retryIntervalMs: number;
   codec: Codec;
-  binaryType: 'arraybuffer' | 'blob';
+  binaryType: 'arraybuffer';
 }
 
 const defaultOptions: Options = {
@@ -43,6 +43,11 @@ export class WebSocketClientTransport extends Transport {
   state: 'open' | 'closed' | 'destroyed';
 
   /**
+   * The binary type of the WebSocket connection.
+   */
+  binaryType: 'arraybuffer';
+
+  /**
    * An ongoing reconnect attempt if it exists. When the attempt finishes, it contains a
    * {@link WebSocketResult} object when a connection is established or an error occurs.
    */
@@ -68,6 +73,7 @@ export class WebSocketClientTransport extends Transport {
     const options = { ...defaultOptions, ...providedOptions };
     super(options.codec, clientId);
     this.state = 'open';
+    this.binaryType = options.binaryType;
     this.wsGetter = wsGetter;
     this.options = options;
     this.sendQueue = [];
@@ -116,7 +122,7 @@ export class WebSocketClientTransport extends Transport {
       log?.info(`${this.clientId} -- websocket ok`);
 
       this.ws = res.ws;
-      this.ws.binaryType = 'arraybuffer';
+      this.ws.binaryType = this.options.binaryType;
       this.ws.onmessage = (msg) => this.onMessage(msg.data as Uint8Array);
       this.ws.onclose = () => {
         this.reconnectPromise = undefined;
