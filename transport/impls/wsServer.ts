@@ -59,8 +59,17 @@ export class WebSocketServerTransport extends Transport {
   }
 
   send(msg: OpaqueTransportMessage): MessageId {
+    if (msg.to === 'broadcast') {
+      for (const conn of this.connMap.values()) {
+        log?.info(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
+        conn.send(this.codec.toBuffer(msg));
+      }
+      return msg.id;
+    }
+
     const conn = this.connMap.get(msg.to);
     if (conn) {
+      log?.info(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
       conn.send(this.codec.toBuffer(msg));
       return msg.id;
     } else {

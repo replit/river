@@ -215,7 +215,7 @@ export function asClientStream<
 export function payloadToTransportMessage<Payload extends object>(
   payload: Payload,
   streamId?: string,
-) {
+): TransportMessage<Payload> {
   return msg(
     'client',
     'SERVER',

@@ -25,12 +25,15 @@ export type {
 export async function waitForMessage(
   t: Transport,
   filter?: (msg: OpaqueTransportMessage) => boolean,
+  rejectMismatch?: boolean,
 ) {
-  return new Promise((resolve, _reject) => {
+  return new Promise((resolve, reject) => {
     function onMessage(msg: OpaqueTransportMessage) {
       if (!filter || filter?.(msg)) {
         resolve(msg.payload);
         t.removeMessageListener(onMessage);
+      } else if (rejectMismatch) {
+        reject(new Error('message didnt match the filter'));
       }
     }
 
