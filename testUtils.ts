@@ -1,7 +1,7 @@
 import WebSocket from 'isomorphic-ws';
 import { WebSocketServer } from 'ws';
 import http from 'http';
-import { WebSocketTransport } from './transport/impls/ws';
+import { WebSocketClientTransport } from './transport/impls/wsClient';
 import { Static, TObject } from '@sinclair/typebox';
 import { Procedure, ServiceContext } from './router';
 import {
@@ -19,6 +19,7 @@ import {
   UNCAUGHT_ERROR,
 } from './router/result';
 import { Codec } from './codec';
+import { WebSocketServerTransport } from './transport/impls/wsServer';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -66,35 +67,21 @@ export async function createLocalWebSocketClient(port: number) {
  * Creates a pair of WebSocket transports for testing purposes.
  * @param port - The port number to use for the client transport. This should be acquired after starting a server via {@link createWebSocketServer}.
  * @param wss - The WebSocketServer instance to use for the server transport.
- * @returns An array containing the client and server {@link WebSocketTransport} instances.
+ * @returns An array containing the client and server {@link WebSocketClientTransport} instances.
  */
 export function createWsTransports(
   port: number,
   wss: WebSocketServer,
   codec?: Codec,
-): [WebSocketTransport, WebSocketTransport] {
+): [WebSocketClientTransport, WebSocketServerTransport] {
   const options = codec ? { codec } : undefined;
   return [
-    new WebSocketTransport(
-      async () => {
-        return createLocalWebSocketClient(port);
-      },
+    new WebSocketClientTransport(
+      () => createLocalWebSocketClient(port),
       'client',
       options,
     ),
-    new WebSocketTransport(
-      async () => {
-        return new Promise<WebSocket>((resolve) => {
-          wss.on('connection', async function onConnect(serverSock) {
-            wss.removeListener('connection', onConnect);
-            serverSock.binaryType = 'arraybuffer';
-            resolve(serverSock);
-          });
-        });
-      },
-      'SERVER',
-      options,
-    ),
+    new WebSocketServerTransport(wss, 'SERVER', options),
   ];
 }
 

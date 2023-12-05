@@ -28,7 +28,7 @@ type WebSocketResult = { ws: WebSocket } | { err: string };
  * @class
  * @extends Transport
  */
-export class WebSocketTransport extends Transport {
+export class WebSocketClientTransport extends Transport {
   /**
    * A function that returns a Promise that resolves to a WebSocket instance.
    */

@@ -56,7 +56,7 @@ export abstract class Transport {
    * You generally shouldn't need to override this in downstream transport implementations.
    * @param msg The received message.
    */
-  onMessage(msg: Uint8Array) {
+  onMessage(msg: Uint8Array, cb?: (msg: OpaqueTransportMessage) => void) {
     const parsedMsg = this.codec.fromBuffer(msg);
 
     if (parsedMsg === null) {
@@ -92,6 +92,7 @@ export abstract class Transport {
       }
 
       // handle actual message
+      cb?.(parsedMsg);
       for (const handler of this.handlers) {
         handler(parsedMsg);
       }
