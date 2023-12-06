@@ -4,6 +4,7 @@ import { TransportClientId } from '../../message';
 import { Transport } from '../../transport';
 import { Server } from 'ws';
 import { WebSocketConnection } from './connection';
+import WebSocket from 'isomorphic-ws';
 
 interface Options {
   codec: Codec;
@@ -13,7 +14,9 @@ const defaultOptions: Options = {
   codec: NaiveJsonCodec,
 };
 
-export class WebSocketServerTransport extends Transport<WebSocketConnection> {
+export class WebSocketServerTransport extends Transport<
+  WebSocketConnection<WebSocket>
+> {
   wss: Server;
   clientId: TransportClientId;
 
@@ -31,7 +34,7 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
 
   setupConnectionStatusListeners(): void {
     this.wss.on('connection', (ws) => {
-      let conn: WebSocketConnection | undefined = undefined;
+      let conn: WebSocketConnection<WebSocket> | undefined = undefined;
 
       ws.onmessage = (msg) => {
         const parsedMsg = this.parseMsg(msg.data as Uint8Array);

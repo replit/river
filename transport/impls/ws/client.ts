@@ -1,4 +1,3 @@
-import WebSocket from 'isomorphic-ws';
 import { Transport } from '../../transport';
 import { NaiveJsonCodec } from '../../../codec/json';
 import { TransportClientId } from '../../message';
@@ -25,7 +24,9 @@ type WebSocketResult = { ws: WebSocket } | { err: string };
  * @class
  * @extends Transport
  */
-export class WebSocketClientTransport extends Transport<WebSocketConnection> {
+export class WebSocketClientTransport extends Transport<
+  WebSocketConnection<WebSocket>
+> {
   /**
    * A function that returns a Promise that resolves to a WebSocket instance.
    */

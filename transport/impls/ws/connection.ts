@@ -1,19 +1,23 @@
 import { TransportClientId } from '../../message';
 import { Connection, Transport } from '../../transport';
-import WebSocket from 'isomorphic-ws';
+import type IsomorphicWebSocket from 'isomorphic-ws';
 
-export class WebSocketConnection extends Connection {
-  ws: WebSocket;
+export class WebSocketConnection<
+  Ws extends WebSocket | IsomorphicWebSocket,
+> extends Connection {
+  ws: Ws;
 
   constructor(
-    transport: Transport<WebSocketConnection>,
+    transport: Transport<WebSocketConnection<Ws>>,
     connectedTo: TransportClientId,
-    ws: WebSocket,
+    ws: Ws,
   ) {
     super(transport, connectedTo);
     this.ws = ws;
     ws.binaryType = 'arraybuffer';
-    this.ws.onmessage = (msg) => this.onMessage(msg.data as Uint8Array);
+    this.ws.onmessage = (
+      msg: MessageEvent<any> | IsomorphicWebSocket.MessageEvent,
+    ) => this.onMessage(msg.data as Uint8Array);
   }
 
   send(payload: Uint8Array) {
