@@ -121,7 +121,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       return (
         msg.serviceName === serviceName &&
         msg.procedureName === procName &&
-        (msg.streamId === streamId || msg.streamId === 'global')
+        msg.streamId === streamId
       );
     }
 

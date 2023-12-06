@@ -71,21 +71,6 @@ describe('sending and receiving across websockets works', async () => {
     serverTransport.send(msg1);
     serverTransport.send(msg2);
     await expect(promises).resolves.toStrictEqual([msg1.payload, msg2.payload]);
-
-    // try broadcasting
-    const msgBroadcast = makeDummyMessage(
-      'SERVER',
-      'broadcast',
-      'hello everyone',
-    );
-    serverTransport.send(msgBroadcast);
-    return expect(
-      Promise.all([
-        // true means reject if we receive any message that isn't the one we are expecting
-        waitForMessage(client2, (recv) => recv.id === msgBroadcast.id, true),
-        waitForMessage(client1, (recv) => recv.id === msgBroadcast.id, true),
-      ]),
-    ).resolves.toStrictEqual([msgBroadcast.payload, msgBroadcast.payload]);
   });
 });
 

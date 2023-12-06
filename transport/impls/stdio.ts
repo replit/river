@@ -71,5 +71,7 @@ export class StdioTransport extends Transport {
   /**
    * Closes the transport.
    */
-  async close() {}
+  async close() {
+    this.output.end();
+  }
 }

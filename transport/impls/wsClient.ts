@@ -37,12 +37,6 @@ export class WebSocketClientTransport extends Transport {
   options: Options;
 
   /**
-   * A flag indicating whether the transport has been destroyed.
-   * A destroyed transport will not attempt to reconnect and cannot be used again.
-   */
-  state: 'open' | 'closed' | 'destroyed';
-
-  /**
    * The binary type of the WebSocket connection.
    */
   binaryType: 'arraybuffer';
@@ -72,20 +66,19 @@ export class WebSocketClientTransport extends Transport {
   ) {
     const options = { ...defaultOptions, ...providedOptions };
     super(options.codec, clientId);
-    this.state = 'open';
     this.binaryType = options.binaryType;
     this.wsGetter = wsGetter;
     this.options = options;
     this.sendQueue = [];
-    this.tryConnect();
+    this.open();
   }
 
   /**
    * Begins a new attempt to establish a WebSocket connection.
    */
-  private async tryConnect() {
-    if (this.state !== 'open') {
-      return;
+  async open() {
+    if (this.state === 'destroyed') {
+      throw new Error('cant reopen a destroyed connection');
     }
 
     // wait until it's ready or we get an error
@@ -121,12 +114,15 @@ export class WebSocketClientTransport extends Transport {
     if ('ws' in res && res.ws.readyState === res.ws.OPEN) {
       log?.info(`${this.clientId} -- websocket ok`);
 
+      this.state = 'open';
       this.ws = res.ws;
       this.ws.binaryType = this.options.binaryType;
       this.ws.onmessage = (msg) => this.onMessage(msg.data as Uint8Array);
       this.ws.onclose = () => {
         this.reconnectPromise = undefined;
-        this.tryConnect().catch();
+        if (this.state !== 'destroyed') {
+          this.open();
+        }
       };
 
       // send outstanding
@@ -151,7 +147,7 @@ export class WebSocketClientTransport extends Transport {
       `${this.clientId} -- websocket failed, trying again in ${this.options.retryIntervalMs}ms`,
     );
     this.reconnectPromise = undefined;
-    setTimeout(() => this.tryConnect(), this.options.retryIntervalMs);
+    setTimeout(() => this.open(), this.options.retryIntervalMs);
   }
 
   /**
@@ -182,7 +178,7 @@ export class WebSocketClientTransport extends Transport {
         )}`,
       );
       this.sendQueue.push(id);
-      this.tryConnect().catch();
+      this.open();
     }
 
     return id;

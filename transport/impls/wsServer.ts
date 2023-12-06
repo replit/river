@@ -47,26 +47,22 @@ export class WebSocketServerTransport extends Transport {
         }
       });
 
-      ws.onmessage = (msg) =>
-        this.onMessage(msg.data as Uint8Array, (parsed) => {
-          from = parsed.from;
+      ws.onmessage = (msg) => {
+        const parsedMsg = this.parseMsg(msg.data as Uint8Array);
+        if (parsedMsg) {
+          from = parsedMsg.from;
           log?.info(`${clientId} -- new connection from ${from}`);
           if (from !== 'unknown') {
             this.connMap.set(from, ws);
           }
-        });
+
+          this.handleMsg(parsedMsg);
+        }
+      };
     });
   }
 
   send(msg: OpaqueTransportMessage): MessageId {
-    if (msg.to === 'broadcast') {
-      for (const conn of this.connMap.values()) {
-        log?.info(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
-        conn.send(this.codec.toBuffer(msg));
-      }
-      return msg.id;
-    }
-
     const conn = this.connMap.get(msg.to);
     if (conn) {
       log?.info(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
