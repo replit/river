@@ -2,7 +2,7 @@
   "name": "@replit/river",
   "sideEffects": false,
   "description": "It's like tRPC but... with JSON Schema Support, duplex streaming and support for service multiplexing. Transport agnostic!",
-  "version": "0.6.4",
+  "version": "0.7.0",
   "type": "module",
   "exports": {
     ".": "./dist/router/index.js",
@@ -10,7 +10,8 @@
     "./codec": "./dist/codec/index.js",
     "./test-util": "./dist/testUtils.js",
     "./transport": "./dist/transport/index.js",
-    "./transport/ws": "./dist/transport/impls/ws.js",
+    "./transport/ws/client": "./dist/transport/impls/ws/client.js",
+    "./transport/ws/server": "./dist/transport/impls/ws/server.js",
     "./transport/stdio": "./dist/transport/impls/stdio.js"
   },
   "files": [

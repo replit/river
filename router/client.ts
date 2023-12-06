@@ -1,4 +1,4 @@
-import { Transport } from '../transport/types';
+import { Connection, Transport } from '../transport/transport';
 import {
   AnyService,
   ProcErrors,
@@ -13,6 +13,8 @@ import {
   OpaqueTransportMessage,
   ControlFlags,
   msg,
+  TransportClientId,
+  ControlMessagePayloadSchema,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { waitForMessage } from '../transport';
@@ -108,7 +110,8 @@ function _createRecursiveProxy(
  * @returns The client for the server.
  */
 export const createClient = <Srv extends Server<Record<string, AnyService>>>(
-  transport: Transport,
+  transport: Transport<Connection>,
+  serverId: TransportClientId = 'SERVER',
 ) =>
   _createRecursiveProxy(async (opts) => {
     const [serviceName, procName] = [...opts.path];
@@ -119,7 +122,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       return (
         msg.serviceName === serviceName &&
         msg.procedureName === procName &&
-        (msg.streamId === streamId || msg.streamId === 'global')
+        msg.streamId === streamId
       );
     }
 
@@ -134,7 +137,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
         for await (const rawIn of inputStream) {
           const m = msg(
             transport.clientId,
-            'SERVER',
+            serverId,
             serviceName,
             procName,
             streamId,
@@ -159,11 +162,13 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
         outputStream.end();
         const closeMessage = msg(
           transport.clientId,
-          'SERVER',
+          serverId,
           serviceName,
           procName,
           streamId,
-          {},
+          { type: 'CLOSE' as const } satisfies Static<
+            typeof ControlMessagePayloadSchema
+          >,
         );
         closeMessage.controlFlags |= ControlFlags.StreamClosedBit;
         transport.send(closeMessage);
@@ -175,7 +180,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       // rpc case
       const m = msg(
         transport.clientId,
-        'SERVER',
+        serverId,
         serviceName,
         procName,
         streamId,

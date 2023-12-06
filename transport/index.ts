@@ -1,8 +1,8 @@
 import { OpaqueTransportMessage } from './message';
-import { Transport } from './types';
+import { Connection, Transport } from './transport';
 
 // re-export
-export { Transport } from './types';
+export { Transport } from './transport';
 export {
   TransportMessageSchema,
   OpaqueTransportMessageSchema,
@@ -23,14 +23,17 @@ export type {
  * @returns A promise that resolves with the payload of the first message that passes the filter.
  */
 export async function waitForMessage(
-  t: Transport,
+  t: Transport<Connection>,
   filter?: (msg: OpaqueTransportMessage) => boolean,
+  rejectMismatch?: boolean,
 ) {
-  return new Promise((resolve, _reject) => {
+  return new Promise((resolve, reject) => {
     function onMessage(msg: OpaqueTransportMessage) {
       if (!filter || filter?.(msg)) {
         resolve(msg.payload);
         t.removeMessageListener(onMessage);
+      } else if (rejectMismatch) {
+        reject(new Error('message didnt match the filter'));
       }
     }
 

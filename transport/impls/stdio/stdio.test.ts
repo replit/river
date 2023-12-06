@@ -1,20 +1,20 @@
 import { describe, test, expect } from 'vitest';
 import stream from 'node:stream';
 import { StdioTransport } from './stdio';
-import { waitForMessage } from '..';
-import { payloadToTransportMessage } from '../../testUtils';
+import { waitForMessage } from '../..';
+import { payloadToTransportMessage } from '../../../testUtils';
 
 describe('sending and receiving across node streams works', () => {
   test('basic send/receive', async () => {
     const clientToServer = new stream.PassThrough();
     const serverToClient = new stream.PassThrough();
     const serverTransport = new StdioTransport(
-      'SERVER',
+      'abc',
       clientToServer,
       serverToClient,
     );
     const clientTransport = new StdioTransport(
-      'client',
+      'def',
       serverToClient,
       clientToServer,
     );
@@ -25,7 +25,14 @@ describe('sending and receiving across node streams works', () => {
     };
 
     const p = waitForMessage(serverTransport);
-    clientTransport.send(payloadToTransportMessage(msg));
+    clientTransport.send(
+      payloadToTransportMessage(
+        msg,
+        'stream',
+        clientTransport.clientId,
+        serverTransport.clientId,
+      ),
+    );
 
     await expect(p).resolves.toStrictEqual(msg);
   });

@@ -5,8 +5,11 @@ import {
   createWsTransports,
   createDummyTransportMessage,
   onServerReady,
-} from '../../testUtils';
-import { waitForMessage } from '..';
+  createLocalWebSocketClient,
+} from '../../../testUtils';
+import { msg, waitForMessage } from '../..';
+import { WebSocketServerTransport } from './server';
+import { WebSocketClientTransport } from './client';
 
 describe('sending and receiving across websockets works', async () => {
   const server = http.createServer();
@@ -27,6 +30,48 @@ describe('sending and receiving across websockets works', async () => {
     return expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg.id),
     ).resolves.toStrictEqual(msg.payload);
+  });
+
+  test('sending respects to/from fields', async () => {
+    const makeDummyMessage = (from: string, to: string, message: string) => {
+      return msg(from, to, 'service', 'proc', 'stream', {
+        msg: message,
+      });
+    };
+
+    const clientId1 = 'client1';
+    const clientId2 = 'client2';
+    const serverId = 'SERVER';
+    const serverTransport = new WebSocketServerTransport(wss, serverId);
+
+    const initClient = async (id: string) => {
+      const client = new WebSocketClientTransport(
+        () => createLocalWebSocketClient(port),
+        id,
+        'SERVER',
+      );
+      const initMsg = makeDummyMessage(id, serverId, 'hello server');
+      client.send(initMsg);
+      await expect(
+        waitForMessage(serverTransport, (recv) => recv.id === initMsg.id),
+      ).resolves.toStrictEqual(initMsg.payload);
+      return client;
+    };
+
+    const client1 = await initClient(clientId1);
+    const client2 = await initClient(clientId2);
+
+    // sending messages from server to client shouldn't leak between clients
+    const msg1 = makeDummyMessage('SERVER', 'client1', 'hello client1');
+    const msg2 = makeDummyMessage('SERVER', 'client2', 'hello client1');
+    const promises = Promise.all([
+      // true means reject if we receive any message that isn't the one we are expecting
+      waitForMessage(client2, (recv) => recv.id === msg2.id, true),
+      waitForMessage(client1, (recv) => recv.id === msg1.id, true),
+    ]);
+    serverTransport.send(msg1);
+    serverTransport.send(msg2);
+    await expect(promises).resolves.toStrictEqual([msg1.payload, msg2.payload]);
   });
 });
 
@@ -56,7 +101,7 @@ describe('retry logic', async () => {
       waitForMessage(serverTransport, (recv) => recv.id === msg1.id),
     ).resolves.toStrictEqual(msg1.payload);
 
-    clientTransport.ws?.close();
+    clientTransport.connections.forEach((conn) => conn.ws.close());
     clientTransport.send(msg2);
     return expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg2.id),
@@ -73,7 +118,7 @@ describe('retry logic', async () => {
       waitForMessage(serverTransport, (recv) => recv.id === msg1.id),
     ).resolves.toStrictEqual(msg1.payload);
 
-    clientTransport.ws?.terminate();
+    clientTransport.connections.forEach((conn) => conn.ws.terminate());
     clientTransport.send(msg2);
     return expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg2.id),
@@ -92,7 +137,7 @@ describe('retry logic', async () => {
 
     clientTransport.destroy();
     return expect(() => clientTransport.send(msg2)).toThrow(
-      new Error('ws is destroyed, cant send'),
+      new Error('transport is destroyed, cant send'),
     );
   });
 });
