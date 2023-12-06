@@ -288,7 +288,7 @@ export abstract class Transport<ConnType extends Connection> {
   /**
    * Default close implementation for transports. You should override this in the downstream
    * implementation if you need to do any additional cleanup and call super.close() at the end.
-   * Closes the WebSocket transport. Any messages sent while the transport is closed will be silently discarded.
+   * Closes the transport. Any messages sent while the transport is closed will be silently discarded.
    */
   async close() {
     for (const conn of this.connections.values()) {
@@ -301,7 +301,9 @@ export abstract class Transport<ConnType extends Connection> {
   }
 
   /**
-   * Destroys the WebSocket transport. Any messages sent while the transport is closed will throw an error.
+   * Default destroy implementation for transports. You should override this in the downstream
+   * implementation if you need to do any additional cleanup and call super.destroy() at the end.
+   * Destroys the transport. Any messages sent while the transport is destroyed will throw an error.
    */
   async destroy() {
     for (const conn of this.connections.values()) {
