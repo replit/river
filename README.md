@@ -11,7 +11,7 @@ It's like tRPC but...
 ## Developing
 
 - `npm i` -- install dependencies
-- `npm check` -- lint
-- `npm format` -- format
-- `npm test` -- run tests
-- `npm publish` -- cut a new release (should bump version in package.json first)
+- `npm run check` -- lint
+- `npm run format` -- format
+- `npm run test` -- run tests
+- `npm run publish` -- cut a new release (should bump version in package.json first)
