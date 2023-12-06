@@ -43,6 +43,10 @@ export const TransportAckSchema = TransportMessageSchema(
   }),
 );
 
+export const ControlMessagePayloadSchema = Type.Object({
+  type: Type.Literal('CLOSE'),
+});
+
 /**
  * Defines the schema for an opaque transport message that is agnostic to any
  * procedure/service.

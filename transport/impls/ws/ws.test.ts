@@ -6,10 +6,10 @@ import {
   createDummyTransportMessage,
   onServerReady,
   createLocalWebSocketClient,
-} from '../../testUtils';
-import { msg, waitForMessage } from '..';
-import { WebSocketServerTransport } from './wsServer';
-import { WebSocketClientTransport } from './wsClient';
+} from '../../../testUtils';
+import { msg, waitForMessage } from '../..';
+import { WebSocketServerTransport } from './server';
+import { WebSocketClientTransport } from './client';
 
 describe('sending and receiving across websockets works', async () => {
   const server = http.createServer();
@@ -48,6 +48,7 @@ describe('sending and receiving across websockets works', async () => {
       const client = new WebSocketClientTransport(
         () => createLocalWebSocketClient(port),
         id,
+        'SERVER',
       );
       const initMsg = makeDummyMessage(id, serverId, 'hello server');
       client.send(initMsg);
@@ -100,7 +101,7 @@ describe('retry logic', async () => {
       waitForMessage(serverTransport, (recv) => recv.id === msg1.id),
     ).resolves.toStrictEqual(msg1.payload);
 
-    clientTransport.ws?.close();
+    clientTransport.connections.forEach((conn) => conn.ws.close());
     clientTransport.send(msg2);
     return expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg2.id),
@@ -117,7 +118,7 @@ describe('retry logic', async () => {
       waitForMessage(serverTransport, (recv) => recv.id === msg1.id),
     ).resolves.toStrictEqual(msg1.payload);
 
-    clientTransport.ws?.terminate();
+    clientTransport.connections.forEach((conn) => conn.ws.terminate());
     clientTransport.send(msg2);
     return expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg2.id),
@@ -136,7 +137,7 @@ describe('retry logic', async () => {
 
     clientTransport.destroy();
     return expect(() => clientTransport.send(msg2)).toThrow(
-      new Error('ws is destroyed, cant send'),
+      new Error('transport is destroyed, cant send'),
     );
   });
 });

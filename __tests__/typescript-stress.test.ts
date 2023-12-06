@@ -3,7 +3,7 @@ import { Procedure, ServiceBuilder, serializeService } from '../router/builder';
 import { Type } from '@sinclair/typebox';
 import { MessageId, OpaqueTransportMessage, reply } from '../transport/message';
 import { createServer } from '../router/server';
-import { Transport } from '../transport/types';
+import { Connection, Transport } from '../transport/transport';
 import { NaiveJsonCodec } from '../codec/json';
 import { createClient } from '../router/client';
 import { Ok } from '../router/result';
@@ -87,7 +87,7 @@ export const StupidlyLargeService = () =>
     .finalize();
 
 // mock transport
-export class MockTransport extends Transport {
+export class MockTransport extends Transport<Connection> {
   constructor(clientId: string) {
     super(NaiveJsonCodec, clientId);
   }
@@ -97,6 +97,8 @@ export class MockTransport extends Transport {
     return id;
   }
 
+  setupConnectionStatusListeners() {}
+  async createNewConnection() {}
   async close() {}
 }
 

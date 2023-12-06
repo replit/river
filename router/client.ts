@@ -1,4 +1,4 @@
-import { Transport } from '../transport/types';
+import { Connection, Transport } from '../transport/transport';
 import {
   AnyService,
   ProcErrors,
@@ -14,6 +14,7 @@ import {
   ControlFlags,
   msg,
   TransportClientId,
+  ControlMessagePayloadSchema,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { waitForMessage } from '../transport';
@@ -109,7 +110,7 @@ function _createRecursiveProxy(
  * @returns The client for the server.
  */
 export const createClient = <Srv extends Server<Record<string, AnyService>>>(
-  transport: Transport,
+  transport: Transport<Connection>,
   serverId: TransportClientId = 'SERVER',
 ) =>
   _createRecursiveProxy(async (opts) => {
@@ -165,7 +166,9 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
           serviceName,
           procName,
           streamId,
-          {},
+          { type: 'CLOSE' as const } satisfies Static<
+            typeof ControlMessagePayloadSchema
+          >,
         );
         closeMessage.controlFlags |= ControlFlags.StreamClosedBit;
         transport.send(closeMessage);

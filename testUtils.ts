@@ -1,11 +1,12 @@
 import WebSocket from 'isomorphic-ws';
 import { WebSocketServer } from 'ws';
 import http from 'http';
-import { WebSocketClientTransport } from './transport/impls/wsClient';
+import { WebSocketClientTransport } from './transport/impls/ws/client';
 import { Static, TObject } from '@sinclair/typebox';
 import { Procedure, ServiceContext } from './router';
 import {
   OpaqueTransportMessage,
+  TransportClientId,
   TransportMessage,
   msg,
   reply,
@@ -19,7 +20,7 @@ import {
   UNCAUGHT_ERROR,
 } from './router/result';
 import { Codec } from './codec';
-import { WebSocketServerTransport } from './transport/impls/wsServer';
+import { WebSocketServerTransport } from './transport/impls/ws/server';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -79,6 +80,7 @@ export function createWsTransports(
     new WebSocketClientTransport(
       () => createLocalWebSocketClient(port),
       'client',
+      'SERVER',
       options,
     ),
     new WebSocketServerTransport(wss, 'SERVER', options),
@@ -215,15 +217,10 @@ export function asClientStream<
 export function payloadToTransportMessage<Payload extends object>(
   payload: Payload,
   streamId?: string,
+  from: TransportClientId = 'client',
+  to: TransportClientId = 'SERVER',
 ): TransportMessage<Payload> {
-  return msg(
-    'client',
-    'SERVER',
-    'service',
-    'procedure',
-    streamId ?? 'stream',
-    payload,
-  );
+  return msg(from, to, 'service', 'procedure', streamId ?? 'stream', payload);
 }
 
 /**

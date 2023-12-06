@@ -1,9 +1,10 @@
 import { Static, TObject } from '@sinclair/typebox';
-import { Transport } from '../transport/types';
+import { Connection, Transport } from '../transport/transport';
 import { AnyProcedure, AnyService } from './builder';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 import {
+  ControlMessagePayloadSchema,
   OpaqueTransportMessage,
   TransportMessage,
   isStreamClose,
@@ -48,7 +49,7 @@ interface ProcStream {
  * @returns A promise that resolves to a server instance with the registered services.
  */
 export async function createServer<Services extends Record<string, AnyService>>(
-  transport: Transport,
+  transport: Transport<Connection>,
   services: Services,
   extendedContext?: Omit<ServiceContext, 'state'>,
 ): Promise<Server<Services>> {
@@ -100,15 +101,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
     }
 
     const procedure = service.procedures[msg.procedureName] as AnyProcedure;
-    if (!Value.Check(procedure.input, msg.payload)) {
-      log?.error(
-        `${transport.clientId} -- procedure ${msg.serviceName}.${msg.procedureName} received invalid payload: ${msg.payload}`,
-      );
-      return;
-    }
-
-    const inputMessage = msg as TransportMessage<TObject>;
-    if (isStreamOpen(inputMessage.controlFlags)) {
+    if (isStreamOpen(msg.controlFlags)) {
       const incoming: ProcStream['incoming'] = pushable({ objectMode: true });
       const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
       const openPromises: Array<Promise<unknown>> = [
@@ -179,8 +172,17 @@ export async function createServer<Services extends Record<string, AnyService>>(
       return;
     }
 
-    procStream.incoming.push(inputMessage);
-    if (isStreamClose(inputMessage.controlFlags)) {
+    if (Value.Check(procedure.input, msg.payload)) {
+      procStream.incoming.push(msg as TransportMessage);
+    } else if (!Value.Check(ControlMessagePayloadSchema, msg.payload)) {
+      log?.error(
+        `${transport.clientId} -- procedure ${msg.serviceName}.${
+          msg.procedureName
+        } received invalid payload: ${JSON.stringify(msg.payload)}`,
+      );
+    }
+
+    if (isStreamClose(msg.controlFlags)) {
       procStream.incoming.end();
       await Promise.all(procStream.openPromises);
       procStream.outgoing.end();

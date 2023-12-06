@@ -21,9 +21,9 @@ import { codecs } from '../codec/codec.test';
 describe.each(codecs)(
   'client <-> server integration test ($name codec)',
   async ({ codec }) => {
-    const server = http.createServer();
-    const port = await onServerReady(server);
-    const webSocketServer = await createWebSocketServer(server);
+    const httpServer = http.createServer();
+    const port = await onServerReady(httpServer);
+    const webSocketServer = await createWebSocketServer(httpServer);
     const getTransports = () =>
       createWsTransports(port, webSocketServer, codec);
 
@@ -31,7 +31,7 @@ describe.each(codecs)(
       webSocketServer.clients.forEach((socket) => {
         socket.close();
       });
-      server.close();
+      httpServer.close();
     });
 
     test('rpc', async () => {
@@ -137,11 +137,11 @@ describe.each(codecs)(
         expected.push(i);
 
         if (i == 10) {
-          clientTransport.ws?.close();
+          clientTransport.connections.forEach((conn) => conn.ws.close());
         }
 
         if (i == 42) {
-          clientTransport.ws?.terminate();
+          clientTransport.connections.forEach((conn) => conn.ws.terminate());
         }
 
         await client.test.add({
@@ -201,8 +201,7 @@ describe.each(codecs)(
 
       // cleanup
       for (let i = 0; i < CONCURRENCY; i++) {
-        const [input, _output, close] = openStreams[i];
-        input.end();
+        const [_input, _output, close] = openStreams[i];
         close();
       }
     });
