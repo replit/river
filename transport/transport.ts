@@ -14,7 +14,9 @@ import { log } from '../logging';
 
 /**
  * Abstract base for a connection between two nodes in a River network.
- * Both {@link Connection} and {@link Transport} need to be defined for complete communication.
+ * A connection is responsible for sending and receiving messages on a 1:1
+ * basis between nodes.
+ * Connections can be reused across different transports.
  * @abstract
  */
 export abstract class Connection {
@@ -41,6 +43,8 @@ export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
 /**
  * Abstract base for a transport layer for communication between nodes in a River network.
+ * A transport is responsible for handling the 1:n connection logic between nodes and
+ * delegating sending/receiving to connections.
  * Any River transport methods need to implement this interface.
  * @abstract
  */
