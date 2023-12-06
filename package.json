@@ -2,7 +2,7 @@
   "name": "@replit/river",
   "sideEffects": false,
   "description": "It's like tRPC but... with JSON Schema Support, duplex streaming and support for service multiplexing. Transport agnostic!",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "type": "module",
   "exports": {
     ".": "./dist/router/index.js",
@@ -35,7 +35,7 @@
   "scripts": {
     "check": "tsc --noEmit && npx prettier . --check",
     "format": "npx prettier . --write",
-    "build": "tsc",
+    "build": "rm -rf ./dist && tsc",
     "prepack": "npm run build",
     "release": "npm publish --access public",
     "test": "vitest",
