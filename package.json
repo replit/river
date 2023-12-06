@@ -10,8 +10,8 @@
     "./codec": "./dist/codec/index.js",
     "./test-util": "./dist/testUtils.js",
     "./transport": "./dist/transport/index.js",
-    "./transport/ws/client": "./dist/transport/impls/wsClient.js",
-    "./transport/ws/server": "./dist/transport/impls/wsServer.js",
+    "./transport/ws/client": "./dist/transport/impls/ws/client.js",
+    "./transport/ws/server": "./dist/transport/impls/ws/server.js",
     "./transport/stdio": "./dist/transport/impls/stdio.js"
   },
   "files": [
