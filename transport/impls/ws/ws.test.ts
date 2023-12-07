@@ -6,7 +6,7 @@ import {
   createDummyTransportMessage,
   onServerReady,
   createLocalWebSocketClient,
-} from '../../../testUtils';
+} from '../../../util/testHelpers';
 import { msg, waitForMessage } from '../..';
 import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';

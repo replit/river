@@ -4,9 +4,9 @@ import {
   createWebSocketServer,
   createWsTransports,
   onServerReady,
-} from '../testUtils';
+} from '../util/testHelpers';
 import largePayload from './largePayload.json';
-import { TestServiceConstructor } from './fixtures';
+import { TestServiceConstructor } from './fixtures/services';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { StupidlyLargeService } from './typescript-stress.test';

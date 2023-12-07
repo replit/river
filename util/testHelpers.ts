@@ -1,16 +1,16 @@
 import WebSocket from 'isomorphic-ws';
 import { WebSocketServer } from 'ws';
 import http from 'http';
-import { WebSocketClientTransport } from './transport/impls/ws/client';
+import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { Static, TObject } from '@sinclair/typebox';
-import { Procedure, ServiceContext } from './router';
+import { Procedure, ServiceContext } from '../router';
 import {
   OpaqueTransportMessage,
   TransportClientId,
   TransportMessage,
   msg,
   reply,
-} from './transport';
+} from '../transport';
 import { Pushable, pushable } from 'it-pushable';
 import {
   Err,
@@ -18,9 +18,9 @@ import {
   RiverError,
   RiverUncaughtSchema,
   UNCAUGHT_ERROR,
-} from './router/result';
-import { Codec } from './codec';
-import { WebSocketServerTransport } from './transport/impls/ws/server';
+} from '../router/result';
+import { Codec } from '../codec';
+import { WebSocketServerTransport } from '../transport/impls/ws/server';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.

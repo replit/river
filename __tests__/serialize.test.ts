@@ -4,7 +4,7 @@ import {
   BinaryFileServiceConstructor,
   FallibleServiceConstructor,
   TestServiceConstructor,
-} from './fixtures';
+} from './fixtures/services';
 
 describe('serialize service to jsonschema', () => {
   test('serialize basic service', () => {

@@ -5,7 +5,7 @@ import {
   createWsTransports,
   iterNext,
   onServerReady,
-} from '../testUtils';
+} from '../util/testHelpers';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import http from 'http';
@@ -17,7 +17,7 @@ import {
   STREAM_ERROR,
   SubscribableServiceConstructor,
   TestServiceConstructor,
-} from './fixtures';
+} from './fixtures/services';
 import { UNCAUGHT_ERROR } from '../router/result';
 import { codecs } from '../codec/codec.test';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';

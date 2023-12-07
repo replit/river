@@ -3,7 +3,7 @@ import {
   asClientStream,
   asClientSubscription,
   iterNext,
-} from '../testUtils';
+} from '../util/testHelpers';
 import { assert, describe, expect, test } from 'vitest';
 import {
   DIV_BY_ZERO,
@@ -11,9 +11,9 @@ import {
   STREAM_ERROR,
   SubscribableServiceConstructor,
   TestServiceConstructor,
-} from './fixtures';
+} from './fixtures/services';
 import { UNCAUGHT_ERROR } from '../router/result';
-import { Observable } from '../datatypes';
+import { Observable } from './fixtures/observable';
 
 describe('server-side test', () => {
   const service = TestServiceConstructor();

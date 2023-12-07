@@ -1,5 +1,6 @@
 /**
  * Represents an observable value that can be subscribed to for changes.
+ * This should only be used in tests
  * @template T - The type of the value being observed.
  */
 export class Observable<T> {

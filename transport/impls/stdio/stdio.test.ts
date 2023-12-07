@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import stream from 'node:stream';
 import { StdioTransport } from './stdio';
 import { waitForMessage } from '../..';
-import { payloadToTransportMessage } from '../../../testUtils';
+import { payloadToTransportMessage } from '../../../util/testHelpers';
 
 describe('sending and receiving across node streams works', () => {
   test('basic send/receive', async () => {
