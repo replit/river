@@ -142,16 +142,18 @@ export async function createServer<Services extends Record<string, AnyService>>(
         openPromises.push(
           (async () => {
             const inputMessage = await incoming.next();
-            if (inputMessage.value) {
-              try {
-                const outputMessage = await procedure.handler(
-                  serviceContext,
-                  inputMessage.value,
-                );
-                outgoing.push(outputMessage);
-              } catch (err) {
-                errorHandler(err);
-              }
+            if (inputMessage.done) {
+              return;
+            }
+
+            try {
+              const outputMessage = await procedure.handler(
+                serviceContext,
+                inputMessage.value,
+              );
+              outgoing.push(outputMessage);
+            } catch (err) {
+              errorHandler(err);
             }
           })(),
         );
@@ -159,16 +161,18 @@ export async function createServer<Services extends Record<string, AnyService>>(
         openPromises.push(
           (async () => {
             const inputMessage = await incoming.next();
-            if (inputMessage.value) {
-              try {
-                await procedure.handler(
-                  serviceContext,
-                  inputMessage.value,
-                  outgoing,
-                );
-              } catch (err) {
-                errorHandler(err);
-              }
+            if (inputMessage.done) {
+              return;
+            }
+
+            try {
+              await procedure.handler(
+                serviceContext,
+                inputMessage.value,
+                outgoing,
+              );
+            } catch (err) {
+              errorHandler(err);
             }
           })(),
         );

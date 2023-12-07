@@ -33,7 +33,7 @@ type ServiceClient<Router extends AnyService> = {
   [ProcName in keyof Router['procedures']]: ProcType<
     Router,
     ProcName
-  > extends 'rpc' // rpc case
+  > extends 'rpc'
     ? {
         rpc: (
           input: Static<ProcInput<Router, ProcName>>,
@@ -44,7 +44,7 @@ type ServiceClient<Router extends AnyService> = {
           >
         >;
       }
-    : ProcType<Router, ProcName> extends 'stream' // stream case
+    : ProcType<Router, ProcName> extends 'stream'
     ? {
         stream: () => Promise<
           [
@@ -59,11 +59,9 @@ type ServiceClient<Router extends AnyService> = {
           ]
         >;
       }
-    : ProcType<Router, ProcName> extends 'subscription' // subscription
+    : ProcType<Router, ProcName> extends 'subscription'
     ? {
-        subscribe: (
-          input: Static<ProcInput<Router, ProcName>>, // input
-        ) => Promise<
+        subscribe: (input: Static<ProcInput<Router, ProcName>>) => Promise<
           [
             AsyncIter<
               Result<
