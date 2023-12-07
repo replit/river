@@ -1,0 +1,21 @@
+run = "npm run test:ui"
+modules = ["nodejs-20:v8-20230920-bd784b9"]
+hidden = [".config", "package-lock.json"]
+
+disableGuessImports = true
+disableInstallBeforeRun = true
+
+[nix]
+channel = "stable-23_05"
+
+[[ports]]
+localPort = 3000
+externalPort = 80
+
+[[ports]]
+localPort = 36859
+externalPort = 8099
+
+[[ports]]
+localPort = 41669
+externalPort = 9000
