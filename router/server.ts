@@ -101,7 +101,8 @@ export async function createServer<Services extends Record<string, AnyService>>(
     }
 
     const procedure = service.procedures[msg.procedureName] as AnyProcedure;
-    if (isStreamOpen(msg.controlFlags)) {
+    const streamIdx = `${msg.serviceName}.${msg.procedureName}:${msg.streamId}`;
+    if (isStreamOpen(msg.controlFlags) && !streamMap.has(streamIdx)) {
       const incoming: ProcStream['incoming'] = pushable({ objectMode: true });
       const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
       const openPromises: Array<Promise<unknown>> = [
@@ -140,11 +141,12 @@ export async function createServer<Services extends Record<string, AnyService>>(
       } else if (procedure.type === 'rpc') {
         openPromises.push(
           (async () => {
-            for await (const inputMessage of incoming) {
+            const inputMessage = await incoming.next();
+            if (inputMessage.value) {
               try {
                 const outputMessage = await procedure.handler(
                   serviceContext,
-                  inputMessage,
+                  inputMessage.value,
                 );
                 outgoing.push(outputMessage);
               } catch (err) {
@@ -153,18 +155,33 @@ export async function createServer<Services extends Record<string, AnyService>>(
             }
           })(),
         );
+      } else if (procedure.type === 'subscription') {
+        openPromises.push(
+          (async () => {
+            const inputMessage = await incoming.next();
+            if (inputMessage.value) {
+              try {
+                await procedure.handler(
+                  serviceContext,
+                  inputMessage.value,
+                  outgoing,
+                );
+              } catch (err) {
+                errorHandler(err);
+              }
+            }
+          })(),
+        );
       }
 
-      streamMap.set(`${msg.serviceName}.${msg.procedureName}:${msg.streamId}`, {
+      streamMap.set(streamIdx, {
         incoming,
         outgoing,
         openPromises,
       });
     }
 
-    const procStream = streamMap.get(
-      `${msg.serviceName}.${msg.procedureName}:${msg.streamId}`,
-    );
+    const procStream = streamMap.get(streamIdx);
     if (!procStream) {
       log?.warn(
         `${transport.clientId} -- couldn't find a matching procedure stream for ${msg.serviceName}.${msg.procedureName}:${msg.streamId}`,

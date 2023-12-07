@@ -136,7 +136,7 @@ export function asClientRpc<
  * @param {State} state - The state object.
  * @param {Procedure<State, 'stream', I, O>} proc - The procedure to handle the stream.
  * @param {Omit<ServiceContext, 'state'>} [extendedContext] - The extended context object.
- * @returns {[Pushable<Static<I>>, Pushable<Static<O>>]} - Pair of input and output streams.
+ * @returns Pair of input and output streams.
  */
 export function asClientStream<
   State extends object | unknown,
@@ -208,6 +208,68 @@ export function asClientStream<
 }
 
 /**
+ * Transforms a subscription procedure definition into a procedure that returns an output stream.
+ * Input messages can be pushed into the input stream.
+ * This should only be used for testing.
+ * @template State - The type of the state object.
+ * @template I - The type of the input object.
+ * @template O - The type of the output object.
+ * @param {State} state - The state object.
+ * @param {Procedure<State, 'stream', I, O>} proc - The procedure to handle the stream.
+ * @param {Omit<ServiceContext, 'state'>} [extendedContext] - The extended context object.
+ * @returns A function that when passed a message, returns the output stream.
+ */
+export function asClientSubscription<
+  State extends object | unknown,
+  I extends TObject,
+  O extends TObject,
+  E extends RiverError,
+>(
+  state: State,
+  proc: Procedure<State, 'subscription', I, O, E>,
+  extendedContext?: Omit<ServiceContext, 'state'>,
+) {
+  const rawOutput = pushable<Result<Static<O>, Static<E>>>({
+    objectMode: true,
+  });
+  const transportOutput = pushable<
+    TransportMessage<Result<Static<O>, Static<E>>>
+  >({
+    objectMode: true,
+  });
+
+  // unwrap from transport
+  (async () => {
+    for await (const transportRes of transportOutput) {
+      rawOutput.push(transportRes.payload);
+    }
+  })();
+
+  return async (
+    msg: Static<I>,
+  ): Promise<
+    Pushable<Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>>
+  > => {
+    proc
+      .handler(
+        { ...extendedContext, state },
+        payloadToTransportMessage(msg),
+        transportOutput,
+      )
+      .catch((err) => {
+        const errorMsg =
+          err instanceof Error ? err.message : `[coerced to error] ${err}`;
+        return Err({
+          code: UNCAUGHT_ERROR,
+          message: errorMsg,
+        });
+      });
+
+    return rawOutput;
+  };
+}
+
+/**
  * Converts a payload object to a transport message with reasonable defaults.
  * This should only be used for testing.
  * @param payload - The payload object to be converted.
@@ -232,4 +294,13 @@ export function createDummyTransportMessage(): OpaqueTransportMessage {
     msg: 'cool',
     test: Math.random(),
   });
+}
+
+/**
+ * Retrieves the next value from an async iterable iterator.
+ * @param iter The async iterable iterator.
+ * @returns A promise that resolves to the next value from the iterator.
+ */
+export function iterNext<T>(iter: AsyncIterableIterator<T>) {
+  return iter.next().then((res) => res.value);
 }
