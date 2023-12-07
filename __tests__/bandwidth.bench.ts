@@ -84,13 +84,13 @@ describe('simple router level bandwidth', async () => {
   bench(
     'rpc (wait for response)',
     async () => {
-      const result = await client.test.add({ n: 1 });
+      const result = await client.test.add.rpc({ n: 1 });
       assert(result.ok);
     },
     { time: BENCH_DURATION },
   );
 
-  const [input, output] = await client.test.echo();
+  const [input, output] = await client.test.echo.stream();
   bench(
     'stream (wait for response)',
     async () => {
@@ -131,7 +131,7 @@ describe('complex (50 procedures) router level bandwidth', async () => {
   bench(
     'rpc (wait for response)',
     async () => {
-      const result = await client.b.f35({ a: 1 });
+      const result = await client.b.f35.rpc({ a: 1 });
       assert(result.ok);
     },
     { time: BENCH_DURATION },

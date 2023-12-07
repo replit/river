@@ -5,7 +5,6 @@ import {
   ProcInput,
   ProcOutput,
   ProcType,
-  ValidProcType,
 } from './builder';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
