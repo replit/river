@@ -1,7 +1,8 @@
 import { Type } from '@sinclair/typebox';
-import { ServiceBuilder } from '../router/builder';
-import { reply } from '../transport/message';
-import { Err, Ok } from '../router/result';
+import { ServiceBuilder } from '../../router/builder';
+import { reply } from '../../transport/message';
+import { Err, Ok } from '../../router/result';
+import { Observable } from './observable';
 
 export const EchoRequest = Type.Object({
   msg: Type.String(),
@@ -149,6 +150,35 @@ export const FallibleServiceConstructor = () =>
             returnStream.push(reply(msg, Ok({ response: req.msg })));
           }
         }
+      },
+    })
+    .finalize();
+
+export const SubscribableServiceConstructor = () =>
+  ServiceBuilder.create('subscribable')
+    .initialState({
+      count: new Observable<number>(0),
+    })
+    .defineProcedure('add', {
+      type: 'rpc',
+      input: Type.Object({ n: Type.Number() }),
+      output: Type.Object({ result: Type.Number() }),
+      errors: Type.Never(),
+      async handler(ctx, msg) {
+        const { n } = msg.payload;
+        ctx.state.count.set((prev) => prev + n);
+        return reply(msg, Ok({ result: ctx.state.count.get() }));
+      },
+    })
+    .defineProcedure('value', {
+      type: 'subscription',
+      input: Type.Object({}),
+      output: Type.Object({ result: Type.Number() }),
+      errors: Type.Never(),
+      async handler(ctx, msg, returnStream) {
+        ctx.state.count.observe((count) => {
+          returnStream.push(reply(msg, Ok({ result: count })));
+        });
       },
     })
     .finalize();

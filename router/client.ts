@@ -34,28 +34,46 @@ type ServiceClient<Router extends AnyService> = {
     Router,
     ProcName
   > extends 'rpc'
-    ? // rpc case
-      (
-        input: Static<ProcInput<Router, ProcName>>,
-      ) => Promise<
-        Result<
-          Static<ProcOutput<Router, ProcName>>,
-          Static<ProcErrors<Router, ProcName>>
-        >
-      >
-    : // get stream case
-      () => Promise<
-        [
-          Pushable<Static<ProcInput<Router, ProcName>>>, // input
-          AsyncIter<
-            Result<
-              Static<ProcOutput<Router, ProcName>>,
-              Static<ProcErrors<Router, ProcName>>
-            >
-          >, // output
-          () => void, // close handle
-        ]
-      >;
+    ? {
+        rpc: (
+          input: Static<ProcInput<Router, ProcName>>,
+        ) => Promise<
+          Result<
+            Static<ProcOutput<Router, ProcName>>,
+            Static<ProcErrors<Router, ProcName>>
+          >
+        >;
+      }
+    : ProcType<Router, ProcName> extends 'stream'
+    ? {
+        stream: () => Promise<
+          [
+            Pushable<Static<ProcInput<Router, ProcName>>>, // input
+            AsyncIter<
+              Result<
+                Static<ProcOutput<Router, ProcName>>,
+                Static<ProcErrors<Router, ProcName>>
+              >
+            >, // output
+            () => void, // close handle
+          ]
+        >;
+      }
+    : ProcType<Router, ProcName> extends 'subscription'
+    ? {
+        subscribe: (input: Static<ProcInput<Router, ProcName>>) => Promise<
+          [
+            AsyncIter<
+              Result<
+                Static<ProcOutput<Router, ProcName>>,
+                Static<ProcErrors<Router, ProcName>>
+              >
+            >, // output
+            () => void, // close handle
+          ]
+        >;
+      }
+    : never;
 };
 
 /**
@@ -114,7 +132,13 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
   serverId: TransportClientId = 'SERVER',
 ) =>
   _createRecursiveProxy(async (opts) => {
-    const [serviceName, procName] = [...opts.path];
+    const [serviceName, procName, procType] = [...opts.path];
+    if (!(serviceName && procName && procType)) {
+      throw new Error(
+        'invalid river call, ensure the service and procedure you are calling exists',
+      );
+    }
+
     const [input] = opts.args;
     const streamId = nanoid();
 
@@ -126,8 +150,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       );
     }
 
-    if (input === undefined) {
-      // stream case (stream methods are called with zero arguments)
+    if (procType === 'stream') {
       const inputStream = pushable({ objectMode: true });
       const outputStream = pushable({ objectMode: true });
 
@@ -176,8 +199,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       };
 
       return [inputStream, outputStream, closeHandler];
-    } else {
-      // rpc case
+    } else if (procType === 'rpc') {
       const m = msg(
         transport.clientId,
         serverId,
@@ -192,5 +214,34 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
         ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit;
       transport.send(m);
       return waitForMessage(transport, belongsToSameStream);
+    } else if (procType === 'subscribe') {
+      const m = msg(
+        transport.clientId,
+        serverId,
+        serviceName,
+        procName,
+        streamId,
+        input as object,
+      );
+      m.controlFlags |= ControlFlags.StreamOpenBit;
+      transport.send(m);
+
+      // transport -> output
+      const outputStream = pushable({ objectMode: true });
+      const listener = (msg: OpaqueTransportMessage) => {
+        if (belongsToSameStream(msg)) {
+          outputStream.push(msg.payload);
+        }
+      };
+
+      transport.addMessageListener(listener);
+      const closeHandler = () => {
+        outputStream.end();
+        transport.removeMessageListener(listener);
+      };
+
+      return [outputStream, closeHandler];
+    } else {
+      throw new Error(`invalid river call, unknown procedure type ${procType}`);
     }
   }, []) as ServerClient<Srv>;
