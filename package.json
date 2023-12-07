@@ -11,7 +11,10 @@
     "./test-util": "./dist/util/testHelpers.js",
     "./transport": "./dist/transport/index.js",
     "./transport/ws/client": "./dist/transport/impls/ws/client.js",
-    "./transport/ws/server": "./dist/transport/impls/ws/server.js",
+    "./transport/ws/server": "./dist/transport/impls/ws/serve
+    
+    
+    r.js",
     "./transport/stdio": "./dist/transport/impls/stdio.js"
   },
   "files": [
@@ -27,10 +30,11 @@
   },
   "devDependencies": {
     "@types/ws": "^8.5.5",
+    "@vitest/ui": "^1.0.1",
     "prettier": "^3.0.0",
     "tsup": "^7.2.0",
     "typescript": "^5.2.2",
-    "vitest": "^0.34.6"
+    "vitest": "^1.0.1"
   },
   "scripts": {
     "check": "tsc --noEmit && npx prettier . --check",
@@ -38,6 +42,7 @@
     "build": "rm -rf ./dist && tsc",
     "prepack": "npm run build",
     "release": "npm publish --access public",
+    "test:ui": "echo \"remember to go to /__vitest__ in the webview\" && vitest --ui --api.host 0.0.0.0 --api.port 3000",
     "test": "vitest",
     "bench": "vitest bench"
   },
