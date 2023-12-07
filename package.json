@@ -12,7 +12,8 @@
     "./transport": "./dist/transport/index.js",
     "./transport/ws/client": "./dist/transport/impls/ws/client.js",
     "./transport/ws/server": "./dist/transport/impls/ws/server.js",
-    "./transport/stdio": "./dist/transport/impls/stdio.js"
+    "./transport/stdio": "./dist/transport/impls/stdio.js",
+    "./datatypes": "./dist/datatypes/index.js"
   },
   "files": [
     "dist"

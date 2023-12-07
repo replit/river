@@ -13,7 +13,7 @@ import {
   TestServiceConstructor,
 } from './fixtures';
 import { UNCAUGHT_ERROR } from '../router/result';
-import { Observable } from '../datatypes/observable';
+import { Observable } from '../datatypes';
 
 describe('server-side test', () => {
   const service = TestServiceConstructor();
