@@ -10,6 +10,8 @@ It's like tRPC but...
 
 ## Developing
 
+[![Run on Repl.it](https://replit.com/badge/github/replit/river)](https://replit.com/new/github/replit/river)
+
 - `npm i` -- install dependencies
 - `npm run check` -- lint
 - `npm run format` -- format
