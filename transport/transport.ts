@@ -31,10 +31,6 @@ export abstract class Connection {
     this.transport = transport;
   }
 
-  onMessage(msg: Uint8Array) {
-    return this.transport.onMessage(msg);
-  }
-
   abstract send(msg: Uint8Array): boolean;
   abstract close(): Promise<void>;
 }
