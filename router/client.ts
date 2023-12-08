@@ -15,6 +15,7 @@ import {
   msg,
   TransportClientId,
   ControlMessagePayloadSchema,
+  isStreamClose,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { waitForMessage } from '../transport';
@@ -182,6 +183,10 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
         if (belongsToSameStream(msg)) {
           outputStream.push(msg.payload);
         }
+
+        if (isStreamClose(msg.controlFlags)) {
+          outputStream.end();
+        }
       };
 
       transport.addMessageListener(listener);
@@ -236,6 +241,10 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       const listener = (msg: OpaqueTransportMessage) => {
         if (belongsToSameStream(msg)) {
           outputStream.push(msg.payload);
+        }
+
+        if (isStreamClose(msg.controlFlags)) {
+          outputStream.end();
         }
       };
 
