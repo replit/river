@@ -8,6 +8,8 @@ It's like tRPC but...
 - with Result types and error handling
 - over WebSockets
 
+To use River, you must be on least Typescript 5 with `"moduleResolution": "bundler"`.
+
 ## Developing
 
 [![Run on Repl.it](https://replit.com/badge/github/replit/river)](https://replit.com/new/github/replit/river)
