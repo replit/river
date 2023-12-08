@@ -8,9 +8,6 @@ import readline from 'readline';
 const newlineBuff = new TextEncoder().encode('\n');
 
 export class StdioConnection extends Connection {
-  /**
-   * The writable stream to use as output.
-   */
   output: NodeJS.WritableStream;
 
   constructor(
