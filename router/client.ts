@@ -180,12 +180,10 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
 
       // transport -> output
       const listener = (msg: OpaqueTransportMessage) => {
-        if (belongsToSameStream(msg)) {
-          outputStream.push(msg.payload);
-        }
-
         if (isStreamClose(msg.controlFlags)) {
           outputStream.end();
+        } else if (belongsToSameStream(msg)) {
+          outputStream.push(msg.payload);
         }
       };
 

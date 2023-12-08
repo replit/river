@@ -91,6 +91,7 @@ describe.each(codecs)(
       input.push({ msg: 'abc', ignore: false });
       input.push({ msg: 'def', ignore: true });
       input.push({ msg: 'ghi', ignore: false });
+      input.push({ msg: 'end', ignore: false, end: true });
       input.end();
 
       const result1 = await iterNext(output);
@@ -100,6 +101,13 @@ describe.each(codecs)(
       const result2 = await iterNext(output);
       assert(result2.ok);
       expect(result2.payload).toStrictEqual({ response: 'ghi' });
+
+      const result3 = await iterNext(output);
+      assert(result3.ok);
+      expect(result3.payload).toStrictEqual({ response: 'end' });
+
+      const result4 = await output.next();
+      assert(result4.done);
 
       close();
     });

@@ -7,6 +7,7 @@ import { Observable } from './observable';
 export const EchoRequest = Type.Object({
   msg: Type.String(),
   ignore: Type.Boolean(),
+  end: Type.Optional(Type.Boolean()),
 });
 export const EchoResponse = Type.Object({ response: Type.String() });
 
@@ -36,6 +37,10 @@ export const TestServiceConstructor = () =>
           const req = msg.payload;
           if (!req.ignore) {
             returnStream.push(reply(msg, Ok({ response: req.msg })));
+          }
+
+          if (req.end) {
+            returnStream.end();
           }
         }
       },
