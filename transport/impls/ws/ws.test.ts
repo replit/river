@@ -1,5 +1,12 @@
 import http from 'http';
-import { describe, test, expect, afterAll } from 'vitest';
+import {
+  describe,
+  test,
+  expect,
+  afterAll,
+  beforeEach,
+  afterEach,
+} from 'vitest';
 import {
   createWebSocketServer,
   createWsTransports,
@@ -10,6 +17,7 @@ import {
 import { msg, waitForMessage } from '../..';
 import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
+import { ensureTransportIsClean } from '../../../__tests__/fixtures/cleanup';
 
 describe('sending and receiving across websockets works', async () => {
   const server = http.createServer();
@@ -17,9 +25,7 @@ describe('sending and receiving across websockets works', async () => {
   const wss = await createWebSocketServer(server);
 
   afterAll(() => {
-    wss.clients.forEach((socket) => {
-      socket.close();
-    });
+    wss.close();
     server.close();
   });
 
@@ -27,9 +33,14 @@ describe('sending and receiving across websockets works', async () => {
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
     const msg = createDummyTransportMessage();
     clientTransport.send(msg);
-    return expect(
+    await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg.id),
     ).resolves.toStrictEqual(msg.payload);
+
+    await clientTransport.close();
+    await serverTransport.close();
+    ensureTransportIsClean(clientTransport);
+    ensureTransportIsClean(serverTransport);
   });
 
   test('sending respects to/from fields', async () => {
@@ -79,11 +90,22 @@ describe('retry logic', async () => {
   const server = http.createServer();
   const port = await onServerReady(server);
   const wss = await createWebSocketServer(server);
+  let clientTransport: WebSocketClientTransport;
+  let serverTransport: WebSocketServerTransport;
+
+  beforeEach(() => {
+    [clientTransport, serverTransport] = createWsTransports(port, wss);
+  });
+
+  afterEach(async () => {
+    await clientTransport.close();
+    await serverTransport.close();
+    ensureTransportIsClean(clientTransport);
+    ensureTransportIsClean(serverTransport);
+  });
 
   afterAll(() => {
-    wss.clients.forEach((socket) => {
-      socket.close();
-    });
+    wss.close();
     server.close();
   });
 
@@ -92,7 +114,6 @@ describe('retry logic', async () => {
   // not going to worry about this rn but for future
 
   test('ws transport is recreated after clean disconnect', async () => {
-    const [clientTransport, serverTransport] = createWsTransports(port, wss);
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 
@@ -109,7 +130,6 @@ describe('retry logic', async () => {
   });
 
   test('ws transport is recreated after unclean disconnect', async () => {
-    const [clientTransport, serverTransport] = createWsTransports(port, wss);
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 
@@ -126,7 +146,6 @@ describe('retry logic', async () => {
   });
 
   test('ws transport is not recreated after destroy', async () => {
-    const [clientTransport, serverTransport] = createWsTransports(port, wss);
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 

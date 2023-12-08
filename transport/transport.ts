@@ -29,7 +29,7 @@ export abstract class Connection {
   }
 
   abstract send(msg: Uint8Array): boolean;
-  abstract close(): Promise<void>;
+  abstract close(): void;
 }
 
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
@@ -162,7 +162,7 @@ export abstract class Transport<ConnType extends Connection> {
       this.send(msg);
     }
 
-    this.sendQueue.set(conn.connectedTo, []);
+    this.sendQueue.delete(conn.connectedTo);
   }
 
   /**

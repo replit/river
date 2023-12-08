@@ -27,7 +27,6 @@ export class StdioConnection extends Connection {
   }
 
   async close() {
-    this.transport.onDisconnect(this);
     this.output.end();
   }
 }

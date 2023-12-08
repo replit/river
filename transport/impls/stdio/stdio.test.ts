@@ -3,6 +3,7 @@ import stream from 'node:stream';
 import { StdioTransport } from './stdio';
 import { waitForMessage } from '../..';
 import { payloadToTransportMessage } from '../../../util/testHelpers';
+import { ensureTransportIsClean } from '../../../__tests__/fixtures/cleanup';
 
 describe('sending and receiving across node streams works', () => {
   test('basic send/receive', async () => {
@@ -35,5 +36,9 @@ describe('sending and receiving across node streams works', () => {
     );
 
     await expect(p).resolves.toStrictEqual(msg);
+    await clientTransport.close();
+    await serverTransport.close();
+    ensureTransportIsClean(clientTransport);
+    ensureTransportIsClean(serverTransport);
   });
 });

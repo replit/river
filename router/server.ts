@@ -29,6 +29,7 @@ import {
  */
 export interface Server<Services> {
   services: Services;
+  streams: Map<string, ProcStream>;
   close(): Promise<void>;
 }
 
@@ -114,15 +115,20 @@ export async function createServer<Services extends Record<string, AnyService>>(
           }
 
           // we ended, send a close bit back to the client
-          transport.send(
-            closeStream(
-              transport.clientId,
-              message.from,
-              message.serviceName,
-              message.procedureName,
-              message.streamId,
-            ),
-          );
+          if (
+            procedure.type === 'subscription' ||
+            procedure.type === 'stream'
+          ) {
+            transport.send(
+              closeStream(
+                transport.clientId,
+                message.from,
+                message.serviceName,
+                message.procedureName,
+                message.streamId,
+              ),
+            );
+          }
         })(),
       ];
 
@@ -216,22 +222,32 @@ export async function createServer<Services extends Record<string, AnyService>>(
     }
 
     if (isStreamClose(message.controlFlags)) {
+      console.log('closing stream');
       procStream.incoming.end();
-      await Promise.all(procStream.openPromises);
+      // await Promise.all(procStream.openPromises);
+      await procStream.openPromises[1];
       procStream.outgoing.end();
+      await procStream.openPromises[0];
+      console.log('stream closed');
+      streamMap.delete(streamIdx);
     }
   };
 
   transport.addMessageListener(handler);
   return {
     services,
+    streams: streamMap,
     async close() {
+      console.log(`closing server, ${streamMap.size} streams open`);
       transport.removeMessageListener(handler);
       for (const [_, stream] of streamMap) {
         stream.incoming.end();
-        await Promise.all(stream.openPromises);
+        // await Promise.all(stream.openPromises);
+        await stream.openPromises[1];
         stream.outgoing.end();
+        await stream.openPromises[0];
       }
+      console.log('closed server');
     },
   };
 }

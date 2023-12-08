@@ -1,4 +1,12 @@
-import { afterAll, assert, describe, expect, test } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  assert,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from 'vitest';
 import {
   createLocalWebSocketClient,
   createWebSocketServer,
@@ -22,6 +30,10 @@ import { UNCAUGHT_ERROR } from '../router/result';
 import { codecs } from '../codec/codec.test';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
+import {
+  ensureServerIsClean,
+  ensureTransportIsClean,
+} from './fixtures/cleanup';
 
 describe.each(codecs)(
   'client <-> server integration test ($name codec)',
@@ -29,28 +41,42 @@ describe.each(codecs)(
     const httpServer = http.createServer();
     const port = await onServerReady(httpServer);
     const webSocketServer = await createWebSocketServer(httpServer);
-    const getTransports = () =>
-      createWsTransports(port, webSocketServer, codec);
+
+    let clientTransport: WebSocketClientTransport;
+    let serverTransport: WebSocketServerTransport;
+
+    beforeEach(() => {
+      [clientTransport, serverTransport] = createWsTransports(
+        port,
+        webSocketServer,
+        codec,
+      );
+    });
+
+    afterEach(async () => {
+      await clientTransport.close();
+      await serverTransport.close();
+      ensureTransportIsClean(clientTransport);
+      ensureTransportIsClean(serverTransport);
+    });
 
     afterAll(() => {
-      webSocketServer.clients.forEach((socket) => {
-        socket.close();
-      });
+      webSocketServer.close();
       httpServer.close();
     });
 
     test('rpc', async () => {
-      const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: TestServiceConstructor() };
       const server = await createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
       const result = await client.test.add.rpc({ n: 3 });
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 3 });
+      await server.close();
+      ensureServerIsClean(server);
     });
 
     test('fallible rpc', async () => {
-      const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: FallibleServiceConstructor() };
       const server = await createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -66,10 +92,11 @@ describe.each(codecs)(
           test: 'abc',
         },
       });
+      await server.close();
+      ensureServerIsClean(server);
     });
 
     test('rpc with binary (uint8array)', async () => {
-      const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: BinaryFileServiceConstructor() };
       const server = await createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -79,10 +106,11 @@ describe.each(codecs)(
       expect(new TextDecoder().decode(result.payload.contents)).toStrictEqual(
         'contents for file test.py',
       );
+      await server.close();
+      ensureServerIsClean(server);
     });
 
     test('stream', async () => {
-      const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: TestServiceConstructor() };
       const server = await createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -106,14 +134,16 @@ describe.each(codecs)(
       assert(result3.ok);
       expect(result3.payload).toStrictEqual({ response: 'end' });
 
+      // after the server stream is ended, the client stream should be ended too
       const result4 = await output.next();
       assert(result4.done);
 
       close();
+      await server.close();
+      ensureServerIsClean(server);
     });
 
     test('fallible stream', async () => {
-      const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: FallibleServiceConstructor() };
       const server = await createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -137,6 +167,8 @@ describe.each(codecs)(
         message: 'some message',
       });
       close();
+      await server.close();
+      ensureServerIsClean(server);
     });
 
     test('subscription', async () => {
@@ -195,10 +227,18 @@ describe.each(codecs)(
 
       close1();
       close2();
+
+      await client1Transport.close();
+      await client2Transport.close();
+      await serverTransport.close();
+      ensureTransportIsClean(client1Transport);
+      ensureTransportIsClean(client2Transport);
+      ensureTransportIsClean(serverTransport);
+      await server.close();
+      ensureServerIsClean(server);
     });
 
     test('message order is preserved in the face of disconnects', async () => {
-      const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: OrderingServiceConstructor() };
       const server = await createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -222,12 +262,13 @@ describe.each(codecs)(
 
       const res = await client.test.getAll.rpc({});
       assert(res.ok);
-      return expect(res.payload.msgs).toStrictEqual(expected);
+      expect(res.payload.msgs).toStrictEqual(expected);
+      await server.close();
+      ensureServerIsClean(server);
     });
 
     const CONCURRENCY = 10;
     test('concurrent rpcs', async () => {
-      const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: OrderingServiceConstructor() };
       const server = await createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -242,10 +283,11 @@ describe.each(codecs)(
         assert(result.ok);
         expect(result.payload).toStrictEqual({ n: i });
       }
+      await server.close();
+      ensureServerIsClean(server);
     });
 
     test('concurrent streams', async () => {
-      const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: TestServiceConstructor() };
       const server = await createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -275,6 +317,9 @@ describe.each(codecs)(
         const [_input, _output, close] = openStreams[i];
         close();
       }
+
+      await server.close();
+      ensureServerIsClean(server);
     });
   },
 );
