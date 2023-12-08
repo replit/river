@@ -112,14 +112,18 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
     }
 
     // otherwise try and reconnect again
-    log?.warn(
-      `${this.clientId} -- websocket failed, trying again in ${this.options.retryIntervalMs}ms`,
-    );
     this.reconnectPromises.delete(to);
     if (attempt >= this.options.retryAttemptsMax) {
-      return;
+      throw new Error(
+        `${this.clientId} -- websocket to ${to} failed after ${attempt} attempts, giving up`,
+      );
     } else {
       // linear backoff
+      log?.warn(
+        `${this.clientId} -- websocket to ${to} failed, trying again in ${
+          this.options.retryIntervalMs * attempt
+        }ms`,
+      );
       setTimeout(
         () => this.createNewConnection(to, attempt + 1),
         this.options.retryIntervalMs * attempt,
