@@ -14,6 +14,8 @@ export type {
   MessageId,
   OpaqueTransportMessage,
   TransportClientId,
+  isStreamOpen,
+  isStreamClose,
 } from './message';
 
 /**
