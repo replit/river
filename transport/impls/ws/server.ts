@@ -67,14 +67,4 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
     log?.warn(err);
     return;
   }
-
-  async destroy() {
-    super.destroy();
-    this.wss.close();
-  }
-
-  async close() {
-    super.close();
-    this.wss.close();
-  }
 }
