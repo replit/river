@@ -153,6 +153,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
     if (procType === 'stream') {
       const inputStream = pushable({ objectMode: true });
       const outputStream = pushable({ objectMode: true });
+      let firstMessage = true;
 
       // input -> transport
       // this gets cleaned up on i.end() which is called by closeHandler
@@ -167,7 +168,11 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
             rawIn as object,
           );
 
-          m.controlFlags |= ControlFlags.StreamOpenBit;
+          if (firstMessage) {
+            m.controlFlags |= ControlFlags.StreamOpenBit;
+            firstMessage = false;
+          }
+
           transport.send(m);
         }
       })();

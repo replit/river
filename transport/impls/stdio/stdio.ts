@@ -42,7 +42,6 @@ const defaultOptions: Options = {
 
 /**
  * A transport implementation that uses standard input and output streams.
- * Can only be used 1:1, not N:1
  * @extends Transport
  */
 export class StdioTransport extends Transport<StdioConnection> {
