@@ -5,7 +5,7 @@ import {
   createWsTransports,
   onServerReady,
 } from '../util/testHelpers';
-import largePayload from './largePayload.json';
+import largePayload from './fixtures/largePayload.json';
 import { TestServiceConstructor } from './fixtures/services';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
