@@ -1,4 +1,4 @@
-import { Type, TSchema } from '@sinclair/typebox';
+import { Type, TSchema, Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 
 /**
@@ -126,11 +126,33 @@ export function reply<Payload extends object>(
 ): TransportMessage<Payload> {
   return {
     ...msg,
+    controlFlags: 0,
     id: nanoid(),
     to: msg.from,
     from: msg.to,
     payload: response,
   };
+}
+
+/**
+ * Create a request to close a stream
+ * @param from The ID of the client initiating the close.
+ * @param to The ID of the client being closed.
+ * @param respondTo The transport message to respond to.
+ * @returns The close message
+ */
+export function closeStream(
+  from: TransportClientId,
+  to: TransportClientId,
+  service: string,
+  proc: string,
+  stream: string,
+) {
+  const closeMessage = msg(from, to, service, proc, stream, {
+    type: 'CLOSE' as const,
+  } satisfies Static<typeof ControlMessagePayloadSchema>);
+  closeMessage.controlFlags |= ControlFlags.StreamClosedBit;
+  return closeMessage;
 }
 
 /**

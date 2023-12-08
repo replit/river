@@ -14,8 +14,8 @@ import {
   ControlFlags,
   msg,
   TransportClientId,
-  ControlMessagePayloadSchema,
   isStreamClose,
+  closeStream,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { waitForMessage } from '../transport';
@@ -193,18 +193,15 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       const closeHandler = () => {
         inputStream.end();
         outputStream.end();
-        const closeMessage = msg(
-          transport.clientId,
-          serverId,
-          serviceName,
-          procName,
-          streamId,
-          { type: 'CLOSE' as const } satisfies Static<
-            typeof ControlMessagePayloadSchema
-          >,
+        transport.send(
+          closeStream(
+            transport.clientId,
+            serverId,
+            serviceName,
+            procName,
+            streamId,
+          ),
         );
-        closeMessage.controlFlags |= ControlFlags.StreamClosedBit;
-        transport.send(closeMessage);
         transport.removeMessageListener(listener);
       };
 
