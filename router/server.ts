@@ -38,8 +38,10 @@ interface ProcStream {
   outgoing: Pushable<
     TransportMessage<Result<Static<TObject>, Static<RiverError>>>
   >;
-  openPromises: Array<Promise<unknown>>;
-  // TODO: abort controller probably goes here
+  promises: {
+    outputHandler: Promise<unknown>;
+    inputHandler: Promise<unknown>;
+  };
 }
 
 /**
@@ -61,6 +63,17 @@ export async function createServer<Services extends Record<string, AnyService>>(
   > = new Map();
   // map of streamId to ProcStream
   const streamMap: Map<string, ProcStream> = new Map();
+
+  async function cleanupStream(id: string) {
+    const stream = streamMap.get(id);
+    if (stream) {
+      stream.incoming.end();
+      await stream.promises.inputHandler;
+      stream.outgoing.end();
+      await stream.promises.outputHandler;
+      streamMap.delete(id);
+    }
+  }
 
   function getContext(service: AnyService) {
     const context = contextMap.get(service);
@@ -107,7 +120,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
     if (isStreamOpen(message.controlFlags) && !streamMap.has(streamIdx)) {
       const incoming: ProcStream['incoming'] = pushable({ objectMode: true });
       const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
-      const openPromises: Array<Promise<unknown>> = [
+      const outputHandler: Promise<unknown> =
         // sending outgoing messages back to client
         (async () => {
           for await (const response of outgoing) {
@@ -115,6 +128,8 @@ export async function createServer<Services extends Record<string, AnyService>>(
           }
 
           // we ended, send a close bit back to the client
+          // only subscriptions and streams have streams the
+          // handler can close
           if (
             procedure.type === 'subscription' ||
             procedure.type === 'stream'
@@ -129,8 +144,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
               ),
             );
           }
-        })(),
-      ];
+        })();
 
       function errorHandler(err: unknown) {
         const errorMsg =
@@ -150,56 +164,51 @@ export async function createServer<Services extends Record<string, AnyService>>(
       }
 
       // pump incoming message stream -> handler -> outgoing message stream
+      let inputHandler: Promise<unknown> = Promise.resolve();
       if (procedure.type === 'stream') {
-        openPromises.push(
-          procedure
-            .handler(serviceContext, incoming, outgoing)
-            .catch(errorHandler),
-        );
+        inputHandler = procedure
+          .handler(serviceContext, incoming, outgoing)
+          .catch(errorHandler);
       } else if (procedure.type === 'rpc') {
-        openPromises.push(
-          (async () => {
-            const inputMessage = await incoming.next();
-            if (inputMessage.done) {
-              return;
-            }
+        inputHandler = (async () => {
+          const inputMessage = await incoming.next();
+          if (inputMessage.done) {
+            return;
+          }
 
-            try {
-              const outputMessage = await procedure.handler(
-                serviceContext,
-                inputMessage.value,
-              );
-              outgoing.push(outputMessage);
-            } catch (err) {
-              errorHandler(err);
-            }
-          })(),
-        );
+          try {
+            const outputMessage = await procedure.handler(
+              serviceContext,
+              inputMessage.value,
+            );
+            outgoing.push(outputMessage);
+          } catch (err) {
+            errorHandler(err);
+          }
+        })();
       } else if (procedure.type === 'subscription') {
-        openPromises.push(
-          (async () => {
-            const inputMessage = await incoming.next();
-            if (inputMessage.done) {
-              return;
-            }
+        inputHandler = (async () => {
+          const inputMessage = await incoming.next();
+          if (inputMessage.done) {
+            return;
+          }
 
-            try {
-              await procedure.handler(
-                serviceContext,
-                inputMessage.value,
-                outgoing,
-              );
-            } catch (err) {
-              errorHandler(err);
-            }
-          })(),
-        );
+          try {
+            await procedure.handler(
+              serviceContext,
+              inputMessage.value,
+              outgoing,
+            );
+          } catch (err) {
+            errorHandler(err);
+          }
+        })();
       }
 
       streamMap.set(streamIdx, {
         incoming,
         outgoing,
-        openPromises,
+        promises: { inputHandler, outputHandler },
       });
     }
 
@@ -222,14 +231,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
     }
 
     if (isStreamClose(message.controlFlags)) {
-      console.log('closing stream');
-      procStream.incoming.end();
-      // await Promise.all(procStream.openPromises);
-      await procStream.openPromises[1];
-      procStream.outgoing.end();
-      await procStream.openPromises[0];
-      console.log('stream closed');
-      streamMap.delete(streamIdx);
+      await cleanupStream(streamIdx);
     }
   };
 
@@ -238,16 +240,10 @@ export async function createServer<Services extends Record<string, AnyService>>(
     services,
     streams: streamMap,
     async close() {
-      console.log(`closing server, ${streamMap.size} streams open`);
       transport.removeMessageListener(handler);
-      for (const [_, stream] of streamMap) {
-        stream.incoming.end();
-        // await Promise.all(stream.openPromises);
-        await stream.openPromises[1];
-        stream.outgoing.end();
-        await stream.openPromises[0];
+      for (const streamIdx of streamMap.keys()) {
+        await cleanupStream(streamIdx);
       }
-      console.log('closed server');
     },
   };
 }

@@ -246,6 +246,15 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       transport.addMessageListener(listener);
       const closeHandler = () => {
         outputStream.end();
+        transport.send(
+          closeStream(
+            transport.clientId,
+            serverId,
+            serviceName,
+            procName,
+            streamId,
+          ),
+        );
         transport.removeMessageListener(listener);
       };
 

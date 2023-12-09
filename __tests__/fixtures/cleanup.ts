@@ -1,30 +1,55 @@
-import { expect } from 'vitest';
+import { expect, vi } from 'vitest';
 import { Connection, Transport } from '../../transport';
 import { Server } from '../../router';
 
-export function ensureTransportIsClean(t: Transport<Connection>) {
-  expect(t.state, 'transport should be closed after the test').to.not.equal(
-    'open',
-  );
+export async function ensureTransportIsClean(t: Transport<Connection>) {
+  expect(
+    t.state,
+    `transport ${t.clientId} should be closed after the test`,
+  ).to.not.equal('open');
   expect(
     t.connections,
-    'transport should not have open connections after the test',
+    `transport ${t.clientId} should not have open connections after the test`,
   ).toStrictEqual(new Map());
   expect(
     t.messageHandlers,
-    'transport should not have open message handlers after the test',
+    `transport ${t.clientId} should not have open message handlers after the test`,
   ).toStrictEqual(new Set());
-  expect(
-    t.sendQueue,
-    'transport should not have any messages its waiting to send after the test',
-  ).toStrictEqual(new Map());
-  return true;
+
+  vi.waitUntil(() => t.sendQueue.size === 0).finally(() => {
+    expect(
+      t.sendQueue,
+      `transport ${t.clientId} should not have any messages waiting to send after the test`,
+    ).toStrictEqual(new Map());
+  });
 }
 
-export function ensureServerIsClean(s: Server<unknown>) {
-  expect(
-    s.streams,
-    'server should not have any open streams after the test',
-  ).toStrictEqual(new Map());
-  return true;
+export async function ensureServerIsClean(s: Server<unknown>) {
+  return vi.waitUntil(() => s.streams.size === 0);
+}
+
+export async function testFinishesCleanly({
+  clientTransports,
+  serverTransport,
+  server,
+}: Partial<{
+  clientTransports: Array<Transport<Connection>>;
+  serverTransport: Transport<Connection>;
+  server: Server<unknown>;
+}>) {
+  if (clientTransports) {
+    await Promise.all(clientTransports.map((t) => t.close()));
+    await Promise.all(clientTransports.map(ensureTransportIsClean));
+  }
+
+  // server sits on top of server transport so we clean it up first
+  if (server) {
+    await ensureServerIsClean(server);
+    await server.close();
+  }
+
+  if (serverTransport) {
+    await serverTransport.close();
+    await ensureTransportIsClean(serverTransport);
+  }
 }
