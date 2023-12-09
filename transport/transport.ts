@@ -13,8 +13,15 @@ import {
 import { log } from '../logging';
 
 /**
+ * A 1:1 connection between two transports. Once this is created,
+ * the {@link Connection} is expected to take over responsibility for
+ * reading and writing messages from the underlying connection.
  *
- * @abstract
+ * 1) Messages received on the {@link Connection} are dispatched back to the {@link Transport}
+ *    via {@link Transport.onMessage}. The {@link Transport} then notifies any registered message listeners.
+ * 2) When {@link Transport.send}(msg) is called, the transport looks up the appropriate
+ *    connection in the {@link connections} map via `msg.to` and calls {@link send}(bytes)
+ *    so the connection can send it.
  */
 export abstract class Connection {
   connectedTo: TransportClientId;
@@ -35,20 +42,15 @@ export abstract class Connection {
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
 /**
- * Here's how to think about how transports are related to connections.
- *
+ * Transports manage the lifecycle (creation/deletion) of connections. Its responsibilities include:
+ * 
  *  1) Constructing a new {@link Connection} on {@link TransportMessage}s from new clients.
  *     After constructing the {@link Connection}, {@link onConnect} is called which adds it to the connection map.
  *  2) Delegating message listening of the connection to the newly created {@link Connection}.
  *     From this point on, the {@link Connection} is responsible for *reading* and *writing*
  *     messages from the connection.
- *  3) Messages received on the {@link Connection} are dispatched back to the {@link Transport} 
- *     via this.{@link onMessage}. The {@link Transport} then notifies any registered message listeners.
- *  4) When {@link Transport.send}(msg) is called, the transport looks up the appropriate
- *     connection in the {@link connections} map via `msg.to` and calls {@link Connection.send}(bytes)
- *     so the connection can send it.
- *  5) When a connection is closed, the {@link Transport} calls {@link onDisconnect} which closes the
- *    connection via {@link Connection.close} and removes it from the {@link connections} map.
+ *  3) When a connection is closed, the {@link Transport} calls {@link onDisconnect} which closes the
+ *     connection via {@link Connection.close} and removes it from the {@link connections} map.
 
  *
  * ```plaintext
