@@ -38,7 +38,7 @@ describe('sending and receiving across node streams works', () => {
     await expect(p).resolves.toStrictEqual(msg);
     await clientTransport.close();
     await serverTransport.close();
-    ensureTransportIsClean(clientTransport);
-    ensureTransportIsClean(serverTransport);
+    await ensureTransportIsClean(clientTransport);
+    await ensureTransportIsClean(serverTransport);
   });
 });
