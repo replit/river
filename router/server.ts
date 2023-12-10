@@ -1,6 +1,6 @@
 import { Static, TObject } from '@sinclair/typebox';
 import { Connection, Transport } from '../transport/transport';
-import { AnyProcedure, AnyService } from './builder';
+import { AnyProcedure, AnyService, Procedure } from './builder';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 import {
@@ -164,7 +164,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
       }
 
       // pump incoming message stream -> handler -> outgoing message stream
-      let inputHandler: Promise<unknown> = Promise.resolve();
+      let inputHandler: Promise<unknown>;
       if (procedure.type === 'stream') {
         inputHandler = procedure
           .handler(serviceContext, incoming, outgoing)
@@ -203,6 +203,15 @@ export async function createServer<Services extends Record<string, AnyService>>(
             errorHandler(err);
           }
         })();
+      } else {
+        // procedure is inferred to be never here as this is not a valid procedure type
+        // we cast just to log
+        log?.warn(
+          `${transport.clientId} -- got request for invalid procedure type ${
+            (procedure as AnyProcedure).type
+          } at ${message.serviceName}.${message.procedureName}`,
+        );
+        return;
       }
 
       streamMap.set(streamIdx, {
