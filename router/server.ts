@@ -1,6 +1,6 @@
 import { Static, TObject } from '@sinclair/typebox';
 import { Connection, Transport } from '../transport/transport';
-import { AnyProcedure, AnyService, Procedure } from './builder';
+import { AnyProcedure, AnyService } from './builder';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 import {
