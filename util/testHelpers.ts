@@ -2,7 +2,7 @@ import WebSocket from 'isomorphic-ws';
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
-import { Static, TObject } from '@sinclair/typebox';
+import { Static } from '@sinclair/typebox';
 import { Procedure, ServiceContext } from '../router';
 import {
   OpaqueTransportMessage,
@@ -21,6 +21,7 @@ import {
 } from '../router/result';
 import { Codec } from '../codec';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
+import { PayloadType } from '../router/builder';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -100,8 +101,8 @@ export function createWsTransports(
  */
 export function asClientRpc<
   State extends object | unknown,
-  I extends TObject,
-  O extends TObject,
+  I extends PayloadType,
+  O extends PayloadType,
   E extends RiverError,
 >(
   state: State,
@@ -140,8 +141,8 @@ export function asClientRpc<
  */
 export function asClientStream<
   State extends object | unknown,
-  I extends TObject,
-  O extends TObject,
+  I extends PayloadType,
+  O extends PayloadType,
   E extends RiverError,
 >(
   state: State,
@@ -221,8 +222,8 @@ export function asClientStream<
  */
 export function asClientSubscription<
   State extends object | unknown,
-  I extends TObject,
-  O extends TObject,
+  I extends PayloadType,
+  O extends PayloadType,
   E extends RiverError,
 >(
   state: State,
