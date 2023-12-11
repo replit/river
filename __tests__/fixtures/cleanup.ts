@@ -17,9 +17,9 @@ export async function ensureTransportIsClean(t: Transport<Connection>) {
     `transport ${t.clientId} should not have open connections after the test`,
   ).toStrictEqual(new Map());
   expect(
-    t.messageHandlers,
+    t.eventDispatcher.numberOfListeners('message'),
     `transport ${t.clientId} should not have open message handlers after the test`,
-  ).toStrictEqual(new Set());
+  ).equal(0);
 }
 
 export async function waitUntil<T>(

@@ -11,6 +11,7 @@ import {
   reply,
 } from './message';
 import { log } from '../logging';
+import { EventDispatcher, EventHandler, EventTypes } from './events';
 
 /**
  * A 1:1 connection between two transports. Once this is created,
@@ -89,11 +90,6 @@ export abstract class Transport<ConnType extends Connection> {
   clientId: TransportClientId;
 
   /**
-   * The set of message handlers registered with this transport.
-   */
-  messageHandlers: Set<(msg: OpaqueTransportMessage) => void>;
-
-  /**
    * An array of message IDs that are waiting to be sent over the WebSocket connection.
    * This builds up if the WebSocket is down for a period of time.
    */
@@ -110,12 +106,17 @@ export abstract class Transport<ConnType extends Connection> {
   connections: Map<TransportClientId, ConnType>;
 
   /**
+   * The event dispatcher for handling events of type EventTypes.
+   */
+  eventDispatcher: EventDispatcher<EventTypes>;
+
+  /**
    * Creates a new Transport instance.
    * @param codec The codec used to encode and decode messages.
    * @param clientId The client ID of this transport.
    */
   constructor(codec: Codec, clientId: TransportClientId) {
-    this.messageHandlers = new Set();
+    this.eventDispatcher = new EventDispatcher();
     this.sendBuffer = new Map();
     this.sendQueue = new Map();
     this.connections = new Map();
@@ -146,6 +147,11 @@ export abstract class Transport<ConnType extends Connection> {
     log?.info(`${this.clientId} -- new connection to ${conn.connectedTo}`);
     this.connections.set(conn.connectedTo, conn);
 
+    this.eventDispatcher.dispatchEvent('connectionStatus', {
+      status: 'connect',
+      conn,
+    });
+
     // send outstanding
     const outstanding = this.sendQueue.get(conn.connectedTo);
     if (!outstanding) {
@@ -175,6 +181,10 @@ export abstract class Transport<ConnType extends Connection> {
     log?.info(`${this.clientId} -- disconnect from ${conn.connectedTo}`);
     conn.close();
     this.connections.delete(conn.connectedTo);
+    this.eventDispatcher.dispatchEvent('connectionStatus', {
+      status: 'disconnect',
+      conn,
+    });
   }
 
   /**
@@ -232,9 +242,7 @@ export abstract class Transport<ConnType extends Connection> {
         return;
       }
 
-      for (const handler of this.messageHandlers) {
-        handler(msg);
-      }
+      this.eventDispatcher.dispatchEvent('message', msg);
 
       if (!isAck(msg.controlFlags)) {
         const ackMsg = reply(msg, { ack: msg.id });
@@ -247,19 +255,27 @@ export abstract class Transport<ConnType extends Connection> {
   }
 
   /**
-   * Adds a message listener to this transport.
+   * Adds a listener to this transport.
+   * @param the type of event to listen for
    * @param handler The message handler to add.
    */
-  addMessageListener(handler: (msg: OpaqueTransportMessage) => void): void {
-    this.messageHandlers.add(handler);
+  addEventListener<K extends EventTypes, T extends EventHandler<K>>(
+    type: K,
+    handler: T,
+  ): void {
+    this.eventDispatcher.addEventListener(type, handler);
   }
 
   /**
-   * Removes a message listener from this transport.
+   * Removes a listener from this transport.
+   * @param the type of event to unlisten on
    * @param handler The message handler to remove.
    */
-  removeMessageListener(handler: (msg: OpaqueTransportMessage) => void): void {
-    this.messageHandlers.delete(handler);
+  removeEventListener<K extends EventTypes, T extends EventHandler<K>>(
+    type: K,
+    handler: T,
+  ): void {
+    this.eventDispatcher.removeEventListener(type, handler);
   }
 
   /**
