@@ -5,10 +5,11 @@ import {
   MessageId,
   OpaqueTransportMessage,
   OpaqueTransportMessageSchema,
+  PingMessageSchema,
   TransportAckSchema,
   TransportClientId,
-  isAck,
-  reply,
+  ack,
+  pong,
 } from './message';
 import { log } from '../logging';
 
@@ -27,12 +28,23 @@ export abstract class Connection {
   connectedTo: TransportClientId;
   transport: Transport<Connection>;
 
+  /**
+   * A flag to store if this connection is healthy. The server will periodically
+   * send `ping` control messages to the client, which is expected to respond
+   * with a `pong` control message. After the server sends the `ping` message,
+   * it will mark the connection as "unhealthy" until it receives a `pong`.
+   * If an interval passes and the server attempts to send a second `ping`
+   * without receiving a `pong`, it will close the unhealthy connection.
+   */
+  healthy: boolean;
+
   constructor(
     transport: Transport<Connection>,
     connectedTo: TransportClientId,
   ) {
     this.connectedTo = connectedTo;
     this.transport = transport;
+    this.healthy = true;
   }
 
   abstract send(msg: Uint8Array): boolean;
@@ -219,29 +231,56 @@ export abstract class Transport<ConnType extends Connection> {
       return;
     }
 
-    if (isAck(msg.controlFlags) && Value.Check(TransportAckSchema, msg)) {
-      // process ack
-      log?.info(`${this.clientId} -- received ack: ${JSON.stringify(msg)}`);
-      if (this.sendBuffer.has(msg.payload.ack)) {
-        this.sendBuffer.delete(msg.payload.ack);
+    // discard messages not meant for this recipient
+    if (msg.to !== this.clientId) {
+      return;
+    }
+
+    switch (msg.controlFlags) {
+      // ack
+      case ControlFlags.AckBit: {
+        if (!Value.Check(TransportAckSchema, msg)) {
+          throw new Error('invalid ack received');
+        }
+        log?.info(`${this.clientId} -- received ack: ${JSON.stringify(msg)}`);
+        if (this.sendBuffer.has(msg.payload.ack)) {
+          this.sendBuffer.delete(msg.payload.ack);
+        }
+        break;
       }
-    } else {
+
+      // ping
+      case ControlFlags.Ping: {
+        if (!Value.Check(PingMessageSchema, msg)) {
+          throw new Error('invalid ping received');
+        }
+
+        log?.info(`${this.clientId} -- received ping: ${JSON.stringify(msg)}`);
+        this.send(pong(msg));
+        break;
+      }
+
+      // pong
+      case ControlFlags.Pong: {
+        log?.info(`${this.clientId} -- received pong: ${JSON.stringify(msg)}`);
+        const connection = this.connections.get(msg.from);
+        if (connection) {
+          connection.healthy = true;
+        }
+        break;
+      }
+
       // regular river message
-      log?.info(`${this.clientId} -- received msg: ${JSON.stringify(msg)}`);
-      if (msg.to !== this.clientId) {
-        return;
-      }
+      default: {
+        log?.info(`${this.clientId} -- received msg: ${JSON.stringify(msg)}`);
 
-      for (const handler of this.messageHandlers) {
-        handler(msg);
-      }
+        // send acknowledgement of receipt
+        this.send(ack(msg));
 
-      if (!isAck(msg.controlFlags)) {
-        const ackMsg = reply(msg, { ack: msg.id });
-        ackMsg.controlFlags = ControlFlags.AckBit;
-        ackMsg.from = this.clientId;
-
-        this.send(ackMsg);
+        // handle message
+        for (const handler of this.messageHandlers) {
+          handler(msg);
+        }
       }
     }
   }
@@ -286,10 +325,18 @@ export abstract class Transport<ConnType extends Connection> {
 
     let conn = this.connections.get(msg.to);
 
-    // we only use sendBuffer to track messages that we expect an ack from,
-    // messages with the ack flag are not responded to
-    if (!isAck(msg.controlFlags)) {
-      this.sendBuffer.set(msg.id, msg);
+    switch (msg.controlFlags) {
+      // acks, pings, pongs do not use the send buffer
+      case ControlFlags.AckBit:
+      case ControlFlags.Ping:
+      case ControlFlags.Pong: {
+        break;
+      }
+
+      // use sendBuffer to track messages that we expect an ack from
+      default: {
+        this.sendBuffer.set(msg.id, msg);
+      }
     }
 
     if (conn) {
