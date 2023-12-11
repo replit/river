@@ -1,7 +1,10 @@
 import {
   asClientRpc,
   asClientStream,
+  asClientStreamWithInitialization,
   asClientSubscription,
+  asClientUpload,
+  asClientUploadWithInitialization,
   iterNext,
 } from '../util/testHelpers';
 import { assert, describe, expect, test } from 'vitest';
@@ -10,6 +13,7 @@ import {
   FallibleServiceConstructor,
   STREAM_ERROR,
   SubscribableServiceConstructor,
+  UploadableServiceConstructor,
   TestServiceConstructor,
 } from './fixtures/services';
 import { UNCAUGHT_ERROR } from '../router/result';
@@ -73,6 +77,29 @@ describe('server-side test', () => {
     expect(output.readableLength).toBe(0);
   });
 
+  test('stream with initialization', async () => {
+    const [input, output] = asClientStreamWithInitialization(
+      initialState,
+      service.procedures.echoWithPrefix,
+      { prefix: 'test' },
+    );
+
+    input.push({ msg: 'abc', ignore: false });
+    input.push({ msg: 'def', ignore: true });
+    input.push({ msg: 'ghi', ignore: false });
+    input.end();
+
+    const result1 = await iterNext(output);
+    assert(result1 && result1.ok);
+    expect(result1.payload).toStrictEqual({ response: 'test abc' });
+
+    const result2 = await iterNext(output);
+    assert(result2 && result2.ok);
+    expect(result2.payload).toStrictEqual({ response: 'test ghi' });
+
+    expect(output.readableLength).toBe(0);
+  });
+
   test('fallible stream', async () => {
     const service = FallibleServiceConstructor();
     const [input, output] = asClientStream({}, service.procedures.echo);
@@ -117,5 +144,32 @@ describe('server-side test', () => {
     const streamResult2 = await iterNext(stream);
     assert(streamResult2 && streamResult1.ok);
     expect(streamResult2.payload).toStrictEqual({ result: 3 });
+  });
+
+  test('uploads', async () => {
+    const service = UploadableServiceConstructor();
+    const [input, result] = asClientUpload({}, service.procedures.addMultiple);
+
+    input.push({ n: 1 });
+    input.push({ n: 2 });
+    input.end();
+    expect(await result).toStrictEqual({ ok: true, payload: { result: 3 } });
+  });
+
+  test('uploads with initialization', async () => {
+    const service = UploadableServiceConstructor();
+    const [input, result] = asClientUploadWithInitialization(
+      {},
+      service.procedures.addMultipleWithPrefix,
+      { prefix: 'test' },
+    );
+
+    input.push({ n: 1 });
+    input.push({ n: 2 });
+    input.end();
+    expect(await result).toStrictEqual({
+      ok: true,
+      payload: { result: 'test 3' },
+    });
   });
 });

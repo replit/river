@@ -45,6 +45,23 @@ export const TestServiceConstructor = () =>
         }
       },
     })
+    .defineProcedure('echoWithPrefix', {
+      type: 'stream',
+      init: Type.Object({ prefix: Type.String() }),
+      input: EchoRequest,
+      output: EchoResponse,
+      errors: Type.Never(),
+      async handler(_ctx, init, msgStream, returnStream) {
+        for await (const msg of msgStream) {
+          const req = msg.payload;
+          if (!req.ignore) {
+            returnStream.push(
+              reply(msg, Ok({ response: `${init.payload.prefix} ${req.msg}` })),
+            );
+          }
+        }
+      },
+    })
     .finalize();
 
 export const OrderingServiceConstructor = () =>
@@ -184,6 +201,47 @@ export const SubscribableServiceConstructor = () =>
         ctx.state.count.observe((count) => {
           returnStream.push(reply(msg, Ok({ result: count })));
         });
+      },
+    })
+    .finalize();
+
+export const UploadableServiceConstructor = () =>
+  ServiceBuilder.create('uploadable')
+    .initialState({})
+    .defineProcedure('addMultiple', {
+      type: 'upload',
+      input: Type.Object({ n: Type.Number() }),
+      output: Type.Object({ result: Type.Number() }),
+      errors: Type.Never(),
+      async handler(_ctx, msgStream) {
+        let result = 0;
+        let lastMsg;
+        for await (const msg of msgStream) {
+          const { n } = msg.payload;
+          result += n;
+          lastMsg = msg;
+        }
+        return reply(lastMsg!, Ok({ result: result }));
+      },
+    })
+    .defineProcedure('addMultipleWithPrefix', {
+      type: 'upload',
+      init: Type.Object({ prefix: Type.String() }),
+      input: Type.Object({ n: Type.Number() }),
+      output: Type.Object({ result: Type.String() }),
+      errors: Type.Never(),
+      async handler(_ctx, init, msgStream) {
+        let result = 0;
+        let lastMsg;
+        for await (const msg of msgStream) {
+          const { n } = msg.payload;
+          result += n;
+          lastMsg = msg;
+        }
+        return reply(
+          lastMsg!,
+          Ok({ result: init.payload.prefix + ' ' + result }),
+        );
       },
     })
     .finalize();

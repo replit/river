@@ -2,6 +2,8 @@ import { Connection, Transport } from '../transport/transport';
 import {
   AnyService,
   ProcErrors,
+  ProcHasInit,
+  ProcInit,
   ProcInput,
   ProcOutput,
   ProcType,
@@ -45,21 +47,64 @@ type ServiceClient<Router extends AnyService> = {
           >
         >;
       }
+    : ProcType<Router, ProcName> extends 'upload'
+    ? ProcHasInit<Router, ProcName> extends true
+      ? {
+          upload: (init: Static<ProcInit<Router, ProcName>>) => Promise<
+            [
+              Pushable<Static<ProcInput<Router, ProcName>>>, // input
+              Promise<
+                Result<
+                  Static<ProcOutput<Router, ProcName>>,
+                  Static<ProcErrors<Router, ProcName>>
+                >
+              >, // output
+            ]
+          >;
+        }
+      : {
+          upload: () => Promise<
+            [
+              Pushable<Static<ProcInput<Router, ProcName>>>, // input
+              Promise<
+                Result<
+                  Static<ProcOutput<Router, ProcName>>,
+                  Static<ProcErrors<Router, ProcName>>
+                >
+              >, // output
+            ]
+          >;
+        }
     : ProcType<Router, ProcName> extends 'stream'
-    ? {
-        stream: () => Promise<
-          [
-            Pushable<Static<ProcInput<Router, ProcName>>>, // input
-            AsyncIter<
-              Result<
-                Static<ProcOutput<Router, ProcName>>,
-                Static<ProcErrors<Router, ProcName>>
-              >
-            >, // output
-            () => void, // close handle
-          ]
-        >;
-      }
+    ? ProcHasInit<Router, ProcName> extends true
+      ? {
+          stream: (init: Static<ProcInit<Router, ProcName>>) => Promise<
+            [
+              Pushable<Static<ProcInput<Router, ProcName>>>, // input
+              AsyncIter<
+                Result<
+                  Static<ProcOutput<Router, ProcName>>,
+                  Static<ProcErrors<Router, ProcName>>
+                >
+              >, // output
+              () => void, // close handle
+            ]
+          >;
+        }
+      : {
+          stream: () => Promise<
+            [
+              Pushable<Static<ProcInput<Router, ProcName>>>, // input
+              AsyncIter<
+                Result<
+                  Static<ProcOutput<Router, ProcName>>,
+                  Static<ProcErrors<Router, ProcName>>
+                >
+              >, // output
+              () => void, // close handle
+            ]
+          >;
+        }
     : ProcType<Router, ProcName> extends 'subscription'
     ? {
         subscribe: (input: Static<ProcInput<Router, ProcName>>) => Promise<
@@ -156,8 +201,24 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       const outputStream = pushable({ objectMode: true });
       let firstMessage = true;
 
+      if (input) {
+        const m = msg(
+          transport.clientId,
+          serverId,
+          serviceName,
+          procName,
+          streamId,
+          input as object,
+        );
+
+        // first message needs the open bit.
+        m.controlFlags = ControlFlags.StreamOpenBit;
+        transport.send(m);
+        firstMessage = false;
+      }
+
       // input -> transport
-      // this gets cleaned up on i.end() which is called by closeHandler
+      // this gets cleaned up on inputStream.end() which is called by closeHandler
       (async () => {
         for await (const rawIn of inputStream) {
           const m = msg(
@@ -259,6 +320,59 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       };
 
       return [outputStream, closeHandler];
+    } else if (procType === 'upload') {
+      const inputStream = pushable({ objectMode: true });
+      let firstMessage = true;
+
+      if (input) {
+        const m = msg(
+          transport.clientId,
+          serverId,
+          serviceName,
+          procName,
+          streamId,
+          input as object,
+        );
+
+        // first message needs the open bit.
+        m.controlFlags = ControlFlags.StreamOpenBit;
+        transport.send(m);
+        firstMessage = false;
+      }
+
+      // input -> transport
+      // this gets cleaned up on inputStream.end(), which the caller should call.
+      (async () => {
+        for await (const rawIn of inputStream) {
+          const m = msg(
+            transport.clientId,
+            serverId,
+            serviceName,
+            procName,
+            streamId,
+            rawIn as object,
+          );
+
+          if (firstMessage) {
+            m.controlFlags |= ControlFlags.StreamOpenBit;
+            firstMessage = false;
+          }
+
+          transport.send(m);
+        }
+
+        transport.send(
+          closeStream(
+            transport.clientId,
+            serverId,
+            serviceName,
+            procName,
+            streamId,
+          ),
+        );
+      })();
+
+      return [inputStream, waitForMessage(transport, belongsToSameStream)];
     } else {
       throw new Error(`invalid river call, unknown procedure type ${procType}`);
     }
