@@ -10,6 +10,7 @@ import {
 import { msg, waitForMessage } from '../..';
 import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
+import { testFinishesCleanly } from '../../../__tests__/fixtures/cleanup';
 
 describe('sending and receiving across websockets works', async () => {
   const server = http.createServer();
@@ -17,9 +18,7 @@ describe('sending and receiving across websockets works', async () => {
   const wss = await createWebSocketServer(server);
 
   afterAll(() => {
-    wss.clients.forEach((socket) => {
-      socket.close();
-    });
+    wss.close();
     server.close();
   });
 
@@ -27,9 +26,14 @@ describe('sending and receiving across websockets works', async () => {
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
     const msg = createDummyTransportMessage();
     clientTransport.send(msg);
-    return expect(
+    await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg.id),
     ).resolves.toStrictEqual(msg.payload);
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
   });
 
   test('sending respects to/from fields', async () => {
@@ -72,6 +76,11 @@ describe('sending and receiving across websockets works', async () => {
     serverTransport.send(msg1);
     serverTransport.send(msg2);
     await expect(promises).resolves.toStrictEqual([msg1.payload, msg2.payload]);
+
+    await testFinishesCleanly({
+      clientTransports: [client1, client2],
+      serverTransport,
+    });
   });
 });
 
@@ -81,9 +90,7 @@ describe('retry logic', async () => {
   const wss = await createWebSocketServer(server);
 
   afterAll(() => {
-    wss.clients.forEach((socket) => {
-      socket.close();
-    });
+    wss.close();
     server.close();
   });
 
@@ -103,9 +110,16 @@ describe('retry logic', async () => {
 
     clientTransport.connections.forEach((conn) => conn.ws.close());
     clientTransport.send(msg2);
-    return expect(
+
+    // by this point the client should have reconnected
+    await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg2.id),
     ).resolves.toStrictEqual(msg2.payload);
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
   });
 
   test('ws transport is recreated after unclean disconnect', async () => {
@@ -120,9 +134,17 @@ describe('retry logic', async () => {
 
     clientTransport.connections.forEach((conn) => conn.ws.terminate());
     clientTransport.send(msg2);
-    return expect(
+
+    // by this point the client should have reconnected
+    await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg2.id),
     ).resolves.toStrictEqual(msg2.payload);
+
+    // this is not expected to be clean because we destroyed the transport
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
   });
 
   test('ws transport is not recreated after destroy', async () => {
@@ -136,8 +158,13 @@ describe('retry logic', async () => {
     ).resolves.toStrictEqual(msg1.payload);
 
     clientTransport.destroy();
-    return expect(() => clientTransport.send(msg2)).toThrow(
+    expect(() => clientTransport.send(msg2)).toThrow(
       new Error('transport is destroyed, cant send'),
     );
+
+    // this is not expected to be clean because we destroyed the transport
+    expect(clientTransport.state).toEqual('destroyed');
+    await clientTransport.close();
+    await serverTransport.close();
   });
 });

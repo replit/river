@@ -1,8 +1,8 @@
 import { OpaqueTransportMessage } from './message';
-import { Connection, Transport } from './transport';
+import { Transport, Connection } from './transport';
 
 // re-export
-export { Transport } from './transport';
+export { Transport, Connection } from './transport';
 export {
   TransportMessageSchema,
   OpaqueTransportMessageSchema,

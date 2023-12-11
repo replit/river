@@ -22,6 +22,7 @@ import { UNCAUGHT_ERROR } from '../router/result';
 import { codecs } from '../codec/codec.test';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
+import { testFinishesCleanly } from './fixtures/cleanup';
 
 describe.each(codecs)(
   'client <-> server integration test ($name codec)',
@@ -33,9 +34,7 @@ describe.each(codecs)(
       createWsTransports(port, webSocketServer, codec);
 
     afterAll(() => {
-      webSocketServer.clients.forEach((socket) => {
-        socket.close();
-      });
+      webSocketServer.close();
       httpServer.close();
     });
 
@@ -47,6 +46,12 @@ describe.each(codecs)(
       const result = await client.test.add.rpc({ n: 3 });
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 3 });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
     });
 
     test('fallible rpc', async () => {
@@ -66,6 +71,12 @@ describe.each(codecs)(
           test: 'abc',
         },
       });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
     });
 
     test('rpc with binary (uint8array)', async () => {
@@ -79,6 +90,12 @@ describe.each(codecs)(
       expect(new TextDecoder().decode(result.payload.contents)).toStrictEqual(
         'contents for file test.py',
       );
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
     });
 
     test('stream', async () => {
@@ -91,6 +108,7 @@ describe.each(codecs)(
       input.push({ msg: 'abc', ignore: false });
       input.push({ msg: 'def', ignore: true });
       input.push({ msg: 'ghi', ignore: false });
+      input.push({ msg: 'end', ignore: false, end: true });
       input.end();
 
       const result1 = await iterNext(output);
@@ -101,7 +119,20 @@ describe.each(codecs)(
       assert(result2.ok);
       expect(result2.payload).toStrictEqual({ response: 'ghi' });
 
+      const result3 = await iterNext(output);
+      assert(result3.ok);
+      expect(result3.payload).toStrictEqual({ response: 'end' });
+
+      // after the server stream is ended, the client stream should be ended too
+      const result4 = await output.next();
+      assert(result4.done);
+
       close();
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
     });
 
     test('fallible stream', async () => {
@@ -128,7 +159,13 @@ describe.each(codecs)(
         code: UNCAUGHT_ERROR,
         message: 'some message',
       });
+
       close();
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
     });
 
     test('subscription', async () => {
@@ -187,6 +224,12 @@ describe.each(codecs)(
 
       close1();
       close2();
+
+      await testFinishesCleanly({
+        clientTransports: [client1Transport, client2Transport],
+        serverTransport,
+        server,
+      });
     });
 
     test('message order is preserved in the face of disconnects', async () => {
@@ -214,7 +257,13 @@ describe.each(codecs)(
 
       const res = await client.test.getAll.rpc({});
       assert(res.ok);
-      return expect(res.payload.msgs).toStrictEqual(expected);
+      expect(res.payload.msgs).toStrictEqual(expected);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
     });
 
     const CONCURRENCY = 10;
@@ -234,6 +283,12 @@ describe.each(codecs)(
         assert(result.ok);
         expect(result.payload).toStrictEqual({ n: i });
       }
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
     });
 
     test('concurrent streams', async () => {
@@ -267,6 +322,12 @@ describe.each(codecs)(
         const [_input, _output, close] = openStreams[i];
         close();
       }
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
     });
   },
 );

@@ -34,8 +34,11 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
       let conn: WebSocketConnection | undefined = undefined;
 
       ws.onmessage = (msg) => {
+        // when we establish WebSocketConnection, ws.onmessage
+        // gets overriden so this only runs on the first valid message
+        // the websocket receives
         const parsedMsg = this.parseMsg(msg.data as Uint8Array);
-        if (parsedMsg) {
+        if (parsedMsg && !conn) {
           conn = new WebSocketConnection(this, parsedMsg.from, ws);
           this.onConnect(conn);
           this.handleMsg(parsedMsg);
@@ -63,15 +66,5 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
     const err = `${this.clientId} -- failed to send msg to ${to}, client probably dropped`;
     log?.warn(err);
     return;
-  }
-
-  async destroy() {
-    super.destroy();
-    this.wss.close();
-  }
-
-  async close() {
-    super.close();
-    this.wss.close();
   }
 }

@@ -8,9 +8,6 @@ import readline from 'readline';
 const newlineBuff = new TextEncoder().encode('\n');
 
 export class StdioConnection extends Connection {
-  /**
-   * The writable stream to use as output.
-   */
   output: NodeJS.WritableStream;
 
   constructor(
@@ -30,7 +27,6 @@ export class StdioConnection extends Connection {
   }
 
   async close() {
-    this.transport.onDisconnect(this);
     this.output.end();
   }
 }
@@ -45,7 +41,6 @@ const defaultOptions: Options = {
 
 /**
  * A transport implementation that uses standard input and output streams.
- * Can only be used 1:1, not N:1
  * @extends Transport
  */
 export class StdioTransport extends Transport<StdioConnection> {

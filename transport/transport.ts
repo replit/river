@@ -13,11 +13,15 @@ import {
 import { log } from '../logging';
 
 /**
- * Abstract base for a connection between two nodes in a River network.
- * A connection is responsible for sending and receiving messages on a 1:1
- * basis between nodes.
- * Connections can be reused across different transports.
- * @abstract
+ * A 1:1 connection between two transports. Once this is created,
+ * the {@link Connection} is expected to take over responsibility for
+ * reading and writing messages from the underlying connection.
+ *
+ * 1) Messages received on the {@link Connection} are dispatched back to the {@link Transport}
+ *    via {@link Transport.onMessage}. The {@link Transport} then notifies any registered message listeners.
+ * 2) When {@link Transport.send}(msg) is called, the transport looks up the appropriate
+ *    connection in the {@link connections} map via `msg.to` and calls {@link send}(bytes)
+ *    so the connection can send it.
  */
 export abstract class Connection {
   connectedTo: TransportClientId;
@@ -31,21 +35,40 @@ export abstract class Connection {
     this.transport = transport;
   }
 
-  onMessage(msg: Uint8Array) {
-    return this.transport.onMessage(msg);
-  }
-
   abstract send(msg: Uint8Array): boolean;
-  abstract close(): Promise<void>;
+  abstract close(): void;
 }
 
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
 /**
- * Abstract base for a transport layer for communication between nodes in a River network.
- * A transport is responsible for handling the 1:n connection logic between nodes and
- * delegating sending/receiving to connections.
- * Any River transport methods need to implement this interface.
+ * Transports manage the lifecycle (creation/deletion) of connections. Its responsibilities include:
+ * 
+ *  1) Constructing a new {@link Connection} on {@link TransportMessage}s from new clients.
+ *     After constructing the {@link Connection}, {@link onConnect} is called which adds it to the connection map.
+ *  2) Delegating message listening of the connection to the newly created {@link Connection}.
+ *     From this point on, the {@link Connection} is responsible for *reading* and *writing*
+ *     messages from the connection.
+ *  3) When a connection is closed, the {@link Transport} calls {@link onDisconnect} which closes the
+ *     connection via {@link Connection.close} and removes it from the {@link connections} map.
+
+ *
+ * ```plaintext
+ *            ▲
+ *  incoming  │
+ *  messages  │
+ *            ▼
+ *      ┌─────────────┐   1:N   ┌────────────┐
+ *      │  Transport  │ ◄─────► │ Connection │
+ *      └─────────────┘         └────────────┘
+ *            ▲
+ *            │
+ *            ▼
+ *      ┌───────────┐
+ *      │ Message   │
+ *      │ Listeners │
+ *      └───────────┘
+ * ```
  * @abstract
  */
 export abstract class Transport<ConnType extends Connection> {
@@ -141,7 +164,7 @@ export abstract class Transport<ConnType extends Connection> {
       this.send(msg);
     }
 
-    this.sendQueue.set(conn.connectedTo, []);
+    this.sendQueue.delete(conn.connectedTo);
   }
 
   /**

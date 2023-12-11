@@ -10,6 +10,7 @@ import {
   isStreamClose,
   isStreamOpen,
   reply,
+  closeStream,
 } from '../transport/message';
 import { ServiceContext, ServiceContextWithState } from './context';
 import { log } from '../logging';
@@ -28,6 +29,7 @@ import {
  */
 export interface Server<Services> {
   services: Services;
+  streams: Map<string, ProcStream>;
   close(): Promise<void>;
 }
 
@@ -36,8 +38,10 @@ interface ProcStream {
   outgoing: Pushable<
     TransportMessage<Result<Static<TObject>, Static<RiverError>>>
   >;
-  openPromises: Array<Promise<unknown>>;
-  // TODO: abort controller probably goes here
+  promises: {
+    outputHandler: Promise<unknown>;
+    inputHandler: Promise<unknown>;
+  };
 }
 
 /**
@@ -60,6 +64,17 @@ export async function createServer<Services extends Record<string, AnyService>>(
   // map of streamId to ProcStream
   const streamMap: Map<string, ProcStream> = new Map();
 
+  async function cleanupStream(id: string) {
+    const stream = streamMap.get(id);
+    if (stream) {
+      stream.incoming.end();
+      await stream.promises.inputHandler;
+      stream.outgoing.end();
+      await stream.promises.outputHandler;
+      streamMap.delete(id);
+    }
+  }
+
   function getContext(service: AnyService) {
     const context = contextMap.get(service);
     if (!context) {
@@ -76,53 +91,70 @@ export async function createServer<Services extends Record<string, AnyService>>(
     contextMap.set(service, { ...extendedContext, state: service.state });
   }
 
-  const handler = async (msg: OpaqueTransportMessage) => {
-    if (msg.to !== transport.clientId) {
+  const handler = async (message: OpaqueTransportMessage) => {
+    if (message.to !== transport.clientId) {
       log?.info(
         `${transport.clientId} -- got msg with destination that isn't the server, ignoring`,
       );
       return;
     }
 
-    if (!(msg.serviceName in services)) {
+    if (!(message.serviceName in services)) {
       log?.warn(
-        `${transport.clientId} -- couldn't find service ${msg.serviceName}`,
+        `${transport.clientId} -- couldn't find service ${message.serviceName}`,
       );
       return;
     }
 
-    const service = services[msg.serviceName];
+    const service = services[message.serviceName];
     const serviceContext = getContext(service);
-    if (!(msg.procedureName in service.procedures)) {
+    if (!(message.procedureName in service.procedures)) {
       log?.warn(
-        `${transport.clientId} -- couldn't find a matching procedure for ${msg.serviceName}.${msg.procedureName}`,
+        `${transport.clientId} -- couldn't find a matching procedure for ${message.serviceName}.${message.procedureName}`,
       );
       return;
     }
 
-    const procedure = service.procedures[msg.procedureName] as AnyProcedure;
-    const streamIdx = `${msg.serviceName}.${msg.procedureName}:${msg.streamId}`;
-    if (isStreamOpen(msg.controlFlags) && !streamMap.has(streamIdx)) {
+    const procedure = service.procedures[message.procedureName] as AnyProcedure;
+    const streamIdx = `${message.serviceName}.${message.procedureName}:${message.streamId}`;
+    if (isStreamOpen(message.controlFlags) && !streamMap.has(streamIdx)) {
       const incoming: ProcStream['incoming'] = pushable({ objectMode: true });
       const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
-      const openPromises: Array<Promise<unknown>> = [
+      const outputHandler: Promise<unknown> =
         // sending outgoing messages back to client
         (async () => {
           for await (const response of outgoing) {
             transport.send(response);
           }
-        })(),
-      ];
+
+          // we ended, send a close bit back to the client
+          // only subscriptions and streams have streams the
+          // handler can close
+          if (
+            procedure.type === 'subscription' ||
+            procedure.type === 'stream'
+          ) {
+            transport.send(
+              closeStream(
+                transport.clientId,
+                message.from,
+                message.serviceName,
+                message.procedureName,
+                message.streamId,
+              ),
+            );
+          }
+        })();
 
       function errorHandler(err: unknown) {
         const errorMsg =
           err instanceof Error ? err.message : `[coerced to error] ${err}`;
         log?.error(
-          `${transport.clientId} -- procedure ${msg.serviceName}.${msg.procedureName}:${msg.streamId} threw an error: ${errorMsg}`,
+          `${transport.clientId} -- procedure ${message.serviceName}.${message.procedureName}:${message.streamId} threw an error: ${errorMsg}`,
         );
         outgoing.push(
           reply(
-            msg,
+            message,
             Err({
               code: UNCAUGHT_ERROR,
               message: errorMsg,
@@ -132,93 +164,94 @@ export async function createServer<Services extends Record<string, AnyService>>(
       }
 
       // pump incoming message stream -> handler -> outgoing message stream
+      let inputHandler: Promise<unknown>;
       if (procedure.type === 'stream') {
-        openPromises.push(
-          procedure
-            .handler(serviceContext, incoming, outgoing)
-            .catch(errorHandler),
-        );
+        inputHandler = procedure
+          .handler(serviceContext, incoming, outgoing)
+          .catch(errorHandler);
       } else if (procedure.type === 'rpc') {
-        openPromises.push(
-          (async () => {
-            const inputMessage = await incoming.next();
-            if (inputMessage.done) {
-              return;
-            }
+        inputHandler = (async () => {
+          const inputMessage = await incoming.next();
+          if (inputMessage.done) {
+            return;
+          }
 
-            try {
-              const outputMessage = await procedure.handler(
-                serviceContext,
-                inputMessage.value,
-              );
-              outgoing.push(outputMessage);
-            } catch (err) {
-              errorHandler(err);
-            }
-          })(),
-        );
+          try {
+            const outputMessage = await procedure.handler(
+              serviceContext,
+              inputMessage.value,
+            );
+            outgoing.push(outputMessage);
+          } catch (err) {
+            errorHandler(err);
+          }
+        })();
       } else if (procedure.type === 'subscription') {
-        openPromises.push(
-          (async () => {
-            const inputMessage = await incoming.next();
-            if (inputMessage.done) {
-              return;
-            }
+        inputHandler = (async () => {
+          const inputMessage = await incoming.next();
+          if (inputMessage.done) {
+            return;
+          }
 
-            try {
-              await procedure.handler(
-                serviceContext,
-                inputMessage.value,
-                outgoing,
-              );
-            } catch (err) {
-              errorHandler(err);
-            }
-          })(),
+          try {
+            await procedure.handler(
+              serviceContext,
+              inputMessage.value,
+              outgoing,
+            );
+          } catch (err) {
+            errorHandler(err);
+          }
+        })();
+      } else {
+        // procedure is inferred to be never here as this is not a valid procedure type
+        // we cast just to log
+        log?.warn(
+          `${transport.clientId} -- got request for invalid procedure type ${
+            (procedure as AnyProcedure).type
+          } at ${message.serviceName}.${message.procedureName}`,
         );
+        return;
       }
 
       streamMap.set(streamIdx, {
         incoming,
         outgoing,
-        openPromises,
+        promises: { inputHandler, outputHandler },
       });
     }
 
     const procStream = streamMap.get(streamIdx);
     if (!procStream) {
       log?.warn(
-        `${transport.clientId} -- couldn't find a matching procedure stream for ${msg.serviceName}.${msg.procedureName}:${msg.streamId}`,
+        `${transport.clientId} -- couldn't find a matching procedure stream for ${message.serviceName}.${message.procedureName}:${message.streamId}`,
       );
       return;
     }
 
-    if (Value.Check(procedure.input, msg.payload)) {
-      procStream.incoming.push(msg as TransportMessage);
-    } else if (!Value.Check(ControlMessagePayloadSchema, msg.payload)) {
+    if (Value.Check(procedure.input, message.payload)) {
+      procStream.incoming.push(message as TransportMessage);
+    } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
       log?.error(
-        `${transport.clientId} -- procedure ${msg.serviceName}.${
-          msg.procedureName
-        } received invalid payload: ${JSON.stringify(msg.payload)}`,
+        `${transport.clientId} -- procedure ${message.serviceName}.${
+          message.procedureName
+        } received invalid payload: ${JSON.stringify(message.payload)}`,
       );
     }
 
-    if (isStreamClose(msg.controlFlags)) {
-      procStream.incoming.end();
-      await Promise.all(procStream.openPromises);
-      procStream.outgoing.end();
+    if (isStreamClose(message.controlFlags)) {
+      await cleanupStream(streamIdx);
     }
   };
 
   transport.addMessageListener(handler);
   return {
     services,
+    streams: streamMap,
     async close() {
       transport.removeMessageListener(handler);
-      for (const [_, stream] of streamMap) {
-        stream.incoming.end();
-        await Promise.all(stream.openPromises);
-        stream.outgoing.end();
+      for (const streamIdx of streamMap.keys()) {
+        await cleanupStream(streamIdx);
       }
     },
   };

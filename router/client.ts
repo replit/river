@@ -14,7 +14,8 @@ import {
   ControlFlags,
   msg,
   TransportClientId,
-  ControlMessagePayloadSchema,
+  isStreamClose,
+  closeStream,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { waitForMessage } from '../transport';
@@ -153,6 +154,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
     if (procType === 'stream') {
       const inputStream = pushable({ objectMode: true });
       const outputStream = pushable({ objectMode: true });
+      let firstMessage = true;
 
       // input -> transport
       // this gets cleaned up on i.end() which is called by closeHandler
@@ -167,14 +169,20 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
             rawIn as object,
           );
 
-          m.controlFlags |= ControlFlags.StreamOpenBit;
+          if (firstMessage) {
+            m.controlFlags |= ControlFlags.StreamOpenBit;
+            firstMessage = false;
+          }
+
           transport.send(m);
         }
       })();
 
       // transport -> output
       const listener = (msg: OpaqueTransportMessage) => {
-        if (belongsToSameStream(msg)) {
+        if (isStreamClose(msg.controlFlags)) {
+          outputStream.end();
+        } else if (belongsToSameStream(msg)) {
           outputStream.push(msg.payload);
         }
       };
@@ -183,18 +191,15 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       const closeHandler = () => {
         inputStream.end();
         outputStream.end();
-        const closeMessage = msg(
-          transport.clientId,
-          serverId,
-          serviceName,
-          procName,
-          streamId,
-          { type: 'CLOSE' as const } satisfies Static<
-            typeof ControlMessagePayloadSchema
-          >,
+        transport.send(
+          closeStream(
+            transport.clientId,
+            serverId,
+            serviceName,
+            procName,
+            streamId,
+          ),
         );
-        closeMessage.controlFlags |= ControlFlags.StreamClosedBit;
-        transport.send(closeMessage);
         transport.removeMessageListener(listener);
       };
 
@@ -232,11 +237,24 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
         if (belongsToSameStream(msg)) {
           outputStream.push(msg.payload);
         }
+
+        if (isStreamClose(msg.controlFlags)) {
+          outputStream.end();
+        }
       };
 
       transport.addMessageListener(listener);
       const closeHandler = () => {
         outputStream.end();
+        transport.send(
+          closeStream(
+            transport.clientId,
+            serverId,
+            serviceName,
+            procName,
+            streamId,
+          ),
+        );
         transport.removeMessageListener(listener);
       };
 

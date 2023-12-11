@@ -36,6 +36,7 @@ describe('serialize service to jsonschema', () => {
             properties: {
               msg: { type: 'string' },
               ignore: { type: 'boolean' },
+              end: { type: 'boolean' },
             },
             required: ['msg', 'ignore'],
             type: 'object',

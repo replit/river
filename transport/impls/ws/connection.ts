@@ -13,7 +13,9 @@ export class WebSocketConnection extends Connection {
     super(transport, connectedTo);
     this.ws = ws;
     ws.binaryType = 'arraybuffer';
-    this.ws.onmessage = (msg) => this.onMessage(msg.data as Uint8Array);
+
+    // take over the onmessage for this websocket
+    this.ws.onmessage = (msg) => transport.onMessage(msg.data as Uint8Array);
   }
 
   send(payload: Uint8Array) {
