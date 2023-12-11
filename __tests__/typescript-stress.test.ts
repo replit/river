@@ -8,8 +8,11 @@ import { NaiveJsonCodec } from '../codec/json';
 import { createClient } from '../router/client';
 import { Ok } from '../router/result';
 
-const input = Type.Object({ a: Type.Number() });
-const output = Type.Object({ b: Type.Number() });
+const input = Type.Union([
+  Type.Object({ a: Type.Number() }),
+  Type.Object({ c: Type.String() }),
+]);
+const output = Type.Object({ b: Type.Union([Type.Number(), Type.String()]) });
 const errors = Type.Union([
   Type.Object({
     code: Type.Literal('ERROR1'),
@@ -20,6 +23,7 @@ const errors = Type.Union([
     message: Type.String(),
   }),
 ]);
+
 const fnBody: Procedure<{}, 'rpc', typeof input, typeof output, typeof errors> =
   {
     type: 'rpc',
@@ -27,7 +31,11 @@ const fnBody: Procedure<{}, 'rpc', typeof input, typeof output, typeof errors> =
     output,
     errors,
     async handler(_state, msg) {
-      return reply(msg, Ok({ b: msg.payload.a }));
+      if ('c' in msg.payload) {
+        return reply(msg, Ok({ b: msg.payload.c }));
+      } else {
+        return reply(msg, Ok({ b: msg.payload.a }));
+      }
     },
   };
 
@@ -116,6 +124,8 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
     };
     const server = await createServer(new MockTransport('SERVER'), listing);
     const client = createClient<typeof server>(new MockTransport('client'));
+    expect(client.d.f48.rpc({ a: 0 })).toBeTruthy();
+    expect(client.a.f2.rpc({ c: 'abc' })).toBeTruthy();
     expect(server).toBeTruthy();
     expect(client).toBeTruthy();
   });

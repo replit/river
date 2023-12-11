@@ -8,6 +8,7 @@ export type {
   ProcOutput,
   ProcType,
   Procedure,
+  PayloadType,
 } from './builder';
 export { createClient } from './client';
 export type { ServerClient } from './client';

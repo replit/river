@@ -110,6 +110,8 @@ export type ProcType<
   ProcName extends keyof S['procedures'],
 > = S['procedures'][ProcName]['type'];
 
+export type PayloadType = TObject | TUnion<TObject[]>;
+
 /**
  * Defines a Procedure type that can be either an RPC or a stream procedure.
  * @template State - The TypeBox schema of the state object.
@@ -120,8 +122,8 @@ export type ProcType<
 export type Procedure<
   State extends object | unknown,
   Ty extends ValidProcType,
-  I extends TObject,
-  O extends TObject,
+  I extends PayloadType,
+  O extends PayloadType,
   E extends RiverError,
 > = Ty extends 'rpc'
   ? {
@@ -162,8 +164,8 @@ export type Procedure<
 export type AnyProcedure = Procedure<
   object,
   ValidProcType,
-  TObject,
-  TObject,
+  PayloadType,
+  PayloadType,
   RiverError
 >;
 
@@ -214,8 +216,8 @@ export class ServiceBuilder<T extends Service<string, object, ProcListing>> {
   defineProcedure<
     ProcName extends string,
     Ty extends ValidProcType,
-    I extends TObject,
-    O extends TObject,
+    I extends PayloadType,
+    O extends PayloadType,
     E extends RiverError,
   >(
     procName: ProcName,

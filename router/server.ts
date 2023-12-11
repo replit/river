@@ -1,6 +1,6 @@
-import { Static, TObject } from '@sinclair/typebox';
+import { Static } from '@sinclair/typebox';
 import { Connection, Transport } from '../transport/transport';
-import { AnyProcedure, AnyService } from './builder';
+import { AnyProcedure, AnyService, PayloadType } from './builder';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 import {
@@ -36,7 +36,7 @@ export interface Server<Services> {
 interface ProcStream {
   incoming: Pushable<TransportMessage>;
   outgoing: Pushable<
-    TransportMessage<Result<Static<TObject>, Static<RiverError>>>
+    TransportMessage<Result<Static<PayloadType>, Static<RiverError>>>
   >;
   promises: {
     outputHandler: Promise<unknown>;
