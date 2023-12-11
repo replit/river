@@ -11,6 +11,7 @@ import {
   isStreamOpen,
   reply,
   closeStream,
+  ping,
 } from '../transport/message';
 import { ServiceContext, ServiceContextWithState } from './context';
 import { log } from '../logging';
@@ -244,11 +245,24 @@ export async function createServer<Services extends Record<string, AnyService>>(
     }
   };
 
+  const healthCheckInterval = setInterval(() => {
+    transport.connections.forEach((conn) => {
+      // Close unhealthy connections that haven't responded to the previous ping
+      if (!conn.healthy) {
+        return conn.close();
+      }
+      // Initiate a new ping-pong sequence
+      conn.healthy = false;
+      transport.send(ping({ from: transport.clientId, to: conn.connectedTo }));
+    });
+  }, 30_000);
+
   transport.addMessageListener(handler);
   return {
     services,
     streams: streamMap,
     async close() {
+      clearInterval(healthCheckInterval);
       transport.removeMessageListener(handler);
       for (const streamIdx of streamMap.keys()) {
         await cleanupStream(streamIdx);

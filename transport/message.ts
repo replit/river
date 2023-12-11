@@ -12,6 +12,8 @@ export const enum ControlFlags {
   AckBit = 0b0001,
   StreamOpenBit = 0b0010,
   StreamClosedBit = 0b0100,
+  Ping = 0b1000,
+  Pong = 0b10000,
 }
 
 /**
@@ -22,15 +24,48 @@ export const enum ControlFlags {
  */
 export const TransportMessageSchema = <T extends TSchema>(t: T) =>
   Type.Object({
+    /**
+     * ID of the individual message
+     */
     id: Type.String(),
+
+    /**
+     * ID of the river transport this message is being sent from
+     */
     from: Type.String(),
+
+    /**
+     * ID of the river transport this message is intended for
+     */
     to: Type.String(),
-    serviceName: Type.String(),
-    procedureName: Type.String(),
+    /**
+     * Name of the service this message is intended to be handled by
+     */
+    serviceName: Type.Union([Type.String(), Type.Literal('CONTROL')]),
+
+    /**
+     * Name of the procedure
+     */
+    procedureName: Type.Union([Type.String(), Type.Literal('CONTROL')]),
+
+    /**
+     * ID of the stream this message is a part of
+     */
     streamId: Type.String(),
+
+    /**
+     * Internal flags used by river to indicate special control messages.
+     * @see ControlFlags
+     */
     controlFlags: Type.Integer(),
+
+    /**
+     * The payload of the message
+     */
     payload: t,
   });
+
+const BaseTransportMessage = TransportMessageSchema(Type.Object({}));
 
 /**
  * Defines the schema for a transport acknowledgement message. This is never constructed manually
@@ -185,4 +220,62 @@ export function isStreamClose(controlFlag: number): boolean {
     (controlFlag & ControlFlags.StreamClosedBit) ===
     ControlFlags.StreamClosedBit
   );
+}
+
+export function ack(msg: OpaqueTransportMessage) {
+  const out = reply(msg, { ack: msg.id });
+  out.controlFlags = ControlFlags.AckBit;
+  return out;
+}
+
+export const PingMessageSchema = Type.Intersect([
+  BaseTransportMessage,
+  Type.Object({
+    controlFlags: Type.Literal(ControlFlags.Ping),
+  }),
+]);
+
+/**
+ * A "ping" message is sent to a client by the server periodically to check
+ * connection health. The client should respond with a {@link pongMessage}.
+ */
+export function ping(props: {
+  from: string;
+  to: string;
+}): Static<typeof PingMessageSchema> {
+  return {
+    ...props,
+    id: nanoid(),
+    streamId: nanoid(),
+    controlFlags: ControlFlags.Ping,
+    serviceName: 'CONTROL',
+    procedureName: 'CONTROL',
+    payload: {},
+  };
+}
+
+export const PongMessageSchema = Type.Intersect([
+  BaseTransportMessage,
+  Type.Object({
+    controlFlags: Type.Literal(ControlFlags.Pong),
+  }),
+]);
+
+/**
+ * A "pong" message is sent to the server by a client, in response to a
+ * {@link pingMessage}.
+ */
+export function pong(
+  reply: ReturnType<typeof ping>,
+): Static<typeof PongMessageSchema> {
+  return {
+    id: nanoid(),
+    streamId: reply.streamId,
+    from: reply.to,
+    to: reply.from,
+    controlFlags: ControlFlags.Pong,
+    serviceName: 'CONTROL',
+    procedureName: 'CONTROL',
+    payload: {},
+  };
 }

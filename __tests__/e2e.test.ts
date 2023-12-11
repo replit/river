@@ -1,4 +1,4 @@
-import { afterAll, assert, describe, expect, test } from 'vitest';
+import { afterAll, assert, describe, expect, test, vi } from 'vitest';
 import {
   createLocalWebSocketClient,
   createWebSocketServer,
@@ -22,7 +22,7 @@ import { UNCAUGHT_ERROR } from '../router/result';
 import { codecs } from '../codec/codec.test';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
-import { testFinishesCleanly } from './fixtures/cleanup';
+import { testFinishesCleanly, waitUntil } from './fixtures/cleanup';
 
 describe.each(codecs)(
   'client <-> server integration test ($name codec)',
@@ -323,6 +323,76 @@ describe.each(codecs)(
         close();
       }
 
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('ping pong successful', async () => {
+      vi.useFakeTimers();
+      // Given
+      const [clientTransport, serverTransport] = getTransports();
+      const serviceDefs = { test: TestServiceConstructor() };
+      const server = await createServer(serverTransport, serviceDefs);
+      const client = createClient<typeof server>(clientTransport);
+
+      // Establish an initial connection
+      await client.test.add.rpc({ n: 3 });
+
+      // When
+      const serverSendSpy = vi.spyOn(serverTransport, 'send');
+      const clientSendSpy = vi.spyOn(clientTransport, 'send');
+      vi.advanceTimersByTime(30_000);
+      await waitUntil(() => clientSendSpy.mock.calls.length, 1);
+
+      // Then
+      expect(serverSendSpy).toBeCalledTimes(1);
+      expect(clientSendSpy).toBeCalledTimes(1);
+      expect(serverSendSpy).toBeCalledWith(
+        expect.objectContaining({ controlFlags: 8 }),
+      );
+      expect(clientSendSpy).toBeCalledWith(
+        expect.objectContaining({ controlFlags: 16 }),
+      );
+
+      // Cleanup
+      vi.useRealTimers();
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('ping pong disconnect', async () => {
+      vi.useFakeTimers();
+      // Given
+      const [clientTransport, serverTransport] = getTransports();
+      const serviceDefs = { test: TestServiceConstructor() };
+      const server = await createServer(serverTransport, serviceDefs);
+      const client = createClient<typeof server>(clientTransport);
+
+      // Establish an initial connection, then close the client
+      await client.test.add.rpc({ n: 3 });
+      clientTransport.close();
+
+      // Wait 30 seconds, attempt to send a ping from server
+      const serverSendSpy = vi.spyOn(serverTransport, 'send');
+      vi.advanceTimersByTime(30_000);
+      expect(serverSendSpy).toBeCalledTimes(1);
+
+      // Wait 30 seconds, attempt to send another ping from server
+      const unhealthyConnection = serverTransport.connections.get('client');
+      assert(unhealthyConnection);
+      const closeConnectionSpy = vi.spyOn(unhealthyConnection, 'close');
+      vi.advanceTimersByTime(30_000);
+      expect(closeConnectionSpy).toBeCalledTimes(1);
+      expect(serverSendSpy).toBeCalledTimes(1);
+
+      // Cleanup
+      vi.useRealTimers();
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
