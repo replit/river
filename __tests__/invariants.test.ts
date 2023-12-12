@@ -86,16 +86,22 @@ describe('procedures should leave no trace after finishing', async () => {
     const server = await createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
-    let serverListeners = serverTransport.messageHandlers.size;
-    let clientListeners = clientTransport.messageHandlers.size;
+    let serverListeners =
+      serverTransport.eventDispatcher.numberOfListeners('message');
+    let clientListeners =
+      clientTransport.eventDispatcher.numberOfListeners('message');
 
     // start procedure
     await client.test.add.rpc({ n: 3 });
     // end procedure
 
     // number of message handlers shouldn't increase after rpc
-    expect(serverTransport.messageHandlers.size).toEqual(serverListeners);
-    expect(clientTransport.messageHandlers.size).toEqual(clientListeners);
+    expect(
+      serverTransport.eventDispatcher.numberOfListeners('message'),
+    ).toEqual(serverListeners);
+    expect(
+      clientTransport.eventDispatcher.numberOfListeners('message'),
+    ).toEqual(clientListeners);
 
     // check number of connections
     expect(serverTransport.connections.size).toEqual(1);
@@ -113,8 +119,10 @@ describe('procedures should leave no trace after finishing', async () => {
     const server = await createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
-    let serverListeners = serverTransport.messageHandlers.size;
-    let clientListeners = clientTransport.messageHandlers.size;
+    let serverListeners =
+      serverTransport.eventDispatcher.numberOfListeners('message');
+    let clientListeners =
+      clientTransport.eventDispatcher.numberOfListeners('message');
 
     // start procedure
     const [input, output, close] = await client.test.echo.stream();
@@ -138,8 +146,12 @@ describe('procedures should leave no trace after finishing', async () => {
     // end procedure
 
     // number of message handlers shouldn't increase after stream ends
-    expect(serverTransport.messageHandlers.size).toEqual(serverListeners);
-    expect(clientTransport.messageHandlers.size).toEqual(clientListeners);
+    expect(
+      serverTransport.eventDispatcher.numberOfListeners('message'),
+    ).toEqual(serverListeners);
+    expect(
+      clientTransport.eventDispatcher.numberOfListeners('message'),
+    ).toEqual(clientListeners);
 
     // check number of connections
     expect(serverTransport.connections.size).toEqual(1);
@@ -157,8 +169,10 @@ describe('procedures should leave no trace after finishing', async () => {
     const server = await createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
-    let serverListeners = serverTransport.messageHandlers.size;
-    let clientListeners = clientTransport.messageHandlers.size;
+    let serverListeners =
+      serverTransport.eventDispatcher.numberOfListeners('message');
+    let clientListeners =
+      clientTransport.eventDispatcher.numberOfListeners('message');
 
     // start procedure
     const [subscription, close] = await client.test.value.subscribe({});
@@ -177,8 +191,12 @@ describe('procedures should leave no trace after finishing', async () => {
     // end procedure
 
     // number of message handlers shouldn't increase after stream ends
-    expect(serverTransport.messageHandlers.size).toEqual(serverListeners);
-    expect(clientTransport.messageHandlers.size).toEqual(clientListeners);
+    expect(
+      serverTransport.eventDispatcher.numberOfListeners('message'),
+    ).toEqual(serverListeners);
+    expect(
+      clientTransport.eventDispatcher.numberOfListeners('message'),
+    ).toEqual(clientListeners);
 
     // check number of connections
     expect(serverTransport.connections.size).toEqual(1);

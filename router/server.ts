@@ -244,12 +244,12 @@ export async function createServer<Services extends Record<string, AnyService>>(
     }
   };
 
-  transport.addMessageListener(handler);
+  transport.addEventListener('message', handler);
   return {
     services,
     streams: streamMap,
     async close() {
-      transport.removeMessageListener(handler);
+      transport.removeEventListener('message', handler);
       for (const streamIdx of streamMap.keys()) {
         await cleanupStream(streamIdx);
       }

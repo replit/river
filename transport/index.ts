@@ -33,12 +33,12 @@ export async function waitForMessage(
     function onMessage(msg: OpaqueTransportMessage) {
       if (!filter || filter?.(msg)) {
         resolve(msg.payload);
-        t.removeMessageListener(onMessage);
+        t.removeEventListener('message', onMessage);
       } else if (rejectMismatch) {
         reject(new Error('message didnt match the filter'));
       }
     }
 
-    t.addMessageListener(onMessage);
+    t.addEventListener('message', onMessage);
   });
 }
