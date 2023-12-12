@@ -62,7 +62,7 @@ export function serializeService(s: AnyService): object {
         {
           input: Type.Strict(procDef.input),
           output: Type.Strict(procDef.output),
-          // Only add the `errors` field if it is not non-never.
+          // Only add the `errors` field if it is non-never.
           ...('errors' in procDef
             ? {
                 errors: Type.Strict(procDef.errors),
