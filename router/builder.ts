@@ -62,7 +62,12 @@ export function serializeService(s: AnyService): object {
         {
           input: Type.Strict(procDef.input),
           output: Type.Strict(procDef.output),
-          errors: Type.Strict(procDef.errors),
+          // Only add the `errors` field if it is not non-never.
+          ...('errors' in procDef
+            ? {
+                errors: Type.Strict(procDef.errors),
+              }
+            : {}),
           type: procDef.type,
           // Only add the `init` field if the type declares it.
           ...('init' in procDef
