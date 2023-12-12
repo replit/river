@@ -51,6 +51,45 @@ describe('serialize service to jsonschema', () => {
           errors: { not: {} },
           type: 'stream',
         },
+        echoWithPrefix: {
+          errors: {
+            not: {},
+          },
+          init: {
+            properties: {
+              prefix: {
+                type: 'string',
+              },
+            },
+            required: ['prefix'],
+            type: 'object',
+          },
+          input: {
+            properties: {
+              end: {
+                type: 'boolean',
+              },
+              ignore: {
+                type: 'boolean',
+              },
+              msg: {
+                type: 'string',
+              },
+            },
+            required: ['msg', 'ignore'],
+            type: 'object',
+          },
+          output: {
+            properties: {
+              response: {
+                type: 'string',
+              },
+            },
+            required: ['response'],
+            type: 'object',
+          },
+          type: 'stream',
+        },
       },
     });
   });

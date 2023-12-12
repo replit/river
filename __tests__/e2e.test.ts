@@ -16,6 +16,7 @@ import {
   OrderingServiceConstructor,
   STREAM_ERROR,
   SubscribableServiceConstructor,
+  UploadableServiceConstructor,
   TestServiceConstructor,
 } from './fixtures/services';
 import { UNCAUGHT_ERROR } from '../router/result';
@@ -135,6 +136,36 @@ describe.each(codecs)(
       });
     });
 
+    test('stream with init message', async () => {
+      const [clientTransport, serverTransport] = getTransports();
+      const serviceDefs = { test: TestServiceConstructor() };
+      const server = await createServer(serverTransport, serviceDefs);
+      const client = createClient<typeof server>(clientTransport);
+
+      const [input, output, close] = await client.test.echoWithPrefix.stream({
+        prefix: 'test',
+      });
+      input.push({ msg: 'abc', ignore: false });
+      input.push({ msg: 'def', ignore: true });
+      input.push({ msg: 'ghi', ignore: false });
+      input.end();
+
+      const result1 = await iterNext(output);
+      assert(result1.ok);
+      expect(result1.payload).toStrictEqual({ response: 'test abc' });
+
+      const result2 = await iterNext(output);
+      assert(result2.ok);
+      expect(result2.payload).toStrictEqual({ response: 'test ghi' });
+
+      close();
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
     test('fallible stream', async () => {
       const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: FallibleServiceConstructor() };
@@ -227,6 +258,52 @@ describe.each(codecs)(
 
       await testFinishesCleanly({
         clientTransports: [client1Transport, client2Transport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('upload', async () => {
+      const [clientTransport, serverTransport] = getTransports();
+
+      const serviceDefs = { uploadable: UploadableServiceConstructor() };
+      const server = await createServer(serverTransport, serviceDefs);
+      const client = createClient<typeof server>(clientTransport);
+
+      const [addStream, addResult] =
+        await client.uploadable.addMultiple.upload();
+      addStream.push({ n: 1 });
+      addStream.push({ n: 2 });
+      addStream.end();
+      const result = await addResult;
+      assert(result.ok);
+      expect(result.payload).toStrictEqual({ result: 3 });
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('upload with init message', async () => {
+      const [clientTransport, serverTransport] = getTransports();
+
+      const serviceDefs = { uploadable: UploadableServiceConstructor() };
+      const server = await createServer(serverTransport, serviceDefs);
+      const client = createClient<typeof server>(clientTransport);
+
+      const [addStream, addResult] =
+        await client.uploadable.addMultipleWithPrefix.upload({
+          prefix: 'test',
+        });
+      addStream.push({ n: 1 });
+      addStream.push({ n: 2 });
+      addStream.end();
+      const result = await addResult;
+      assert(result.ok);
+      expect(result.payload).toStrictEqual({ result: 'test 3' });
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
         serverTransport,
         server,
       });

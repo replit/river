@@ -166,9 +166,22 @@ export async function createServer<Services extends Record<string, AnyService>>(
       // pump incoming message stream -> handler -> outgoing message stream
       let inputHandler: Promise<unknown>;
       if (procedure.type === 'stream') {
-        inputHandler = procedure
-          .handler(serviceContext, incoming, outgoing)
-          .catch(errorHandler);
+        if ('init' in procedure) {
+          inputHandler = (async () => {
+            const initMessage = await incoming.next();
+            if (initMessage.done) {
+              return;
+            }
+
+            return procedure
+              .handler(serviceContext, initMessage.value, incoming, outgoing)
+              .catch(errorHandler);
+          })();
+        } else {
+          inputHandler = procedure
+            .handler(serviceContext, incoming, outgoing)
+            .catch(errorHandler);
+        }
       } else if (procedure.type === 'rpc') {
         inputHandler = (async () => {
           const inputMessage = await incoming.next();
@@ -203,6 +216,38 @@ export async function createServer<Services extends Record<string, AnyService>>(
             errorHandler(err);
           }
         })();
+      } else if (procedure.type === 'upload') {
+        if ('init' in procedure) {
+          inputHandler = (async () => {
+            const initMessage = await incoming.next();
+            if (initMessage.done) {
+              return;
+            }
+
+            try {
+              const outputMessage = await procedure.handler(
+                serviceContext,
+                initMessage.value,
+                incoming,
+              );
+              outgoing.push(outputMessage);
+            } catch (err) {
+              errorHandler(err);
+            }
+          })();
+        } else {
+          inputHandler = (async () => {
+            try {
+              const outputMessage = await procedure.handler(
+                serviceContext,
+                incoming,
+              );
+              outgoing.push(outputMessage);
+            } catch (err) {
+              errorHandler(err);
+            }
+          })();
+        }
       } else {
         // procedure is inferred to be never here as this is not a valid procedure type
         // we cast just to log
@@ -229,7 +274,10 @@ export async function createServer<Services extends Record<string, AnyService>>(
       return;
     }
 
-    if (Value.Check(procedure.input, message.payload)) {
+    if (
+      Value.Check(procedure.input, message.payload) ||
+      ('init' in procedure && Value.Check(procedure.init, message.payload))
+    ) {
       procStream.incoming.push(message as TransportMessage);
     } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
       log?.error(

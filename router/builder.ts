@@ -5,9 +5,19 @@ import { ServiceContextWithState } from './context';
 import { Result, RiverError, RiverUncaughtSchema } from './result';
 
 /**
- * The valid {@link Procedure} types.
+ * The valid {@link Procedure} types. The `stream` and `upload` types can optionally have a
+ * different type for the very first initialization message. The suffixless types correspond to
+ * gRPC's four combinations of stream / non-stream in each direction.
  */
-export type ValidProcType = 'rpc' | 'stream' | 'subscription';
+export type ValidProcType =
+  // Single message in both directions.
+  | 'rpc'
+  // Client-stream (potentially preceded by an initialization message), single message from server.
+  | 'upload'
+  // Single message from client, stream from server.
+  | 'subscription'
+  // Bidirectional stream (potentially preceded by an initialization message).
+  | 'stream';
 
 /**
  * A generic procedure listing where the keys are the names of the procedures
@@ -54,6 +64,12 @@ export function serializeService(s: AnyService): object {
           output: Type.Strict(procDef.output),
           errors: Type.Strict(procDef.errors),
           type: procDef.type,
+          // Only add the `init` field if the type declares it.
+          ...('init' in procDef
+            ? {
+                init: Type.Strict(procDef.init),
+              }
+            : {}),
         },
       ]),
     ),
@@ -69,6 +85,26 @@ export type ProcHandler<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
 > = S['procedures'][ProcName]['handler'];
+
+/**
+ * Helper to get whether the type definition for the procedure contains an init type.
+ * @template S - The service.
+ * @template ProcName - The name of the procedure.
+ */
+export type ProcHasInit<
+  S extends AnyService,
+  ProcName extends keyof S['procedures'],
+> = S['procedures'][ProcName] extends { init: any } ? true : false;
+
+/**
+ * Helper to get the type definition for the procedure init type of a service.
+ * @template S - The service.
+ * @template ProcName - The name of the procedure.
+ */
+export type ProcInit<
+  S extends AnyService,
+  ProcName extends keyof S['procedures'],
+> = S['procedures'][ProcName]['init'];
 
 /**
  * Helper to get the type definition for the procedure input of a service.
@@ -118,6 +154,7 @@ export type PayloadType = TObject | TUnion<TObject[]>;
  * @template Ty - The type of the procedure.
  * @template I - The TypeBox schema of the input object.
  * @template O - The TypeBox schema of the output object.
+ * @template Init - The TypeBox schema of the input initialization object.
  */
 export type Procedure<
   State extends object | unknown,
@@ -125,48 +162,92 @@ export type Procedure<
   I extends PayloadType,
   O extends PayloadType,
   E extends RiverError,
+  Init extends PayloadType | null = null,
 > = Ty extends 'rpc'
-  ? {
-      input: I;
-      output: O;
-      errors: E;
-      handler: (
-        context: ServiceContextWithState<State>,
-        input: TransportMessage<Static<I>>,
-      ) => Promise<TransportMessage<Result<Static<O>, Static<E>>>>;
-      type: Ty;
-    }
-  : Ty extends 'stream'
-  ? {
-      input: I;
-      output: O;
-      errors: E;
-      handler: (
-        context: ServiceContextWithState<State>,
-        input: AsyncIterable<TransportMessage<Static<I>>>,
-        output: Pushable<TransportMessage<Result<Static<O>, Static<E>>>>,
-      ) => Promise<void>;
-      type: Ty;
-    }
+  ? Init extends null
+    ? {
+        input: I;
+        output: O;
+        errors: E;
+        handler: (
+          context: ServiceContextWithState<State>,
+          input: TransportMessage<Static<I>>,
+        ) => Promise<TransportMessage<Result<Static<O>, Static<E>>>>;
+        type: Ty;
+      }
+    : never
+  : Ty extends 'upload'
+  ? Init extends PayloadType
+    ? {
+        init: Init;
+        input: I;
+        output: O;
+        errors: E;
+        handler: (
+          context: ServiceContextWithState<State>,
+          init: TransportMessage<Static<Init>>,
+          input: AsyncIterable<TransportMessage<Static<I>>>,
+        ) => Promise<TransportMessage<Result<Static<O>, Static<E>>>>;
+        type: Ty;
+      }
+    : {
+        input: I;
+        output: O;
+        errors: E;
+        handler: (
+          context: ServiceContextWithState<State>,
+          input: AsyncIterable<TransportMessage<Static<I>>>,
+        ) => Promise<TransportMessage<Result<Static<O>, Static<E>>>>;
+        type: Ty;
+      }
   : Ty extends 'subscription'
-  ? {
-      input: I;
-      output: O;
-      errors: E;
-      handler: (
-        context: ServiceContextWithState<State>,
-        input: TransportMessage<Static<I>>,
-        output: Pushable<TransportMessage<Result<Static<O>, Static<E>>>>,
-      ) => Promise<void>;
-      type: Ty;
-    }
+  ? Init extends null
+    ? {
+        input: I;
+        output: O;
+        errors: E;
+        handler: (
+          context: ServiceContextWithState<State>,
+          input: TransportMessage<Static<I>>,
+          output: Pushable<TransportMessage<Result<Static<O>, Static<E>>>>,
+        ) => Promise<void>;
+        type: Ty;
+      }
+    : never
+  : Ty extends 'stream'
+  ? Init extends PayloadType
+    ? {
+        init: Init;
+        input: I;
+        output: O;
+        errors: E;
+        handler: (
+          context: ServiceContextWithState<State>,
+          init: TransportMessage<Static<Init>>,
+          input: AsyncIterable<TransportMessage<Static<I>>>,
+          output: Pushable<TransportMessage<Result<Static<O>, Static<E>>>>,
+        ) => Promise<void>;
+        type: Ty;
+      }
+    : {
+        input: I;
+        output: O;
+        errors: E;
+        handler: (
+          context: ServiceContextWithState<State>,
+          input: AsyncIterable<TransportMessage<Static<I>>>,
+          output: Pushable<TransportMessage<Result<Static<O>, Static<E>>>>,
+        ) => Promise<void>;
+        type: Ty;
+      }
   : never;
 export type AnyProcedure = Procedure<
   object,
   ValidProcType,
   PayloadType,
   PayloadType,
-  RiverError
+  RiverError,
+  PayloadType | null
 >;
 
 /**
@@ -210,8 +291,8 @@ export class ServiceBuilder<T extends Service<string, object, ProcListing>> {
   /**
    * Defines a new procedure for the service.
    * @param {ProcName} procName The name of the procedure.
-   * @param {Procedure<T['state'], Ty, I, O>} procDef The definition of the procedure.
-   * @returns {ServiceBuilder<{ name: T['name']; state: T['state']; procedures: T['procedures'] & { [k in ProcName]: Procedure<T['state'], Ty, I, O>; }; }>} A new ServiceBuilder instance with the updated schema.
+   * @param {Procedure<T['state'], Ty, I, O, E, Init>} procDef The definition of the procedure.
+   * @returns {ServiceBuilder<{ name: T['name']; state: T['state']; procedures: T['procedures'] & { [k in ProcName]: Procedure<T['state'], Ty, I, O, E, Init>; }; }>} A new ServiceBuilder instance with the updated schema.
    */
   defineProcedure<
     ProcName extends string,
@@ -219,17 +300,20 @@ export class ServiceBuilder<T extends Service<string, object, ProcListing>> {
     I extends PayloadType,
     O extends PayloadType,
     E extends RiverError,
+    Init extends PayloadType | null = null,
   >(
     procName: ProcName,
-    procDef: Procedure<T['state'], Ty, I, O, E>,
+    procDef: Procedure<T['state'], Ty, I, O, E, Init>,
   ): ServiceBuilder<{
     name: T['name'];
     state: T['state'];
     procedures: T['procedures'] & {
-      [k in ProcName]: Procedure<T['state'], Ty, I, O, E>;
+      [k in ProcName]: Procedure<T['state'], Ty, I, O, E, Init>;
     };
   }> {
-    type ProcListing = { [k in ProcName]: Procedure<T['state'], Ty, I, O, E> };
+    type ProcListing = {
+      [k in ProcName]: Procedure<T['state'], Ty, I, O, E, Init>;
+    };
     const newProcedure = { [procName]: procDef } as ProcListing;
     const procedures = {
       ...this.schema.procedures,
