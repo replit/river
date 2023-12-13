@@ -128,20 +128,24 @@ describe('procedures should leave no trace after finishing', async () => {
     const [input, output, close] = await client.test.echo.stream();
     input.push({ msg: '1', ignore: false });
     input.push({ msg: '2', ignore: false, end: true });
-    input.end();
 
     const result1 = await iterNext(output);
     assert(result1.ok);
     expect(result1.payload).toStrictEqual({ response: '1' });
+
+    // ensure we only have one stream despite pushing multiple messages.
+    await waitUntil(() => server.streams.size, 1);
+    input.end();
+    // ensure we no longer have any streams since the input was closed.
+    await waitUntil(() => server.streams.size, 0);
+
     const result2 = await iterNext(output);
     assert(result2.ok);
     expect(result2.payload).toStrictEqual({ response: '2' });
 
-    // ensure we exactly have one stream even after we send multiple messages
-    expect(server.streams.size).toEqual(1);
-
     const result3 = await output.next();
     assert(result3.done);
+
     close();
     // end procedure
 
