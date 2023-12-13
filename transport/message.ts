@@ -25,8 +25,8 @@ export const TransportMessageSchema = <T extends TSchema>(t: T) =>
     id: Type.String(),
     from: Type.String(),
     to: Type.String(),
-    serviceName: Type.String(),
-    procedureName: Type.String(),
+    serviceName: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    procedureName: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     streamId: Type.String(),
     controlFlags: Type.Integer(),
     payload: t,
@@ -59,6 +59,15 @@ export const OpaqueTransportMessageSchema = TransportMessageSchema(
 /**
  * Represents a transport message. This is the same type as {@link TransportMessageSchema} but
  * we can't statically infer generics from generic Typebox schemas so we have to define it again here.
+ *
+ * TypeScript can't enforce types when a bitmask is involved, so these are the semantics of
+ * `controlFlags`:
+ * * If `controlFlags & StreamOpenBit == StreamOpenBit`, `streamId` must be set to a unique value
+ *   (suggestion: use `nanoid`).
+ * * `serviceName` and `procedureName` must be set only when `controlFlags & StreamOpenBit ==
+ *    StreamOpenBit`.
+ * * If `controlFlags & StreamClosedBit` is set and the kind is `stream` or `subscription`,
+ *   `payload` can be a control message.
  * @template Payload The type of the payload.
  */
 export type TransportMessage<
@@ -67,8 +76,8 @@ export type TransportMessage<
   id: string;
   from: string;
   to: string;
-  serviceName: string;
-  procedureName: string;
+  serviceName?: string;
+  procedureName?: string;
   streamId: string;
   controlFlags: number;
   payload: Payload;
@@ -97,18 +106,18 @@ export type TransportClientId = string;
 export function msg<Payload extends object>(
   from: string,
   to: string,
-  service: string,
-  proc: string,
-  stream: string,
+  streamId: string,
   payload: Payload,
+  serviceName?: string,
+  procedureName?: string,
 ): TransportMessage<Payload> {
   return {
     id: nanoid(),
     to,
     from,
-    serviceName: service,
-    procedureName: proc,
-    streamId: stream,
+    serviceName,
+    procedureName,
+    streamId,
     controlFlags: 0,
     payload,
   };
@@ -125,9 +134,9 @@ export function reply<Payload extends object>(
   response: Payload,
 ): TransportMessage<Payload> {
   return {
-    ...msg,
-    controlFlags: 0,
     id: nanoid(),
+    streamId: msg.streamId,
+    controlFlags: 0,
     to: msg.from,
     from: msg.to,
     payload: response,
@@ -144,11 +153,9 @@ export function reply<Payload extends object>(
 export function closeStream(
   from: TransportClientId,
   to: TransportClientId,
-  service: string,
-  proc: string,
   stream: string,
 ) {
-  const closeMessage = msg(from, to, service, proc, stream, {
+  const closeMessage = msg(from, to, stream, {
     type: 'CLOSE' as const,
   } satisfies Static<typeof ControlMessagePayloadSchema>);
   closeMessage.controlFlags |= ControlFlags.StreamClosedBit;

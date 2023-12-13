@@ -10,7 +10,7 @@ import { describe, test, expect } from 'vitest';
 
 describe('message helpers', () => {
   test('ack', () => {
-    const m = msg('a', 'b', 'svc', 'proc', 'stream', { test: 1 });
+    const m = msg('a', 'b', 'stream', { test: 1 }, 'svc', 'proc');
     m.controlFlags |= ControlFlags.AckBit;
     expect(m).toHaveProperty('controlFlags');
     expect(isAck(m.controlFlags)).toBe(true);
@@ -19,7 +19,7 @@ describe('message helpers', () => {
   });
 
   test('streamOpen', () => {
-    const m = msg('a', 'b', 'svc', 'proc', 'stream', { test: 1 });
+    const m = msg('a', 'b', 'stream', { test: 1 }, 'svc', 'proc');
     m.controlFlags |= ControlFlags.StreamOpenBit;
     expect(m).toHaveProperty('controlFlags');
     expect(isAck(m.controlFlags)).toBe(false);
@@ -28,7 +28,7 @@ describe('message helpers', () => {
   });
 
   test('streamClose', () => {
-    const m = msg('a', 'b', 'svc', 'proc', 'stream', { test: 1 });
+    const m = msg('a', 'b', 'stream', { test: 1 }, 'svc', 'proc');
     m.controlFlags |= ControlFlags.StreamClosedBit;
     expect(m).toHaveProperty('controlFlags');
     expect(isAck(m.controlFlags)).toBe(false);
@@ -37,7 +37,7 @@ describe('message helpers', () => {
   });
 
   test('reply', () => {
-    const m = msg('a', 'b', 'svc', 'proc', 'stream', { test: 1 });
+    const m = msg('a', 'b', 'stream', { test: 1 }, 'svc', 'proc');
     const payload = { cool: 2 };
     const resp = reply(m, payload);
     expect(resp.id).not.toBe(m.id);
@@ -47,14 +47,14 @@ describe('message helpers', () => {
   });
 
   test('default message has no control flags set', () => {
-    const m = msg('a', 'b', 'svc', 'proc', 'stream', { test: 1 });
+    const m = msg('a', 'b', 'stream', { test: 1 }, 'svc', 'proc');
     expect(isAck(m.controlFlags)).toBe(false);
     expect(isStreamOpen(m.controlFlags)).toBe(false);
     expect(isStreamClose(m.controlFlags)).toBe(false);
   });
 
   test('combining control flags works', () => {
-    const m = msg('a', 'b', 'svc', 'proc', 'stream', { test: 1 });
+    const m = msg('a', 'b', 'stream', { test: 1 }, 'svc', 'proc');
     m.controlFlags |= ControlFlags.StreamOpenBit;
     expect(isStreamOpen(m.controlFlags)).toBe(true);
     expect(isStreamClose(m.controlFlags)).toBe(false);

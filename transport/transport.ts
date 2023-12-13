@@ -210,10 +210,21 @@ export abstract class Transport<ConnType extends Connection> {
     }
 
     if (Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
-      return parsedMsg;
+      // JSON can't express the difference between `undefined` and `null`, so we need to patch that.
+      return {
+        ...parsedMsg,
+        serviceName:
+          parsedMsg.serviceName === null ? undefined : parsedMsg.serviceName,
+        procedureName:
+          parsedMsg.procedureName === null
+            ? undefined
+            : parsedMsg.procedureName,
+      };
     } else {
       log?.warn(
-        `${this.clientId} -- received invalid msg: ${JSON.stringify(msg)}`,
+        `${this.clientId} -- received invalid msg: ${JSON.stringify(
+          parsedMsg,
+        )}`,
       );
       return null;
     }
