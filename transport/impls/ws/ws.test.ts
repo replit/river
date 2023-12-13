@@ -38,9 +38,16 @@ describe('sending and receiving across websockets works', async () => {
 
   test('sending respects to/from fields', async () => {
     const makeDummyMessage = (from: string, to: string, message: string) => {
-      return msg(from, to, 'service', 'proc', 'stream', {
-        msg: message,
-      });
+      return msg(
+        from,
+        to,
+        'stream',
+        {
+          msg: message,
+        },
+        'service',
+        'proc',
+      );
     };
 
     const clientId1 = 'client1';

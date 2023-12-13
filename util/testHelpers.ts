@@ -483,7 +483,7 @@ export function payloadToTransportMessage<Payload extends object>(
   from: TransportClientId = 'client',
   to: TransportClientId = 'SERVER',
 ): TransportMessage<Payload> {
-  return msg(from, to, 'service', 'procedure', streamId ?? 'stream', payload);
+  return msg(from, to, streamId ?? 'stream', payload, 'service', 'procedure');
 }
 
 /**

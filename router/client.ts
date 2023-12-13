@@ -189,11 +189,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
     const streamId = nanoid();
 
     function belongsToSameStream(msg: OpaqueTransportMessage) {
-      return (
-        msg.serviceName === serviceName &&
-        msg.procedureName === procName &&
-        msg.streamId === streamId
-      );
+      return msg.streamId === streamId;
     }
 
     if (procType === 'stream') {
@@ -205,10 +201,10 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
         const m = msg(
           transport.clientId,
           serverId,
-          serviceName,
-          procName,
           streamId,
           input as object,
+          serviceName,
+          procName,
         );
 
         // first message needs the open bit.
@@ -224,13 +220,13 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
           const m = msg(
             transport.clientId,
             serverId,
-            serviceName,
-            procName,
             streamId,
             rawIn as object,
           );
 
           if (firstMessage) {
+            m.serviceName = serviceName;
+            m.procedureName = procName;
             m.controlFlags |= ControlFlags.StreamOpenBit;
             firstMessage = false;
           }
@@ -241,9 +237,13 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
 
       // transport -> output
       const listener = (msg: OpaqueTransportMessage) => {
+        if (!belongsToSameStream(msg)) {
+          return;
+        }
+
         if (isStreamClose(msg.controlFlags)) {
           outputStream.end();
-        } else if (belongsToSameStream(msg)) {
+        } else {
           outputStream.push(msg.payload);
         }
       };
@@ -252,15 +252,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       const closeHandler = () => {
         inputStream.end();
         outputStream.end();
-        transport.send(
-          closeStream(
-            transport.clientId,
-            serverId,
-            serviceName,
-            procName,
-            streamId,
-          ),
-        );
+        transport.send(closeStream(transport.clientId, serverId, streamId));
         transport.removeEventListener('message', listener);
       };
 
@@ -269,10 +261,10 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       const m = msg(
         transport.clientId,
         serverId,
-        serviceName,
-        procName,
         streamId,
         input as object,
+        serviceName,
+        procName,
       );
 
       // rpc is a stream open + close
@@ -284,10 +276,10 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       const m = msg(
         transport.clientId,
         serverId,
-        serviceName,
-        procName,
         streamId,
         input as object,
+        serviceName,
+        procName,
       );
       m.controlFlags |= ControlFlags.StreamOpenBit;
       transport.send(m);
@@ -295,27 +287,21 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       // transport -> output
       const outputStream = pushable({ objectMode: true });
       const listener = (msg: OpaqueTransportMessage) => {
-        if (belongsToSameStream(msg)) {
-          outputStream.push(msg.payload);
+        if (!belongsToSameStream(msg)) {
+          return;
         }
 
         if (isStreamClose(msg.controlFlags)) {
           outputStream.end();
+        } else {
+          outputStream.push(msg.payload);
         }
       };
 
       transport.addEventListener('message', listener);
       const closeHandler = () => {
         outputStream.end();
-        transport.send(
-          closeStream(
-            transport.clientId,
-            serverId,
-            serviceName,
-            procName,
-            streamId,
-          ),
-        );
+        transport.send(closeStream(transport.clientId, serverId, streamId));
         transport.removeEventListener('message', listener);
       };
 
@@ -328,10 +314,10 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
         const m = msg(
           transport.clientId,
           serverId,
-          serviceName,
-          procName,
           streamId,
           input as object,
+          serviceName,
+          procName,
         );
 
         // first message needs the open bit.
@@ -347,29 +333,21 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
           const m = msg(
             transport.clientId,
             serverId,
-            serviceName,
-            procName,
             streamId,
             rawIn as object,
           );
 
           if (firstMessage) {
             m.controlFlags |= ControlFlags.StreamOpenBit;
+            m.serviceName = serviceName;
+            m.procedureName = procName;
             firstMessage = false;
           }
 
           transport.send(m);
         }
 
-        transport.send(
-          closeStream(
-            transport.clientId,
-            serverId,
-            serviceName,
-            procName,
-            streamId,
-          ),
-        );
+        transport.send(closeStream(transport.clientId, serverId, streamId));
       })();
 
       return [inputStream, waitForMessage(transport, belongsToSameStream)];
