@@ -179,6 +179,7 @@ export function asClientStream<
     for await (const transportRes of transportOutput) {
       rawOutput.push(transportRes.payload);
     }
+    rawOutput.end();
   })();
 
   // handle
@@ -262,6 +263,7 @@ export function asClientStreamWithInitialization<
     for await (const transportRes of transportOutput) {
       rawOutput.push(transportRes.payload);
     }
+    rawOutput.end();
   })();
 
   // handle
@@ -328,6 +330,7 @@ export function asClientSubscription<
     for await (const transportRes of transportOutput) {
       rawOutput.push(transportRes.payload);
     }
+    rawOutput.end();
   })();
 
   return async (

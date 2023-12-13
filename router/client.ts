@@ -233,6 +233,8 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
 
           transport.send(m);
         }
+
+        transport.send(closeStream(transport.clientId, serverId, streamId));
       })();
 
       // transport -> output
@@ -243,6 +245,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
 
         if (isStreamClose(msg.controlFlags)) {
           outputStream.end();
+          transport.removeEventListener('message', listener);
         } else {
           outputStream.push(msg.payload);
         }
@@ -293,6 +296,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
 
         if (isStreamClose(msg.controlFlags)) {
           outputStream.end();
+          transport.removeEventListener('message', listener);
         } else {
           outputStream.push(msg.payload);
         }
