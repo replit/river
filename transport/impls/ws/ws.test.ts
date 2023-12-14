@@ -110,7 +110,7 @@ describe('retry logic', async () => {
   // need to also write tests for server-side crashes (but this involves clearing/restoring state)
   // not going to worry about this rn but for future
 
-  test.only('ws transport is recreated after clean disconnect', async () => {
+  test('ws transport is recreated after clean disconnect', async () => {
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
@@ -124,26 +124,20 @@ describe('retry logic', async () => {
       ),
     ).resolves.toStrictEqual(msg1.payload);
 
-    console.log('WE ARE DISCONNECTING');
-    clientTransport.send(msg2);
+    const promise = waitForMessage(
+      serverTransport,
+      clientTransport.clientId,
+      (recv) => recv.id === msg2.id,
+    )
     clientTransport.connections.forEach((conn) => conn.ws.close());
+    clientTransport.send(msg2);
 
     // by this point the client should have reconnected
-    // await expect(
-    //   waitForMessage(
-    //     serverTransport,
-    //     clientTransport.clientId,
-    //     (recv) => recv.id === msg2.id,
-    //   ),
-    // ).resolves.toStrictEqual(msg2.payload);
-
-    console.log('END OF TEST ASSERTIONS BEGIN HERE');
-    // await testFinishesCleanly({
-    //   clientTransports: [clientTransport],
-    //   serverTransport,
-    // });
-
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await expect(promise).resolves.toStrictEqual(msg2.payload);
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
   });
 
   test('ws transport is recreated after unclean disconnect', async () => {
@@ -178,8 +172,8 @@ describe('retry logic', async () => {
     });
   });
 
-  test('client rpc is notified after disconnect grace period expires', async () => {
-    // vi.useFakeTimers()
+  test.only('client rpc is notified after disconnect grace period expires', async () => {
+    vi.useFakeTimers()
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
@@ -193,26 +187,23 @@ describe('retry logic', async () => {
       ),
     ).resolves.toStrictEqual(msg1.payload);
 
+    const promise = waitForMessage(
+      serverTransport,
+      clientTransport.clientId,
+      (recv) => recv.id === msg2.id,
+    )
     clientTransport.connections.forEach((conn) => conn.ws.close());
     clientTransport.send(msg2);
-    // await new Promise(resolve => setTimeout(resolve, CONNECTION_GRACE_PERIOD_MS))
-    // vi.advanceTimersByTime(CONNECTION_GRACE_PERIOD_MS * 2)
-    // await new Promise(resolve => setImmediate(resolve))
-    //
-    // clientTransport.send(msg2);
-    // await expect(
-    //   waitForMessage(
-    //     serverTransport,
-    //     clientTransport.clientId,
-    //     (recv) => recv.id === msg2.id,
-    //   ),
-    // ).resolves.toStrictEqual(Err({}))
-    //
-    // // vi.useRealTimers()
-    // await testFinishesCleanly({
-    //   clientTransports: [clientTransport],
-    //   serverTransport,
-    // });
+
+    await new Promise(resolve => setTimeout(resolve, CONNECTION_GRACE_PERIOD_MS))
+    vi.advanceTimersByTime(CONNECTION_GRACE_PERIOD_MS * 2)
+
+    await expect(promise).resolves.toStrictEqual(Err({}))
+    vi.useRealTimers()
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
   });
 
   test('ws transport is not recreated after destroy', async () => {

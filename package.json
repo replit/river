@@ -40,7 +40,7 @@
     "prepack": "npm run build",
     "release": "npm publish --access public",
     "test:ui": "echo \"remember to go to /__vitest__ in the webview\" && vitest --ui --api.host 0.0.0.0 --api.port 3000",
-    "test": "vitest --test-timeout=10000",
+    "test": "vitest --test-timeout=500",
     "bench": "vitest bench"
   },
   "engines": {
