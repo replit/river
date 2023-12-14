@@ -20,6 +20,10 @@ export async function ensureTransportIsClean(t: Transport<Connection>) {
     t.eventDispatcher.numberOfListeners('message'),
     `transport ${t.clientId} should not have open message handlers after the test`,
   ).equal(0);
+  expect(
+    t.eventDispatcher.numberOfListeners('connectionStatus'),
+    `transport ${t.clientId} should not have open connection handlers after the test`,
+  ).equal(0);
 }
 
 export async function waitUntil<T>(

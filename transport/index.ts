@@ -1,4 +1,6 @@
-import { OpaqueTransportMessage } from './message';
+import { Err, UNCAUGHT_ERROR } from '../router';
+import { EventMap } from './events';
+import { OpaqueTransportMessage, TransportClientId } from './message';
 import { Transport, Connection } from './transport';
 
 // re-export
@@ -26,6 +28,7 @@ export type {
  */
 export async function waitForMessage(
   t: Transport<Connection>,
+  from: TransportClientId,
   filter?: (msg: OpaqueTransportMessage) => boolean,
   rejectMismatch?: boolean,
 ) {
@@ -34,11 +37,27 @@ export async function waitForMessage(
       if (!filter || filter?.(msg)) {
         resolve(msg.payload);
         t.removeEventListener('message', onMessage);
+        t.removeEventListener('connectionStatus', onDisconnect);
       } else if (rejectMismatch) {
         reject(new Error('message didnt match the filter'));
       }
     }
 
+    function onDisconnect(evt: EventMap['connectionStatus']) {
+      if (evt.status === 'disconnect' && evt.conn.connectedTo === from) {
+        t.removeEventListener('message', onMessage);
+        t.removeEventListener('connectionStatus', onDisconnect);
+
+        resolve(
+          Err({
+            code: UNCAUGHT_ERROR,
+            message: `${from} unexpectedly disconnected`,
+          }),
+        );
+      }
+    }
+
+    t.addEventListener('connectionStatus', onDisconnect);
     t.addEventListener('message', onMessage);
   });
 }

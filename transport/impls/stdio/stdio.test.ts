@@ -25,7 +25,7 @@ describe('sending and receiving across node streams works', () => {
       test: 123,
     };
 
-    const p = waitForMessage(serverTransport);
+    const p = waitForMessage(serverTransport, clientTransport.clientId);
     clientTransport.send(
       payloadToTransportMessage(
         msg,

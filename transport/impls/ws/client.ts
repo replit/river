@@ -130,11 +130,4 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
       );
     }
   }
-
-  /**
-   * Begins a new attempt to establish a WebSocket connection.
-   */
-  async open() {
-    return this.createNewConnection(this.serverId);
-  }
 }

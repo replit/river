@@ -27,7 +27,11 @@ describe('sending and receiving across websockets works', async () => {
     const msg = createDummyTransportMessage();
     clientTransport.send(msg);
     await expect(
-      waitForMessage(serverTransport, (recv) => recv.id === msg.id),
+      waitForMessage(
+        serverTransport,
+        clientTransport.clientId,
+        (recv) => recv.id === msg.id,
+      ),
     ).resolves.toStrictEqual(msg.payload);
 
     await testFinishesCleanly({
@@ -64,7 +68,7 @@ describe('sending and receiving across websockets works', async () => {
       const initMsg = makeDummyMessage(id, serverId, 'hello server');
       client.send(initMsg);
       await expect(
-        waitForMessage(serverTransport, (recv) => recv.id === initMsg.id),
+        waitForMessage(serverTransport, id, (recv) => recv.id === initMsg.id),
       ).resolves.toStrictEqual(initMsg.payload);
       return client;
     };
@@ -77,8 +81,8 @@ describe('sending and receiving across websockets works', async () => {
     const msg2 = makeDummyMessage('SERVER', 'client2', 'hello client1');
     const promises = Promise.all([
       // true means reject if we receive any message that isn't the one we are expecting
-      waitForMessage(client2, (recv) => recv.id === msg2.id, true),
-      waitForMessage(client1, (recv) => recv.id === msg1.id, true),
+      waitForMessage(client2, serverId, (recv) => recv.id === msg2.id, true),
+      waitForMessage(client1, serverId, (recv) => recv.id === msg1.id, true),
     ]);
     serverTransport.send(msg1);
     serverTransport.send(msg2);
@@ -105,14 +109,18 @@ describe('retry logic', async () => {
   // need to also write tests for server-side crashes (but this involves clearing/restoring state)
   // not going to worry about this rn but for future
 
-  test('ws transport is recreated after clean disconnect', async () => {
+  test.only('ws transport is recreated after clean disconnect', async () => {
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 
     clientTransport.send(msg1);
     await expect(
-      waitForMessage(serverTransport, (recv) => recv.id === msg1.id),
+      waitForMessage(
+        serverTransport,
+        clientTransport.clientId,
+        (recv) => recv.id === msg1.id,
+      ),
     ).resolves.toStrictEqual(msg1.payload);
 
     clientTransport.connections.forEach((conn) => conn.ws.close());
@@ -120,7 +128,11 @@ describe('retry logic', async () => {
 
     // by this point the client should have reconnected
     await expect(
-      waitForMessage(serverTransport, (recv) => recv.id === msg2.id),
+      waitForMessage(
+        serverTransport,
+        clientTransport.clientId,
+        (recv) => recv.id === msg2.id,
+      ),
     ).resolves.toStrictEqual(msg2.payload);
 
     await testFinishesCleanly({
@@ -136,7 +148,11 @@ describe('retry logic', async () => {
 
     clientTransport.send(msg1);
     await expect(
-      waitForMessage(serverTransport, (recv) => recv.id === msg1.id),
+      waitForMessage(
+        serverTransport,
+        clientTransport.clientId,
+        (recv) => recv.id === msg1.id,
+      ),
     ).resolves.toStrictEqual(msg1.payload);
 
     clientTransport.connections.forEach((conn) => conn.ws.terminate());
@@ -144,7 +160,11 @@ describe('retry logic', async () => {
 
     // by this point the client should have reconnected
     await expect(
-      waitForMessage(serverTransport, (recv) => recv.id === msg2.id),
+      waitForMessage(
+        serverTransport,
+        clientTransport.clientId,
+        (recv) => recv.id === msg2.id,
+      ),
     ).resolves.toStrictEqual(msg2.payload);
 
     // this is not expected to be clean because we destroyed the transport
@@ -161,7 +181,11 @@ describe('retry logic', async () => {
 
     clientTransport.send(msg1);
     await expect(
-      waitForMessage(serverTransport, (recv) => recv.id === msg1.id),
+      waitForMessage(
+        serverTransport,
+        clientTransport.clientId,
+        (recv) => recv.id === msg1.id,
+      ),
     ).resolves.toStrictEqual(msg1.payload);
 
     clientTransport.destroy();

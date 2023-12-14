@@ -23,6 +23,7 @@ import {
   RiverUncaughtSchema,
   UNCAUGHT_ERROR,
 } from './result';
+import { EventMap } from '../transport/events';
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -55,6 +56,7 @@ class RiverServer<Services extends Record<string, AnyService>> {
   contextMap: Map<AnyService, ServiceContextWithState<object>>;
   // map of streamId to ProcStream
   streamMap: Map<string, ProcStream>;
+
   // map of client to their open streams by streamId
   clientStreams: Map<TransportClientId, Set<string>>;
 
@@ -76,6 +78,7 @@ class RiverServer<Services extends Record<string, AnyService>> {
     this.streamMap = new Map();
     this.clientStreams = new Map();
     this.transport.addEventListener('message', this.handler);
+    this.transport.addEventListener('connectionStatus', this.onDisconnect);
   }
 
   get streams() {
@@ -103,11 +106,28 @@ class RiverServer<Services extends Record<string, AnyService>> {
     await this.pushToStream(procStream, message, isInitMessage);
   };
 
+  // cleanup streams on unexpected disconnections
+  onDisconnect = async (evt: EventMap['connectionStatus']) => {
+    if (evt.status !== 'disconnect') {
+      return;
+    }
+
+    const disconnectedClientId = evt.conn.connectedTo;
+    const streamsFromThisClient = this.clientStreams.get(disconnectedClientId);
+    if (!streamsFromThisClient) {
+      return;
+    }
+
+    await Promise.all(
+      Array.from(streamsFromThisClient).map(this.cleanupStream),
+    );
+    this.clientStreams.delete(disconnectedClientId);
+  };
+
   async close() {
     this.transport.removeEventListener('message', this.handler);
-    for (const streamIdx of this.streamMap.keys()) {
-      await this.cleanupStream(streamIdx);
-    }
+    this.transport.removeEventListener('connectionStatus', this.onDisconnect);
+    await Promise.all([...this.streamMap.keys()].map(this.cleanupStream));
   }
 
   createNewProcStream(message: OpaqueTransportMessage) {
@@ -284,10 +304,10 @@ class RiverServer<Services extends Record<string, AnyService>> {
     this.streamMap.set(message.streamId, procStream);
 
     // add this stream to ones from that client so we can clean it up in the case of a disconnect without close
-    // const streamsFromThisClient =
-    //   this.clientStreams.get(message.from) ?? new Set();
-    // streamsFromThisClient.add(message.streamId);
-    // this.clientStreams.set(message.from, streamsFromThisClient);
+    const streamsFromThisClient =
+      this.clientStreams.get(message.from) ?? new Set();
+    streamsFromThisClient.add(message.streamId);
+    this.clientStreams.set(message.from, streamsFromThisClient);
 
     return procStream;
   }
@@ -317,6 +337,14 @@ class RiverServer<Services extends Record<string, AnyService>> {
 
     if (isStreamClose(message.controlFlags)) {
       await this.cleanupStream(message.streamId);
+
+      const streamsFromThisClient = this.clientStreams.get(message.from);
+      if (streamsFromThisClient) {
+        streamsFromThisClient.delete(message.streamId);
+        if (streamsFromThisClient.size === 0) {
+          this.clientStreams.delete(message.from);
+        }
+      }
     }
   }
 

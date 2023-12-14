@@ -39,7 +39,7 @@ const dummyPayloadLarge = () => ({
 });
 
 const BENCH_DURATION = 1000;
-describe.only('transport level bandwidth', async () => {
+describe('transport level bandwidth', async () => {
   const server = http.createServer();
   const port = await onServerReady(server);
   const webSocketServer = await createWebSocketServer(server);
@@ -52,7 +52,11 @@ describe.only('transport level bandwidth', async () => {
     'send and recv (small payload)',
     async () => {
       const id = clientTransport.send(dummyPayloadSmall());
-      await waitForMessage(serverTransport, (msg) => msg.id === id);
+      await waitForMessage(
+        serverTransport,
+        clientTransport.clientId,
+        (msg) => msg.id === id,
+      );
       return;
     },
     { time: BENCH_DURATION },
@@ -62,7 +66,11 @@ describe.only('transport level bandwidth', async () => {
     'send and recv (large payload)',
     async () => {
       const id = clientTransport.send(dummyPayloadLarge());
-      await waitForMessage(serverTransport, (msg) => msg.id === id);
+      await waitForMessage(
+        serverTransport,
+        clientTransport.clientId,
+        (msg) => msg.id === id,
+      );
       return;
     },
     { time: BENCH_DURATION },

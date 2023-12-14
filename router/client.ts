@@ -274,7 +274,7 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
       m.controlFlags |=
         ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit;
       transport.send(m);
-      return waitForMessage(transport, belongsToSameStream);
+      return waitForMessage(transport, serverId, belongsToSameStream);
     } else if (procType === 'subscribe') {
       const m = msg(
         transport.clientId,
@@ -354,7 +354,10 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
         transport.send(closeStream(transport.clientId, serverId, streamId));
       })();
 
-      return [inputStream, waitForMessage(transport, belongsToSameStream)];
+      return [
+        inputStream,
+        waitForMessage(transport, serverId, belongsToSameStream),
+      ];
     } else {
       throw new Error(`invalid river call, unknown procedure type ${procType}`);
     }

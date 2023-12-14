@@ -64,10 +64,9 @@ export const OpaqueTransportMessageSchema = TransportMessageSchema(
  * `controlFlags`:
  * * If `controlFlags & StreamOpenBit == StreamOpenBit`, `streamId` must be set to a unique value
  *   (suggestion: use `nanoid`).
- * * `serviceName` and `procedureName` must be set only when `controlFlags & StreamOpenBit ==
- *    StreamOpenBit`.
- * * If `controlFlags & StreamClosedBit` is set and the kind is `stream` or `subscription`,
- *   `payload` can be a control message.
+ * * If `controlFlags & StreamOpenBit == StreamOpenBit`, `serviceName` and `procedureName` must be set.
+ * * If `controlFlags & StreamClosedBit == StreamClosedBit` and the kind is `stream` or `subscription`,
+ *   `payload` should be discarded (usually contains a control message).
  * @template Payload The type of the payload.
  */
 export type TransportMessage<
