@@ -11,8 +11,9 @@ import {
   isStreamOpen,
   reply,
   closeStream,
+  TransportClientId,
 } from '../transport/message';
-import { ServiceContext } from './context';
+import { ServiceContext, ServiceContextWithState } from './context';
 import { log } from '../logging';
 import { Value } from '@sinclair/typebox/value';
 import {
@@ -48,64 +49,90 @@ interface ProcStream {
   };
 }
 
-/**
- * Creates a server instance that listens for incoming messages from a transport and routes them to the appropriate service and procedure.
- * The server tracks the state of each service along with open streams and the extended context object.
- * @param transport - The transport to listen to.
- * @param services - An object containing all the services to be registered on the server.
- * @param extendedContext - An optional object containing additional context to be passed to all services.
- * @returns A promise that resolves to a server instance with the registered services.
- */
-export function createServer<Services extends Record<string, AnyService>>(
-  transport: Transport<Connection>,
-  services: Services,
-  extendedContext?: Omit<ServiceContext, 'state'>,
-): Server<Services> {
-  const contextMap = new Map();
-  for (const service of Object.values(services)) {
-    contextMap.set(service, {
-      ...extendedContext,
-      state: service.state,
-    });
+class RiverServer<Services extends Record<string, AnyService>> {
+  transport: Transport<Connection>;
+  services: Services;
+  contextMap: Map<AnyService, ServiceContextWithState<object>>;
+  // map of streamId to ProcStream
+  streamMap: Map<string, ProcStream>;
+  // map of client to their open streams by streamId
+  clientStreams: Map<TransportClientId, Set<string>>;
+
+  constructor(
+    transport: Transport<Connection>,
+    services: Services,
+    extendedContext?: Omit<ServiceContext, 'state'>,
+  ) {
+    this.transport = transport;
+    this.services = services;
+    this.contextMap = new Map();
+    for (const service of Object.values(services)) {
+      this.contextMap.set(service, {
+        ...extendedContext,
+        state: service.state,
+      });
+    }
+
+    this.streamMap = new Map();
+    this.clientStreams = new Map();
+    this.transport.addEventListener('message', this.handler);
   }
 
-  const getContext = (service: AnyService) => {
-    const context = contextMap.get(service);
-    if (!context) {
-      const err = `${transport.clientId} -- no context found for ${service.name}`;
-      log?.error(err);
-      throw new Error(err);
+  get streams() {
+    return this.streamMap;
+  }
+
+  handler = async (message: OpaqueTransportMessage) => {
+    if (message.to !== this.transport.clientId) {
+      log?.info(
+        `${this.transport.clientId} -- got msg with destination that isn't the server, ignoring`,
+      );
+      return;
     }
 
-    return context;
+    let procStream = this.streamMap.get(message.streamId);
+    const isInitMessage = !procStream;
+
+    // create a proc stream if it doesnt exist
+    procStream ||= this.createNewProcStream(message);
+    if (!procStream) {
+      // if we fail to create a proc stream, just abort
+      return;
+    }
+
+    await this.pushToStream(procStream, message, isInitMessage);
   };
 
-  const streamMap = new Map();
-  const clientStreams = new Map();
+  async close() {
+    this.transport.removeEventListener('message', this.handler);
+    for (const streamIdx of this.streamMap.keys()) {
+      await this.cleanupStream(streamIdx);
+    }
+  }
 
-  const createNewProcStream = (message: OpaqueTransportMessage) => {
+  createNewProcStream(message: OpaqueTransportMessage) {
     if (!isStreamOpen(message.controlFlags)) {
       log?.warn(
-        `${transport.clientId} -- couldn't find a matching procedure stream for ${message.serviceName}.${message.procedureName}:${message.streamId}`,
+        `${this.transport.clientId} -- couldn't find a matching procedure stream for ${message.serviceName}.${message.procedureName}:${message.streamId}`,
       );
       return;
     }
 
-    if (!message.serviceName || !(message.serviceName in services)) {
+    if (!message.serviceName || !(message.serviceName in this.services)) {
       log?.warn(
-        `${transport.clientId} -- couldn't find service ${message.serviceName}`,
+        `${this.transport.clientId} -- couldn't find service ${message.serviceName}`,
       );
       return;
     }
 
-    const service = services[message.serviceName];
-    const serviceContext = getContext(service);
+    const service = this.services[message.serviceName];
+    const serviceContext = this.getContext(service);
     if (
       !message.procedureName ||
       !(message.procedureName in service.procedures)
     ) {
       log?.warn(
-        `${transport.clientId} -- couldn't find a matching procedure for ${message.serviceName}.${message.procedureName}`,
+        `${this.transport.clientId} -- couldn't find a matching procedure for ${message.serviceName}.${message.procedureName}`,
       );
       return;
     }
@@ -117,15 +144,19 @@ export function createServer<Services extends Record<string, AnyService>>(
       // sending outgoing messages back to client
       (async () => {
         for await (const response of outgoing) {
-          transport.send(response);
+          this.transport.send(response);
         }
 
         // we ended, send a close bit back to the client
         // only subscriptions and streams have streams the
         // handler can close
         if (procedure.type === 'subscription' || procedure.type === 'stream') {
-          transport.send(
-            closeStream(transport.clientId, message.from, message.streamId),
+          this.transport.send(
+            closeStream(
+              this.transport.clientId,
+              message.from,
+              message.streamId,
+            ),
           );
         }
       })();
@@ -134,7 +165,7 @@ export function createServer<Services extends Record<string, AnyService>>(
       const errorMsg =
         err instanceof Error ? err.message : `[coerced to error] ${err}`;
       log?.error(
-        `${transport.clientId} -- procedure ${message.serviceName}.${message.procedureName}:${message.streamId} threw an error: ${errorMsg}`,
+        `${this.transport.clientId} -- procedure ${message.serviceName}.${message.procedureName}:${message.streamId} threw an error: ${errorMsg}`,
       );
       outgoing.push(
         reply(
@@ -233,7 +264,7 @@ export function createServer<Services extends Record<string, AnyService>>(
       // procedure is inferred to be never here as this is not a valid procedure type
       // we cast just to log
       log?.warn(
-        `${transport.clientId} -- got request for invalid procedure type ${
+        `${this.transport.clientId} -- got request for invalid procedure type ${
           (procedure as AnyProcedure).type
         } at ${message.serviceName}.${message.procedureName}`,
       );
@@ -250,33 +281,22 @@ export function createServer<Services extends Record<string, AnyService>>(
       promises: { inputHandler, outputHandler },
     };
 
-    streamMap.set(message.streamId, procStream);
+    this.streamMap.set(message.streamId, procStream);
 
     // add this stream to ones from that client so we can clean it up in the case of a disconnect without close
-    const streamsFromThisClient = clientStreams.get(message.from) ?? new Set();
-    streamsFromThisClient.add(message.streamId);
-    clientStreams.set(message.from, streamsFromThisClient);
+    // const streamsFromThisClient =
+    //   this.clientStreams.get(message.from) ?? new Set();
+    // streamsFromThisClient.add(message.streamId);
+    // this.clientStreams.set(message.from, streamsFromThisClient);
+
     return procStream;
-  };
+  }
 
-  const cleanupStream = async (id: string) => {
-    const stream = streamMap.get(id);
-    if (!stream) {
-      return;
-    }
-
-    stream.incoming.end();
-    await stream.promises.inputHandler;
-    stream.outgoing.end();
-    await stream.promises.outputHandler;
-    streamMap.delete(id);
-  };
-
-  const pushToStream = async (
+  async pushToStream(
     procStream: ProcStream,
     message: OpaqueTransportMessage,
     isInit?: boolean,
-  ) => {
+  ) {
     const procedure = procStream.procedure;
     const procHasInitMessage = 'init' in procedure;
 
@@ -289,43 +309,54 @@ export function createServer<Services extends Record<string, AnyService>>(
       procStream.incoming.push(message as TransportMessage);
     } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
       log?.error(
-        `${transport.clientId} -- procedure ${procStream.serviceName}.${
+        `${this.transport.clientId} -- procedure ${procStream.serviceName}.${
           procStream.procedureName
         } received invalid payload: ${JSON.stringify(message.payload)}`,
       );
     }
 
     if (isStreamClose(message.controlFlags)) {
-      await cleanupStream(message.streamId);
+      await this.cleanupStream(message.streamId);
     }
-  };
+  }
 
-  const handler = async (message: OpaqueTransportMessage) => {
-    if (message.to !== transport.clientId) {
-      log?.info(
-        `${transport.clientId} -- got msg with destination that isn't the server, ignoring`,
-      );
+  private getContext(service: AnyService) {
+    const context = this.contextMap.get(service);
+    if (!context) {
+      const err = `${this.transport.clientId} -- no context found for ${service.name}`;
+      log?.error(err);
+      throw new Error(err);
+    }
+
+    return context;
+  }
+
+  async cleanupStream(id: string) {
+    const stream = this.streamMap.get(id);
+    if (!stream) {
       return;
     }
 
-    let procStream = streamMap.get(message.streamId);
-    const isInitMessage = !procStream;
+    stream.incoming.end();
+    await stream.promises.inputHandler;
+    stream.outgoing.end();
+    await stream.promises.outputHandler;
+    this.streamMap.delete(id);
+  }
+}
 
-    procStream ||= createNewProcStream(message);
-    if (!procStream) {
-      return;
-    }
-
-    return pushToStream(procStream, message, isInitMessage);
-  };
-
-  transport.addEventListener('message', handler);
-  return {
-    services,
-    streams: streamMap,
-    async close() {
-      transport.removeEventListener('message', handler);
-      await Promise.all(Array.from(streamMap.keys()).map(cleanupStream));
-    },
-  };
+/**
+ * Creates a server instance that listens for incoming messages from a transport and routes them to the appropriate service and procedure.
+ * The server tracks the state of each service along with open streams and the extended context object.
+ * @param transport - The transport to listen to.
+ * @param services - An object containing all the services to be registered on the server.
+ * @param extendedContext - An optional object containing additional context to be passed to all services.
+ * @returns A promise that resolves to a server instance with the registered services.
+ */
+export function createServer<Services extends Record<string, AnyService>>(
+  transport: Transport<Connection>,
+  services: Services,
+  extendedContext?: Omit<ServiceContext, 'state'>,
+): Server<Services> {
+  return new RiverServer(transport, services, extendedContext);
 }
