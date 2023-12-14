@@ -12,7 +12,7 @@ import {
   reply,
   closeStream,
 } from '../transport/message';
-import { ServiceContext, ServiceContextWithState } from './context';
+import { ServiceContext } from './context';
 import { log } from '../logging';
 import { Value } from '@sinclair/typebox/value';
 import {
@@ -56,32 +56,20 @@ interface ProcStream {
  * @param extendedContext - An optional object containing additional context to be passed to all services.
  * @returns A promise that resolves to a server instance with the registered services.
  */
-export async function createServer<Services extends Record<string, AnyService>>(
+export function createServer<Services extends Record<string, AnyService>>(
   transport: Transport<Connection>,
   services: Services,
   extendedContext?: Omit<ServiceContext, 'state'>,
-): Promise<Server<Services>> {
-  const contextMap: Map<
-    AnyService,
-    ServiceContextWithState<object>
-  > = new Map();
-  // map of streamId to ProcStream
-  const streamMap: Map<string, ProcStream> = new Map();
-
-  async function cleanupStream(id: string) {
-    const stream = streamMap.get(id);
-    if (!stream) {
-      return;
-    }
-
-    stream.incoming.end();
-    await stream.promises.inputHandler;
-    stream.outgoing.end();
-    await stream.promises.outputHandler;
-    streamMap.delete(id);
+): Server<Services> {
+  const contextMap = new Map();
+  for (const service of Object.values(services)) {
+    contextMap.set(service, {
+      ...extendedContext,
+      state: service.state,
+    });
   }
 
-  function getContext(service: AnyService) {
+  const getContext = (service: AnyService) => {
     const context = contextMap.get(service);
     if (!context) {
       const err = `${transport.clientId} -- no context found for ${service.name}`;
@@ -90,42 +78,12 @@ export async function createServer<Services extends Record<string, AnyService>>(
     }
 
     return context;
-  }
+  };
 
-  // populate the context map
-  for (const service of Object.values(services)) {
-    contextMap.set(service, { ...extendedContext, state: service.state });
-  }
+  const streamMap = new Map();
+  const clientStreams = new Map();
 
-  const handler = async (message: OpaqueTransportMessage) => {
-    if (message.to !== transport.clientId) {
-      log?.info(
-        `${transport.clientId} -- got msg with destination that isn't the server, ignoring`,
-      );
-      return;
-    }
-
-    const streamIdx = message.streamId;
-    const procStream = streamMap.get(streamIdx);
-    if (procStream) {
-      // If the stream is a continuation, we do not admit the init messages.
-      if (Value.Check(procStream.procedure.input, message.payload)) {
-        procStream.incoming.push(message as TransportMessage);
-      } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
-        log?.error(
-          `${transport.clientId} -- procedure ${procStream.serviceName}.${
-            procStream.procedureName
-          } received invalid payload: ${JSON.stringify(message.payload)}`,
-        );
-      }
-
-      if (isStreamClose(message.controlFlags)) {
-        await cleanupStream(streamIdx);
-      }
-
-      return;
-    }
-
+  const createNewProcStream = (message: OpaqueTransportMessage) => {
     if (!isStreamOpen(message.controlFlags)) {
       log?.warn(
         `${transport.clientId} -- couldn't find a matching procedure stream for ${message.serviceName}.${message.procedureName}:${message.streamId}`,
@@ -151,8 +109,8 @@ export async function createServer<Services extends Record<string, AnyService>>(
       );
       return;
     }
+
     const procedure = service.procedures[message.procedureName] as AnyProcedure;
-    const procHasInitMessage = 'init' in procedure;
     const incoming: ProcStream['incoming'] = pushable({ objectMode: true });
     const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
     const outputHandler: Promise<unknown> =
@@ -172,7 +130,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
         }
       })();
 
-    function errorHandler(err: unknown) {
+    const errorHandler = (err: unknown) => {
       const errorMsg =
         err instanceof Error ? err.message : `[coerced to error] ${err}`;
       log?.error(
@@ -187,10 +145,11 @@ export async function createServer<Services extends Record<string, AnyService>>(
           } satisfies Static<typeof RiverUncaughtSchema>),
         ),
       );
-    }
+    };
 
     // pump incoming message stream -> handler -> outgoing message stream
     let inputHandler: Promise<unknown>;
+    const procHasInitMessage = 'init' in procedure;
     if (procedure.type === 'stream') {
       if (procHasInitMessage) {
         inputHandler = (async () => {
@@ -281,7 +240,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
       return;
     }
 
-    streamMap.set(streamIdx, {
+    const procStream: ProcStream = {
       id: message.streamId,
       incoming,
       outgoing,
@@ -289,25 +248,75 @@ export async function createServer<Services extends Record<string, AnyService>>(
       procedureName: message.procedureName,
       procedure,
       promises: { inputHandler, outputHandler },
-    });
+    };
 
-    // This is the first message, so we parse is as the initialization message, if supplied.
+    streamMap.set(message.streamId, procStream);
+
+    // add this stream to ones from that client so we can clean it up in the case of a disconnect without close
+    const streamsFromThisClient = clientStreams.get(message.from) ?? new Set();
+    streamsFromThisClient.add(message.streamId);
+    clientStreams.set(message.from, streamsFromThisClient);
+    return procStream;
+  };
+
+  const cleanupStream = async (id: string) => {
+    const stream = streamMap.get(id);
+    if (!stream) {
+      return;
+    }
+
+    stream.incoming.end();
+    await stream.promises.inputHandler;
+    stream.outgoing.end();
+    await stream.promises.outputHandler;
+    streamMap.delete(id);
+  };
+
+  const pushToStream = async (
+    procStream: ProcStream,
+    message: OpaqueTransportMessage,
+    isInit?: boolean,
+  ) => {
+    const procedure = procStream.procedure;
+    const procHasInitMessage = 'init' in procedure;
+
     if (
-      (!procHasInitMessage && Value.Check(procedure.input, message.payload)) ||
-      (procHasInitMessage && Value.Check(procedure.init, message.payload))
+      (isInit &&
+        procHasInitMessage &&
+        Value.Check(procedure.init, message.payload)) ||
+      Value.Check(procedure.input, message.payload)
     ) {
-      incoming.push(message as TransportMessage);
+      procStream.incoming.push(message as TransportMessage);
     } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
       log?.error(
-        `${transport.clientId} -- procedure ${message.serviceName}.${
-          message.procedureName
+        `${transport.clientId} -- procedure ${procStream.serviceName}.${
+          procStream.procedureName
         } received invalid payload: ${JSON.stringify(message.payload)}`,
       );
     }
 
     if (isStreamClose(message.controlFlags)) {
-      await cleanupStream(streamIdx);
+      await cleanupStream(message.streamId);
     }
+  };
+
+  const handler = async (message: OpaqueTransportMessage) => {
+    if (message.to !== transport.clientId) {
+      log?.info(
+        `${transport.clientId} -- got msg with destination that isn't the server, ignoring`,
+      );
+      return;
+    }
+
+    let procStream = streamMap.get(message.streamId);
+    const isInitMessage = !procStream;
+
+    procStream ||= createNewProcStream(message);
+    if (!procStream) {
+      return;
+    }
+
+    return pushToStream(procStream, message, isInitMessage);
   };
 
   transport.addEventListener('message', handler);
@@ -316,9 +325,7 @@ export async function createServer<Services extends Record<string, AnyService>>(
     streams: streamMap,
     async close() {
       transport.removeEventListener('message', handler);
-      for (const streamIdx of streamMap.keys()) {
-        await cleanupStream(streamIdx);
-      }
+      await Promise.all(Array.from(streamMap.keys()).map(cleanupStream));
     },
   };
 }

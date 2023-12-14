@@ -115,14 +115,14 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
     expect(serializeService(StupidlyLargeService())).toBeTruthy();
   });
 
-  test('serverclient should support many services with many procedures', async () => {
+  test('server client should support many services with many procedures', async () => {
     const listing = {
       a: StupidlyLargeService(),
       b: StupidlyLargeService(),
       c: StupidlyLargeService(),
       d: StupidlyLargeService(),
     };
-    const server = await createServer(new MockTransport('SERVER'), listing);
+    const server = createServer(new MockTransport('SERVER'), listing);
     const client = createClient<typeof server>(new MockTransport('client'));
     expect(client.d.f48.rpc({ a: 0 })).toBeTruthy();
     expect(client.a.f2.rpc({ c: 'abc' })).toBeTruthy();

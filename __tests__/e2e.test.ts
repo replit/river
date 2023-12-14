@@ -42,7 +42,7 @@ describe.each(codecs)(
     test('rpc', async () => {
       const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: TestServiceConstructor() };
-      const server = await createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
       const result = await client.test.add.rpc({ n: 3 });
       assert(result.ok);
@@ -58,7 +58,7 @@ describe.each(codecs)(
     test('fallible rpc', async () => {
       const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: FallibleServiceConstructor() };
-      const server = await createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
       const result = await client.test.divide.rpc({ a: 10, b: 2 });
       assert(result.ok);
@@ -83,7 +83,7 @@ describe.each(codecs)(
     test('rpc with binary (uint8array)', async () => {
       const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: BinaryFileServiceConstructor() };
-      const server = await createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
       const result = await client.test.getFile.rpc({ file: 'test.py' });
       assert(result.ok);
@@ -102,7 +102,7 @@ describe.each(codecs)(
     test('stream', async () => {
       const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: TestServiceConstructor() };
-      const server = await createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
 
       const [input, output, close] = await client.test.echo.stream();
@@ -139,7 +139,7 @@ describe.each(codecs)(
     test('stream with init message', async () => {
       const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: TestServiceConstructor() };
-      const server = await createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
 
       const [input, output, close] = await client.test.echoWithPrefix.stream({
@@ -169,7 +169,7 @@ describe.each(codecs)(
     test('fallible stream', async () => {
       const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: FallibleServiceConstructor() };
-      const server = await createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
 
       const [input, output, close] = await client.test.echo.stream();
@@ -220,7 +220,7 @@ describe.each(codecs)(
       );
 
       const serviceDefs = { test: SubscribableServiceConstructor() };
-      const server = await createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, serviceDefs);
       const client1 = createClient<typeof server>(client1Transport);
       const client2 = createClient<typeof server>(client2Transport);
       const [subscription1, close1] = await client1.test.value.subscribe({});
@@ -267,7 +267,7 @@ describe.each(codecs)(
       const [clientTransport, serverTransport] = getTransports();
 
       const serviceDefs = { uploadable: UploadableServiceConstructor() };
-      const server = await createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
 
       const [addStream, addResult] =
@@ -289,7 +289,7 @@ describe.each(codecs)(
       const [clientTransport, serverTransport] = getTransports();
 
       const serviceDefs = { uploadable: UploadableServiceConstructor() };
-      const server = await createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
 
       const [addStream, addResult] =
@@ -312,7 +312,7 @@ describe.each(codecs)(
     test('message order is preserved in the face of disconnects', async () => {
       const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: OrderingServiceConstructor() };
-      const server = await createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
 
       const expected: number[] = [];
@@ -347,7 +347,7 @@ describe.each(codecs)(
     test('concurrent rpcs', async () => {
       const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: OrderingServiceConstructor() };
-      const server = await createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
 
       const promises = [];
@@ -371,7 +371,7 @@ describe.each(codecs)(
     test('concurrent streams', async () => {
       const [clientTransport, serverTransport] = getTransports();
       const serviceDefs = { test: TestServiceConstructor() };
-      const server = await createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
 
       const openStreams = [];

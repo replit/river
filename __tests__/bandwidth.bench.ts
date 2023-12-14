@@ -39,7 +39,7 @@ const dummyPayloadLarge = () => ({
 });
 
 const BENCH_DURATION = 1000;
-describe('transport level bandwidth', async () => {
+describe.only('transport level bandwidth', async () => {
   const server = http.createServer();
   const port = await onServerReady(server);
   const webSocketServer = await createWebSocketServer(server);
@@ -78,7 +78,7 @@ describe('simple router level bandwidth', async () => {
     webSocketServer,
   );
   const serviceDefs = { test: TestServiceConstructor() };
-  const server = await createServer(serverTransport, serviceDefs);
+  const server = createServer(serverTransport, serviceDefs);
   const client = createClient<typeof server>(clientTransport);
 
   bench(
@@ -125,7 +125,7 @@ describe('complex (50 procedures) router level bandwidth', async () => {
     d: StupidlyLargeService(),
   };
 
-  const server = await createServer(serverTransport, serviceDefs);
+  const server = createServer(serverTransport, serviceDefs);
   const client = createClient<typeof server>(clientTransport);
 
   bench(

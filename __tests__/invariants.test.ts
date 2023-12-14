@@ -31,7 +31,7 @@ describe('procedures should leave no trace after finishing', async () => {
   test('closing a transport from the client cleans up connection on the server', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(serverTransport, serviceDefs);
+    const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
     expect(clientTransport.connections.size).toEqual(0);
@@ -57,7 +57,7 @@ describe('procedures should leave no trace after finishing', async () => {
   test('closing a transport from the server cleans up connection on the client', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(serverTransport, serviceDefs);
+    const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
     expect(clientTransport.connections.size).toEqual(0);
@@ -83,7 +83,7 @@ describe('procedures should leave no trace after finishing', async () => {
   test('rpc', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(serverTransport, serviceDefs);
+    const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
     let serverListeners =
@@ -116,7 +116,7 @@ describe('procedures should leave no trace after finishing', async () => {
   test('stream', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(serverTransport, serviceDefs);
+    const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
     let serverListeners =
@@ -170,7 +170,7 @@ describe('procedures should leave no trace after finishing', async () => {
   test('subscription', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const serviceDefs = { test: SubscribableServiceConstructor() };
-    const server = await createServer(serverTransport, serviceDefs);
+    const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
     let serverListeners =
