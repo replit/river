@@ -33,31 +33,59 @@ export async function waitForMessage(
   rejectMismatch?: boolean,
 ) {
   return new Promise((resolve, reject) => {
+    const connectionTimeout = rejectAfterDisconnectGrace(from, () => {
+      console.log('CLEANUP TIMEOUT');
+      cleanup();
+      resolve(
+        Err({
+          code: UNCAUGHT_ERROR,
+          message: `${from} unexpectedly disconnected`,
+        }),
+      );
+    });
+
+    function cleanup() {
+      console.log('CLEANUP');
+      t.removeEventListener('message', onMessage);
+      t.removeEventListener('connectionStatus', connectionTimeout);
+    }
+
     function onMessage(msg: OpaqueTransportMessage) {
       if (!filter || filter?.(msg)) {
+        cleanup();
         resolve(msg.payload);
-        t.removeEventListener('message', onMessage);
-        t.removeEventListener('connectionStatus', onDisconnect);
       } else if (rejectMismatch) {
         reject(new Error('message didnt match the filter'));
       }
     }
 
-    function onDisconnect(evt: EventMap['connectionStatus']) {
-      if (evt.status === 'disconnect' && evt.conn.connectedTo === from) {
-        t.removeEventListener('message', onMessage);
-        t.removeEventListener('connectionStatus', onDisconnect);
-
-        resolve(
-          Err({
-            code: UNCAUGHT_ERROR,
-            message: `${from} unexpectedly disconnected`,
-          }),
-        );
-      }
-    }
-
-    t.addEventListener('connectionStatus', onDisconnect);
+    console.log('WAITING ON NEW MESSAGE');
+    t.addEventListener('connectionStatus', connectionTimeout);
     t.addEventListener('message', onMessage);
   });
+}
+
+export const CONNECTION_GRACE_PERIOD_MS = 150; // 5s
+export function rejectAfterDisconnectGrace(
+  from: TransportClientId,
+  cb: () => void,
+) {
+  let timeout: ReturnType<typeof setTimeout> | undefined = undefined;
+  return (evt: EventMap['connectionStatus']) => {
+    if (evt.status === 'connect' && evt.conn.connectedTo === from) {
+      console.log('CONNECT');
+      clearTimeout(timeout);
+      timeout = undefined;
+    }
+
+    if (evt.status === 'disconnect' && evt.conn.connectedTo === from) {
+      console.log('DISCONNECT');
+      // cb()
+      timeout = setTimeout(() => {
+        // we never hit here
+        console.log('INSIDE TIMEOUT');
+        cb();
+      }, CONNECTION_GRACE_PERIOD_MS);
+    }
+  };
 }
