@@ -2,8 +2,6 @@ import WebSocket from 'isomorphic-ws';
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
-import { Static } from '@sinclair/typebox';
-import { Procedure, ServiceContext } from '../router';
 import {
   Connection,
   OpaqueTransportMessage,
@@ -11,19 +9,20 @@ import {
   TransportClientId,
   TransportMessage,
   msg,
-  reply,
 } from '../transport';
-import { Pushable, pushable } from 'it-pushable';
+import { pushable } from 'it-pushable';
+import { Codec } from '../codec';
+import { WebSocketServerTransport } from '../transport/impls/ws/server';
 import {
-  Err,
+  PayloadType,
+  Procedure,
   Result,
   RiverError,
   RiverUncaughtSchema,
+  ServiceContext,
   UNCAUGHT_ERROR,
-} from '../router/result';
-import { Codec } from '../codec';
-import { WebSocketServerTransport } from '../transport/impls/ws/server';
-import { PayloadType } from '../router/builder';
+} from '../router';
+import { Static } from '@sinclair/typebox';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -91,391 +90,6 @@ export function createWsTransports(
 }
 
 /**
- * Transforms an RPC procedure definition into a normal function call.
- * This should only be used for testing.
- * @template State - The type of the state object.
- * @template I - The type of the input message payload.
- * @template O - The type of the output message payload.
- * @param {State} state - The state object.
- * @param {Procedure<State, 'rpc', I, O, E, null>} proc - The RPC procedure to invoke.
- * @param {Omit<ServiceContext, 'state'>} [extendedContext] - Optional extended context.
- * @returns A function that can be used to invoke the RPC procedure.
- */
-export function asClientRpc<
-  State extends object | unknown,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
->(
-  state: State,
-  proc: Procedure<State, 'rpc', I, O, E, null>,
-  extendedContext?: Omit<ServiceContext, 'state'>,
-) {
-  return (
-    msg: Static<I>,
-  ): Promise<
-    Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>
-  > =>
-    proc
-      .handler({ ...extendedContext, state }, payloadToTransportMessage(msg))
-      .then((res) => res.payload)
-      .catch((err) => {
-        const errorMsg =
-          err instanceof Error ? err.message : `[coerced to error] ${err}`;
-        return Err({
-          code: UNCAUGHT_ERROR,
-          message: errorMsg,
-        });
-      });
-}
-
-/**
- * Transforms a stream procedure definition into a pair of input and output streams.
- * Input messages can be pushed into the input stream.
- * This should only be used for testing.
- * @template State - The type of the state object.
- * @template I - The type of the input object.
- * @template O - The type of the output object.
- * @param {State} state - The state object.
- * @param {Procedure<State, 'stream', I, O, E, null>} proc - The procedure to handle the stream.
- * @param {Omit<ServiceContext, 'state'>} [extendedContext] - The extended context object.
- * @returns Pair of input and output streams.
- */
-export function asClientStream<
-  State extends object | unknown,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
->(
-  state: State,
-  proc: Procedure<State, 'stream', I, O, E, null>,
-  extendedContext?: Omit<ServiceContext, 'state'>,
-): [
-  Pushable<Static<I>>,
-  Pushable<Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>>,
-] {
-  const rawInput = pushable<Static<I>>({ objectMode: true });
-  const rawOutput = pushable<Result<Static<O>, Static<E>>>({
-    objectMode: true,
-  });
-
-  const transportInput = pushable<TransportMessage<Static<I>>>({
-    objectMode: true,
-  });
-  const transportOutput = pushable<
-    TransportMessage<Result<Static<O>, Static<E>>>
-  >({
-    objectMode: true,
-  });
-
-  // wrapping in transport
-  (async () => {
-    for await (const rawIn of rawInput) {
-      transportInput.push(payloadToTransportMessage(rawIn));
-    }
-    transportInput.end();
-  })();
-
-  // unwrap from transport
-  (async () => {
-    for await (const transportRes of transportOutput) {
-      rawOutput.push(transportRes.payload);
-    }
-    rawOutput.end();
-  })();
-
-  // handle
-  (async () => {
-    try {
-      await proc.handler(
-        { ...extendedContext, state },
-        transportInput,
-        transportOutput,
-      );
-    } catch (err) {
-      const errorMsg =
-        err instanceof Error ? err.message : `[coerced to error] ${err}`;
-      transportOutput.push(
-        reply(
-          payloadToTransportMessage({}),
-          Err({
-            code: UNCAUGHT_ERROR,
-            message: errorMsg,
-          }),
-        ),
-      );
-    }
-    transportOutput.end();
-  })();
-
-  return [rawInput, rawOutput];
-}
-
-/**
- * Transforms a stream procedure definition into a pair of input and output streams.
- * Input messages can be pushed into the input stream.
- * This should only be used for testing.
- * @template State - The type of the state object.
- * @template I - The type of the input object.
- * @template O - The type of the output object.
- * @param {State} state - The state object.
- * @param {Procedure<State, 'stream', I, O, E, null>} proc - The procedure to handle the stream.
- * @param {Omit<ServiceContext, 'state'>} [extendedContext] - The extended context object.
- * @returns Pair of input and output streams.
- */
-export function asClientStreamWithInitialization<
-  State extends object | unknown,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
-  Init extends PayloadType,
->(
-  state: State,
-  proc: Procedure<State, 'stream', I, O, E, Init>,
-  init: Static<PayloadType>,
-  extendedContext?: Omit<ServiceContext, 'state'>,
-): [
-  Pushable<Static<I>>,
-  Pushable<Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>>,
-] {
-  const rawInput = pushable<Static<I>>({ objectMode: true });
-  const rawOutput = pushable<Result<Static<O>, Static<E>>>({
-    objectMode: true,
-  });
-
-  const transportInput = pushable<TransportMessage<Static<I>>>({
-    objectMode: true,
-  });
-  const transportOutput = pushable<
-    TransportMessage<Result<Static<O>, Static<E>>>
-  >({
-    objectMode: true,
-  });
-
-  // wrapping in transport
-  (async () => {
-    for await (const rawIn of rawInput) {
-      transportInput.push(payloadToTransportMessage(rawIn));
-    }
-    transportInput.end();
-  })();
-
-  // unwrap from transport
-  (async () => {
-    for await (const transportRes of transportOutput) {
-      rawOutput.push(transportRes.payload);
-    }
-    rawOutput.end();
-  })();
-
-  // handle
-  (async () => {
-    try {
-      await proc.handler(
-        { ...extendedContext, state },
-        payloadToTransportMessage(init),
-        transportInput,
-        transportOutput,
-      );
-    } catch (err) {
-      const errorMsg =
-        err instanceof Error ? err.message : `[coerced to error] ${err}`;
-      transportOutput.push(
-        reply(
-          payloadToTransportMessage({}),
-          Err({
-            code: UNCAUGHT_ERROR,
-            message: errorMsg,
-          }),
-        ),
-      );
-    }
-    transportOutput.end();
-  })();
-
-  return [rawInput, rawOutput];
-}
-
-/**
- * Transforms a subscription procedure definition into a procedure that returns an output stream.
- * Input messages can be pushed into the input stream.
- * This should only be used for testing.
- * @template State - The type of the state object.
- * @template I - The type of the input object.
- * @template O - The type of the output object.
- * @param {State} state - The state object.
- * @param {Procedure<State, 'stream', I, O, E, null>} proc - The procedure to handle the stream.
- * @param {Omit<ServiceContext, 'state'>} [extendedContext] - The extended context object.
- * @returns A function that when passed a message, returns the output stream.
- */
-export function asClientSubscription<
-  State extends object | unknown,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
->(
-  state: State,
-  proc: Procedure<State, 'subscription', I, O, E, null>,
-  extendedContext?: Omit<ServiceContext, 'state'>,
-) {
-  const rawOutput = pushable<Result<Static<O>, Static<E>>>({
-    objectMode: true,
-  });
-  const transportOutput = pushable<
-    TransportMessage<Result<Static<O>, Static<E>>>
-  >({
-    objectMode: true,
-  });
-
-  // unwrap from transport
-  (async () => {
-    for await (const transportRes of transportOutput) {
-      rawOutput.push(transportRes.payload);
-    }
-    rawOutput.end();
-  })();
-
-  return async (
-    msg: Static<I>,
-  ): Promise<
-    Pushable<Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>>
-  > => {
-    proc
-      .handler(
-        { ...extendedContext, state },
-        payloadToTransportMessage(msg),
-        transportOutput,
-      )
-      .catch((err) => {
-        const errorMsg =
-          err instanceof Error ? err.message : `[coerced to error] ${err}`;
-        return Err({
-          code: UNCAUGHT_ERROR,
-          message: errorMsg,
-        });
-      });
-
-    return rawOutput;
-  };
-}
-
-/**
- * Transforms an upload procedure definition into a procedure that returns an input stream.
- * Input messages can be pushed into the input stream.
- * This should only be used for testing.
- * @template State - The type of the state object.
- * @template I - The type of the input object.
- * @template O - The type of the output object.
- * @param {State} state - The state object.
- * @param {Procedure<State, 'upload', I, O, E, null>} proc - The procedure to handle the stream.
- * @param {Omit<ServiceContext, 'state'>} [extendedContext] - The extended context object.
- * @returns A function that when passed a message, returns the output stream.
- */
-export function asClientUpload<
-  State extends object | unknown,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
->(
-  state: State,
-  proc: Procedure<State, 'upload', I, O, E, null>,
-  extendedContext?: Omit<ServiceContext, 'state'>,
-): [
-  Pushable<Static<I>>,
-  Promise<Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>>,
-] {
-  const rawInput = pushable<Static<I>>({ objectMode: true });
-  const transportInput = pushable<TransportMessage<Static<I>>>({
-    objectMode: true,
-  });
-
-  // wrapping in transport
-  (async () => {
-    for await (const rawIn of rawInput) {
-      transportInput.push(payloadToTransportMessage(rawIn));
-    }
-    transportInput.end();
-  })();
-
-  return [
-    rawInput,
-    proc
-      .handler({ ...extendedContext, state }, transportInput)
-      .then((res) => res.payload)
-      .catch((err) => {
-        const errorMsg =
-          err instanceof Error ? err.message : `[coerced to error] ${err}`;
-        return Err({
-          code: UNCAUGHT_ERROR,
-          message: errorMsg,
-        });
-      }),
-  ];
-}
-
-/**
- * Transforms an upload with initialization procedure definition into a procedure that returns an
- * input stream.
- * Input messages can be pushed into the input stream.
- * This should only be used for testing.
- * @template State - The type of the state object.
- * @template Init - The type of the init object.
- * @template I - The type of the input object.
- * @template O - The type of the output object.
- * @param {State} state - The state object.
- * @param {Procedure<State, 'upload', I, O, E, Init>} proc - The procedure to handle the stream.
- * @param {Omit<ServiceContext, 'state'>} [extendedContext] - The extended context object.
- * @returns A function that when passed a message, returns the output stream.
- */
-export function asClientUploadWithInitialization<
-  State extends object | unknown,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
-  Init extends PayloadType,
->(
-  state: State,
-  proc: Procedure<State, 'upload', I, O, E, Init>,
-  init: Static<Init>,
-  extendedContext?: Omit<ServiceContext, 'state'>,
-): [
-  Pushable<Static<I>>,
-  Promise<Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>>,
-] {
-  const rawInput = pushable<Static<I>>({ objectMode: true });
-  const transportInput = pushable<TransportMessage<Static<I>>>({
-    objectMode: true,
-  });
-
-  // wrapping in transport
-  (async () => {
-    for await (const rawIn of rawInput) {
-      transportInput.push(payloadToTransportMessage(rawIn));
-    }
-    transportInput.end();
-  })();
-
-  return [
-    rawInput,
-    proc
-      .handler(
-        { ...extendedContext, state },
-        payloadToTransportMessage(init),
-        transportInput,
-      )
-      .then((res) => res.payload)
-      .catch((err) => {
-        const errorMsg =
-          err instanceof Error ? err.message : `[coerced to error] ${err}`;
-        return Err({
-          code: UNCAUGHT_ERROR,
-          message: errorMsg,
-        });
-      }),
-  ];
-}
-
-/**
  * Converts a payload object to a transport message with reasonable defaults.
  * This should only be used for testing.
  * @param payload - The payload object to be converted.
@@ -507,8 +121,8 @@ export function createDummyTransportMessage(): OpaqueTransportMessage {
  * @param iter The async iterable iterator.
  * @returns A promise that resolves to the next value from the iterator.
  */
-export function iterNext<T>(iter: AsyncIterableIterator<T>) {
-  return iter.next().then((res) => res.value);
+export async function iterNext<T>(iter: AsyncIterableIterator<T>) {
+  return await iter.next().then((res) => res.value);
 }
 
 /**
@@ -538,4 +152,124 @@ export async function waitForMessage(
 
     t.addEventListener('message', onMessage);
   });
+}
+
+function catchProcError(err: unknown) {
+  const errorMsg =
+    err instanceof Error ? err.message : `[coerced to error] ${err}`;
+  return {
+    ok: false,
+    payload: {
+      code: UNCAUGHT_ERROR,
+      message: errorMsg,
+    },
+  };
+}
+
+export function asClientRpc<
+  State extends object | unknown,
+  I extends PayloadType,
+  O extends PayloadType,
+  E extends RiverError,
+  Init extends PayloadType | null = null,
+>(
+  state: State,
+  proc: Procedure<State, 'rpc', I, O, E, Init>,
+  extendedContext?: Omit<ServiceContext, 'state'>,
+) {
+  return async (
+    msg: Static<I>,
+  ): Promise<
+    Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>
+  > => {
+    return await proc
+      .handler({ ...extendedContext, state }, msg)
+      .catch(catchProcError);
+  };
+}
+
+export function asClientStream<
+  State extends object | unknown,
+  I extends PayloadType,
+  O extends PayloadType,
+  E extends RiverError,
+  Init extends PayloadType | null = null,
+>(
+  state: State,
+  proc: Procedure<State, 'stream', I, O, E, Init>,
+  init?: Init extends PayloadType ? Static<Init> : null,
+  extendedContext?: Omit<ServiceContext, 'state'>,
+) {
+  const input = pushable<Static<I>>({ objectMode: true });
+  const output = pushable<Result<Static<O>, Static<E>>>({
+    objectMode: true,
+  });
+
+  (async () => {
+    if (init) {
+      const _proc = proc as Procedure<State, 'stream', I, O, E, PayloadType>;
+      await _proc
+        .handler({ ...extendedContext, state }, init, input, output)
+        .catch((err) => output.push(catchProcError(err)));
+    } else {
+      const _proc = proc as Procedure<State, 'stream', I, O, E, null>;
+      await _proc
+        .handler({ ...extendedContext, state }, input, output)
+        .catch((err) => output.push(catchProcError(err)));
+    }
+  })();
+
+  return [input, output] as const;
+}
+
+export function asClientSubscription<
+  State extends object | unknown,
+  I extends PayloadType,
+  O extends PayloadType,
+  E extends RiverError,
+>(
+  state: State,
+  proc: Procedure<State, 'subscription', I, O, E>,
+  extendedContext?: Omit<ServiceContext, 'state'>,
+) {
+  const output = pushable<Result<Static<O>, Static<E>>>({
+    objectMode: true,
+  });
+
+  return async (msg: Static<I>) => {
+    (async () => {
+      return await proc
+        .handler({ ...extendedContext, state }, msg, output)
+        .catch((err) => output.push(catchProcError(err)));
+    })();
+    return output;
+  };
+}
+
+export async function asClientUpload<
+  State extends object | unknown,
+  I extends PayloadType,
+  O extends PayloadType,
+  E extends RiverError,
+  Init extends PayloadType | null = null,
+>(
+  state: State,
+  proc: Procedure<State, 'upload', I, O, E, Init>,
+  init?: Init extends PayloadType ? Static<Init> : null,
+  extendedContext?: Omit<ServiceContext, 'state'>,
+) {
+  const input = pushable<Static<I>>({ objectMode: true });
+  if (init) {
+    const _proc = proc as Procedure<State, 'upload', I, O, E, PayloadType>;
+    const result = _proc
+      .handler({ ...extendedContext, state }, init, input)
+      .catch(catchProcError);
+    return [input, result] as const;
+  } else {
+    const _proc = proc as Procedure<State, 'upload', I, O, E, null>;
+    const result = _proc
+      .handler({ ...extendedContext, state }, input)
+      .catch(catchProcError);
+    return [input, result] as const;
+  }
 }
