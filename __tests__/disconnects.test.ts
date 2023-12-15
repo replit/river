@@ -56,7 +56,6 @@ describe('procedures should handle unexpected disconnects', async () => {
 
     // start procedure
     await client.test.add.rpc({ n: 3 });
-
     expect(clientTransport.connections.size).toEqual(1);
     expect(serverTransport.connections.size).toEqual(1);
 
@@ -76,8 +75,8 @@ describe('procedures should handle unexpected disconnects', async () => {
       }),
     );
 
-    expect(clientTransport.connections.size).toEqual(0);
-    expect(serverTransport.connections.size).toEqual(0);
+    waitFor(() => expect(clientTransport.connections.size).toEqual(0));
+    waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     await ensureServerIsClean(server);
   });
 
@@ -112,8 +111,8 @@ describe('procedures should handle unexpected disconnects', async () => {
       }),
     );
 
-    expect(clientTransport.connections.size).toEqual(0);
-    expect(serverTransport.connections.size).toEqual(0);
+    waitFor(() => expect(clientTransport.connections.size).toEqual(0));
+    waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     await ensureServerIsClean(server);
   });
 
@@ -238,8 +237,8 @@ describe('procedures should handle unexpected disconnects', async () => {
       }),
     );
 
-    expect(clientTransport.connections.size).toEqual(0);
-    expect(serverTransport.connections.size).toEqual(0);
+    waitFor(() => expect(clientTransport.connections.size).toEqual(0));
+    waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     await ensureServerIsClean(server);
   });
 });

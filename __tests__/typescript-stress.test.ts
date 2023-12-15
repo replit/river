@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { Procedure, ServiceBuilder, serializeService } from '../router/builder';
 import { Type } from '@sinclair/typebox';
-import { MessageId, OpaqueTransportMessage, reply } from '../transport/message';
+import { MessageId, OpaqueTransportMessage } from '../transport/message';
 import { createServer } from '../router/server';
 import { Connection, Transport } from '../transport/transport';
 import { NaiveJsonCodec } from '../codec/json';
@@ -32,10 +32,10 @@ const fnBody: Procedure<{}, 'rpc', typeof input, typeof output, typeof errors> =
     output,
     errors,
     async handler(_state, msg) {
-      if ('c' in msg.payload) {
-        return reply(msg, Ok({ b: msg.payload.c }));
+      if ('c' in msg) {
+        return Ok({ b: msg.c });
       } else {
-        return reply(msg, Ok({ b: msg.payload.a }));
+        return Ok({ b: msg.a });
       }
     },
   };
