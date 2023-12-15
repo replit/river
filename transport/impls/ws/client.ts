@@ -32,8 +32,8 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
   wsGetter: (to: TransportClientId) => Promise<WebSocket>;
   options: Options;
   serverId: TransportClientId;
-
   reconnectPromises: Map<TransportClientId, Promise<WebSocketResult>>;
+  tryReconnecting: boolean = true;
 
   /**
    * Creates a new WebSocketTransport instance.
@@ -67,6 +67,13 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
 
     let reconnectPromise = this.reconnectPromises.get(to);
     if (!reconnectPromise) {
+      if (!this.tryReconnecting) {
+        log?.info(
+          `${this.clientId} -- tryReconnecting is false, not attempting reconnect`,
+        );
+        return;
+      }
+
       reconnectPromise = new Promise<WebSocketResult>(async (resolve) => {
         log?.info(`${this.clientId} -- establishing a new websocket to ${to}`);
         const ws = await this.wsGetter(to);
