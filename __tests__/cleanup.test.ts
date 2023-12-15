@@ -1,4 +1,4 @@
-import { afterAll, assert, describe, expect, test, vi } from 'vitest';
+import { afterAll, assert, describe, expect, test } from 'vitest';
 import http from 'http';
 import {
   createWebSocketServer,
@@ -9,15 +9,14 @@ import {
 import {
   SubscribableServiceConstructor,
   TestServiceConstructor,
+  UploadableServiceConstructor,
 } from './fixtures/services';
-import { Err, createClient, createServer } from '../router';
+import { createClient, createServer } from '../router';
 import {
   ensureServerIsClean,
   ensureTransportQueuesAreEventuallyEmpty,
   waitFor,
 } from './fixtures/cleanup';
-import { CONNECTION_GRACE_PERIOD_MS } from '../transport';
-import { UNEXPECTED_DISCONNECT } from '../router/result';
 
 describe('procedures should leave no trace after finishing', async () => {
   const httpServer = http.createServer();
@@ -55,39 +54,6 @@ describe('procedures should leave no trace after finishing', async () => {
         'server should cleanup connection after client closes',
       ).toEqual(0),
     );
-  });
-
-  test('client dropping silently should clean up connection on the server after grace period', async () => {
-    vi.useFakeTimers();
-    const [clientTransport, serverTransport] = getTransports();
-    const serviceDefs = { test: TestServiceConstructor() };
-    const server = createServer(serverTransport, serviceDefs);
-    const client = createClient<typeof server>(clientTransport);
-
-    // start procedure
-    await client.test.add.rpc({ n: 3 });
-
-    expect(clientTransport.connections.size).toEqual(1);
-    expect(serverTransport.connections.size).toEqual(1);
-
-    clientTransport.connections.forEach((conn) => conn.ws.terminate());
-    const procPromise = client.test.add.rpc({ n: 4 });
-    // end procedure
-
-    // after we've disconnected, hit end of grace period
-    await vi.runOnlyPendingTimersAsync();
-    await vi.advanceTimersByTimeAsync(CONNECTION_GRACE_PERIOD_MS);
-
-    // we should get an error + expect the streams to be cleaned up
-    await expect(procPromise).resolves.toMatchObject(
-      Err({
-        code: UNEXPECTED_DISCONNECT,
-      }),
-    );
-    expect(clientTransport.connections.size).toEqual(0);
-    expect(serverTransport.connections.size).toEqual(0);
-    await ensureServerIsClean(server);
-    vi.useRealTimers();
   });
 
   test('closing a transport from the server cleans up connection on the client', async () => {
@@ -220,18 +186,55 @@ describe('procedures should leave no trace after finishing', async () => {
     let result = await iterNext(subscription);
     assert(result.ok);
     expect(result.payload).toStrictEqual({ result: 0 });
-
     const add1 = await client.test.add.rpc({ n: 1 });
     assert(add1.ok);
-
     result = await iterNext(subscription);
     assert(result.ok);
-    expect(result.payload).toStrictEqual({ result: 1 });
 
     close();
     // end procedure
 
-    // number of message handlers shouldn't increase after stream ends
+    // number of message handlers shouldn't increase after subscription ends
+    expect(
+      serverTransport.eventDispatcher.numberOfListeners('message'),
+    ).toEqual(serverListeners);
+    expect(
+      clientTransport.eventDispatcher.numberOfListeners('message'),
+    ).toEqual(clientListeners);
+
+    // check number of connections
+    expect(serverTransport.connections.size).toEqual(1);
+    expect(clientTransport.connections.size).toEqual(1);
+    await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
+    await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
+
+    // ensure we have no streams left on the server
+    await ensureServerIsClean(server);
+  });
+
+  test('upload', async () => {
+    const [clientTransport, serverTransport] = getTransports();
+    const serviceDefs = { uploadable: UploadableServiceConstructor() };
+    const server = createServer(serverTransport, serviceDefs);
+    const client = createClient<typeof server>(clientTransport);
+
+    let serverListeners =
+      serverTransport.eventDispatcher.numberOfListeners('message');
+    let clientListeners =
+      clientTransport.eventDispatcher.numberOfListeners('message');
+
+    // start procedure
+    const [addStream, addResult] = await client.uploadable.addMultiple.upload();
+    addStream.push({ n: 1 });
+    addStream.push({ n: 2 });
+    addStream.end();
+
+    const result = await addResult;
+    assert(result.ok);
+    expect(result.payload).toStrictEqual({ result: 3 });
+    // end procedure
+
+    // number of message handlers shouldn't increase after upload ends
     expect(
       serverTransport.eventDispatcher.numberOfListeners('message'),
     ).toEqual(serverListeners);

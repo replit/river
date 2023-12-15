@@ -363,7 +363,7 @@ class RiverServer<Services extends Record<string, AnyService>> {
     return context;
   }
 
-  async cleanupStream(id: string) {
+  cleanupStream = async (id: string) => {
     const stream = this.streamMap.get(id);
     if (!stream) {
       return;
@@ -374,7 +374,7 @@ class RiverServer<Services extends Record<string, AnyService>> {
     stream.outgoing.end();
     await stream.promises.outputHandler;
     this.streamMap.delete(id);
-  }
+  };
 }
 
 /**

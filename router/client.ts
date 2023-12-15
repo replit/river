@@ -21,7 +21,7 @@ import {
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
-import { Result } from './result';
+import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
 import { waitForMessage } from '../util/testHelpers';
 
@@ -161,6 +161,69 @@ function _createRecursiveProxy(
   return proxy;
 }
 
+/**
+ * Creates a client for a given server using the provided transport.
+ * Note that the client only needs the type of the server, not the actual
+ * server definition itself.
+ *
+ * This relies on a proxy to dynamically create the client, so the client
+ * will be typed as if it were the actual server with the appropriate services
+ * and procedures.
+ *
+ * @template Srv - The type of the server.
+ * @param {Transport} transport - The transport to use for communication.
+ * @returns The client for the server.
+ */
+export const createClient = <Srv extends Server<Record<string, AnyService>>>(
+  transport: Transport<Connection>,
+  serverId: TransportClientId = 'SERVER',
+) =>
+  _createRecursiveProxy(async (opts) => {
+    const [serviceName, procName, procType] = [...opts.path];
+    if (!(serviceName && procName && procType)) {
+      throw new Error(
+        'invalid river call, ensure the service and procedure you are calling exists',
+      );
+    }
+
+    const [input] = opts.args;
+    if (procType === 'rpc') {
+      return handleRpc(
+        transport,
+        serverId,
+        input as object,
+        serviceName,
+        procName,
+      );
+    } else if (procType === 'stream') {
+      return handleStream(
+        transport,
+        serverId,
+        input as object | undefined,
+        serviceName,
+        procName,
+      );
+    } else if (procType === 'subscribe') {
+      return handleSubscribe(
+        transport,
+        serverId,
+        input as object,
+        serviceName,
+        procName,
+      );
+    } else if (procType === 'upload') {
+      return handleUpload(
+        transport,
+        serverId,
+        input as object | undefined,
+        serviceName,
+        procName,
+      );
+    } else {
+      throw new Error(`invalid river call, unknown procedure type ${procType}`);
+    }
+  }, []) as ServerClient<Srv>;
+
 export const CONNECTION_GRACE_PERIOD_MS = 5_000; // 5s
 export function rejectAfterDisconnectGrace(
   from: TransportClientId,
@@ -196,14 +259,39 @@ function handleRpc(
     procName,
   );
 
-  function belongsToSameStream(msg: OpaqueTransportMessage) {
-    return msg.streamId === streamId;
-  }
-
   // rpc is a stream open + close
   m.controlFlags |= ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit;
   transport.send(m);
-  return waitForMessage(transport, belongsToSameStream);
+
+  return new Promise((resolve) => {
+    // on disconnect, set a timer to return an error
+    // on (re)connect, clear the timer
+    const onConnectionStatus = rejectAfterDisconnectGrace(serverId, () => {
+      cleanup();
+      resolve(
+        Err({
+          code: UNEXPECTED_DISCONNECT,
+          message: `${serverId} unexpectedly disconnected`,
+        }),
+      );
+    });
+
+    function cleanup() {
+      transport.removeEventListener('message', onMessage);
+      transport.removeEventListener('connectionStatus', onConnectionStatus);
+    }
+
+    function onMessage(msg: OpaqueTransportMessage) {
+      if (msg.streamId === streamId) {
+        // cleanup and resolve as soon as we get a message
+        cleanup();
+        resolve(msg.payload);
+      }
+    }
+
+    transport.addEventListener('message', onMessage);
+    transport.addEventListener('connectionStatus', onConnectionStatus);
+  });
 }
 
 function handleStream(
@@ -217,10 +305,6 @@ function handleStream(
   const inputStream = pushable({ objectMode: true });
   const outputStream = pushable({ objectMode: true });
   let firstMessage = true;
-
-  function belongsToSameStream(msg: OpaqueTransportMessage) {
-    return msg.streamId === streamId;
-  }
 
   if (init) {
     const m = msg(
@@ -254,32 +338,48 @@ function handleStream(
       transport.send(m);
     }
 
+    // after ending input stream, send a close message to the server
     transport.send(closeStream(transport.clientId, serverId, streamId));
   })();
 
   // transport -> output
-  const listener = (msg: OpaqueTransportMessage) => {
-    if (!belongsToSameStream(msg)) {
+  function onMessage(msg: OpaqueTransportMessage) {
+    if (msg.streamId !== streamId) {
       return;
     }
 
     if (isStreamClose(msg.controlFlags)) {
-      outputStream.end();
-      transport.removeEventListener('message', listener);
+      cleanup();
     } else {
       outputStream.push(msg.payload);
     }
-  };
+  }
 
-  transport.addEventListener('message', listener);
-
-  const closeHandler = () => {
+  function cleanup() {
     inputStream.end();
     outputStream.end();
+    transport.removeEventListener('message', onMessage);
+    transport.removeEventListener('connectionStatus', onConnectionStatus);
+  }
+
+  const closeHandler = () => {
+    cleanup();
     transport.send(closeStream(transport.clientId, serverId, streamId));
-    transport.removeEventListener('message', listener);
   };
 
+  // close stream after disconnect + grace period elapses
+  const onConnectionStatus = rejectAfterDisconnectGrace(serverId, () => {
+    outputStream.push(
+      Err({
+        code: UNEXPECTED_DISCONNECT,
+        message: `${serverId} unexpectedly disconnected`,
+      }),
+    );
+    cleanup();
+  });
+
+  transport.addEventListener('message', onMessage);
+  transport.addEventListener('connectionStatus', onConnectionStatus);
   return [inputStream, outputStream, closeHandler];
 }
 
@@ -302,14 +402,10 @@ function handleSubscribe(
   m.controlFlags |= ControlFlags.StreamOpenBit;
   transport.send(m);
 
-  function belongsToSameStream(msg: OpaqueTransportMessage) {
-    return msg.streamId === streamId;
-  }
-
   // transport -> output
   const outputStream = pushable({ objectMode: true });
   const listener = (msg: OpaqueTransportMessage) => {
-    if (!belongsToSameStream(msg)) {
+    if (msg.streamId !== streamId) {
       return;
     }
 
@@ -383,66 +479,3 @@ function handleUpload(
 
   return [inputStream, waitForMessage(transport, belongsToSameStream)];
 }
-
-/**
- * Creates a client for a given server using the provided transport.
- * Note that the client only needs the type of the server, not the actual
- * server definition itself.
- *
- * This relies on a proxy to dynamically create the client, so the client
- * will be typed as if it were the actual server with the appropriate services
- * and procedures.
- *
- * @template Srv - The type of the server.
- * @param {Transport} transport - The transport to use for communication.
- * @returns The client for the server.
- */
-export const createClient = <Srv extends Server<Record<string, AnyService>>>(
-  transport: Transport<Connection>,
-  serverId: TransportClientId = 'SERVER',
-) =>
-  _createRecursiveProxy(async (opts) => {
-    const [serviceName, procName, procType] = [...opts.path];
-    if (!(serviceName && procName && procType)) {
-      throw new Error(
-        'invalid river call, ensure the service and procedure you are calling exists',
-      );
-    }
-
-    const [input] = opts.args;
-    if (procType === 'rpc') {
-      return handleRpc(
-        transport,
-        serverId,
-        input as object,
-        serviceName,
-        procName,
-      );
-    } else if (procType === 'stream') {
-      return handleStream(
-        transport,
-        serverId,
-        input as object | undefined,
-        serviceName,
-        procName,
-      );
-    } else if (procType === 'subscribe') {
-      return handleSubscribe(
-        transport,
-        serverId,
-        input as object,
-        serviceName,
-        procName,
-      );
-    } else if (procType === 'upload') {
-      return handleUpload(
-        transport,
-        serverId,
-        input as object | undefined,
-        serviceName,
-        procName,
-      );
-    } else {
-      throw new Error(`invalid river call, unknown procedure type ${procType}`);
-    }
-  }, []) as ServerClient<Srv>;
