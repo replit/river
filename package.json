@@ -1,28 +1,56 @@
 {
   "name": "@replit/river",
-  "sideEffects": false,
   "description": "It's like tRPC but... with JSON Schema Support, duplex streaming and support for service multiplexing. Transport agnostic!",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "type": "module",
   "exports": {
-    ".": "./dist/router/index.js",
-    "./logging": "./dist/logging/index.js",
-    "./codec": "./dist/codec/index.js",
-    "./test-util": "./dist/util/testHelpers.js",
-    "./transport": "./dist/transport/index.js",
-    "./transport/ws/client": "./dist/transport/impls/ws/client.js",
-    "./transport/ws/server": "./dist/transport/impls/ws/server.js",
-    "./transport/stdio": "./dist/transport/impls/stdio/stdio.js"
+    ".": {
+      "import": "./dist/router/index.js",
+      "require": "./dist/router/index.cjs"
+    },
+    "./logging": {
+      "import": "./dist/logging/index.js",
+      "require": "./dist/logging/index.cjs"
+    },
+    "./codec": {
+      "import": "./dist/codec/index.js",
+      "require": "./dist/codec/index.cjs"
+    },
+    "./transport": {
+      "import": "./dist/transport/index.js",
+      "require": "./dist/transport/index.cjs"
+    },
+    "./transport/ws/client": {
+      "import": "./dist/transport/impls/ws/client.js",
+      "require": "./dist/transport/impls/ws/client.cjs"
+    },
+    "./transport/ws/server": {
+      "import": "./dist/transport/impls/ws/server.js",
+      "require": "./dist/transport/impls/ws/server.cjs"
+    },
+    "./transport/stdio": {
+      "import": "./dist/transport/impls/stdio/stdio.js",
+      "require": "./dist/transport/impls/stdio/stdio.cjs"
+    },
+    "./test-util": {
+      "import": "./dist/util/testHelpers.js",
+      "require": "./dist/util/testHelpers.cjs"
+    }
   },
+  "sideEffects": [
+    "./dist/logging/index.js"
+  ],
   "files": [
     "dist"
   ],
   "dependencies": {
     "@msgpack/msgpack": "^3.0.0-beta2",
-    "@sinclair/typebox": "^0.31.8",
+    "nanoid": "^4.0.2"
+  },
+  "peerDependencies": {
+    "@sinclair/typebox": "^0.31.28",
     "isomorphic-ws": "^5.0.0",
     "it-pushable": "^3.2.1",
-    "nanoid": "^4.0.2",
     "ws": "^8.13.0"
   },
   "devDependencies": {
@@ -36,7 +64,7 @@
   "scripts": {
     "check": "tsc --noEmit && npx prettier . --check",
     "format": "npx prettier . --write",
-    "build": "rm -rf ./dist && tsc",
+    "build": "tsup && du -sh dist",
     "prepack": "npm run build",
     "release": "npm publish --access public",
     "test:ui": "echo \"remember to go to /__vitest__ in the webview\" && vitest --ui --api.host 0.0.0.0 --api.port 3000",
