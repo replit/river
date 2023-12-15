@@ -45,12 +45,12 @@
   ],
   "dependencies": {
     "@msgpack/msgpack": "^3.0.0-beta2",
+    "it-pushable": "^3.2.3",
     "nanoid": "^4.0.2"
   },
   "peerDependencies": {
     "@sinclair/typebox": "^0.31.28",
     "isomorphic-ws": "^5.0.0",
-    "it-pushable": "^3.2.3",
     "ws": "^8.13.0"
   },
   "devDependencies": {
