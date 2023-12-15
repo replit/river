@@ -17,6 +17,7 @@ import {
   ensureTransportQueuesAreEventuallyEmpty,
   waitFor,
 } from './fixtures/cleanup';
+import { buildServiceDefs } from '../router/defs';
 
 describe('procedures should leave no trace after finishing', async () => {
   const httpServer = http.createServer();
@@ -31,7 +32,7 @@ describe('procedures should leave no trace after finishing', async () => {
 
   test('closing a transport from the client cleans up connection on the server', async () => {
     const [clientTransport, serverTransport] = getTransports();
-    const serviceDefs = { test: TestServiceConstructor() };
+    const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
     const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
@@ -58,7 +59,7 @@ describe('procedures should leave no trace after finishing', async () => {
 
   test('closing a transport from the server cleans up connection on the client', async () => {
     const [clientTransport, serverTransport] = getTransports();
-    const serviceDefs = { test: TestServiceConstructor() };
+    const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
     const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
@@ -85,7 +86,7 @@ describe('procedures should leave no trace after finishing', async () => {
 
   test('rpc', async () => {
     const [clientTransport, serverTransport] = getTransports();
-    const serviceDefs = { test: TestServiceConstructor() };
+    const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
     const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
@@ -118,7 +119,7 @@ describe('procedures should leave no trace after finishing', async () => {
 
   test('stream', async () => {
     const [clientTransport, serverTransport] = getTransports();
-    const serviceDefs = { test: TestServiceConstructor() };
+    const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
     const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
@@ -172,7 +173,7 @@ describe('procedures should leave no trace after finishing', async () => {
 
   test('subscription', async () => {
     const [clientTransport, serverTransport] = getTransports();
-    const serviceDefs = { test: SubscribableServiceConstructor() };
+    const serviceDefs = buildServiceDefs([SubscribableServiceConstructor()]);
     const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
@@ -182,11 +183,11 @@ describe('procedures should leave no trace after finishing', async () => {
       clientTransport.eventDispatcher.numberOfListeners('message');
 
     // start procedure
-    const [subscription, close] = await client.test.value.subscribe({});
+    const [subscription, close] = await client.subscribable.value.subscribe({});
     let result = await iterNext(subscription);
     assert(result.ok);
     expect(result.payload).toStrictEqual({ result: 0 });
-    const add1 = await client.test.add.rpc({ n: 1 });
+    const add1 = await client.subscribable.add.rpc({ n: 1 });
     assert(add1.ok);
     result = await iterNext(subscription);
     assert(result.ok);
@@ -214,7 +215,7 @@ describe('procedures should leave no trace after finishing', async () => {
 
   test('upload', async () => {
     const [clientTransport, serverTransport] = getTransports();
-    const serviceDefs = { uploadable: UploadableServiceConstructor() };
+    const serviceDefs = buildServiceDefs([UploadableServiceConstructor()]);
     const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
