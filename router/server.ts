@@ -113,6 +113,10 @@ class RiverServer<Services extends Record<string, AnyService>> {
     }
 
     const disconnectedClientId = evt.conn.connectedTo;
+    log?.info(
+      `${this.transport.clientId} -- got unexpected disconnect from ${disconnectedClientId}, cleaning up streams`,
+    );
+
     const streamsFromThisClient = this.clientStreams.get(disconnectedClientId);
     if (!streamsFromThisClient) {
       return;

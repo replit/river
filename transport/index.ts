@@ -1,4 +1,4 @@
-import { Err, UNCAUGHT_ERROR } from '../router';
+import { Err } from '../router';
 import { UNEXPECTED_DISCONNECT } from '../router/result';
 import { EventMap } from './events';
 import { OpaqueTransportMessage, TransportClientId } from './message';
@@ -22,7 +22,7 @@ export type {
 } from './message';
 
 /**
- * Waits for a message from the transport.
+ * Waits for a message on the transport.
  * @param {Transport} t - The transport to listen to.
  * @param filter - An optional filter function to apply to the received messages.
  * @returns A promise that resolves with the payload of the first message that passes the filter.

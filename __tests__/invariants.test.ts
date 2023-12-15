@@ -14,7 +14,7 @@ import { createClient, createServer } from '../router';
 import {
   ensureServerIsClean,
   ensureTransportQueuesAreEventuallyEmpty,
-  waitUntil,
+  waitFor,
 } from './fixtures/cleanup';
 
 describe('procedures should leave no trace after finishing', async () => {
@@ -47,10 +47,11 @@ describe('procedures should leave no trace after finishing', async () => {
     // should be back to 0 connections after client closes
     clientTransport.close();
     expect(clientTransport.connections.size).toEqual(0);
-    await waitUntil(
-      () => serverTransport.connections.size,
-      0,
-      'server should cleanup connection after client closes',
+    await waitFor(() =>
+      expect(
+        serverTransport.connections.size,
+        'server should cleanup connection after client closes',
+      ).toEqual(0),
     );
   });
 
@@ -73,10 +74,11 @@ describe('procedures should leave no trace after finishing', async () => {
     // should be back to 0 connections after client closes
     serverTransport.close();
     expect(serverTransport.connections.size).toEqual(0);
-    await waitUntil(
-      () => clientTransport.connections.size,
-      0,
-      'client should cleanup connection after server closes',
+    await waitFor(() =>
+      expect(
+        clientTransport.connections.size,
+        'client should cleanup connection after server closes',
+      ).toEqual(0),
     );
   });
 
@@ -134,10 +136,10 @@ describe('procedures should leave no trace after finishing', async () => {
     expect(result1.payload).toStrictEqual({ response: '1' });
 
     // ensure we only have one stream despite pushing multiple messages.
-    await waitUntil(() => server.streams.size, 1);
+    await waitFor(() => expect(server.streams.size).toEqual(1));
     input.end();
     // ensure we no longer have any streams since the input was closed.
-    await waitUntil(() => server.streams.size, 0);
+    await waitFor(() => expect(server.streams.size).toEqual(0));
 
     const result2 = await iterNext(output);
     assert(result2.ok);

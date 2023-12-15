@@ -26,39 +26,33 @@ export async function ensureTransportIsClean(t: Transport<Connection>) {
   ).equal(0);
 }
 
-export async function waitUntil<T>(
-  valueGetter: () => T,
-  expected: T,
-  message?: string,
-) {
-  return vi
-    .waitUntil(() => valueGetter() === expected, waitUntilOptions)
-    .finally(() => {
-      expect(valueGetter(), message).toEqual(expected);
-    });
+export function waitFor<T>(cb: () => T | Promise<T>) {
+  return vi.waitFor(cb, waitUntilOptions);
 }
 
 export async function ensureTransportQueuesAreEventuallyEmpty(
   t: Transport<Connection>,
 ) {
-  await waitUntil(
-    () => t.sendQueue.size,
-    0,
-    `transport ${t.clientId} should not have any messages waiting to send after the test`,
+  await waitFor(() =>
+    expect(
+      t.sendQueue.size,
+      `transport ${t.clientId} should not have any messages waiting to send after the test`,
+    ).toEqual(0),
   );
-
-  await waitUntil(
-    () => t.sendBuffer.size,
-    0,
-    `transport ${t.clientId} should not have any un-acked messages after the test`,
+  await waitFor(() =>
+    expect(
+      t.sendBuffer.size,
+      `transport ${t.clientId} should not have any un-acked messages after the test`,
+    ).toEqual(0),
   );
 }
 
 export async function ensureServerIsClean(s: Server<unknown>) {
-  return waitUntil(
-    () => s.streams.size,
-    0,
-    `server should not have any open streams after the test`,
+  return waitFor(() =>
+    expect(
+      s.streams.size,
+      `server should not have any open streams after the test`,
+    ).toEqual(0),
   );
 }
 
