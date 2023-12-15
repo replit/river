@@ -12,8 +12,7 @@ export default defineConfig({
     'transport/stdio.ts',
   ],
   format: ['esm', 'cjs'],
-  splitting: false,
-  sourcemap: true,
+  sourcemap: false,
   clean: true,
   dts: true,
 });

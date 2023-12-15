@@ -2,7 +2,7 @@ import { Codec, NaiveJsonCodec } from '../../../codec';
 import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
 import { Transport } from '../../transport';
-import { Server } from 'ws';
+import { WebSocketServer } from 'ws';
 import { WebSocket } from 'isomorphic-ws';
 import { WebSocketConnection } from './connection';
 
@@ -15,11 +15,11 @@ const defaultOptions: Options = {
 };
 
 export class WebSocketServerTransport extends Transport<WebSocketConnection> {
-  wss: Server;
+  wss: WebSocketServer;
   clientId: TransportClientId;
 
   constructor(
-    wss: Server,
+    wss: WebSocketServer,
     clientId: TransportClientId,
     providedOptions?: Partial<Options>,
   ) {
