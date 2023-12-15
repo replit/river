@@ -1,7 +1,7 @@
 {
   "name": "@replit/river",
   "description": "It's like tRPC but... with JSON Schema Support, duplex streaming and support for service multiplexing. Transport agnostic!",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "type": "module",
   "exports": {
     ".": {
@@ -50,7 +50,7 @@
   "peerDependencies": {
     "@sinclair/typebox": "^0.31.28",
     "isomorphic-ws": "^5.0.0",
-    "it-pushable": "^3.2.1",
+    "it-pushable": "^3.2.3",
     "ws": "^8.13.0"
   },
   "devDependencies": {
