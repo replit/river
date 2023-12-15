@@ -21,8 +21,12 @@ export type RiverErrorSchema =
 export type RiverError = TUnion<RiverErrorSchema[]> | RiverErrorSchema | TNever;
 
 export const UNCAUGHT_ERROR = 'UNCAUGHT_ERROR';
+export const UNEXPECTED_DISCONNECT = 'UNEXPECTED_DISCONNECT';
 export const RiverUncaughtSchema = Type.Object({
-  code: Type.Literal(UNCAUGHT_ERROR),
+  code: Type.Union([
+    Type.Literal(UNCAUGHT_ERROR),
+    Type.Literal(UNEXPECTED_DISCONNECT),
+  ]),
   message: Type.String(),
 });
 

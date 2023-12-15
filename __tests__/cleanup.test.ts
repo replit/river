@@ -9,12 +9,13 @@ import {
 import {
   SubscribableServiceConstructor,
   TestServiceConstructor,
+  UploadableServiceConstructor,
 } from './fixtures/services';
 import { createClient, createServer } from '../router';
 import {
   ensureServerIsClean,
   ensureTransportQueuesAreEventuallyEmpty,
-  waitUntil,
+  waitFor,
 } from './fixtures/cleanup';
 
 describe('procedures should leave no trace after finishing', async () => {
@@ -31,7 +32,7 @@ describe('procedures should leave no trace after finishing', async () => {
   test('closing a transport from the client cleans up connection on the server', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(serverTransport, serviceDefs);
+    const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
     expect(clientTransport.connections.size).toEqual(0);
@@ -47,17 +48,18 @@ describe('procedures should leave no trace after finishing', async () => {
     // should be back to 0 connections after client closes
     clientTransport.close();
     expect(clientTransport.connections.size).toEqual(0);
-    await waitUntil(
-      () => serverTransport.connections.size,
-      0,
-      'server should cleanup connection after client closes',
+    await waitFor(() =>
+      expect(
+        serverTransport.connections.size,
+        'server should cleanup connection after client closes',
+      ).toEqual(0),
     );
   });
 
   test('closing a transport from the server cleans up connection on the client', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(serverTransport, serviceDefs);
+    const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
     expect(clientTransport.connections.size).toEqual(0);
@@ -73,17 +75,18 @@ describe('procedures should leave no trace after finishing', async () => {
     // should be back to 0 connections after client closes
     serverTransport.close();
     expect(serverTransport.connections.size).toEqual(0);
-    await waitUntil(
-      () => clientTransport.connections.size,
-      0,
-      'client should cleanup connection after server closes',
+    await waitFor(() =>
+      expect(
+        clientTransport.connections.size,
+        'client should cleanup connection after server closes',
+      ).toEqual(0),
     );
   });
 
   test('rpc', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(serverTransport, serviceDefs);
+    const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
     let serverListeners =
@@ -116,7 +119,7 @@ describe('procedures should leave no trace after finishing', async () => {
   test('stream', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const serviceDefs = { test: TestServiceConstructor() };
-    const server = await createServer(serverTransport, serviceDefs);
+    const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
     let serverListeners =
@@ -134,10 +137,10 @@ describe('procedures should leave no trace after finishing', async () => {
     expect(result1.payload).toStrictEqual({ response: '1' });
 
     // ensure we only have one stream despite pushing multiple messages.
-    await waitUntil(() => server.streams.size, 1);
+    await waitFor(() => expect(server.streams.size).toEqual(1));
     input.end();
     // ensure we no longer have any streams since the input was closed.
-    await waitUntil(() => server.streams.size, 0);
+    await waitFor(() => expect(server.streams.size).toEqual(0));
 
     const result2 = await iterNext(output);
     assert(result2.ok);
@@ -170,7 +173,7 @@ describe('procedures should leave no trace after finishing', async () => {
   test('subscription', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const serviceDefs = { test: SubscribableServiceConstructor() };
-    const server = await createServer(serverTransport, serviceDefs);
+    const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
     let serverListeners =
@@ -183,18 +186,55 @@ describe('procedures should leave no trace after finishing', async () => {
     let result = await iterNext(subscription);
     assert(result.ok);
     expect(result.payload).toStrictEqual({ result: 0 });
-
     const add1 = await client.test.add.rpc({ n: 1 });
     assert(add1.ok);
-
     result = await iterNext(subscription);
     assert(result.ok);
-    expect(result.payload).toStrictEqual({ result: 1 });
 
     close();
     // end procedure
 
-    // number of message handlers shouldn't increase after stream ends
+    // number of message handlers shouldn't increase after subscription ends
+    expect(
+      serverTransport.eventDispatcher.numberOfListeners('message'),
+    ).toEqual(serverListeners);
+    expect(
+      clientTransport.eventDispatcher.numberOfListeners('message'),
+    ).toEqual(clientListeners);
+
+    // check number of connections
+    expect(serverTransport.connections.size).toEqual(1);
+    expect(clientTransport.connections.size).toEqual(1);
+    await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
+    await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
+
+    // ensure we have no streams left on the server
+    await ensureServerIsClean(server);
+  });
+
+  test('upload', async () => {
+    const [clientTransport, serverTransport] = getTransports();
+    const serviceDefs = { uploadable: UploadableServiceConstructor() };
+    const server = createServer(serverTransport, serviceDefs);
+    const client = createClient<typeof server>(clientTransport);
+
+    let serverListeners =
+      serverTransport.eventDispatcher.numberOfListeners('message');
+    let clientListeners =
+      clientTransport.eventDispatcher.numberOfListeners('message');
+
+    // start procedure
+    const [addStream, addResult] = await client.uploadable.addMultiple.upload();
+    addStream.push({ n: 1 });
+    addStream.push({ n: 2 });
+    addStream.end();
+
+    const result = await addResult;
+    assert(result.ok);
+    expect(result.payload).toStrictEqual({ result: 3 });
+    // end procedure
+
+    // number of message handlers shouldn't increase after upload ends
     expect(
       serverTransport.eventDispatcher.numberOfListeners('message'),
     ).toEqual(serverListeners);

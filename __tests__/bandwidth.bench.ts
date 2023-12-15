@@ -4,13 +4,13 @@ import {
   createWebSocketServer,
   createWsTransports,
   onServerReady,
+  waitForMessage,
 } from '../util/testHelpers';
 import largePayload from './fixtures/largePayload.json';
 import { TestServiceConstructor } from './fixtures/services';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { StupidlyLargeService } from './typescript-stress.test';
-import { waitForMessage } from '../transport';
 
 let smallId = 0;
 let largeId = 0;
@@ -78,7 +78,7 @@ describe('simple router level bandwidth', async () => {
     webSocketServer,
   );
   const serviceDefs = { test: TestServiceConstructor() };
-  const server = await createServer(serverTransport, serviceDefs);
+  const server = createServer(serverTransport, serviceDefs);
   const client = createClient<typeof server>(clientTransport);
 
   bench(
@@ -125,7 +125,7 @@ describe('complex (50 procedures) router level bandwidth', async () => {
     d: StupidlyLargeService(),
   };
 
-  const server = await createServer(serverTransport, serviceDefs);
+  const server = createServer(serverTransport, serviceDefs);
   const client = createClient<typeof server>(clientTransport);
 
   bench(

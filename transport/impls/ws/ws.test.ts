@@ -1,16 +1,21 @@
 import http from 'http';
-import { describe, test, expect, afterAll } from 'vitest';
+import { describe, test, expect, afterAll, vi } from 'vitest';
 import {
   createWebSocketServer,
   createWsTransports,
   createDummyTransportMessage,
   onServerReady,
   createLocalWebSocketClient,
+  waitForMessage,
 } from '../../../util/testHelpers';
-import { msg, waitForMessage } from '../..';
+import { msg } from '../..';
 import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
-import { testFinishesCleanly } from '../../../__tests__/fixtures/cleanup';
+import {
+  testFinishesCleanly,
+  waitFor,
+} from '../../../__tests__/fixtures/cleanup';
+import { EventMap } from '../../events';
 
 describe('sending and receiving across websockets works', async () => {
   const server = http.createServer();
@@ -25,10 +30,12 @@ describe('sending and receiving across websockets works', async () => {
   test('basic send/receive', async () => {
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
     const msg = createDummyTransportMessage();
+    const msgPromise = waitForMessage(
+      serverTransport,
+      (recv) => recv.id === msg.id,
+    );
     clientTransport.send(msg);
-    await expect(
-      waitForMessage(serverTransport, (recv) => recv.id === msg.id),
-    ).resolves.toStrictEqual(msg.payload);
+    await expect(msgPromise).resolves.toStrictEqual(msg.payload);
 
     await testFinishesCleanly({
       clientTransports: [clientTransport],
@@ -62,10 +69,12 @@ describe('sending and receiving across websockets works', async () => {
         'SERVER',
       );
       const initMsg = makeDummyMessage(id, serverId, 'hello server');
+      const initMsgPromise = waitForMessage(
+        serverTransport,
+        (recv) => recv.id === initMsg.id,
+      );
       client.send(initMsg);
-      await expect(
-        waitForMessage(serverTransport, (recv) => recv.id === initMsg.id),
-      ).resolves.toStrictEqual(initMsg.payload);
+      await expect(initMsgPromise).resolves.toStrictEqual(initMsg.payload);
       return client;
     };
 
@@ -105,64 +114,152 @@ describe('retry logic', async () => {
   // need to also write tests for server-side crashes (but this involves clearing/restoring state)
   // not going to worry about this rn but for future
 
-  test('ws transport is recreated after clean disconnect', async () => {
+  test('ws connection is recreated after clean disconnect', async () => {
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 
+    const msg1Promise = waitForMessage(
+      serverTransport,
+      (recv) => recv.id === msg1.id,
+    );
     clientTransport.send(msg1);
-    await expect(
-      waitForMessage(serverTransport, (recv) => recv.id === msg1.id),
-    ).resolves.toStrictEqual(msg1.payload);
+    await expect(msg1Promise).resolves.toStrictEqual(msg1.payload);
 
+    // clean disconnect
     clientTransport.connections.forEach((conn) => conn.ws.close());
-    clientTransport.send(msg2);
+    const msg2Promise = waitForMessage(
+      serverTransport,
+      (recv) => recv.id === msg2.id,
+    );
 
     // by this point the client should have reconnected
-    await expect(
-      waitForMessage(serverTransport, (recv) => recv.id === msg2.id),
-    ).resolves.toStrictEqual(msg2.payload);
-
+    clientTransport.send(msg2);
+    await expect(msg2Promise).resolves.toStrictEqual(msg2.payload);
     await testFinishesCleanly({
       clientTransports: [clientTransport],
       serverTransport,
     });
   });
 
-  test('ws transport is recreated after unclean disconnect', async () => {
+  test('ws connection is recreated after unclean disconnect', async () => {
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 
+    const msg1Promise = waitForMessage(
+      serverTransport,
+      (recv) => recv.id === msg1.id,
+    );
     clientTransport.send(msg1);
-    await expect(
-      waitForMessage(serverTransport, (recv) => recv.id === msg1.id),
-    ).resolves.toStrictEqual(msg1.payload);
+    await expect(msg1Promise).resolves.toStrictEqual(msg1.payload);
 
+    // unclean disconnect
     clientTransport.connections.forEach((conn) => conn.ws.terminate());
-    clientTransport.send(msg2);
+    const msg2Promise = waitForMessage(
+      serverTransport,
+      (recv) => recv.id === msg2.id,
+    );
 
     // by this point the client should have reconnected
-    await expect(
-      waitForMessage(serverTransport, (recv) => recv.id === msg2.id),
-    ).resolves.toStrictEqual(msg2.payload);
-
-    // this is not expected to be clean because we destroyed the transport
+    clientTransport.send(msg2);
+    await expect(msg2Promise).resolves.toStrictEqual(msg2.payload);
     await testFinishesCleanly({
       clientTransports: [clientTransport],
       serverTransport,
     });
   });
 
-  test('ws transport is not recreated after destroy', async () => {
+  test('both client and server transport gets connection and disconnection notifs', async () => {
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 
+    const onClientConnect = vi.fn();
+    const onClientDisconnect = vi.fn();
+    const clientHandler = (evt: EventMap['connectionStatus']) => {
+      if (evt.conn.connectedTo !== serverTransport.clientId) return;
+      if (evt.status === 'connect') return onClientConnect();
+      if (evt.status === 'disconnect') return onClientDisconnect();
+    };
+
+    const onServerConnect = vi.fn();
+    const onServerDisconnect = vi.fn();
+    const serverHandler = (evt: EventMap['connectionStatus']) => {
+      if (
+        evt.status === 'connect' &&
+        evt.conn.connectedTo === clientTransport.clientId
+      )
+        return onServerConnect();
+      if (
+        evt.status === 'disconnect' &&
+        evt.conn.connectedTo === clientTransport.clientId
+      )
+        return onServerDisconnect();
+    };
+
+    clientTransport.addEventListener('connectionStatus', clientHandler);
+    serverTransport.addEventListener('connectionStatus', serverHandler);
+
+    expect(onClientConnect).toHaveBeenCalledTimes(0);
+    expect(onClientDisconnect).toHaveBeenCalledTimes(0);
+    expect(onServerConnect).toHaveBeenCalledTimes(0);
+    expect(onServerDisconnect).toHaveBeenCalledTimes(0);
+
+    const msg1Promise = waitForMessage(
+      serverTransport,
+      (recv) => recv.id === msg1.id,
+    );
     clientTransport.send(msg1);
-    await expect(
-      waitForMessage(serverTransport, (recv) => recv.id === msg1.id),
-    ).resolves.toStrictEqual(msg1.payload);
+    await expect(msg1Promise).resolves.toStrictEqual(msg1.payload);
+
+    expect(onClientConnect).toHaveBeenCalledTimes(1);
+    expect(onClientDisconnect).toHaveBeenCalledTimes(0);
+    expect(onServerConnect).toHaveBeenCalledTimes(1);
+    expect(onServerDisconnect).toHaveBeenCalledTimes(0);
+
+    // clean disconnect
+    clientTransport.connections.forEach((conn) => conn.ws.close());
+
+    // wait for connection status to propagate to server
+    await waitFor(() => expect(onClientConnect).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onClientDisconnect).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onServerConnect).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onServerDisconnect).toHaveBeenCalledTimes(1));
+
+    const msg2Promise = waitForMessage(
+      serverTransport,
+      (recv) => recv.id === msg2.id,
+    );
+
+    // by this point the client should have reconnected
+    clientTransport.send(msg2);
+    await expect(msg2Promise).resolves.toStrictEqual(msg2.payload);
+    expect(onClientConnect).toHaveBeenCalledTimes(2);
+    expect(onClientDisconnect).toHaveBeenCalledTimes(1);
+    expect(onServerConnect).toHaveBeenCalledTimes(2);
+    expect(onServerDisconnect).toHaveBeenCalledTimes(1);
+
+    // teardown
+    clientTransport.removeEventListener('connectionStatus', clientHandler);
+    serverTransport.removeEventListener('connectionStatus', serverHandler);
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
+  });
+
+  test('ws connection is not recreated after destroy', async () => {
+    const [clientTransport, serverTransport] = createWsTransports(port, wss);
+    const msg1 = createDummyTransportMessage();
+    const msg2 = createDummyTransportMessage();
+
+    const promise1 = waitForMessage(
+      serverTransport,
+      (recv) => recv.id === msg1.id,
+    );
+    clientTransport.send(msg1);
+    await expect(promise1).resolves.toStrictEqual(msg1.payload);
 
     clientTransport.destroy();
     expect(() => clientTransport.send(msg2)).toThrow(
