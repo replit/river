@@ -11,7 +11,7 @@ import { CONNECTION_GRACE_PERIOD_MS, msg, waitForMessage } from '../..';
 import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
 import { testFinishesCleanly } from '../../../__tests__/fixtures/cleanup';
-import { Err, UNCAUGHT_ERROR } from '../../../router';
+import { Err } from '../../../router';
 import { UNEXPECTED_DISCONNECT } from '../../../router/result';
 
 describe('sending and receiving across websockets works', async () => {
