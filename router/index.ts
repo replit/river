@@ -10,6 +10,8 @@ export type {
   Procedure,
   PayloadType,
 } from './builder';
+export { buildServiceDefs } from './defs';
+export type { ServiceDefs } from './defs';
 export { createClient } from './client';
 export type { ServerClient } from './client';
 export { createServer } from './server';

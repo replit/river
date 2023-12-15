@@ -10,13 +10,13 @@ import { Result, RiverError, RiverUncaughtSchema } from './result';
  * gRPC's four combinations of stream / non-stream in each direction.
  */
 export type ValidProcType =
-  // Single message in both directions.
+  // Single message in both directions (1:1).
   | 'rpc'
-  // Client-stream (potentially preceded by an initialization message), single message from server.
+  // Client-stream (potentially preceded by an initialization message), single message from server (n:1).
   | 'upload'
-  // Single message from client, stream from server.
+  // Single message from client, stream from server (1:n).
   | 'subscription'
-  // Bidirectional stream (potentially preceded by an initialization message).
+  // Bidirectional stream (potentially preceded by an initialization message) (n:n).
   | 'stream';
 
 /**
