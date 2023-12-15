@@ -23,9 +23,10 @@ import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
+import { ServiceDefs } from './defs';
 
 // helper to make next, yield, and return all the same type
-type AsyncIter<T> = AsyncGenerator<T, T, unknown>;
+export type AsyncIter<T> = AsyncGenerator<T, T, unknown>;
 
 /**
  * A helper type to transform an actual service type into a type
@@ -126,7 +127,7 @@ type ServiceClient<Router extends AnyService> = {
  * Defines a type that represents a client for a server with a set of services.
  * @template Srv - The type of the server.
  */
-export type ServerClient<Srv extends Server<Record<string, AnyService>>> = {
+export type ServerClient<Srv extends Server<ServiceDefs>> = {
   [SvcName in keyof Srv['services']]: ServiceClient<Srv['services'][SvcName]>;
 };
 
@@ -173,7 +174,7 @@ function _createRecursiveProxy(
  * @param {Transport} transport - The transport to use for communication.
  * @returns The client for the server.
  */
-export const createClient = <Srv extends Server<Record<string, AnyService>>>(
+export const createClient = <Srv extends Server<ServiceDefs>>(
   transport: Transport<Connection>,
   serverId: TransportClientId = 'SERVER',
 ) =>

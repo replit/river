@@ -1,6 +1,5 @@
 import { Type } from '@sinclair/typebox';
 import { ServiceBuilder } from '../../router/builder';
-import { reply } from '../../transport/message';
 import { Err, Ok } from '../../router/result';
 import { Observable } from './observable';
 
@@ -21,10 +20,9 @@ export const TestServiceConstructor = () =>
       input: Type.Object({ n: Type.Number() }),
       output: Type.Object({ result: Type.Number() }),
       errors: Type.Never(),
-      async handler(ctx, msg) {
-        const { n } = msg.payload;
+      async handler(ctx, { n }) {
         ctx.state.count += n;
-        return reply(msg, Ok({ result: ctx.state.count }));
+        return Ok({ result: ctx.state.count });
       },
     })
     .defineProcedure('echo', {
@@ -33,13 +31,12 @@ export const TestServiceConstructor = () =>
       output: EchoResponse,
       errors: Type.Never(),
       async handler(_ctx, msgStream, returnStream) {
-        for await (const msg of msgStream) {
-          const req = msg.payload;
-          if (!req.ignore) {
-            returnStream.push(reply(msg, Ok({ response: req.msg })));
+        for await (const { ignore, msg, end } of msgStream) {
+          if (!ignore) {
+            returnStream.push(Ok({ response: msg }));
           }
 
-          if (req.end) {
+          if (end) {
             returnStream.end();
           }
         }
@@ -52,12 +49,9 @@ export const TestServiceConstructor = () =>
       output: EchoResponse,
       errors: Type.Never(),
       async handler(_ctx, init, msgStream, returnStream) {
-        for await (const msg of msgStream) {
-          const req = msg.payload;
-          if (!req.ignore) {
-            returnStream.push(
-              reply(msg, Ok({ response: `${init.payload.prefix} ${req.msg}` })),
-            );
+        for await (const { ignore, msg } of msgStream) {
+          if (!ignore) {
+            returnStream.push(Ok({ response: `${init.prefix} ${msg}` }));
           }
         }
       },
@@ -74,10 +68,9 @@ export const OrderingServiceConstructor = () =>
       input: Type.Object({ n: Type.Number() }),
       output: Type.Object({ n: Type.Number() }),
       errors: Type.Never(),
-      async handler(ctx, msg) {
-        const { n } = msg.payload;
+      async handler(ctx, { n }) {
         ctx.state.msgs.push(n);
-        return reply(msg, Ok({ n }));
+        return Ok({ n });
       },
     })
     .defineProcedure('getAll', {
@@ -85,8 +78,8 @@ export const OrderingServiceConstructor = () =>
       input: Type.Object({}),
       output: Type.Object({ msgs: Type.Array(Type.Number()) }),
       errors: Type.Never(),
-      async handler(ctx, msg) {
-        return reply(msg, Ok({ msgs: ctx.state.msgs }));
+      async handler(ctx, _msg) {
+        return Ok({ msgs: ctx.state.msgs });
       },
     })
     .finalize();
@@ -98,11 +91,11 @@ export const BinaryFileServiceConstructor = () =>
       input: Type.Object({ file: Type.String() }),
       output: Type.Object({ contents: Type.Uint8Array() }),
       errors: Type.Never(),
-      async handler(_ctx, msg) {
+      async handler(_ctx, { file }) {
         const bytes: Uint8Array = new TextEncoder().encode(
-          `contents for file ${msg.payload.file}`,
+          `contents for file ${file}`,
         );
-        return reply(msg, Ok({ contents: bytes }));
+        return Ok({ contents: bytes });
       },
     })
     .finalize();
@@ -123,19 +116,15 @@ export const FallibleServiceConstructor = () =>
           extras: Type.Object({ test: Type.String() }),
         }),
       ]),
-      async handler(_ctx, msg) {
-        const { a, b } = msg.payload;
+      async handler(_ctx, { a, b }) {
         if (b === 0) {
-          return reply(msg, {
-            ok: false,
-            payload: {
-              code: DIV_BY_ZERO,
-              message: 'Cannot divide by zero',
-              extras: { test: 'abc' },
-            },
+          return Err({
+            code: DIV_BY_ZERO,
+            message: 'Cannot divide by zero',
+            extras: { test: 'abc' },
           });
         } else {
-          return reply(msg, Ok({ result: a / b }));
+          return Ok({ result: a / b });
         }
       },
     })
@@ -154,22 +143,18 @@ export const FallibleServiceConstructor = () =>
         }),
       ]),
       async handler(_ctx, msgStream, returnStream) {
-        for await (const msg of msgStream) {
-          const req = msg.payload;
-          if (req.throwError) {
+        for await (const { msg, throwError, throwResult } of msgStream) {
+          if (throwError) {
             throw new Error('some message');
-          } else if (req.throwResult) {
+          } else if (throwResult) {
             returnStream.push(
-              reply(
-                msg,
-                Err({
-                  code: STREAM_ERROR,
-                  message: 'field throwResult was set to true',
-                }),
-              ),
+              Err({
+                code: STREAM_ERROR,
+                message: 'field throwResult was set to true',
+              }),
             );
           } else {
-            returnStream.push(reply(msg, Ok({ response: req.msg })));
+            returnStream.push(Ok({ response: msg }));
           }
         }
       },
@@ -186,10 +171,9 @@ export const SubscribableServiceConstructor = () =>
       input: Type.Object({ n: Type.Number() }),
       output: Type.Object({ result: Type.Number() }),
       errors: Type.Never(),
-      async handler(ctx, msg) {
-        const { n } = msg.payload;
+      async handler(ctx, { n }) {
         ctx.state.count.set((prev) => prev + n);
-        return reply(msg, Ok({ result: ctx.state.count.get() }));
+        return Ok({ result: ctx.state.count.get() });
       },
     })
     .defineProcedure('value', {
@@ -197,9 +181,9 @@ export const SubscribableServiceConstructor = () =>
       input: Type.Object({}),
       output: Type.Object({ result: Type.Number() }),
       errors: Type.Never(),
-      async handler(ctx, msg, returnStream) {
+      async handler(ctx, _msg, returnStream) {
         ctx.state.count.observe((count) => {
-          returnStream.push(reply(msg, Ok({ result: count })));
+          returnStream.push(Ok({ result: count }));
         });
       },
     })
@@ -215,13 +199,11 @@ export const UploadableServiceConstructor = () =>
       errors: Type.Never(),
       async handler(_ctx, msgStream) {
         let result = 0;
-        let lastMsg;
-        for await (const msg of msgStream) {
-          const { n } = msg.payload;
+        for await (const { n } of msgStream) {
           result += n;
-          lastMsg = msg;
         }
-        return reply(lastMsg!, Ok({ result: result }));
+
+        return Ok({ result: result });
       },
     })
     .defineProcedure('addMultipleWithPrefix', {
@@ -232,16 +214,10 @@ export const UploadableServiceConstructor = () =>
       errors: Type.Never(),
       async handler(_ctx, init, msgStream) {
         let result = 0;
-        let lastMsg;
-        for await (const msg of msgStream) {
-          const { n } = msg.payload;
+        for await (const { n } of msgStream) {
           result += n;
-          lastMsg = msg;
         }
-        return reply(
-          lastMsg!,
-          Ok({ result: init.payload.prefix + ' ' + result }),
-        );
+        return Ok({ result: init.prefix + ' ' + result });
       },
     })
     .finalize();

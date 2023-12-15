@@ -11,6 +11,7 @@ import { TestServiceConstructor } from './fixtures/services';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { StupidlyLargeService } from './typescript-stress.test';
+import { buildServiceDefs } from '../router/defs';
 
 let smallId = 0;
 let largeId = 0;
@@ -77,7 +78,7 @@ describe('simple router level bandwidth', async () => {
     port,
     webSocketServer,
   );
-  const serviceDefs = { test: TestServiceConstructor() };
+  const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
   const server = createServer(serverTransport, serviceDefs);
   const client = createClient<typeof server>(clientTransport);
 
@@ -118,12 +119,12 @@ describe('complex (50 procedures) router level bandwidth', async () => {
     port,
     webSocketServer,
   );
-  const serviceDefs = {
-    a: StupidlyLargeService(),
-    b: StupidlyLargeService(),
-    c: StupidlyLargeService(),
-    d: StupidlyLargeService(),
-  };
+  const serviceDefs = buildServiceDefs([
+    StupidlyLargeService('a'),
+    StupidlyLargeService('b'),
+    StupidlyLargeService('c'),
+    StupidlyLargeService('d'),
+  ]);
 
   const server = createServer(serverTransport, serviceDefs);
   const client = createClient<typeof server>(clientTransport);

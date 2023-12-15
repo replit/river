@@ -1,6 +1,5 @@
 import { TObject, Static, Type, TUnion } from '@sinclair/typebox';
 import type { Pushable } from 'it-pushable';
-import { TransportMessage } from '../transport/message';
 import { ServiceContextWithState } from './context';
 import { Result, RiverError, RiverUncaughtSchema } from './result';
 
@@ -10,13 +9,13 @@ import { Result, RiverError, RiverUncaughtSchema } from './result';
  * gRPC's four combinations of stream / non-stream in each direction.
  */
 export type ValidProcType =
-  // Single message in both directions.
+  // Single message in both directions (1:1).
   | 'rpc'
-  // Client-stream (potentially preceded by an initialization message), single message from server.
+  // Client-stream (potentially preceded by an initialization message), single message from server (n:1).
   | 'upload'
-  // Single message from client, stream from server.
+  // Single message from client, stream from server (1:n).
   | 'subscription'
-  // Bidirectional stream (potentially preceded by an initialization message).
+  // Bidirectional stream (potentially preceded by an initialization message) (n:n).
   | 'stream';
 
 /**
@@ -176,8 +175,8 @@ export type Procedure<
         errors: E;
         handler: (
           context: ServiceContextWithState<State>,
-          input: TransportMessage<Static<I>>,
-        ) => Promise<TransportMessage<Result<Static<O>, Static<E>>>>;
+          input: Static<I>,
+        ) => Promise<Result<Static<O>, Static<E>>>;
         type: Ty;
       }
     : never
@@ -190,9 +189,9 @@ export type Procedure<
         errors: E;
         handler: (
           context: ServiceContextWithState<State>,
-          init: TransportMessage<Static<Init>>,
-          input: AsyncIterable<TransportMessage<Static<I>>>,
-        ) => Promise<TransportMessage<Result<Static<O>, Static<E>>>>;
+          init: Static<Init>,
+          input: AsyncIterableIterator<Static<I>>,
+        ) => Promise<Result<Static<O>, Static<E>>>;
         type: Ty;
       }
     : {
@@ -201,8 +200,8 @@ export type Procedure<
         errors: E;
         handler: (
           context: ServiceContextWithState<State>,
-          input: AsyncIterable<TransportMessage<Static<I>>>,
-        ) => Promise<TransportMessage<Result<Static<O>, Static<E>>>>;
+          input: AsyncIterableIterator<Static<I>>,
+        ) => Promise<Result<Static<O>, Static<E>>>;
         type: Ty;
       }
   : Ty extends 'subscription'
@@ -213,8 +212,8 @@ export type Procedure<
         errors: E;
         handler: (
           context: ServiceContextWithState<State>,
-          input: TransportMessage<Static<I>>,
-          output: Pushable<TransportMessage<Result<Static<O>, Static<E>>>>,
+          input: Static<I>,
+          output: Pushable<Result<Static<O>, Static<E>>>,
         ) => Promise<void>;
         type: Ty;
       }
@@ -228,9 +227,9 @@ export type Procedure<
         errors: E;
         handler: (
           context: ServiceContextWithState<State>,
-          init: TransportMessage<Static<Init>>,
-          input: AsyncIterable<TransportMessage<Static<I>>>,
-          output: Pushable<TransportMessage<Result<Static<O>, Static<E>>>>,
+          init: Static<Init>,
+          input: AsyncIterableIterator<Static<I>>,
+          output: Pushable<Result<Static<O>, Static<E>>>,
         ) => Promise<void>;
         type: Ty;
       }
@@ -240,8 +239,8 @@ export type Procedure<
         errors: E;
         handler: (
           context: ServiceContextWithState<State>,
-          input: AsyncIterable<TransportMessage<Static<I>>>,
-          output: Pushable<TransportMessage<Result<Static<O>, Static<E>>>>,
+          input: AsyncIterableIterator<Static<I>>,
+          output: Pushable<Result<Static<O>, Static<E>>>,
         ) => Promise<void>;
         type: Ty;
       }

@@ -6,7 +6,6 @@ import type { Pushable } from 'it-pushable';
 import {
   ControlMessagePayloadSchema,
   OpaqueTransportMessage,
-  TransportMessage,
   isStreamClose,
   isStreamOpen,
   reply,
@@ -24,6 +23,7 @@ import {
   UNCAUGHT_ERROR,
 } from './result';
 import { EventMap } from '../transport/events';
+import { ServiceDefs } from './defs';
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -40,17 +40,15 @@ interface ProcStream {
   serviceName: string;
   procedureName: string;
   procedure: AnyProcedure;
-  incoming: Pushable<TransportMessage>;
-  outgoing: Pushable<
-    TransportMessage<Result<Static<PayloadType>, Static<RiverError>>>
-  >;
+  incoming: Pushable<PayloadType>;
+  outgoing: Pushable<Result<Static<PayloadType>, Static<RiverError>>>;
   promises: {
     outputHandler: Promise<unknown>;
     inputHandler: Promise<unknown>;
   };
 }
 
-class RiverServer<Services extends Record<string, AnyService>> {
+class RiverServer<Services extends ServiceDefs> {
   transport: Transport<Connection>;
   services: Services;
   contextMap: Map<AnyService, ServiceContextWithState<object>>;
@@ -168,7 +166,7 @@ class RiverServer<Services extends Record<string, AnyService>> {
       // sending outgoing messages back to client
       (async () => {
         for await (const response of outgoing) {
-          this.transport.send(response);
+          this.transport.send(reply(message, response));
         }
 
         // we ended, send a close bit back to the client
@@ -192,13 +190,10 @@ class RiverServer<Services extends Record<string, AnyService>> {
         `${this.transport.clientId} -- procedure ${message.serviceName}.${message.procedureName}:${message.streamId} threw an error: ${errorMsg}`,
       );
       outgoing.push(
-        reply(
-          message,
-          Err({
-            code: UNCAUGHT_ERROR,
-            message: errorMsg,
-          } satisfies Static<typeof RiverUncaughtSchema>),
-        ),
+        Err({
+          code: UNCAUGHT_ERROR,
+          message: errorMsg,
+        } satisfies Static<typeof RiverUncaughtSchema>),
       );
     };
 
@@ -330,7 +325,7 @@ class RiverServer<Services extends Record<string, AnyService>> {
         Value.Check(procedure.init, message.payload)) ||
       Value.Check(procedure.input, message.payload)
     ) {
-      procStream.incoming.push(message as TransportMessage);
+      procStream.incoming.push(message.payload as PayloadType);
     } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
       log?.error(
         `${this.transport.clientId} -- procedure ${procStream.serviceName}.${
@@ -385,7 +380,7 @@ class RiverServer<Services extends Record<string, AnyService>> {
  * @param extendedContext - An optional object containing additional context to be passed to all services.
  * @returns A promise that resolves to a server instance with the registered services.
  */
-export function createServer<Services extends Record<string, AnyService>>(
+export function createServer<Services extends ServiceDefs>(
   transport: Transport<Connection>,
   services: Services,
   extendedContext?: Omit<ServiceContext, 'state'>,

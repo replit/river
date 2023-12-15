@@ -27,6 +27,7 @@ import { CONNECTION_GRACE_PERIOD_MS } from '../router/client';
 import { Err, UNEXPECTED_DISCONNECT } from '../router/result';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
+import { buildServiceDefs } from '../router/defs';
 
 describe('procedures should handle unexpected disconnects', async () => {
   const httpServer = http.createServer();
@@ -49,13 +50,12 @@ describe('procedures should handle unexpected disconnects', async () => {
 
   test('rpc', async () => {
     const [clientTransport, serverTransport] = getTransports();
-    const serviceDefs = { test: TestServiceConstructor() };
+    const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
     const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
     // start procedure
     await client.test.add.rpc({ n: 3 });
-
     expect(clientTransport.connections.size).toEqual(1);
     expect(serverTransport.connections.size).toEqual(1);
 
@@ -75,14 +75,14 @@ describe('procedures should handle unexpected disconnects', async () => {
       }),
     );
 
-    expect(clientTransport.connections.size).toEqual(0);
-    expect(serverTransport.connections.size).toEqual(0);
+    waitFor(() => expect(clientTransport.connections.size).toEqual(0));
+    waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     await ensureServerIsClean(server);
   });
 
   test('stream', async () => {
     const [clientTransport, serverTransport] = getTransports();
-    const serviceDefs = { test: TestServiceConstructor() };
+    const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
     const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
@@ -111,8 +111,8 @@ describe('procedures should handle unexpected disconnects', async () => {
       }),
     );
 
-    expect(clientTransport.connections.size).toEqual(0);
-    expect(serverTransport.connections.size).toEqual(0);
+    waitFor(() => expect(clientTransport.connections.size).toEqual(0));
+    waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     await ensureServerIsClean(server);
   });
 
@@ -132,25 +132,29 @@ describe('procedures should handle unexpected disconnects', async () => {
       'SERVER',
     );
 
-    const serviceDefs = { test: SubscribableServiceConstructor() };
+    const serviceDefs = buildServiceDefs([SubscribableServiceConstructor()]);
     const server = createServer(serverTransport, serviceDefs);
     const client1 = createClient<typeof server>(client1Transport);
     const client2 = createClient<typeof server>(client2Transport);
 
     // start procedure
     // client1 and client2 both subscribe
-    const [subscription1, close1] = await client1.test.value.subscribe({});
+    const [subscription1, close1] = await client1.subscribable.value.subscribe(
+      {},
+    );
     let result = await iterNext(subscription1);
     assert(result.ok);
     expect(result.payload).toStrictEqual({ result: 0 });
 
-    const [subscription2, _close2] = await client2.test.value.subscribe({});
+    const [subscription2, _close2] = await client2.subscribable.value.subscribe(
+      {},
+    );
     result = await iterNext(subscription2);
     assert(result.ok);
     expect(result.payload).toStrictEqual({ result: 0 });
 
     // client2 adds a value
-    const add1 = await client2.test.add.rpc({ n: 1 });
+    const add1 = await client2.subscribable.add.rpc({ n: 1 });
     assert(add1.ok);
 
     // both clients should receive the updated value
@@ -171,7 +175,7 @@ describe('procedures should handle unexpected disconnects', async () => {
     client2Transport.tryReconnecting = false;
 
     // client1 who is still connected can still add values and receive updates
-    const add2Promise = client1.test.add.rpc({ n: 2 });
+    const add2Promise = client1.subscribable.add.rpc({ n: 2 });
 
     // after we've disconnected, hit end of grace period
     await vi.runOnlyPendingTimersAsync();
@@ -205,7 +209,7 @@ describe('procedures should handle unexpected disconnects', async () => {
 
   test('upload', async () => {
     const [clientTransport, serverTransport] = getTransports();
-    const serviceDefs = { uploadable: UploadableServiceConstructor() };
+    const serviceDefs = buildServiceDefs([UploadableServiceConstructor()]);
     const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);
 
@@ -233,8 +237,8 @@ describe('procedures should handle unexpected disconnects', async () => {
       }),
     );
 
-    expect(clientTransport.connections.size).toEqual(0);
-    expect(serverTransport.connections.size).toEqual(0);
+    waitFor(() => expect(clientTransport.connections.size).toEqual(0));
+    waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     await ensureServerIsClean(server);
   });
 });
