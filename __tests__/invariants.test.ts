@@ -1,4 +1,4 @@
-import { afterAll, assert, describe, expect, test } from 'vitest';
+import { afterAll, assert, describe, expect, test, vi } from 'vitest';
 import http from 'http';
 import {
   createWebSocketServer,
@@ -10,12 +10,14 @@ import {
   SubscribableServiceConstructor,
   TestServiceConstructor,
 } from './fixtures/services';
-import { createClient, createServer } from '../router';
+import { Err, createClient, createServer } from '../router';
 import {
   ensureServerIsClean,
   ensureTransportQueuesAreEventuallyEmpty,
   waitFor,
 } from './fixtures/cleanup';
+import { CONNECTION_GRACE_PERIOD_MS } from '../transport';
+import { UNEXPECTED_DISCONNECT } from '../router/result';
 
 describe('procedures should leave no trace after finishing', async () => {
   const httpServer = http.createServer();
@@ -53,6 +55,39 @@ describe('procedures should leave no trace after finishing', async () => {
         'server should cleanup connection after client closes',
       ).toEqual(0),
     );
+  });
+
+  test('client dropping silently should clean up connection on the server after grace period', async () => {
+    vi.useFakeTimers();
+    const [clientTransport, serverTransport] = getTransports();
+    const serviceDefs = { test: TestServiceConstructor() };
+    const server = createServer(serverTransport, serviceDefs);
+    const client = createClient<typeof server>(clientTransport);
+
+    // start procedure
+    await client.test.add.rpc({ n: 3 });
+
+    expect(clientTransport.connections.size).toEqual(1);
+    expect(serverTransport.connections.size).toEqual(1);
+
+    clientTransport.connections.forEach((conn) => conn.ws.terminate());
+    const procPromise = client.test.add.rpc({ n: 4 });
+    // end procedure
+
+    // after we've disconnected, hit end of grace period
+    await vi.runOnlyPendingTimersAsync();
+    await vi.advanceTimersByTimeAsync(CONNECTION_GRACE_PERIOD_MS);
+
+    // we should get an error + expect the streams to be cleaned up
+    await expect(procPromise).resolves.toMatchObject(
+      Err({
+        code: UNEXPECTED_DISCONNECT,
+      }),
+    );
+    expect(clientTransport.connections.size).toEqual(0);
+    expect(serverTransport.connections.size).toEqual(0);
+    await ensureServerIsClean(server);
+    vi.useRealTimers();
   });
 
   test('closing a transport from the server cleans up connection on the client', async () => {
