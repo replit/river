@@ -4,13 +4,13 @@ import {
   createWebSocketServer,
   createWsTransports,
   onServerReady,
+  waitForMessage,
 } from '../util/testHelpers';
 import largePayload from './fixtures/largePayload.json';
 import { TestServiceConstructor } from './fixtures/services';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { StupidlyLargeService } from './typescript-stress.test';
-import { waitForMessage } from '../transport';
 
 let smallId = 0;
 let largeId = 0;
@@ -52,11 +52,7 @@ describe('transport level bandwidth', async () => {
     'send and recv (small payload)',
     async () => {
       const id = clientTransport.send(dummyPayloadSmall());
-      await waitForMessage(
-        serverTransport,
-        clientTransport.clientId,
-        (msg) => msg.id === id,
-      );
+      await waitForMessage(serverTransport, (msg) => msg.id === id);
       return;
     },
     { time: BENCH_DURATION },
@@ -66,11 +62,7 @@ describe('transport level bandwidth', async () => {
     'send and recv (large payload)',
     async () => {
       const id = clientTransport.send(dummyPayloadLarge());
-      await waitForMessage(
-        serverTransport,
-        clientTransport.clientId,
-        (msg) => msg.id === id,
-      );
+      await waitForMessage(serverTransport, (msg) => msg.id === id);
       return;
     },
     { time: BENCH_DURATION },

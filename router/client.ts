@@ -20,9 +20,10 @@ import {
   closeStream,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
-import { waitForMessage } from '../transport';
 import { nanoid } from 'nanoid';
 import { Result } from './result';
+import { EventMap } from '../transport/events';
+import { waitForMessage } from '../util/testHelpers';
 
 // helper to make next, yield, and return all the same type
 type AsyncIter<T> = AsyncGenerator<T, T, unknown>;
@@ -160,6 +161,229 @@ function _createRecursiveProxy(
   return proxy;
 }
 
+export const CONNECTION_GRACE_PERIOD_MS = 5_000; // 5s
+export function rejectAfterDisconnectGrace(
+  from: TransportClientId,
+  cb: () => void,
+) {
+  let timeout: ReturnType<typeof setTimeout> | undefined = undefined;
+  return (evt: EventMap['connectionStatus']) => {
+    if (evt.status === 'connect' && evt.conn.connectedTo === from) {
+      clearTimeout(timeout);
+      timeout = undefined;
+    }
+
+    if (evt.status === 'disconnect' && evt.conn.connectedTo === from) {
+      timeout = setTimeout(cb, CONNECTION_GRACE_PERIOD_MS);
+    }
+  };
+}
+
+function handleRpc(
+  transport: Transport<Connection>,
+  serverId: TransportClientId,
+  input: object,
+  serviceName: string,
+  procName: string,
+) {
+  const streamId = nanoid();
+  const m = msg(
+    transport.clientId,
+    serverId,
+    streamId,
+    input,
+    serviceName,
+    procName,
+  );
+
+  function belongsToSameStream(msg: OpaqueTransportMessage) {
+    return msg.streamId === streamId;
+  }
+
+  // rpc is a stream open + close
+  m.controlFlags |= ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit;
+  transport.send(m);
+  return waitForMessage(transport, belongsToSameStream);
+}
+
+function handleStream(
+  transport: Transport<Connection>,
+  serverId: TransportClientId,
+  init: object | undefined,
+  serviceName: string,
+  procName: string,
+) {
+  const streamId = nanoid();
+  const inputStream = pushable({ objectMode: true });
+  const outputStream = pushable({ objectMode: true });
+  let firstMessage = true;
+
+  function belongsToSameStream(msg: OpaqueTransportMessage) {
+    return msg.streamId === streamId;
+  }
+
+  if (init) {
+    const m = msg(
+      transport.clientId,
+      serverId,
+      streamId,
+      init,
+      serviceName,
+      procName,
+    );
+
+    // first message needs the open bit.
+    m.controlFlags = ControlFlags.StreamOpenBit;
+    transport.send(m);
+    firstMessage = false;
+  }
+
+  // input -> transport
+  // this gets cleaned up on inputStream.end() which is called by closeHandler
+  (async () => {
+    for await (const rawIn of inputStream) {
+      const m = msg(transport.clientId, serverId, streamId, rawIn as object);
+
+      if (firstMessage) {
+        m.serviceName = serviceName;
+        m.procedureName = procName;
+        m.controlFlags |= ControlFlags.StreamOpenBit;
+        firstMessage = false;
+      }
+
+      transport.send(m);
+    }
+
+    transport.send(closeStream(transport.clientId, serverId, streamId));
+  })();
+
+  // transport -> output
+  const listener = (msg: OpaqueTransportMessage) => {
+    if (!belongsToSameStream(msg)) {
+      return;
+    }
+
+    if (isStreamClose(msg.controlFlags)) {
+      outputStream.end();
+      transport.removeEventListener('message', listener);
+    } else {
+      outputStream.push(msg.payload);
+    }
+  };
+
+  transport.addEventListener('message', listener);
+
+  const closeHandler = () => {
+    inputStream.end();
+    outputStream.end();
+    transport.send(closeStream(transport.clientId, serverId, streamId));
+    transport.removeEventListener('message', listener);
+  };
+
+  return [inputStream, outputStream, closeHandler];
+}
+
+function handleSubscribe(
+  transport: Transport<Connection>,
+  serverId: TransportClientId,
+  input: object,
+  serviceName: string,
+  procName: string,
+) {
+  const streamId = nanoid();
+  const m = msg(
+    transport.clientId,
+    serverId,
+    streamId,
+    input,
+    serviceName,
+    procName,
+  );
+  m.controlFlags |= ControlFlags.StreamOpenBit;
+  transport.send(m);
+
+  function belongsToSameStream(msg: OpaqueTransportMessage) {
+    return msg.streamId === streamId;
+  }
+
+  // transport -> output
+  const outputStream = pushable({ objectMode: true });
+  const listener = (msg: OpaqueTransportMessage) => {
+    if (!belongsToSameStream(msg)) {
+      return;
+    }
+
+    if (isStreamClose(msg.controlFlags)) {
+      outputStream.end();
+      transport.removeEventListener('message', listener);
+    } else {
+      outputStream.push(msg.payload);
+    }
+  };
+
+  transport.addEventListener('message', listener);
+  const closeHandler = () => {
+    outputStream.end();
+    transport.send(closeStream(transport.clientId, serverId, streamId));
+    transport.removeEventListener('message', listener);
+  };
+
+  return [outputStream, closeHandler];
+}
+
+function handleUpload(
+  transport: Transport<Connection>,
+  serverId: TransportClientId,
+  input: object | undefined,
+  serviceName: string,
+  procName: string,
+) {
+  const streamId = nanoid();
+  const inputStream = pushable({ objectMode: true });
+  let firstMessage = true;
+
+  function belongsToSameStream(msg: OpaqueTransportMessage) {
+    return msg.streamId === streamId;
+  }
+
+  if (input) {
+    const m = msg(
+      transport.clientId,
+      serverId,
+      streamId,
+      input as object,
+      serviceName,
+      procName,
+    );
+
+    // first message needs the open bit.
+    m.controlFlags = ControlFlags.StreamOpenBit;
+    transport.send(m);
+    firstMessage = false;
+  }
+
+  // input -> transport
+  // this gets cleaned up on inputStream.end(), which the caller should call.
+  (async () => {
+    for await (const rawIn of inputStream) {
+      const m = msg(transport.clientId, serverId, streamId, rawIn as object);
+
+      if (firstMessage) {
+        m.controlFlags |= ControlFlags.StreamOpenBit;
+        m.serviceName = serviceName;
+        m.procedureName = procName;
+        firstMessage = false;
+      }
+
+      transport.send(m);
+    }
+
+    transport.send(closeStream(transport.clientId, serverId, streamId));
+  })();
+
+  return [inputStream, waitForMessage(transport, belongsToSameStream)];
+}
+
 /**
  * Creates a client for a given server using the provided transport.
  * Note that the client only needs the type of the server, not the actual
@@ -186,178 +410,38 @@ export const createClient = <Srv extends Server<Record<string, AnyService>>>(
     }
 
     const [input] = opts.args;
-    const streamId = nanoid();
-
-    function belongsToSameStream(msg: OpaqueTransportMessage) {
-      return msg.streamId === streamId;
-    }
-
-    if (procType === 'stream') {
-      const inputStream = pushable({ objectMode: true });
-      const outputStream = pushable({ objectMode: true });
-      let firstMessage = true;
-
-      if (input) {
-        const m = msg(
-          transport.clientId,
-          serverId,
-          streamId,
-          input as object,
-          serviceName,
-          procName,
-        );
-
-        // first message needs the open bit.
-        m.controlFlags = ControlFlags.StreamOpenBit;
-        transport.send(m);
-        firstMessage = false;
-      }
-
-      // input -> transport
-      // this gets cleaned up on inputStream.end() which is called by closeHandler
-      (async () => {
-        for await (const rawIn of inputStream) {
-          const m = msg(
-            transport.clientId,
-            serverId,
-            streamId,
-            rawIn as object,
-          );
-
-          if (firstMessage) {
-            m.serviceName = serviceName;
-            m.procedureName = procName;
-            m.controlFlags |= ControlFlags.StreamOpenBit;
-            firstMessage = false;
-          }
-
-          transport.send(m);
-        }
-
-        transport.send(closeStream(transport.clientId, serverId, streamId));
-      })();
-
-      // transport -> output
-      const listener = (msg: OpaqueTransportMessage) => {
-        if (!belongsToSameStream(msg)) {
-          return;
-        }
-
-        if (isStreamClose(msg.controlFlags)) {
-          outputStream.end();
-          transport.removeEventListener('message', listener);
-        } else {
-          outputStream.push(msg.payload);
-        }
-      };
-
-      transport.addEventListener('message', listener);
-      const closeHandler = () => {
-        inputStream.end();
-        outputStream.end();
-        transport.send(closeStream(transport.clientId, serverId, streamId));
-        transport.removeEventListener('message', listener);
-      };
-
-      return [inputStream, outputStream, closeHandler];
-    } else if (procType === 'rpc') {
-      const m = msg(
-        transport.clientId,
+    if (procType === 'rpc') {
+      return handleRpc(
+        transport,
         serverId,
-        streamId,
         input as object,
         serviceName,
         procName,
       );
-
-      // rpc is a stream open + close
-      m.controlFlags |=
-        ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit;
-      transport.send(m);
-      return waitForMessage(transport, serverId, belongsToSameStream);
+    } else if (procType === 'stream') {
+      return handleStream(
+        transport,
+        serverId,
+        input as object | undefined,
+        serviceName,
+        procName,
+      );
     } else if (procType === 'subscribe') {
-      const m = msg(
-        transport.clientId,
+      return handleSubscribe(
+        transport,
         serverId,
-        streamId,
         input as object,
         serviceName,
         procName,
       );
-      m.controlFlags |= ControlFlags.StreamOpenBit;
-      transport.send(m);
-
-      // transport -> output
-      const outputStream = pushable({ objectMode: true });
-      const listener = (msg: OpaqueTransportMessage) => {
-        if (!belongsToSameStream(msg)) {
-          return;
-        }
-
-        if (isStreamClose(msg.controlFlags)) {
-          outputStream.end();
-          transport.removeEventListener('message', listener);
-        } else {
-          outputStream.push(msg.payload);
-        }
-      };
-
-      transport.addEventListener('message', listener);
-      const closeHandler = () => {
-        outputStream.end();
-        transport.send(closeStream(transport.clientId, serverId, streamId));
-        transport.removeEventListener('message', listener);
-      };
-
-      return [outputStream, closeHandler];
     } else if (procType === 'upload') {
-      const inputStream = pushable({ objectMode: true });
-      let firstMessage = true;
-
-      if (input) {
-        const m = msg(
-          transport.clientId,
-          serverId,
-          streamId,
-          input as object,
-          serviceName,
-          procName,
-        );
-
-        // first message needs the open bit.
-        m.controlFlags = ControlFlags.StreamOpenBit;
-        transport.send(m);
-        firstMessage = false;
-      }
-
-      // input -> transport
-      // this gets cleaned up on inputStream.end(), which the caller should call.
-      (async () => {
-        for await (const rawIn of inputStream) {
-          const m = msg(
-            transport.clientId,
-            serverId,
-            streamId,
-            rawIn as object,
-          );
-
-          if (firstMessage) {
-            m.controlFlags |= ControlFlags.StreamOpenBit;
-            m.serviceName = serviceName;
-            m.procedureName = procName;
-            firstMessage = false;
-          }
-
-          transport.send(m);
-        }
-
-        transport.send(closeStream(transport.clientId, serverId, streamId));
-      })();
-
-      return [
-        inputStream,
-        waitForMessage(transport, serverId, belongsToSameStream),
-      ];
+      return handleUpload(
+        transport,
+        serverId,
+        input as object | undefined,
+        serviceName,
+        procName,
+      );
     } else {
       throw new Error(`invalid river call, unknown procedure type ${procType}`);
     }

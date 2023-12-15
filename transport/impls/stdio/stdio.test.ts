@@ -1,8 +1,10 @@
 import { describe, test, expect } from 'vitest';
 import stream from 'node:stream';
 import { StdioTransport } from './stdio';
-import { waitForMessage } from '../..';
-import { payloadToTransportMessage } from '../../../util/testHelpers';
+import {
+  payloadToTransportMessage,
+  waitForMessage,
+} from '../../../util/testHelpers';
 import { ensureTransportIsClean } from '../../../__tests__/fixtures/cleanup';
 
 describe('sending and receiving across node streams works', () => {
@@ -25,7 +27,7 @@ describe('sending and receiving across node streams works', () => {
       test: 123,
     };
 
-    const p = waitForMessage(serverTransport, clientTransport.clientId);
+    const p = waitForMessage(serverTransport);
     clientTransport.send(
       payloadToTransportMessage(
         msg,

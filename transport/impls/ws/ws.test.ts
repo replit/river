@@ -6,16 +6,15 @@ import {
   createDummyTransportMessage,
   onServerReady,
   createLocalWebSocketClient,
+  waitForMessage,
 } from '../../../util/testHelpers';
-import { CONNECTION_GRACE_PERIOD_MS, msg, waitForMessage } from '../..';
+import { msg } from '../..';
 import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
 import {
   testFinishesCleanly,
   waitFor,
 } from '../../../__tests__/fixtures/cleanup';
-import { Err } from '../../../router';
-import { UNEXPECTED_DISCONNECT } from '../../../router/result';
 import { EventMap } from '../../events';
 
 describe('sending and receiving across websockets works', async () => {
@@ -33,7 +32,6 @@ describe('sending and receiving across websockets works', async () => {
     const msg = createDummyTransportMessage();
     const msgPromise = waitForMessage(
       serverTransport,
-      clientTransport.clientId,
       (recv) => recv.id === msg.id,
     );
     clientTransport.send(msg);
@@ -73,7 +71,6 @@ describe('sending and receiving across websockets works', async () => {
       const initMsg = makeDummyMessage(id, serverId, 'hello server');
       const initMsgPromise = waitForMessage(
         serverTransport,
-        id,
         (recv) => recv.id === initMsg.id,
       );
       client.send(initMsg);
@@ -89,8 +86,8 @@ describe('sending and receiving across websockets works', async () => {
     const msg2 = makeDummyMessage('SERVER', 'client2', 'hello client1');
     const promises = Promise.all([
       // true means reject if we receive any message that isn't the one we are expecting
-      waitForMessage(client2, serverId, (recv) => recv.id === msg2.id, true),
-      waitForMessage(client1, serverId, (recv) => recv.id === msg1.id, true),
+      waitForMessage(client2, (recv) => recv.id === msg2.id, true),
+      waitForMessage(client1, (recv) => recv.id === msg1.id, true),
     ]);
     serverTransport.send(msg1);
     serverTransport.send(msg2);
@@ -124,7 +121,6 @@ describe('retry logic', async () => {
 
     const msg1Promise = waitForMessage(
       serverTransport,
-      clientTransport.clientId,
       (recv) => recv.id === msg1.id,
     );
     clientTransport.send(msg1);
@@ -134,7 +130,6 @@ describe('retry logic', async () => {
     clientTransport.connections.forEach((conn) => conn.ws.close());
     const msg2Promise = waitForMessage(
       serverTransport,
-      clientTransport.clientId,
       (recv) => recv.id === msg2.id,
     );
 
@@ -154,7 +149,6 @@ describe('retry logic', async () => {
 
     const msg1Promise = waitForMessage(
       serverTransport,
-      clientTransport.clientId,
       (recv) => recv.id === msg1.id,
     );
     clientTransport.send(msg1);
@@ -164,7 +158,6 @@ describe('retry logic', async () => {
     clientTransport.connections.forEach((conn) => conn.ws.terminate());
     const msg2Promise = waitForMessage(
       serverTransport,
-      clientTransport.clientId,
       (recv) => recv.id === msg2.id,
     );
 
@@ -215,7 +208,6 @@ describe('retry logic', async () => {
 
     const msg1Promise = waitForMessage(
       serverTransport,
-      clientTransport.clientId,
       (recv) => recv.id === msg1.id,
     );
     clientTransport.send(msg1);
@@ -237,7 +229,6 @@ describe('retry logic', async () => {
 
     const msg2Promise = waitForMessage(
       serverTransport,
-      clientTransport.clientId,
       (recv) => recv.id === msg2.id,
     );
 
@@ -265,7 +256,6 @@ describe('retry logic', async () => {
 
     const promise1 = waitForMessage(
       serverTransport,
-      clientTransport.clientId,
       (recv) => recv.id === msg1.id,
     );
     clientTransport.send(msg1);
