@@ -1,16 +1,32 @@
-import { afterAll, assert, describe, expect, test, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  assert,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from 'vitest';
 import http from 'http';
 import {
+  createLocalWebSocketClient,
   createWebSocketServer,
   createWsTransports,
   iterNext,
   onServerReady,
 } from '../util/testHelpers';
-import { TestServiceConstructor } from './fixtures/services';
+import {
+  SubscribableServiceConstructor,
+  TestServiceConstructor,
+  UploadableServiceConstructor,
+} from './fixtures/services';
 import { createClient, createServer } from '../router';
-import { ensureServerIsClean } from './fixtures/cleanup';
+import { ensureServerIsClean, waitFor } from './fixtures/cleanup';
 import { CONNECTION_GRACE_PERIOD_MS } from '../router/client';
 import { Err, UNEXPECTED_DISCONNECT } from '../router/result';
+import { WebSocketServerTransport } from '../transport/impls/ws/server';
+import { WebSocketClientTransport } from '../transport/impls/ws/client';
 
 describe('procedures should handle unexpected disconnects', async () => {
   const httpServer = http.createServer();
@@ -23,8 +39,15 @@ describe('procedures should handle unexpected disconnects', async () => {
     httpServer.close();
   });
 
-  test('rpc', async () => {
+  beforeEach(() => {
     vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test('rpc', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const serviceDefs = { test: TestServiceConstructor() };
     const server = createServer(serverTransport, serviceDefs);
@@ -55,11 +78,9 @@ describe('procedures should handle unexpected disconnects', async () => {
     expect(clientTransport.connections.size).toEqual(0);
     expect(serverTransport.connections.size).toEqual(0);
     await ensureServerIsClean(server);
-    vi.useRealTimers();
   });
 
   test('stream', async () => {
-    vi.useFakeTimers();
     const [clientTransport, serverTransport] = getTransports();
     const serviceDefs = { test: TestServiceConstructor() };
     const server = createServer(serverTransport, serviceDefs);
@@ -76,7 +97,6 @@ describe('procedures should handle unexpected disconnects', async () => {
 
     clientTransport.connections.forEach((conn) => conn.ws.close());
     clientTransport.tryReconnecting = false;
-
     const nextResPromise = iterNext(output);
     // end procedure
 
@@ -94,6 +114,127 @@ describe('procedures should handle unexpected disconnects', async () => {
     expect(clientTransport.connections.size).toEqual(0);
     expect(serverTransport.connections.size).toEqual(0);
     await ensureServerIsClean(server);
-    vi.useRealTimers();
+  });
+
+  test('subscription', async () => {
+    const serverTransport = new WebSocketServerTransport(
+      webSocketServer,
+      'SERVER',
+    );
+    const client1Transport = new WebSocketClientTransport(
+      () => createLocalWebSocketClient(port),
+      'client1',
+      'SERVER',
+    );
+    const client2Transport = new WebSocketClientTransport(
+      () => createLocalWebSocketClient(port),
+      'client2',
+      'SERVER',
+    );
+
+    const serviceDefs = { test: SubscribableServiceConstructor() };
+    const server = createServer(serverTransport, serviceDefs);
+    const client1 = createClient<typeof server>(client1Transport);
+    const client2 = createClient<typeof server>(client2Transport);
+
+    // start procedure
+    // client1 and client2 both subscribe
+    const [subscription1, close1] = await client1.test.value.subscribe({});
+    let result = await iterNext(subscription1);
+    assert(result.ok);
+    expect(result.payload).toStrictEqual({ result: 0 });
+
+    const [subscription2, _close2] = await client2.test.value.subscribe({});
+    result = await iterNext(subscription2);
+    assert(result.ok);
+    expect(result.payload).toStrictEqual({ result: 0 });
+
+    // client2 adds a value
+    const add1 = await client2.test.add.rpc({ n: 1 });
+    assert(add1.ok);
+
+    // both clients should receive the updated value
+    result = await iterNext(subscription1);
+    assert(result.ok);
+    expect(result.payload).toStrictEqual({ result: 1 });
+    result = await iterNext(subscription2);
+    assert(result.ok);
+    expect(result.payload).toStrictEqual({ result: 1 });
+
+    // all clients are connected
+    expect(client1Transport.connections.size).toEqual(1);
+    expect(client2Transport.connections.size).toEqual(1);
+    expect(serverTransport.connections.size).toEqual(2);
+
+    // kill the connection for client2
+    client2Transport.connections.forEach((conn) => conn.ws.close());
+    client2Transport.tryReconnecting = false;
+
+    // client1 who is still connected can still add values and receive updates
+    const add2Promise = client1.test.add.rpc({ n: 2 });
+
+    // after we've disconnected, hit end of grace period
+    await vi.runOnlyPendingTimersAsync();
+    await vi.advanceTimersByTimeAsync(CONNECTION_GRACE_PERIOD_MS);
+
+    // we should get an error from the subscription on client2
+    const nextResPromise = iterNext(subscription2);
+    await expect(nextResPromise).resolves.toMatchObject(
+      Err({
+        code: UNEXPECTED_DISCONNECT,
+      }),
+    );
+
+    // client1 who is still connected can still add values and receive updates
+    assert((await add2Promise).ok);
+    result = await iterNext(subscription1);
+    assert(result.ok);
+    expect(result.payload).toStrictEqual({ result: 3 });
+
+    // at this point, only client1 is connected
+    expect(client1Transport.connections.size).toEqual(1);
+    expect(client2Transport.connections.size).toEqual(0);
+    expect(serverTransport.connections.size).toEqual(1);
+
+    // cleanup client1 (client2 is already disconnected)
+    close1();
+    await client1Transport.close();
+
+    await ensureServerIsClean(server);
+  });
+
+  test('upload', async () => {
+    const [clientTransport, serverTransport] = getTransports();
+    const serviceDefs = { uploadable: UploadableServiceConstructor() };
+    const server = createServer(serverTransport, serviceDefs);
+    const client = createClient<typeof server>(clientTransport);
+
+    // start procedure
+    const [addStream, addResult] = await client.uploadable.addMultiple.upload();
+    addStream.push({ n: 1 });
+    addStream.push({ n: 2 });
+    // end procedure
+
+    // need to wait for connection to be established
+    await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+    await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+
+    clientTransport.connections.forEach((conn) => conn.ws.close());
+    clientTransport.tryReconnecting = false;
+
+    // after we've disconnected, hit end of grace period
+    await vi.runOnlyPendingTimersAsync();
+    await vi.advanceTimersByTimeAsync(CONNECTION_GRACE_PERIOD_MS);
+
+    // we should get an error + expect the streams to be cleaned up
+    await expect(addResult).resolves.toMatchObject(
+      Err({
+        code: UNEXPECTED_DISCONNECT,
+      }),
+    );
+
+    expect(clientTransport.connections.size).toEqual(0);
+    expect(serverTransport.connections.size).toEqual(0);
+    await ensureServerIsClean(server);
   });
 });

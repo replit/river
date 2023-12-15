@@ -265,7 +265,6 @@ describe.each(codecs)(
 
     test('upload', async () => {
       const [clientTransport, serverTransport] = getTransports();
-
       const serviceDefs = { uploadable: UploadableServiceConstructor() };
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -287,7 +286,6 @@ describe.each(codecs)(
 
     test('upload with init message', async () => {
       const [clientTransport, serverTransport] = getTransports();
-
       const serviceDefs = { uploadable: UploadableServiceConstructor() };
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
