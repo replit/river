@@ -1,6 +1,5 @@
 {
   "name": "@replit/river",
-  "sideEffects": false,
   "description": "It's like tRPC but... with JSON Schema Support, duplex streaming and support for service multiplexing. Transport agnostic!",
   "version": "0.10.0",
   "type": "module",
@@ -14,15 +13,20 @@
     "./transport/ws/server": "./dist/transport/impls/ws/server.js",
     "./transport/stdio": "./dist/transport/impls/stdio/stdio.js"
   },
+  "sideEffects": [
+    "./dist/logging/index.js"
+  ],
   "files": [
     "dist"
   ],
   "dependencies": {
     "@msgpack/msgpack": "^3.0.0-beta2",
-    "@sinclair/typebox": "^0.31.8",
+    "nanoid": "^4.0.2"
+  },
+  "peerDependencies": {
+    "@sinclair/typebox": "^0.31.28",
     "isomorphic-ws": "^5.0.0",
     "it-pushable": "^3.2.1",
-    "nanoid": "^4.0.2",
     "ws": "^8.13.0"
   },
   "devDependencies": {
@@ -36,7 +40,7 @@
   "scripts": {
     "check": "tsc --noEmit && npx prettier . --check",
     "format": "npx prettier . --write",
-    "build": "rm -rf ./dist && tsc",
+    "build": "tsup",
     "prepack": "npm run build",
     "release": "npm publish --access public",
     "test:ui": "echo \"remember to go to /__vitest__ in the webview\" && vitest --ui --api.host 0.0.0.0 --api.port 3000",
