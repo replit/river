@@ -1,10 +1,8 @@
 import {
   asClientRpc,
   asClientStream,
-  asClientStreamWithInitialization,
   asClientSubscription,
   asClientUpload,
-  asClientUploadWithInitialization,
   iterNext,
 } from '../util/testHelpers';
 import { assert, describe, expect, test } from 'vitest';
@@ -21,10 +19,9 @@ import { Observable } from './fixtures/observable';
 
 describe('server-side test', () => {
   const service = TestServiceConstructor();
-  const initialState = { count: 0 };
 
   test('rpc basic', async () => {
-    const add = asClientRpc(initialState, service.procedures.add);
+    const add = asClientRpc({ count: 0 }, service.procedures.add);
     const result = await add({ n: 3 });
     assert(result.ok);
     expect(result.payload).toStrictEqual({ result: 3 });
@@ -57,7 +54,7 @@ describe('server-side test', () => {
 
   test('stream basic', async () => {
     const [input, output] = asClientStream(
-      initialState,
+      { count: 0 },
       service.procedures.echo,
     );
 
@@ -78,8 +75,8 @@ describe('server-side test', () => {
   });
 
   test('stream with initialization', async () => {
-    const [input, output] = asClientStreamWithInitialization(
-      initialState,
+    const [input, output] = asClientStream(
+      { count: 0 },
       service.procedures.echoWithPrefix,
       { prefix: 'test' },
     );
@@ -148,7 +145,10 @@ describe('server-side test', () => {
 
   test('uploads', async () => {
     const service = UploadableServiceConstructor();
-    const [input, result] = asClientUpload({}, service.procedures.addMultiple);
+    const [input, result] = await asClientUpload(
+      {},
+      service.procedures.addMultiple,
+    );
 
     input.push({ n: 1 });
     input.push({ n: 2 });
@@ -158,7 +158,7 @@ describe('server-side test', () => {
 
   test('uploads with initialization', async () => {
     const service = UploadableServiceConstructor();
-    const [input, result] = asClientUploadWithInitialization(
+    const [input, result] = await asClientUpload(
       {},
       service.procedures.addMultipleWithPrefix,
       { prefix: 'test' },

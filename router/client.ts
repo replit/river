@@ -26,7 +26,7 @@ import { EventMap } from '../transport/events';
 import { ServiceDefs } from './defs';
 
 // helper to make next, yield, and return all the same type
-type AsyncIter<T> = AsyncGenerator<T, T, unknown>;
+export type AsyncIter<T> = AsyncGenerator<T, T, unknown>;
 
 /**
  * A helper type to transform an actual service type into a type
