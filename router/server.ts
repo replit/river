@@ -24,6 +24,7 @@ import {
   UNCAUGHT_ERROR,
 } from './result';
 import { EventMap } from '../transport/events';
+import { ServiceDefs } from './defs';
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -50,7 +51,7 @@ interface ProcStream {
   };
 }
 
-class RiverServer<Services extends Record<string, AnyService>> {
+class RiverServer<Services extends ServiceDefs> {
   transport: Transport<Connection>;
   services: Services;
   contextMap: Map<AnyService, ServiceContextWithState<object>>;
@@ -385,7 +386,7 @@ class RiverServer<Services extends Record<string, AnyService>> {
  * @param extendedContext - An optional object containing additional context to be passed to all services.
  * @returns A promise that resolves to a server instance with the registered services.
  */
-export function createServer<Services extends Record<string, AnyService>>(
+export function createServer<Services extends ServiceDefs>(
   transport: Transport<Connection>,
   services: Services,
   extendedContext?: Omit<ServiceContext, 'state'>,

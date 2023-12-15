@@ -7,6 +7,7 @@ import { Connection, Transport } from '../transport/transport';
 import { NaiveJsonCodec } from '../codec/json';
 import { createClient } from '../router/client';
 import { Ok } from '../router/result';
+import { buildServiceDefs } from '../router/defs';
 
 const input = Type.Union([
   Type.Object({ a: Type.Number() }),
@@ -41,8 +42,8 @@ const fnBody: Procedure<{}, 'rpc', typeof input, typeof output, typeof errors> =
 
 // typescript is limited to max 50 constraints
 // see: https://github.com/microsoft/TypeScript/issues/33541
-export const StupidlyLargeService = () =>
-  ServiceBuilder.create('test')
+export const StupidlyLargeService = (name: string) =>
+  ServiceBuilder.create(name)
     .defineProcedure('f1', fnBody)
     .defineProcedure('f2', fnBody)
     .defineProcedure('f3', fnBody)
@@ -112,17 +113,18 @@ export class MockTransport extends Transport<Connection> {
 
 describe("ensure typescript doesn't give up trying to infer the types for large services", () => {
   test('service with many procedures hits typescript limit', () => {
-    expect(serializeService(StupidlyLargeService())).toBeTruthy();
+    expect(serializeService(StupidlyLargeService('test'))).toBeTruthy();
   });
 
   test('server client should support many services with many procedures', async () => {
-    const listing = {
-      a: StupidlyLargeService(),
-      b: StupidlyLargeService(),
-      c: StupidlyLargeService(),
-      d: StupidlyLargeService(),
-    };
-    const server = createServer(new MockTransport('SERVER'), listing);
+    const serviceDefs = buildServiceDefs([
+      StupidlyLargeService('a'),
+      StupidlyLargeService('b'),
+      StupidlyLargeService('c'),
+      StupidlyLargeService('d'),
+    ]);
+
+    const server = createServer(new MockTransport('SERVER'), serviceDefs);
     const client = createClient<typeof server>(new MockTransport('client'));
     expect(client.d.f48.rpc({ a: 0 })).toBeTruthy();
     expect(client.a.f2.rpc({ c: 'abc' })).toBeTruthy();
