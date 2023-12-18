@@ -10,11 +10,11 @@ import {
 
 export type RiverErrorSchema =
   | TObject<{
-      code: TLiteralString;
+      code: TLiteralString | TUnion<TLiteralString[]>;
       message: TLiteralString | TString;
     }>
   | TObject<{
-      code: TLiteralString;
+      code: TLiteralString | TUnion<TLiteralString[]>;
       message: TLiteralString | TString;
       extras: TSchema;
     }>;
