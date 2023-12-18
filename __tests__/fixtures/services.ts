@@ -136,12 +136,10 @@ export const FallibleServiceConstructor = () =>
         throwError: Type.Boolean(),
       }),
       output: Type.Object({ response: Type.String() }),
-      errors: Type.Union([
-        Type.Object({
-          code: Type.Literal(STREAM_ERROR),
-          message: Type.String(),
-        }),
-      ]),
+      errors: Type.Object({
+        code: Type.Literal(STREAM_ERROR),
+        message: Type.String(),
+      }),
       async handler(_ctx, msgStream, returnStream) {
         for await (const { msg, throwError, throwResult } of msgStream) {
           if (throwError) {
