@@ -9,7 +9,7 @@ export default defineConfig({
     'transport/index.ts',
     'transport/impls/ws/client.ts',
     'transport/impls/ws/server.ts',
-    'transport/stdio.ts',
+    'transport/impls/stdio/stdio.ts',
   ],
   format: ['esm', 'cjs'],
   sourcemap: false,
