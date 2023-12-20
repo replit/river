@@ -23,6 +23,8 @@ import {
   UNCAUGHT_ERROR,
 } from '../router';
 import { Static } from '@sinclair/typebox';
+import { temporaryFile } from 'tempy';
+import { nanoid } from 'nanoid';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -273,3 +275,10 @@ export async function asClientUpload<
     return [input, result] as const;
   }
 }
+
+export const getUnixSocketPath = () => {
+  // https://nodejs.org/api/net.html#identifying-paths-for-ipc-connections
+  return process.platform === 'win32'
+    ? `\\\\?\\pipe\\${nanoid()}`
+    : temporaryFile({ extension: 'sock' });
+};

@@ -6,12 +6,12 @@ import {
   createDummyTransportMessage,
   createWebSocketServer,
   createWsTransports,
+  getUnixSocketPath,
   onServerReady,
   waitForMessage,
 } from '../util/testHelpers';
 import { testFinishesCleanly, waitFor } from './fixtures/cleanup';
 import { EventMap } from '../transport/events';
-import { temporaryFile } from 'tempy';
 import { UnixDomainSocketServerTransport } from '../transport/impls/unixsocket/server';
 import { UnixDomainSocketClientTransport } from '../transport/impls/unixsocket/client';
 
@@ -46,7 +46,7 @@ const transports: Array<{
       let socketPath: string;
       return {
         before: async () => {
-          socketPath = temporaryFile({ extension: 'sock' });
+          socketPath = getUnixSocketPath();
         },
         cleanup: async () => {
           if (fs.existsSync(socketPath)) {

@@ -1,8 +1,8 @@
 import { describe, test, expect, afterEach, beforeEach } from 'vitest';
-import { temporaryFile } from 'tempy';
 import { UnixDomainSocketClientTransport } from './client';
 import { UnixDomainSocketServerTransport } from './server';
 import {
+  getUnixSocketPath,
   payloadToTransportMessage,
   waitForMessage,
 } from '../../../util/testHelpers';
@@ -15,7 +15,7 @@ describe('sending and receiving across unix sockets works', async () => {
   let socketPath: string;
 
   beforeEach(async () => {
-    socketPath = temporaryFile({ extension: 'sock' });
+    socketPath = getUnixSocketPath();
   });
 
   afterEach(async () => {
