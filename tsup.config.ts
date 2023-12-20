@@ -11,7 +11,7 @@ export default defineConfig({
     'transport/impls/ws/server.ts',
     'transport/impls/unixsocket/client.ts',
     'transport/impls/unixsocket/server.ts',
-    'transport/stdio.ts',
+    'transport/impls/stdio/stdio.ts',
   ],
   format: ['esm', 'cjs'],
   sourcemap: false,
