@@ -1,66 +1,11 @@
 import { describe, test, expect, afterAll, vi, beforeEach } from 'vitest';
-import { Connection, Transport } from '../transport';
-import http from 'http';
-import fs from 'fs';
 import {
   createDummyTransportMessage,
-  createWebSocketServer,
-  createWsTransports,
-  getUnixSocketPath,
-  onServerReady,
   waitForMessage,
 } from '../util/testHelpers';
 import { testFinishesCleanly, waitFor } from './fixtures/cleanup';
 import { EventMap } from '../transport/events';
-import { UnixDomainSocketServerTransport } from '../transport/impls/unixsocket/server';
-import { UnixDomainSocketClientTransport } from '../transport/impls/unixsocket/client';
-
-const transports: Array<{
-  name: string;
-  setup: () => Promise<{
-    // client, server
-    getTransports: () => [Transport<Connection>, Transport<Connection>];
-    before?: () => Promise<void>;
-    cleanup: () => Promise<void>;
-  }>;
-}> = [
-  {
-    name: 'ws',
-    setup: async () => {
-      const server = http.createServer();
-      const port = await onServerReady(server);
-      const wss = await createWebSocketServer(server);
-      const cleanup = async () => {
-        wss.close();
-        server.close();
-      };
-      return {
-        getTransports: () => createWsTransports(port, wss),
-        cleanup,
-      };
-    },
-  },
-  {
-    name: 'unix sockets',
-    setup: async () => {
-      let socketPath: string;
-      return {
-        before: async () => {
-          socketPath = getUnixSocketPath();
-        },
-        cleanup: async () => {
-          if (fs.existsSync(socketPath)) {
-            await fs.promises.unlink(socketPath);
-          }
-        },
-        getTransports: () => [
-          new UnixDomainSocketClientTransport(socketPath, 'client', 'SERVER'),
-          new UnixDomainSocketServerTransport(socketPath, 'SERVER'),
-        ],
-      };
-    },
-  },
-];
+import { transports } from './fixtures/transports';
 
 describe.each(transports)('transport -- $name', async ({ setup }) => {
   const { getTransports, cleanup, before } = await setup();
@@ -71,7 +16,6 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
   });
 
   afterAll(cleanup);
-
   test('connection is recreated after clean disconnect', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const msg1 = createDummyTransportMessage();
