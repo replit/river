@@ -1,7 +1,7 @@
 {
   "name": "@replit/river",
   "description": "It's like tRPC but... with JSON Schema Support, duplex streaming and support for service multiplexing. Transport agnostic!",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "type": "module",
   "exports": {
     ".": {
@@ -27,6 +27,14 @@
     "./transport/ws/server": {
       "import": "./dist/transport/impls/ws/server.js",
       "require": "./dist/transport/impls/ws/server.cjs"
+    },
+    "./transport/unixsocket/client": {
+      "import": "./dist/transport/impls/unixsocket/client.js",
+      "require": "./dist/transport/impls/unixsocket/client.cjs"
+    },
+    "./transport/unixsocket/server": {
+      "import": "./dist/transport/impls/unixsocket/server.js",
+      "require": "./dist/transport/impls/unixsocket/server.cjs"
     },
     "./transport/stdio": {
       "import": "./dist/transport/impls/stdio/stdio.js",

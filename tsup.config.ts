@@ -9,6 +9,8 @@ export default defineConfig({
     'transport/index.ts',
     'transport/impls/ws/client.ts',
     'transport/impls/ws/server.ts',
+    'transport/impls/unixsocket/client.ts',
+    'transport/impls/unixsocket/server.ts',
     'transport/stdio.ts',
   ],
   format: ['esm', 'cjs'],
