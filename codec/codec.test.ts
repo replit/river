@@ -38,10 +38,9 @@ describe.each(codecs)('codec -- $name', ({ codec }) => {
   });
 
   test('invalid json returns null', () => {
-    const encoder = new TextEncoder();
-    expect(codec.fromBuffer(encoder.encode(''))).toBeNull();
-    expect(codec.fromBuffer(encoder.encode('['))).toBeNull();
-    expect(codec.fromBuffer(encoder.encode('[{}'))).toBeNull();
-    expect(codec.fromBuffer(encoder.encode('{"a":1}[]'))).toBeNull();
+    expect(codec.fromBuffer(Buffer.from(''))).toBeNull();
+    expect(codec.fromBuffer(Buffer.from('['))).toBeNull();
+    expect(codec.fromBuffer(Buffer.from('[{}'))).toBeNull();
+    expect(codec.fromBuffer(Buffer.from('{"a":1}[]'))).toBeNull();
   });
 });

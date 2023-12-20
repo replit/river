@@ -92,9 +92,7 @@ export const BinaryFileServiceConstructor = () =>
       output: Type.Object({ contents: Type.Uint8Array() }),
       errors: Type.Never(),
       async handler(_ctx, { file }) {
-        const bytes: Uint8Array = new TextEncoder().encode(
-          `contents for file ${file}`,
-        );
+        const bytes: Uint8Array = Buffer.from(`contents for file ${file}`);
         return Ok({ contents: bytes });
       },
     })

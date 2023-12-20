@@ -16,7 +16,6 @@ const defaultOptions: Options = {
 
 export class WebSocketServerTransport extends Transport<WebSocketConnection> {
   wss: WebSocketServer;
-  clientId: TransportClientId;
 
   constructor(
     wss: WebSocketServer,
@@ -26,7 +25,10 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
     const options = { ...defaultOptions, ...providedOptions };
     super(options.codec, clientId);
     this.wss = wss;
-    this.clientId = clientId;
+    wss.on('listening', () => {
+      log?.info(`${this.clientId} -- server is listening`);
+    });
+
     this.setupConnectionStatusListeners();
   }
 

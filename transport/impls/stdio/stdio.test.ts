@@ -22,22 +22,33 @@ describe('sending and receiving across node streams works', () => {
       clientToServer,
     );
 
-    const msg = {
-      msg: 'cool',
-      test: 123,
-    };
+    const messages = [
+      {
+        msg: 'cool\nand\ngood',
+        test: 123,
+      },
+      {
+        msg: 'nice',
+        test: [1, 2, 3, 4],
+      },
+    ];
 
-    const p = waitForMessage(serverTransport);
-    clientTransport.send(
-      payloadToTransportMessage(
+    for (const msg of messages) {
+      const transportMessage = payloadToTransportMessage(
         msg,
         'stream',
         clientTransport.clientId,
         serverTransport.clientId,
-      ),
-    );
+      );
 
-    await expect(p).resolves.toStrictEqual(msg);
+      const p = waitForMessage(
+        serverTransport,
+        (incoming) => incoming.id === transportMessage.id,
+      );
+      clientTransport.send(transportMessage);
+      await expect(p).resolves.toStrictEqual(transportMessage.payload);
+    }
+
     await clientTransport.close();
     await serverTransport.close();
     await ensureTransportIsClean(clientTransport);
