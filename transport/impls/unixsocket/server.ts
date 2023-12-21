@@ -50,7 +50,7 @@ export class UnixDomainSocketServerTransport extends Transport<StreamConnection>
 
       sock.on('error', (err) => {
         log?.warn(
-          `${this.clientId} -- socket error from client ${
+          `${this.clientId} -- socket error in connection to ${
             conn?.connectedTo ?? 'unknown'
           }: ${err}`,
         );

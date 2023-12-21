@@ -3,6 +3,7 @@ import { Codec, NaiveJsonCodec } from '../../../codec';
 import { createDelimitedStream } from '../../transforms/delim';
 import { createConnection } from 'node:net';
 import { StreamConnection } from '../stdio/connection';
+import { log } from '../../../logging';
 
 interface Options {
   codec: Codec;
@@ -50,6 +51,14 @@ export class UnixDomainSocketClientTransport extends Transport<StreamConnection>
       if (conn) {
         this.onDisconnect(conn);
       }
+    });
+
+    sock.on('error', (err) => {
+      log?.warn(
+        `${this.clientId} -- socket error in connection to ${
+          conn?.connectedTo ?? 'unknown'
+        }: ${err}`,
+      );
     });
 
     this.onConnect(conn);

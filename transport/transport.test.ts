@@ -1,4 +1,4 @@
-import { describe, test, expect, afterAll, vi, beforeEach } from 'vitest';
+import { describe, test, expect, afterAll, vi } from 'vitest';
 import { Connection, Transport } from '.';
 import http from 'node:http';
 import fs from 'fs';
@@ -20,7 +20,6 @@ const transports: Array<{
   setup: () => Promise<{
     // client, server
     getTransports: () => [Transport<Connection>, Transport<Connection>];
-    before?: () => Promise<void>;
     cleanup: () => Promise<void>;
   }>;
 }> = [
@@ -43,11 +42,8 @@ const transports: Array<{
   {
     name: 'unix sockets',
     setup: async () => {
-      let socketPath: string;
+      let socketPath = getUnixSocketPath();
       return {
-        before: async () => {
-          socketPath = getUnixSocketPath();
-        },
         cleanup: async () => {
           if (fs.existsSync(socketPath)) {
             await fs.promises.unlink(socketPath);
@@ -63,12 +59,7 @@ const transports: Array<{
 ];
 
 describe.each(transports)('transport -- $name', async ({ setup }) => {
-  const { getTransports, cleanup, before } = await setup();
-  beforeEach(async () => {
-    if (before) {
-      await before();
-    }
-  });
+  const { getTransports, cleanup } = await setup();
 
   afterAll(cleanup);
 

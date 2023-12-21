@@ -1,12 +1,10 @@
-import { DelimiterParser } from './delim';
+import { createDelimitedStream } from './delim';
 import { describe, test, expect, vi } from 'vitest';
 
 describe('DelimiterParser', () => {
   test('basic transform', () => {
     const spy = vi.fn();
-    const parser = new DelimiterParser({
-      delimiter: Buffer.from('\n'),
-    });
+    const parser = createDelimitedStream();
 
     parser.on('data', spy);
     parser.write(Buffer.from('content 1\ncontent'));
@@ -23,7 +21,7 @@ describe('DelimiterParser', () => {
   });
 
   test('flushes remaining data when stream ends even with no delimiter', () => {
-    const parser = new DelimiterParser({ delimiter: Buffer.from([0]) });
+    const parser = createDelimitedStream({ delimiter: Buffer.from([0]) });
     const spy = vi.fn();
     parser.on('data', spy);
     parser.write(Buffer.from([1]));
@@ -34,7 +32,7 @@ describe('DelimiterParser', () => {
   });
 
   test('multibyte delimiter crosses a chunk boundary', () => {
-    const parser = new DelimiterParser({ delimiter: Buffer.from([0, 1]) });
+    const parser = createDelimitedStream({ delimiter: Buffer.from([0, 1]) });
     const spy = vi.fn();
     parser.on('data', spy);
     parser.write(Buffer.from([1, 2, 3, 0]));
@@ -44,5 +42,24 @@ describe('DelimiterParser', () => {
     expect(spy).toHaveBeenCalledTimes(2);
     expect(spy).toHaveBeenNthCalledWith(1, Buffer.from([1, 2, 3]));
     expect(spy).toHaveBeenNthCalledWith(2, Buffer.from([4, 5]));
+  });
+
+  test('max buffer size', () => {
+    const parser = createDelimitedStream({
+      maxBufferSizeBytes: 5,
+    });
+
+    const spy = vi.fn();
+    const err = vi.fn();
+    parser.on('data', spy);
+    parser.on('error', err);
+    parser.write(Buffer.from([1, 2, 3, 4, 5]));
+    expect(spy).toHaveBeenCalledTimes(0);
+    expect(err).toHaveBeenCalledTimes(0);
+
+    parser.write(Buffer.from([6]));
+    expect(spy).toHaveBeenCalledTimes(0);
+    expect(err).toHaveBeenCalledTimes(1);
+    parser.end();
   });
 });

@@ -2,7 +2,9 @@ import { Transform, TransformCallback, TransformOptions } from 'node:stream';
 
 export interface DelimiterOptions extends TransformOptions {
   /** The delimiter on which to split incoming data. */
-  delimiter: string | Buffer;
+  delimiter: Buffer;
+  /** Maximum in-memory buffer size before we throw */
+  maxBufferSizeBytes: number;
 }
 
 /**
@@ -12,20 +14,33 @@ export interface DelimiterOptions extends TransformOptions {
 export class DelimiterParser extends Transform {
   delimiter: Buffer;
   buffer: Buffer;
+  maxBufferSizeBytes: number;
 
-  constructor({ delimiter, ...options }: DelimiterOptions) {
+  constructor({ delimiter, maxBufferSizeBytes, ...options }: DelimiterOptions) {
     super(options);
+    this.maxBufferSizeBytes = maxBufferSizeBytes;
     this.delimiter = Buffer.from(delimiter);
     this.buffer = Buffer.alloc(0);
   }
 
+  // tldr; backpressure will be automatically applied for transform streams
+  // but it relies on both the input/output streams connected on either end having
+  // implemented backpressure properly
+  // see: https://nodejs.org/en/guides/backpressuring-in-streams#lifecycle-of-pipe
   _transform(chunk: Buffer, _encoding: BufferEncoding, cb: TransformCallback) {
     let data = Buffer.concat([this.buffer, chunk]);
-
     let position;
     while ((position = data.indexOf(this.delimiter)) !== -1) {
       this.push(data.subarray(0, position));
       data = data.subarray(position + this.delimiter.length);
+    }
+
+    if (data.byteLength > this.maxBufferSizeBytes) {
+      const err = new Error(
+        `buffer overflow: ${data.byteLength}B > ${this.maxBufferSizeBytes}B`,
+      );
+      this.emit('error', err);
+      return cb(err);
     }
 
     this.buffer = data;
@@ -33,13 +48,19 @@ export class DelimiterParser extends Transform {
   }
 
   _flush(cb: TransformCallback) {
-    this.push(this.buffer);
+    if (this.buffer.length) {
+      this.push(this.buffer);
+    }
+
     this.buffer = Buffer.alloc(0);
     cb();
   }
 }
 
 export const defaultDelimiter = Buffer.from('\n');
-export function createDelimitedStream(delimiter?: Buffer): DelimiterParser {
-  return new DelimiterParser({ delimiter: delimiter ?? defaultDelimiter });
+export function createDelimitedStream(options?: Partial<DelimiterOptions>) {
+  return new DelimiterParser({
+    delimiter: options?.delimiter ?? defaultDelimiter,
+    maxBufferSizeBytes: options?.maxBufferSizeBytes ?? 16 * 1024 * 1024, // 16MB
+  });
 }
