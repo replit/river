@@ -1,32 +1,29 @@
-import { describe, test, expect, afterEach, beforeEach } from 'vitest';
+import { describe, test, expect, afterAll } from 'vitest';
 import { UnixDomainSocketClientTransport } from './client';
 import { UnixDomainSocketServerTransport } from './server';
 import {
   getUnixSocketPath,
+  onUnixSocketServeReady,
   payloadToTransportMessage,
   waitForMessage,
 } from '../../../util/testHelpers';
-import fs from 'fs';
 import { testFinishesCleanly } from '../../../__tests__/fixtures/cleanup';
 import { BinaryCodec } from '../../../codec';
 import { msg } from '../..';
+import net from 'node:net';
 
 describe('sending and receiving across unix sockets works', async () => {
-  let socketPath: string;
+  const socketPath = getUnixSocketPath();
+  const server = net.createServer();
+  await onUnixSocketServeReady(server, socketPath);
 
-  beforeEach(async () => {
-    socketPath = getUnixSocketPath();
-  });
-
-  afterEach(async () => {
-    if (fs.existsSync(socketPath)) {
-      await fs.promises.unlink(socketPath);
-    }
+  afterAll(async () => {
+    server.close();
   });
 
   const getTransports = () => [
     new UnixDomainSocketClientTransport(socketPath, 'client', 'SERVER'),
-    new UnixDomainSocketServerTransport(socketPath, 'SERVER'),
+    new UnixDomainSocketServerTransport(server, 'SERVER'),
   ];
 
   test('basic send/receive', async () => {
@@ -69,7 +66,7 @@ describe('sending and receiving across unix sockets works', async () => {
     const clientId2 = 'client2';
     const serverId = 'SERVER';
     const serverTransport = new UnixDomainSocketServerTransport(
-      socketPath,
+      server,
       serverId,
       { codec: BinaryCodec },
     );

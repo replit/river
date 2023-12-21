@@ -3,7 +3,7 @@ import { assert, bench, describe } from 'vitest';
 import {
   createWebSocketServer,
   createWsTransports,
-  onServerReady,
+  onWsServerReady,
   waitForMessage,
 } from '../util/testHelpers';
 import largePayload from './fixtures/largePayload.json';
@@ -42,7 +42,7 @@ const dummyPayloadLarge = () => ({
 const BENCH_DURATION = 1000;
 describe('transport level bandwidth', async () => {
   const server = http.createServer();
-  const port = await onServerReady(server);
+  const port = await onWsServerReady(server);
   const webSocketServer = await createWebSocketServer(server);
   const [clientTransport, serverTransport] = createWsTransports(
     port,
@@ -72,7 +72,7 @@ describe('transport level bandwidth', async () => {
 
 describe('simple router level bandwidth', async () => {
   const httpServer = http.createServer();
-  const port = await onServerReady(httpServer);
+  const port = await onWsServerReady(httpServer);
   const webSocketServer = await createWebSocketServer(httpServer);
   const [clientTransport, serverTransport] = createWsTransports(
     port,
@@ -113,7 +113,7 @@ describe('simple router level bandwidth', async () => {
 
 describe('complex (50 procedures) router level bandwidth', async () => {
   const httpServer = http.createServer();
-  const port = await onServerReady(httpServer);
+  const port = await onWsServerReady(httpServer);
   const webSocketServer = await createWebSocketServer(httpServer);
   const [clientTransport, serverTransport] = createWsTransports(
     port,

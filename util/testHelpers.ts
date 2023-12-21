@@ -25,6 +25,7 @@ import {
 import { Static } from '@sinclair/typebox';
 import { temporaryFile } from 'tempy';
 import { nanoid } from 'nanoid';
+import net from 'node:net';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -43,7 +44,7 @@ export async function createWebSocketServer(server: http.Server) {
  * @returns A promise that resolves with the allocated port number.
  * @throws An error if a port cannot be allocated.
  */
-export async function onServerReady(server: http.Server): Promise<number> {
+export function onWsServerReady(server: http.Server): Promise<number> {
   return new Promise((resolve, reject) => {
     server.listen(() => {
       const addr = server.address();
@@ -53,6 +54,15 @@ export async function onServerReady(server: http.Server): Promise<number> {
         reject(new Error("couldn't find a port to allocate"));
       }
     });
+  });
+}
+
+export function onUnixSocketServeReady(
+  server: net.Server,
+  path: string,
+): Promise<void> {
+  return new Promise<void>((resolve) => {
+    server.listen(path, resolve);
   });
 }
 

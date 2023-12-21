@@ -1,19 +1,20 @@
 import { describe, test, expect, afterAll, vi } from 'vitest';
 import { Connection, Transport } from '.';
 import http from 'node:http';
-import fs from 'fs';
 import {
   createDummyTransportMessage,
   createWebSocketServer,
   createWsTransports,
   getUnixSocketPath,
-  onServerReady,
+  onUnixSocketServeReady,
+  onWsServerReady,
   waitForMessage,
 } from '../util/testHelpers';
 import { testFinishesCleanly, waitFor } from '../__tests__/fixtures/cleanup';
 import { EventMap } from './events';
 import { UnixDomainSocketServerTransport } from './impls/unixsocket/server';
 import { UnixDomainSocketClientTransport } from './impls/unixsocket/client';
+import net from 'node:net';
 
 const transports: Array<{
   name: string;
@@ -27,7 +28,7 @@ const transports: Array<{
     name: 'ws',
     setup: async () => {
       const server = http.createServer();
-      const port = await onServerReady(server);
+      const port = await onWsServerReady(server);
       const wss = await createWebSocketServer(server);
       const cleanup = async () => {
         wss.close();
@@ -42,16 +43,16 @@ const transports: Array<{
   {
     name: 'unix sockets',
     setup: async () => {
-      let socketPath = getUnixSocketPath();
+      const socketPath = getUnixSocketPath();
+      const server = net.createServer();
+      await onUnixSocketServeReady(server, socketPath);
       return {
         cleanup: async () => {
-          if (fs.existsSync(socketPath)) {
-            await fs.promises.unlink(socketPath);
-          }
+          server.close();
         },
         getTransports: () => [
           new UnixDomainSocketClientTransport(socketPath, 'client', 'SERVER'),
-          new UnixDomainSocketServerTransport(socketPath, 'SERVER'),
+          new UnixDomainSocketServerTransport(server, 'SERVER'),
         ],
       };
     },

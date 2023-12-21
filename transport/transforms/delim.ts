@@ -56,8 +56,6 @@ export class DelimiterParser extends Transform {
     cb();
   }
 
-  // node v14 sets `autoDestroy` to true which automatically calls
-  // destroy() on the stream when it emits 'finish' or errors.
   _destroy(error: Error | null, callback: (error: Error | null) => void): void {
     this.buffer = Buffer.alloc(0);
     super._destroy(error, callback);

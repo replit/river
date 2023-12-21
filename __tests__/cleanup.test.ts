@@ -4,7 +4,7 @@ import {
   createWebSocketServer,
   createWsTransports,
   iterNext,
-  onServerReady,
+  onWsServerReady,
 } from '../util/testHelpers';
 import {
   SubscribableServiceConstructor,
@@ -21,7 +21,7 @@ import { buildServiceDefs } from '../router/defs';
 
 describe('procedures should leave no trace after finishing', async () => {
   const httpServer = http.createServer();
-  const port = await onServerReady(httpServer);
+  const port = await onWsServerReady(httpServer);
   const webSocketServer = await createWebSocketServer(httpServer);
   const getTransports = () => createWsTransports(port, webSocketServer);
 
