@@ -38,3 +38,8 @@ export class DelimiterParser extends Transform {
     cb();
   }
 }
+
+export const defaultDelimiter = Buffer.from('\n');
+export function createDelimitedStream(delimiter?: Buffer): DelimiterParser {
+  return new DelimiterParser({ delimiter: delimiter ?? defaultDelimiter });
+}

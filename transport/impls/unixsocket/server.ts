@@ -1,24 +1,21 @@
 import { Transport, TransportClientId } from '../..';
 import { Codec, NaiveJsonCodec } from '../../../codec';
 import { log } from '../../../logging';
-import { DelimiterParser } from '../../transforms/delim';
+import { createDelimitedStream } from '../../transforms/delim';
 import { createServer, type Server } from 'net';
 import { StreamConnection } from '../stdio/connection';
 
 interface Options {
   codec: Codec;
-  delim: Buffer;
 }
 
 const defaultOptions: Options = {
   codec: NaiveJsonCodec,
-  delim: Buffer.from('\n'),
 };
 
 export class UnixDomainSocketServerTransport extends Transport<StreamConnection> {
   path: string;
   server: Server;
-  delim: Buffer;
 
   constructor(
     socketPath: string,
@@ -27,26 +24,23 @@ export class UnixDomainSocketServerTransport extends Transport<StreamConnection>
   ) {
     const options = { ...defaultOptions, ...providedOptions };
     super(options.codec, clientId);
-    this.delim = options.delim;
     this.path = socketPath;
     this.server = createServer((sock) => {
       let conn: StreamConnection | undefined = undefined;
 
-      sock
-        .pipe(new DelimiterParser({ delimiter: this.delim }))
-        .on('data', (data) => {
-          const parsedMsg = this.parseMsg(data);
-          if (!parsedMsg) {
-            return;
-          }
+      sock.pipe(createDelimitedStream()).on('data', (data) => {
+        const parsedMsg = this.parseMsg(data);
+        if (!parsedMsg) {
+          return;
+        }
 
-          if (!conn) {
-            conn = new StreamConnection(this, parsedMsg.from, sock, this.delim);
-            this.onConnect(conn);
-          }
+        if (!conn) {
+          conn = new StreamConnection(this, parsedMsg.from, sock);
+          this.onConnect(conn);
+        }
 
-          this.handleMsg(parsedMsg);
-        });
+        this.handleMsg(parsedMsg);
+      });
 
       sock.on('close', () => {
         if (conn) {

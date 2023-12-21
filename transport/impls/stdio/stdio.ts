@@ -2,18 +2,16 @@ import { Codec } from '../../../codec';
 import { NaiveJsonCodec } from '../../../codec/json';
 import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
-import { DelimiterParser } from '../../transforms/delim';
+import { createDelimitedStream } from '../../transforms/delim';
 import { Transport } from '../../transport';
 import { StreamConnection } from './connection';
 
 interface Options {
   codec: Codec;
-  delim: Buffer;
 }
 
 const defaultOptions: Options = {
   codec: NaiveJsonCodec,
-  delim: Buffer.from('\n'),
 };
 
 /**
@@ -23,7 +21,6 @@ const defaultOptions: Options = {
 export class StdioTransport extends Transport<StreamConnection> {
   input: NodeJS.ReadableStream = process.stdin;
   output: NodeJS.WritableStream = process.stdout;
-  delim: Buffer;
 
   /**
    * Constructs a new StdioTransport instance.
@@ -39,8 +36,7 @@ export class StdioTransport extends Transport<StreamConnection> {
   ) {
     const options = { ...defaultOptions, ...providedOptions };
     super(options.codec, clientId);
-    this.delim = options.delim;
-    this.input = input.pipe(new DelimiterParser({ delimiter: options.delim }));
+    this.input = input.pipe(createDelimitedStream());
     this.output = output;
     this.setupConnectionStatusListeners();
   }
@@ -51,12 +47,7 @@ export class StdioTransport extends Transport<StreamConnection> {
     this.input.on('data', (msg) => {
       const parsedMsg = this.parseMsg(msg);
       if (parsedMsg && !this.connections.has(parsedMsg.from)) {
-        conn = new StreamConnection(
-          this,
-          parsedMsg.from,
-          this.output,
-          this.delim,
-        );
+        conn = new StreamConnection(this, parsedMsg.from, this.output);
         this.onConnect(conn);
       }
 
@@ -76,7 +67,7 @@ export class StdioTransport extends Transport<StreamConnection> {
     }
 
     log?.info(`${this.clientId} -- establishing a new stream to ${to}`);
-    const conn = new StreamConnection(this, to, this.output, this.delim);
+    const conn = new StreamConnection(this, to, this.output);
     this.onConnect(conn);
   }
 }
