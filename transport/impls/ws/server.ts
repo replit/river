@@ -29,7 +29,7 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
       log?.info(`${this.clientId} -- server is listening`);
     });
 
-    this.setupConnectionStatusListeners();
+    this.wss.on('connection', this.connectionHandler);
   }
 
   connectionHandler = (ws: WebSocket) => {
@@ -62,10 +62,6 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
       );
     };
   };
-
-  setupConnectionStatusListeners(): void {
-    this.wss.on('connection', this.connectionHandler);
-  }
 
   async createNewConnection(to: string) {
     const err = `${this.clientId} -- failed to send msg to ${to}, client probably dropped`;

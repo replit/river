@@ -112,6 +112,7 @@ export abstract class Transport<ConnType extends Connection> {
 
   /**
    * Creates a new Transport instance.
+   * This should also set up {@link onConnect}, and {@link onDisconnect} listeners.
    * @param codec The codec used to encode and decode messages.
    * @param clientId The client ID of this transport.
    */
@@ -124,12 +125,6 @@ export abstract class Transport<ConnType extends Connection> {
     this.clientId = clientId;
     this.state = 'open';
   }
-
-  /**
-   * Abstract method that sets up {@link onConnect}, and {@link onDisconnect} listeners.
-   * The downstream implementation needs to implement this.
-   */
-  abstract setupConnectionStatusListeners(): void;
 
   /**
    * Abstract method that creates a new {@link Connection} object. This should call

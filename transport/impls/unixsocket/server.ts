@@ -56,12 +56,9 @@ export class UnixDomainSocketServerTransport extends Transport<StreamConnection>
         );
       });
     });
-    this.setupConnectionStatusListeners();
-  }
 
-  setupConnectionStatusListeners(): void {
     // there can be multiple transports on the same socket path
-    this.server.listen({ path: this.path, exclusive: false }, () => {
+    this.server.listen({ path: this.path }, () => {
       log?.info(`${this.clientId} -- server is listening`);
     });
   }

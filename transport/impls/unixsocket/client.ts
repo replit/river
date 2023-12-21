@@ -28,17 +28,16 @@ export class UnixDomainSocketClientTransport extends Transport<StreamConnection>
     this.serverId = serverId;
   }
 
-  setupConnectionStatusListeners(): void {
-    this.createNewConnection(this.serverId);
-  }
-
+  // lazily create connection on first send to avoid cases
+  // where we create client and server transports at the same time
+  // but the server hasn't created the socket file yet
   async createNewConnection(to: string): Promise<void> {
     const oldConnection = this.connections.get(to);
     if (oldConnection) {
       oldConnection.close();
     }
 
-    const sock = createConnection({ path: this.path });
+    const sock = createConnection(this.path);
     const conn = new StreamConnection(this, to, sock);
     sock.pipe(createDelimitedStream()).on('data', (data) => {
       const parsedMsg = this.parseMsg(data);

@@ -38,12 +38,8 @@ export class StdioTransport extends Transport<StreamConnection> {
     super(options.codec, clientId);
     this.input = input.pipe(createDelimitedStream());
     this.output = output;
-    this.setupConnectionStatusListeners();
-  }
 
-  setupConnectionStatusListeners(): void {
     let conn: StreamConnection | undefined = undefined;
-
     this.input.on('data', (msg) => {
       const parsedMsg = this.parseMsg(msg);
       if (parsedMsg && !this.connections.has(parsedMsg.from)) {

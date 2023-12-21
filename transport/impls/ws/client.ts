@@ -53,10 +53,8 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
     this.serverId = serverId;
     this.options = options;
     this.reconnectPromises = new Map();
-    this.setupConnectionStatusListeners();
-  }
 
-  setupConnectionStatusListeners(): void {
+    // eagerly connect as soon as we initialize
     this.createNewConnection(this.serverId);
   }
 
