@@ -40,25 +40,29 @@ export class UnixDomainSocketClientTransport extends Transport<StreamConnection>
 
     const sock = createConnection(this.path);
     const conn = new StreamConnection(this, to, sock);
-    sock.pipe(createDelimitedStream()).on('data', (data) => {
+    const delimStream = createDelimitedStream();
+    sock.pipe(delimStream).on('data', (data) => {
       const parsedMsg = this.parseMsg(data);
       if (parsedMsg) {
         this.handleMsg(parsedMsg);
       }
     });
 
-    sock.on('close', () => {
+    const cleanup = () => {
+      delimStream.destroy();
       if (conn) {
         this.onDisconnect(conn);
       }
-    });
+    };
 
+    sock.on('close', cleanup);
     sock.on('error', (err) => {
       log?.warn(
         `${this.clientId} -- socket error in connection to ${
           conn?.connectedTo ?? 'unknown'
         }: ${err}`,
       );
+      cleanup();
     });
 
     this.onConnect(conn);

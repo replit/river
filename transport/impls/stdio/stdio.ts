@@ -36,7 +36,9 @@ export class StdioTransport extends Transport<StreamConnection> {
   ) {
     const options = { ...defaultOptions, ...providedOptions };
     super(options.codec, clientId);
-    this.input = input.pipe(createDelimitedStream());
+
+    const delimStream = createDelimitedStream();
+    this.input = input.pipe(delimStream);
     this.output = output;
 
     let conn: StreamConnection | undefined = undefined;
@@ -50,10 +52,21 @@ export class StdioTransport extends Transport<StreamConnection> {
       this.handleMsg(parsedMsg);
     });
 
-    this.input.on('close', () => {
+    const cleanup = () => {
+      delimStream.destroy();
       if (conn) {
         this.onDisconnect(conn);
       }
+    };
+
+    this.input.on('close', cleanup);
+    this.input.on('error', (err) => {
+      log?.warn(
+        `${this.clientId} -- stdio error in connection to ${
+          conn?.connectedTo ?? 'unknown'
+        }: ${err}`,
+      );
+      cleanup();
     });
   }
 
