@@ -1,5 +1,5 @@
 import { describe, test, expect, afterAll, vi, beforeEach } from 'vitest';
-import { Connection, Transport } from '../transport';
+import { Connection, Transport } from '.';
 import http from 'http';
 import fs from 'fs';
 import {
@@ -10,10 +10,10 @@ import {
   onServerReady,
   waitForMessage,
 } from '../util/testHelpers';
-import { testFinishesCleanly, waitFor } from './fixtures/cleanup';
-import { EventMap } from '../transport/events';
-import { UnixDomainSocketServerTransport } from '../transport/impls/unixsocket/server';
-import { UnixDomainSocketClientTransport } from '../transport/impls/unixsocket/client';
+import { testFinishesCleanly, waitFor } from '../__tests__/fixtures/cleanup';
+import { EventMap } from './events';
+import { UnixDomainSocketServerTransport } from './impls/unixsocket/server';
+import { UnixDomainSocketClientTransport } from './impls/unixsocket/client';
 
 const transports: Array<{
   name: string;
