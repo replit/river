@@ -8,7 +8,7 @@ import {
 } from '../util/testHelpers';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
-import http from 'http';
+import http from 'node:http';
 import {
   BinaryFileServiceConstructor,
   DIV_BY_ZERO,

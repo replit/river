@@ -1,7 +1,7 @@
 import { Transport, TransportClientId } from '../..';
 import { Codec, NaiveJsonCodec } from '../../../codec';
 import { createDelimitedStream } from '../../transforms/delim';
-import { createConnection } from 'net';
+import { createConnection } from 'node:net';
 import { StreamConnection } from '../stdio/connection';
 
 interface Options {

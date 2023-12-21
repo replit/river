@@ -1,6 +1,6 @@
 import { describe, test, expect, afterAll, vi, beforeEach } from 'vitest';
 import { Connection, Transport } from '.';
-import http from 'http';
+import http from 'node:http';
 import fs from 'fs';
 import {
   createDummyTransportMessage,

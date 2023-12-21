@@ -8,7 +8,7 @@ import {
   test,
   vi,
 } from 'vitest';
-import http from 'http';
+import http from 'node:http';
 import {
   createLocalWebSocketClient,
   createWebSocketServer,

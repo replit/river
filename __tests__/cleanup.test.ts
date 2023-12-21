@@ -1,5 +1,5 @@
 import { afterAll, assert, describe, expect, test } from 'vitest';
-import http from 'http';
+import http from 'node:http';
 import {
   createWebSocketServer,
   createWsTransports,

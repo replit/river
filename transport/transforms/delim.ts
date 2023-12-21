@@ -1,4 +1,4 @@
-import { Transform, TransformCallback, TransformOptions } from 'stream';
+import { Transform, TransformCallback, TransformOptions } from 'node:stream';
 
 export interface DelimiterOptions extends TransformOptions {
   /** The delimiter on which to split incoming data. */

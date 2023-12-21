@@ -1,4 +1,4 @@
-import http from 'http';
+import http from 'node:http';
 import { describe, test, expect, afterAll } from 'vitest';
 import {
   createWebSocketServer,

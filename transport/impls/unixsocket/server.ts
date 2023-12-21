@@ -2,7 +2,7 @@ import { Transport, TransportClientId } from '../..';
 import { Codec, NaiveJsonCodec } from '../../../codec';
 import { log } from '../../../logging';
 import { createDelimitedStream } from '../../transforms/delim';
-import { createServer, type Server } from 'net';
+import { createServer, type Server } from 'node:net';
 import { StreamConnection } from '../stdio/connection';
 
 interface Options {

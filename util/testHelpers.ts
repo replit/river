@@ -1,6 +1,6 @@
 import WebSocket from 'isomorphic-ws';
 import { WebSocketServer } from 'ws';
-import http from 'http';
+import http from 'node:http';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import {
   Connection,
