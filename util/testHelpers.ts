@@ -23,7 +23,6 @@ import {
   UNCAUGHT_ERROR,
 } from '../router';
 import { Static } from '@sinclair/typebox';
-import { temporaryFile } from 'tempy';
 import { nanoid } from 'nanoid';
 import net from 'node:net';
 
@@ -290,5 +289,5 @@ export const getUnixSocketPath = () => {
   // https://nodejs.org/api/net.html#identifying-paths-for-ipc-connections
   return process.platform === 'win32'
     ? `\\\\?\\pipe\\${nanoid()}`
-    : temporaryFile({ extension: 'sock' });
+    : `/tmp/${nanoid()}.sock`;
 };
