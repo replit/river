@@ -4,11 +4,11 @@ import {
   createWebSocketServer,
   createWsTransports,
   iterNext,
-  onServerReady,
+  onWsServerReady,
 } from '../util/testHelpers';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
-import http from 'http';
+import http from 'node:http';
 import {
   BinaryFileServiceConstructor,
   DIV_BY_ZERO,
@@ -30,7 +30,7 @@ describe.each(codecs)(
   'client <-> server integration test ($name codec)',
   async ({ codec }) => {
     const httpServer = http.createServer();
-    const port = await onServerReady(httpServer);
+    const port = await onWsServerReady(httpServer);
     const webSocketServer = await createWebSocketServer(httpServer);
     const getTransports = () =>
       createWsTransports(port, webSocketServer, codec);

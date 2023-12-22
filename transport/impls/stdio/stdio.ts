@@ -2,34 +2,9 @@ import { Codec } from '../../../codec';
 import { NaiveJsonCodec } from '../../../codec/json';
 import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
-import { Connection, Transport } from '../../transport';
-import readline from 'readline';
-
-const newlineBuff = new TextEncoder().encode('\n');
-
-export class StdioConnection extends Connection {
-  output: NodeJS.WritableStream;
-
-  constructor(
-    transport: Transport<StdioConnection>,
-    connectedTo: TransportClientId,
-    output: NodeJS.WritableStream,
-  ) {
-    super(transport, connectedTo);
-    this.output = output;
-  }
-
-  send(payload: Uint8Array) {
-    const out = new Uint8Array(payload.length + newlineBuff.length);
-    out.set(payload, 0);
-    out.set(newlineBuff, payload.length);
-    return this.output.write(out);
-  }
-
-  async close() {
-    this.output.end();
-  }
-}
+import { createDelimitedStream } from '../../transforms/delim';
+import { Transport } from '../../transport';
+import { StreamConnection } from './connection';
 
 interface Options {
   codec: Codec;
@@ -43,8 +18,7 @@ const defaultOptions: Options = {
  * A transport implementation that uses standard input and output streams.
  * @extends Transport
  */
-export class StdioTransport extends Transport<StdioConnection> {
-  clientId: TransportClientId;
+export class StdioTransport extends Transport<StreamConnection> {
   input: NodeJS.ReadableStream = process.stdin;
   output: NodeJS.WritableStream = process.stdout;
 
@@ -62,33 +36,37 @@ export class StdioTransport extends Transport<StdioConnection> {
   ) {
     const options = { ...defaultOptions, ...providedOptions };
     super(options.codec, clientId);
-    this.clientId = clientId;
-    this.input = input;
+
+    const delimStream = createDelimitedStream();
+    this.input = input.pipe(delimStream);
     this.output = output;
-    this.setupConnectionStatusListeners();
-  }
 
-  setupConnectionStatusListeners(): void {
-    let conn: StdioConnection | undefined = undefined;
-    const rl = readline.createInterface({
-      input: this.input,
-    });
-
-    const encoder = new TextEncoder();
-    rl.on('line', (msg) => {
-      const parsedMsg = this.parseMsg(encoder.encode(msg));
+    let conn: StreamConnection | undefined = undefined;
+    this.input.on('data', (msg) => {
+      const parsedMsg = this.parseMsg(msg);
       if (parsedMsg && !this.connections.has(parsedMsg.from)) {
-        conn = new StdioConnection(this, parsedMsg.from, this.output);
+        conn = new StreamConnection(this, parsedMsg.from, this.output);
         this.onConnect(conn);
       }
 
       this.handleMsg(parsedMsg);
     });
 
-    rl.on('close', () => {
+    const cleanup = () => {
+      delimStream.destroy();
       if (conn) {
         this.onDisconnect(conn);
       }
+    };
+
+    this.input.on('close', cleanup);
+    this.input.on('error', (err) => {
+      log?.warn(
+        `${this.clientId} -- stdio error in connection to ${
+          conn?.connectedTo ?? 'unknown'
+        }: ${err}`,
+      );
+      cleanup();
     });
   }
 
@@ -98,7 +76,7 @@ export class StdioTransport extends Transport<StdioConnection> {
     }
 
     log?.info(`${this.clientId} -- establishing a new stream to ${to}`);
-    const conn = new StdioConnection(this, to, this.output);
+    const conn = new StreamConnection(this, to, this.output);
     this.onConnect(conn);
   }
 }
