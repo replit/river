@@ -1,10 +1,10 @@
-import http from 'http';
+import http from 'node:http';
 import { describe, test, expect, afterAll } from 'vitest';
 import {
   createWebSocketServer,
   createWsTransports,
   createDummyTransportMessage,
-  onServerReady,
+  onWsServerReady,
   createLocalWebSocketClient,
   waitForMessage,
 } from '../../../util/testHelpers';
@@ -15,7 +15,7 @@ import { testFinishesCleanly } from '../../../__tests__/fixtures/cleanup';
 
 describe('sending and receiving across websockets works', async () => {
   const server = http.createServer();
-  const port = await onServerReady(server);
+  const port = await onWsServerReady(server);
   const wss = await createWebSocketServer(server);
 
   afterAll(() => {
@@ -102,7 +102,7 @@ describe('sending and receiving across websockets works', async () => {
 
 describe('reconnect', async () => {
   const server = http.createServer();
-  const port = await onServerReady(server);
+  const port = await onWsServerReady(server);
   const wss = await createWebSocketServer(server);
 
   afterAll(() => {

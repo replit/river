@@ -2,18 +2,16 @@ import { Codec } from '../../../codec';
 import { NaiveJsonCodec } from '../../../codec/json';
 import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
-import { DelimiterParser } from '../../transforms/delim';
+import { createDelimitedStream } from '../../transforms/delim';
 import { Transport } from '../../transport';
 import { StreamConnection } from './connection';
 
 interface Options {
   codec: Codec;
-  delim: Buffer;
 }
 
 const defaultOptions: Options = {
   codec: NaiveJsonCodec,
-  delim: Buffer.from('\n'),
 };
 
 /**
@@ -23,7 +21,6 @@ const defaultOptions: Options = {
 export class StdioTransport extends Transport<StreamConnection> {
   input: NodeJS.ReadableStream = process.stdin;
   output: NodeJS.WritableStream = process.stdout;
-  delim: Buffer;
 
   /**
    * Constructs a new StdioTransport instance.
@@ -39,34 +36,37 @@ export class StdioTransport extends Transport<StreamConnection> {
   ) {
     const options = { ...defaultOptions, ...providedOptions };
     super(options.codec, clientId);
-    this.delim = options.delim;
-    this.input = input.pipe(new DelimiterParser({ delimiter: options.delim }));
+
+    const delimStream = createDelimitedStream();
+    this.input = input.pipe(delimStream);
     this.output = output;
-    this.setupConnectionStatusListeners();
-  }
 
-  setupConnectionStatusListeners(): void {
     let conn: StreamConnection | undefined = undefined;
-
     this.input.on('data', (msg) => {
       const parsedMsg = this.parseMsg(msg);
       if (parsedMsg && !this.connections.has(parsedMsg.from)) {
-        conn = new StreamConnection(
-          this,
-          parsedMsg.from,
-          this.output,
-          this.delim,
-        );
+        conn = new StreamConnection(this, parsedMsg.from, this.output);
         this.onConnect(conn);
       }
 
       this.handleMsg(parsedMsg);
     });
 
-    this.input.on('close', () => {
+    const cleanup = () => {
+      delimStream.destroy();
       if (conn) {
         this.onDisconnect(conn);
       }
+    };
+
+    this.input.on('close', cleanup);
+    this.input.on('error', (err) => {
+      log?.warn(
+        `${this.clientId} -- stdio error in connection to ${
+          conn?.connectedTo ?? 'unknown'
+        }: ${err}`,
+      );
+      cleanup();
     });
   }
 
@@ -76,7 +76,7 @@ export class StdioTransport extends Transport<StreamConnection> {
     }
 
     log?.info(`${this.clientId} -- establishing a new stream to ${to}`);
-    const conn = new StreamConnection(this, to, this.output, this.delim);
+    const conn = new StreamConnection(this, to, this.output);
     this.onConnect(conn);
   }
 }

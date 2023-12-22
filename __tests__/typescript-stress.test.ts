@@ -106,7 +106,6 @@ export class MockTransport extends Transport<Connection> {
     return id;
   }
 
-  setupConnectionStatusListeners() {}
   async createNewConnection() {}
   async close() {}
 }

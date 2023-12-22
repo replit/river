@@ -1,19 +1,14 @@
-import { describe, test, expect, afterAll, vi, beforeEach } from 'vitest';
+import { describe, test, expect, afterAll, vi } from 'vitest';
 import {
   createDummyTransportMessage,
   waitForMessage,
 } from '../util/testHelpers';
-import { testFinishesCleanly, waitFor } from './fixtures/cleanup';
 import { EventMap } from '../transport/events';
-import { transports } from './fixtures/transports';
+import { transports } from '../__tests__/fixtures/transports';
+import { testFinishesCleanly, waitFor } from '../__tests__/fixtures/cleanup';
 
 describe.each(transports)('transport -- $name', async ({ setup }) => {
-  const { getTransports, cleanup, before } = await setup();
-  beforeEach(async () => {
-    if (before) {
-      await before();
-    }
-  });
+  const { getTransports, cleanup } = await setup();
 
   afterAll(cleanup);
   test('connection is recreated after clean disconnect', async () => {

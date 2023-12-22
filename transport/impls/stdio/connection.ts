@@ -1,18 +1,16 @@
 import { Connection, Transport, TransportClientId } from '../..';
+import { defaultDelimiter } from '../../transforms/delim';
 
 export class StreamConnection extends Connection {
   output: NodeJS.WritableStream;
-  delim: Buffer;
 
   constructor(
     transport: Transport<StreamConnection>,
     connectedTo: TransportClientId,
     output: NodeJS.WritableStream,
-    delim: Buffer,
   ) {
     super(transport, connectedTo);
     this.output = output;
-    this.delim = delim;
   }
 
   send(payload: Uint8Array) {
@@ -20,7 +18,7 @@ export class StreamConnection extends Connection {
       return false;
     }
 
-    return this.output.write(Buffer.concat([payload, this.delim]));
+    return this.output.write(Buffer.concat([payload, defaultDelimiter]));
   }
 
   async close() {

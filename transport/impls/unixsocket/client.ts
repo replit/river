@@ -1,23 +1,21 @@
 import { Transport, TransportClientId } from '../..';
 import { Codec, NaiveJsonCodec } from '../../../codec';
-import { DelimiterParser } from '../../transforms/delim';
-import { createConnection } from 'net';
+import { createDelimitedStream } from '../../transforms/delim';
+import { createConnection } from 'node:net';
 import { StreamConnection } from '../stdio/connection';
+import { log } from '../../../logging';
 
 interface Options {
   codec: Codec;
-  delim: Buffer;
 }
 
 const defaultOptions: Options = {
   codec: NaiveJsonCodec,
-  delim: Buffer.from('\n'),
 };
 
 export class UnixDomainSocketClientTransport extends Transport<StreamConnection> {
   path: string;
   serverId: TransportClientId;
-  delim: Buffer;
 
   constructor(
     socketPath: string,
@@ -27,36 +25,44 @@ export class UnixDomainSocketClientTransport extends Transport<StreamConnection>
   ) {
     const options = { ...defaultOptions, ...providedOptions };
     super(options.codec, clientId);
-    this.delim = options.delim;
     this.path = socketPath;
     this.serverId = serverId;
   }
 
-  setupConnectionStatusListeners(): void {
-    this.createNewConnection(this.serverId);
-  }
-
+  // lazily create connection on first send to avoid cases
+  // where we create client and server transports at the same time
+  // but the server hasn't created the socket file yet
   async createNewConnection(to: string): Promise<void> {
     const oldConnection = this.connections.get(to);
     if (oldConnection) {
       oldConnection.close();
     }
 
-    const sock = createConnection({ path: this.path });
-    const conn = new StreamConnection(this, to, sock, this.delim);
-    sock
-      .pipe(new DelimiterParser({ delimiter: this.delim }))
-      .on('data', (data) => {
-        const parsedMsg = this.parseMsg(data);
-        if (parsedMsg) {
-          this.handleMsg(parsedMsg);
-        }
-      });
+    const sock = createConnection(this.path);
+    const conn = new StreamConnection(this, to, sock);
+    const delimStream = createDelimitedStream();
+    sock.pipe(delimStream).on('data', (data) => {
+      const parsedMsg = this.parseMsg(data);
+      if (parsedMsg) {
+        this.handleMsg(parsedMsg);
+      }
+    });
 
-    sock.on('close', () => {
+    const cleanup = () => {
+      delimStream.destroy();
       if (conn) {
         this.onDisconnect(conn);
       }
+    };
+
+    sock.on('close', cleanup);
+    sock.on('error', (err) => {
+      log?.warn(
+        `${this.clientId} -- socket error in connection to ${
+          conn?.connectedTo ?? 'unknown'
+        }: ${err}`,
+      );
+      cleanup();
     });
 
     this.onConnect(conn);

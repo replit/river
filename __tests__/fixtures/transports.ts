@@ -1,11 +1,12 @@
 import { Connection, Transport } from '../../transport';
-import http from 'http';
-import fs from 'fs';
+import http from 'node:http';
+import net from 'node:net';
 import {
   createWebSocketServer,
   createWsTransports,
   getUnixSocketPath,
-  onServerReady,
+  onUnixSocketServeReady,
+  onWsServerReady,
 } from '../../util/testHelpers';
 import { UnixDomainSocketClientTransport } from '../../transport/impls/unixsocket/client';
 import { UnixDomainSocketServerTransport } from '../../transport/impls/unixsocket/server';
@@ -15,7 +16,6 @@ export const transports: Array<{
   setup: () => Promise<{
     // client, server
     getTransports: () => [Transport<Connection>, Transport<Connection>];
-    before?: () => Promise<void>;
     cleanup: () => Promise<void>;
   }>;
 }> = [
@@ -23,7 +23,7 @@ export const transports: Array<{
     name: 'ws',
     setup: async () => {
       const server = http.createServer();
-      const port = await onServerReady(server);
+      const port = await onWsServerReady(server);
       const wss = await createWebSocketServer(server);
       const cleanup = async () => {
         wss.close();
@@ -38,19 +38,16 @@ export const transports: Array<{
   {
     name: 'unix sockets',
     setup: async () => {
-      let socketPath: string;
+      const socketPath = getUnixSocketPath();
+      const server = net.createServer();
+      await onUnixSocketServeReady(server, socketPath);
       return {
-        before: async () => {
-          socketPath = getUnixSocketPath();
-        },
         cleanup: async () => {
-          if (fs.existsSync(socketPath)) {
-            await fs.promises.unlink(socketPath);
-          }
+          server.close();
         },
         getTransports: () => [
           new UnixDomainSocketClientTransport(socketPath, 'client', 'SERVER'),
-          new UnixDomainSocketServerTransport(socketPath, 'SERVER'),
+          new UnixDomainSocketServerTransport(server, 'SERVER'),
         ],
       };
     },
