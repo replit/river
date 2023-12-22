@@ -1,69 +1,16 @@
 import { describe, test, expect, afterAll, vi } from 'vitest';
-import { Connection, Transport } from '.';
-import http from 'node:http';
 import {
   createDummyTransportMessage,
-  createWebSocketServer,
-  createWsTransports,
-  getUnixSocketPath,
-  onUnixSocketServeReady,
-  onWsServerReady,
   waitForMessage,
 } from '../util/testHelpers';
+import { EventMap } from '../transport/events';
+import { transports } from '../__tests__/fixtures/transports';
 import { testFinishesCleanly, waitFor } from '../__tests__/fixtures/cleanup';
-import { EventMap } from './events';
-import { UnixDomainSocketServerTransport } from './impls/unixsocket/server';
-import { UnixDomainSocketClientTransport } from './impls/unixsocket/client';
-import net from 'node:net';
-
-const transports: Array<{
-  name: string;
-  setup: () => Promise<{
-    // client, server
-    getTransports: () => [Transport<Connection>, Transport<Connection>];
-    cleanup: () => Promise<void>;
-  }>;
-}> = [
-  {
-    name: 'ws',
-    setup: async () => {
-      const server = http.createServer();
-      const port = await onWsServerReady(server);
-      const wss = await createWebSocketServer(server);
-      const cleanup = async () => {
-        wss.close();
-        server.close();
-      };
-      return {
-        getTransports: () => createWsTransports(port, wss),
-        cleanup,
-      };
-    },
-  },
-  {
-    name: 'unix sockets',
-    setup: async () => {
-      const socketPath = getUnixSocketPath();
-      const server = net.createServer();
-      await onUnixSocketServeReady(server, socketPath);
-      return {
-        cleanup: async () => {
-          server.close();
-        },
-        getTransports: () => [
-          new UnixDomainSocketClientTransport(socketPath, 'client', 'SERVER'),
-          new UnixDomainSocketServerTransport(server, 'SERVER'),
-        ],
-      };
-    },
-  },
-];
 
 describe.each(transports)('transport -- $name', async ({ setup }) => {
   const { getTransports, cleanup } = await setup();
 
   afterAll(cleanup);
-
   test('connection is recreated after clean disconnect', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const msg1 = createDummyTransportMessage();
