@@ -1,12 +1,12 @@
 # river - Streaming Remote Procedure Calls
 
-It's like tRPC but...
+It's like tRPC but with
 
-- with JSON Schema Support
-- with full-duplex streaming
-- with support for service multiplexing
-- with Result types and error handling
-- over WebSockets
+- JSON Schema Support
+- full-duplex streaming
+- support for service multiplexing
+- Result types and error handling
+- over any transport (WebSockets, stdio, Unix Domain Socket out of the box)
 
 To use River, you must be on least Typescript 5 with `"moduleResolution": "bundler"`.
 
