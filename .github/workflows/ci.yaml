@@ -10,10 +10,11 @@ on:
 
 jobs:
   build-and-test:
-    strategy:
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    # ci is expensive, let's turn it off for now
+    # strategy:
+    #   matrix:
+    #     os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
@@ -30,9 +31,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          key: ubuntu-latest-node-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-node-
+            ubuntu-latest-node-
 
       - run: npm ci
 
