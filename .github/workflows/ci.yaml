@@ -12,7 +12,9 @@ jobs:
   build-and-test:
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, ubuntu-latest]
+        # ci on mac is expensive, let's turn it off for now
+        # os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
