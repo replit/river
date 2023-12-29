@@ -86,6 +86,10 @@ httpServer.listen(port);
 In another file for the client (to create a separate entrypoint),
 
 ```ts
+import WebSocket from 'isomorphic-ws';
+import { WebSocketClientTransport } from '@replit/river/transport/ws/client';
+import { createClient } from '@replit/river';
+
 const websocketUrl = `wss://locahost:3000`;
 const transport = new WebSocketClientTransport(
   async () => new WebSocket(websocketUrl),
