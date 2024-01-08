@@ -282,6 +282,14 @@ function handleRpc(
     }
 
     function onMessage(msg: OpaqueTransportMessage) {
+      if (msg.streamId !== streamId) {
+        return;
+      }
+
+      if (msg.to !== transport.clientId) {
+        return;
+      }
+
       if (msg.streamId === streamId) {
         // cleanup and resolve as soon as we get a message
         cleanup();
@@ -349,6 +357,10 @@ function handleStream(
       return;
     }
 
+    if (msg.to !== transport.clientId) {
+      return;
+    }
+
     if (isStreamClose(msg.controlFlags)) {
       cleanup();
     } else {
@@ -407,6 +419,10 @@ function handleSubscribe(
   const outputStream = pushable({ objectMode: true });
   function onMessage(msg: OpaqueTransportMessage) {
     if (msg.streamId !== streamId) {
+      return;
+    }
+
+    if (msg.to !== transport.clientId) {
       return;
     }
 
@@ -510,6 +526,10 @@ function handleUpload(
     }
 
     function onMessage(msg: OpaqueTransportMessage) {
+      if (msg.to !== transport.clientId) {
+        return;
+      }
+
       if (msg.streamId === streamId) {
         // cleanup and resolve as soon as we get a message
         cleanup();

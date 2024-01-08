@@ -247,10 +247,6 @@ export abstract class Transport<ConnType extends Connection> {
     } else {
       // regular river message
       log?.info(`${this.clientId} -- received msg: ${JSON.stringify(msg)}`);
-      if (msg.to !== this.clientId) {
-        return;
-      }
-
       this.eventDispatcher.dispatchEvent('message', msg);
 
       if (!isAck(msg.controlFlags)) {
