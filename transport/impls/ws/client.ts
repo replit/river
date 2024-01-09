@@ -76,6 +76,8 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
         log?.info(`${this.clientId} -- establishing a new websocket to ${to}`);
         const ws = await this.wsGetter(to);
         if (ws.readyState === ws.OPEN) {
+          if (this.state !== 'open')
+            return resolve({ err: 'transport is closed' });
           return resolve({ ws });
         }
 
@@ -83,16 +85,24 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
           return resolve({ err: 'ws is closing or closed' });
         }
 
-        ws.addEventListener('open', function onOpen() {
+        const onOpen = () => {
           ws.removeEventListener('open', onOpen);
+          if (this.state !== 'open')
+            return resolve({ err: 'transport is closed' });
           resolve({ ws });
-        });
+        };
 
-        ws.addEventListener('close', function onClose(evt) {
+        const onClose = (evt: WebSocket.CloseEvent) => {
           ws.removeEventListener('close', onClose);
+          if (this.state !== 'open')
+            return resolve({ err: 'transport is closed' });
           resolve({ err: evt.reason });
-        });
+        };
+
+        ws.addEventListener('open', onOpen);
+        ws.addEventListener('close', onClose);
       });
+
       this.reconnectPromises.set(to, reconnectPromise);
     }
 
@@ -134,5 +144,15 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
         this.options.retryIntervalMs * attempt,
       );
     }
+  }
+
+  async close() {
+    super.close();
+    this.reconnectPromises.clear();
+  }
+
+  async destroy() {
+    super.destroy();
+    this.reconnectPromises.clear();
   }
 }
