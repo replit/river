@@ -1,4 +1,5 @@
 const LoggingLevels = {
+  debug: -1,
   info: 0,
   warn: 1,
   error: 2,
@@ -23,11 +24,16 @@ const defaultLoggingLevel: LoggingLevel = 'warn';
  * @param color - Whether to use colored log levels.
  */
 export function bindLogger(write: (msg: string) => void, color?: boolean) {
+  const debug = color ? '\u001b[37mdebug\u001b[0m' : 'debug';
   const info = color ? '\u001b[37minfo\u001b[0m' : 'info';
   const warn = color ? '\u001b[33mwarn\u001b[0m' : 'warn';
   const error = color ? '\u001b[31merr\u001b[0m' : 'err';
 
   log = {
+    debug: (msg) =>
+      log &&
+      LoggingLevels[log.minLevel] <= -1 &&
+      write(`[river:${debug}] ${msg}`),
     info: (msg) =>
       log &&
       LoggingLevels[log.minLevel] <= 0 &&

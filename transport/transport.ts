@@ -240,13 +240,13 @@ export abstract class Transport<ConnType extends Connection> {
 
     if (isAck(msg.controlFlags) && Value.Check(TransportAckSchema, msg)) {
       // process ack
-      log?.info(`${this.clientId} -- received ack: ${JSON.stringify(msg)}`);
+      log?.debug(`${this.clientId} -- received ack: ${JSON.stringify(msg)}`);
       if (this.sendBuffer.has(msg.payload.ack)) {
         this.sendBuffer.delete(msg.payload.ack);
       }
     } else {
       // regular river message
-      log?.info(`${this.clientId} -- received msg: ${JSON.stringify(msg)}`);
+      log?.debug(`${this.clientId} -- received msg: ${JSON.stringify(msg)}`);
       this.eventDispatcher.dispatchEvent('message', msg);
 
       if (!isAck(msg.controlFlags)) {
@@ -314,7 +314,7 @@ export abstract class Transport<ConnType extends Connection> {
     }
 
     if (conn) {
-      log?.info(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
+      log?.debug(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
       const ok = conn.send(this.codec.toBuffer(msg));
       if (ok) {
         return msg.id;
