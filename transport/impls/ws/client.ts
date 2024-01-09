@@ -76,8 +76,6 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
         log?.info(`${this.clientId} -- establishing a new websocket to ${to}`);
         const ws = await this.wsGetter(to);
         if (ws.readyState === ws.OPEN) {
-          if (this.state !== 'open')
-            return resolve({ err: 'transport is closed' });
           return resolve({ ws });
         }
 
@@ -87,15 +85,11 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
 
         const onOpen = () => {
           ws.removeEventListener('open', onOpen);
-          if (this.state !== 'open')
-            return resolve({ err: 'transport is closed' });
           resolve({ ws });
         };
 
         const onClose = (evt: WebSocket.CloseEvent) => {
           ws.removeEventListener('close', onClose);
-          if (this.state !== 'open')
-            return resolve({ err: 'transport is closed' });
           resolve({ err: evt.reason });
         };
 
@@ -107,6 +101,16 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
     }
 
     const res = await reconnectPromise;
+
+    if (this.state !== 'open') {
+      this.reconnectPromises.delete(to);
+      if ('ws' in res) {
+        res.ws.close();
+      }
+
+      return;
+    }
+
     if ('ws' in res && res.ws.readyState === res.ws.OPEN) {
       if (res.ws === this.connections.get(to)?.ws) {
         // this is our current connection
