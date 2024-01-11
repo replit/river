@@ -1,5 +1,5 @@
 import {
-  TLiteralString,
+  TLiteral,
   TNever,
   TObject,
   TSchema,
@@ -8,6 +8,7 @@ import {
   Type,
 } from '@sinclair/typebox';
 
+type TLiteralString = TLiteral<string>;
 export type RiverErrorSchema =
   | TObject<{
       code: TLiteralString | TUnion<TLiteralString[]>;
