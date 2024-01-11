@@ -62,7 +62,6 @@
     "ws": "^8.13.0"
   },
   "devDependencies": {
-    "@sinclair/typebox": "~0.31.28",
     "@types/ws": "^8.5.5",
     "@vitest/ui": "^1.1.0",
     "prettier": "^3.0.0",
