@@ -63,11 +63,11 @@
   },
   "devDependencies": {
     "@types/ws": "^8.5.5",
-    "@vitest/ui": "^1.1.0",
+    "@vitest/ui": "^1.2.1",
     "prettier": "^3.0.0",
     "tsup": "^7.2.0",
     "typescript": "^5.2.2",
-    "vitest": "^1.1.0"
+    "vitest": "^1.2.1"
   },
   "scripts": {
     "check": "tsc --noEmit && npx prettier . --check",
