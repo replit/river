@@ -36,19 +36,20 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
   tryReconnecting: boolean = true;
 
   /**
-   * Creates a new WebSocketTransport instance.
+   * Creates a new WebSocketClientTransport instance.
    * @param wsGetter A function that returns a Promise that resolves to a WebSocket instance.
-   * @param clientId The ID of the client using the transport.
+   * @param sessionId The ID of the client using the transport. This should be unique per session.
+   * @param serverId The ID of the server this transport is connecting to.
    * @param providedOptions An optional object containing configuration options for the transport.
    */
   constructor(
     wsGetter: () => Promise<WebSocket>,
-    clientId: TransportClientId,
+    sessionId: TransportClientId,
     serverId: TransportClientId,
     providedOptions?: Partial<Options>,
   ) {
     const options = { ...defaultOptions, ...providedOptions };
-    super(options.codec, clientId);
+    super(options.codec, sessionId);
     this.wsGetter = wsGetter;
     this.serverId = serverId;
     this.options = options;
@@ -74,27 +75,32 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
 
       reconnectPromise = new Promise<WebSocketResult>(async (resolve) => {
         log?.info(`${this.clientId} -- establishing a new websocket to ${to}`);
-        const ws = await this.wsGetter(to);
-        if (ws.readyState === ws.OPEN) {
-          return resolve({ ws });
+        try {
+          const ws = await this.wsGetter(to);
+          if (ws.readyState === ws.OPEN) {
+            return resolve({ ws });
+          }
+
+          if (ws.readyState === ws.CLOSING || ws.readyState === ws.CLOSED) {
+            return resolve({ err: 'ws is closing or closed' });
+          }
+
+          const onOpen = () => {
+            ws.removeEventListener('open', onOpen);
+            resolve({ ws });
+          };
+
+          const onClose = (evt: WebSocket.CloseEvent) => {
+            ws.removeEventListener('close', onClose);
+            resolve({ err: evt.reason });
+          };
+
+          ws.addEventListener('open', onOpen);
+          ws.addEventListener('close', onClose);
+        } catch (e) {
+          const reason = e instanceof Error ? e.message : 'unknown reason';
+          return resolve({ err: `couldn't get a new websocket: ${reason}` });
         }
-
-        if (ws.readyState === ws.CLOSING || ws.readyState === ws.CLOSED) {
-          return resolve({ err: 'ws is closing or closed' });
-        }
-
-        const onOpen = () => {
-          ws.removeEventListener('open', onOpen);
-          resolve({ ws });
-        };
-
-        const onClose = (evt: WebSocket.CloseEvent) => {
-          ws.removeEventListener('close', onClose);
-          resolve({ err: evt.reason });
-        };
-
-        ws.addEventListener('open', onOpen);
-        ws.addEventListener('close', onClose);
       });
 
       this.reconnectPromises.set(to, reconnectPromise);

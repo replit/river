@@ -89,6 +89,7 @@ In another file for the client (to create a separate entrypoint),
 import WebSocket from 'isomorphic-ws';
 import { WebSocketClientTransport } from '@replit/river/transport/ws/client';
 import { createClient } from '@replit/river';
+import type ServiceSurface from './server';
 
 const websocketUrl = `ws://localhost:3000`;
 const transport = new WebSocketClientTransport(
@@ -117,6 +118,24 @@ import { bindLogger, setLevel } from '@replit/river/logging';
 bindLogger(console.log);
 setLevel('info');
 ```
+
+To listen for connection status changes,
+
+```ts
+transport.addEventListener('connectionStatus', (evt) => {
+  if (evt.status === 'connect') {
+    // do something
+  } else if (evt.status === 'disconnect') {
+    // do something else
+  }
+});
+```
+
+> [!note] WebSocket connection behaviour
+> WebSocket is an idle protocol. This means that when the underlying connection drops, the WebSocket
+> may still think it is still connected (e.g. turning off the network via devtools).
+> You can use `window.addEventListener('online', ...);` and `window.addEventListener('offline', ...);` to
+> know if you need to recreate the transport.
 
 ### Further examples
 
