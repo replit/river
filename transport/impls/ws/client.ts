@@ -59,6 +59,15 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
     this.createNewConnection(this.serverId);
   }
 
+  reopen() {
+    if (this.state === 'destroyed') {
+      throw new Error('cant reopen a destroyed connection');
+    }
+
+    this.state = 'open';
+    this.createNewConnection(this.serverId);
+  }
+
   async createNewConnection(to: string, attempt = 0) {
     if (this.state === 'destroyed') {
       throw new Error('cant reopen a destroyed connection');

@@ -132,6 +132,10 @@ export abstract class Transport<ConnType extends Connection> {
    * The downstream implementation needs to implement this. If the downstream
    * transport cannot make new outgoing connections (e.g. a server transport),
    * it is ok to log an error and return.
+   *
+   * Consumers of river should never need to call this directly.
+   * Instead, look for a `reopen` method on the transport.
+   *
    * @param to The client ID of the node to connect to.
    * @returns The new connection object.
    */
