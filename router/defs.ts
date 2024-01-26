@@ -6,7 +6,7 @@ import { AnyService } from './builder';
  * @template T - An array of services.
  */
 export type ServiceDefs<T extends AnyService[] = AnyService[]> = {
-  [K in T[number]['name']]: T[number];
+  [K in T[number]['name']]: Extract<T[number], { name: K }>;
 };
 
 /**
@@ -18,7 +18,10 @@ export function buildServiceDefs<T extends AnyService[]>(
   services: T,
 ): ServiceDefs<T> {
   return services.reduce((acc, service) => {
-    acc[service.name as keyof ServiceDefs<T>] = service;
+    acc[service.name as keyof ServiceDefs<T>] = service as Extract<
+      T[number],
+      { name: T[number]['name'] }
+    >;
     return acc;
   }, {} as ServiceDefs<T>);
 }

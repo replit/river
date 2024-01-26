@@ -8,6 +8,7 @@ import { NaiveJsonCodec } from '../codec/json';
 import { createClient } from '../router/client';
 import { Ok } from '../router/result';
 import { buildServiceDefs } from '../router/defs';
+import { TestServiceConstructor } from './fixtures/services';
 
 const input = Type.Union([
   Type.Object({ a: Type.Number() }),
@@ -42,7 +43,7 @@ const fnBody: Procedure<{}, 'rpc', typeof input, typeof output, typeof errors> =
 
 // typescript is limited to max 50 constraints
 // see: https://github.com/microsoft/TypeScript/issues/33541
-export const StupidlyLargeService = (name: string) =>
+export const StupidlyLargeService = <Name extends string>(name: Name) =>
   ServiceBuilder.create(name)
     .defineProcedure('f1', fnBody)
     .defineProcedure('f2', fnBody)
@@ -121,12 +122,14 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
       StupidlyLargeService('b'),
       StupidlyLargeService('c'),
       StupidlyLargeService('d'),
+      TestServiceConstructor(),
     ]);
 
     const server = createServer(new MockTransport('SERVER'), serviceDefs);
     const client = createClient<typeof server>(new MockTransport('client'));
     expect(client.d.f48.rpc({ a: 0 })).toBeTruthy();
     expect(client.a.f2.rpc({ c: 'abc' })).toBeTruthy();
+    expect(client.test.add.rpc({ n: 1 })).toBeTruthy();
     expect(server).toBeTruthy();
     expect(client).toBeTruthy();
   });
