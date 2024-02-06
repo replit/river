@@ -1,6 +1,6 @@
 import { Transport, TransportClientId } from '../..';
 import { Codec, NaiveJsonCodec } from '../../../codec';
-import { createDelimitedStream } from '../../transforms/delim';
+import { Delimiter } from '../../transforms/delim';
 import { createConnection } from 'node:net';
 import { StreamConnection } from '../stdio/connection';
 import { log } from '../../../logging';
@@ -40,7 +40,7 @@ export class UnixDomainSocketClientTransport extends Transport<StreamConnection>
 
     const sock = createConnection(this.path);
     const conn = new StreamConnection(this, to, sock);
-    const delimStream = createDelimitedStream();
+    const delimStream = Delimiter.createDelimitedStream();
     sock.pipe(delimStream).on('data', (data) => {
       const parsedMsg = this.parseMsg(data);
       if (parsedMsg) {

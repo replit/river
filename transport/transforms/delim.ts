@@ -1,71 +1,91 @@
 import { Transform, TransformCallback, TransformOptions } from 'node:stream';
 
-export interface DelimiterOptions extends TransformOptions {
-  /** The delimiter on which to split incoming data. */
-  delimiter: Buffer;
+export interface LengthEncodedOptions extends TransformOptions {
   /** Maximum in-memory buffer size before we throw */
   maxBufferSizeBytes: number;
+  preAllocatedBufferSize: number;
 }
 
 /**
- * A transform stream that emits data each time a byte sequence is received.
+ * A transform stream that emits data each time a message with a uint32 length prefix is received.
  * @extends Transform
  */
-export class DelimiterParser extends Transform {
-  delimiter: Buffer;
-  buffer: Buffer;
+export class Uint32LengthEncodedDelimiter extends Transform {
+  receivedBuffer: Buffer;
   maxBufferSizeBytes: number;
 
-  constructor({ delimiter, maxBufferSizeBytes, ...options }: DelimiterOptions) {
+  constructor({
+    preAllocatedBufferSize,
+    maxBufferSizeBytes,
+    ...options
+  }: LengthEncodedOptions) {
     super(options);
     this.maxBufferSizeBytes = maxBufferSizeBytes;
-    this.delimiter = Buffer.from(delimiter);
-    this.buffer = Buffer.alloc(0);
+    this.receivedBuffer = Buffer.alloc(preAllocatedBufferSize);
   }
 
-  // tldr; backpressure will be automatically applied for transform streams
-  // but it relies on both the input/output streams connected on either end having
-  // implemented backpressure properly
-  // see: https://nodejs.org/en/guides/backpressuring-in-streams#lifecycle-of-pipe
   _transform(chunk: Buffer, _encoding: BufferEncoding, cb: TransformCallback) {
-    let data = Buffer.concat([this.buffer, chunk]);
-    let position;
-    while ((position = data.indexOf(this.delimiter)) !== -1) {
-      this.push(data.subarray(0, position));
-      data = data.subarray(position + this.delimiter.length);
-    }
-
-    if (data.byteLength > this.maxBufferSizeBytes) {
+    if (
+      this.receivedBuffer.byteLength + chunk.byteLength >
+      this.maxBufferSizeBytes
+    ) {
       const err = new Error(
-        `buffer overflow: ${data.byteLength}B > ${this.maxBufferSizeBytes}B`,
+        `buffer overflow: ${this.receivedBuffer.byteLength}B > ${this.maxBufferSizeBytes}B`,
       );
+
       this.emit('error', err);
       return cb(err);
     }
 
-    this.buffer = data;
+    this.receivedBuffer = Buffer.concat([this.receivedBuffer, chunk]);
+
+    // ensure there's enough for a length prefix
+    while (this.receivedBuffer.length > 4) {
+      // read length from buffer (accounting for uint32 prefix)
+      const claimedMessageLength = this.receivedBuffer.readUInt32BE(0) + 4;
+      if (this.receivedBuffer.length >= claimedMessageLength) {
+        // slice the buffer to extract the message
+        const message = this.receivedBuffer.subarray(4, claimedMessageLength);
+        this.push(message);
+        this.receivedBuffer =
+          this.receivedBuffer.subarray(claimedMessageLength);
+      } else {
+        // not enough data for a complete message, wait for more data
+        break;
+      }
+    }
+
     cb();
   }
 
   _flush(cb: TransformCallback) {
-    if (this.buffer.length) {
-      this.push(this.buffer);
+    // if there's any leftover data that doesn't form a complete message
+    if (this.receivedBuffer.length) {
+      this.emit('error', new Error('got incomplete message while flushing'));
     }
 
-    this.buffer = Buffer.alloc(0);
+    this.receivedBuffer = Buffer.alloc(0);
     cb();
   }
 
   _destroy(error: Error | null, callback: (error: Error | null) => void): void {
-    this.buffer = Buffer.alloc(0);
+    this.receivedBuffer = Buffer.alloc(0);
     super._destroy(error, callback);
   }
 }
 
-export const defaultDelimiter = Buffer.from('\n');
-export function createDelimitedStream(options?: Partial<DelimiterOptions>) {
-  return new DelimiterParser({
-    delimiter: options?.delimiter ?? defaultDelimiter,
+function createLengthEncodedStream(options?: Partial<LengthEncodedOptions>) {
+  return new Uint32LengthEncodedDelimiter({
     maxBufferSizeBytes: options?.maxBufferSizeBytes ?? 16 * 1024 * 1024, // 16MB
+    preAllocatedBufferSize: options?.preAllocatedBufferSize ?? 16 * 1024, // 16KB
   });
 }
+
+export const Delimiter = {
+  createDelimitedStream: createLengthEncodedStream,
+  writeDelimited: (buf: Uint8Array) => {
+    const lengthPrefix = Buffer.alloc(4);
+    lengthPrefix.writeUInt32BE(buf.length, 0);
+    return Buffer.concat([lengthPrefix, buf]);
+  },
+};

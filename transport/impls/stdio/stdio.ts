@@ -2,7 +2,7 @@ import { Codec } from '../../../codec';
 import { NaiveJsonCodec } from '../../../codec/json';
 import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
-import { createDelimitedStream } from '../../transforms/delim';
+import { Delimiter } from '../../transforms/delim';
 import { Transport } from '../../transport';
 import { StreamConnection } from './connection';
 
@@ -37,7 +37,7 @@ export class StdioTransport extends Transport<StreamConnection> {
     const options = { ...defaultOptions, ...providedOptions };
     super(options.codec, clientId);
 
-    const delimStream = createDelimitedStream();
+    const delimStream = Delimiter.createDelimitedStream();
     this.input = input.pipe(delimStream);
     this.output = output;
 
