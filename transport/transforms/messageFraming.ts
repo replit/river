@@ -7,7 +7,7 @@ export interface LengthEncodedOptions extends TransformOptions {
 }
 
 /**
- * A transform stream that emits data each time a message with a uint32 length prefix is received.
+ * A transform stream that emits data each time a message with a network/BigEndian uint32 length prefix is received.
  * @extends Transform
  */
 export class Uint32LengthPrefixFraming extends Transform {
