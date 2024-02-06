@@ -93,7 +93,7 @@ describe('sending and receiving across unix sockets works', async () => {
       );
 
       // client to server
-      const initMsg = makeDummyMessage(id, serverId, 'hello server');
+      const initMsg = makeDummyMessage(id, serverId, 'hello\nserver');
       const initMsgPromise = waitForMessage(
         serverTransport,
         (recv) => recv.id === initMsg.id,
@@ -107,8 +107,8 @@ describe('sending and receiving across unix sockets works', async () => {
     const client2Transport = await initClient(clientId2);
 
     // sending messages from server to client shouldn't leak between clients
-    const msg1 = makeDummyMessage(serverId, clientId1, 'hello client1');
-    const msg2 = makeDummyMessage(serverId, clientId2, 'hello client2');
+    const msg1 = makeDummyMessage(serverId, clientId1, 'hello\nclient1');
+    const msg2 = makeDummyMessage(serverId, clientId2, 'hello\nclient2');
     const promises = Promise.all([
       // true means reject if we receive any message that isn't the one we are expecting
       waitForMessage(client2Transport, (recv) => recv.id === msg2.id, true),
