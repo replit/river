@@ -10,7 +10,7 @@ export interface LengthEncodedOptions extends TransformOptions {
  * A transform stream that emits data each time a message with a uint32 length prefix is received.
  * @extends Transform
  */
-export class Uint32LengthEncodedDelimiter extends Transform {
+export class Uint32LengthPrefixFraming extends Transform {
   receivedBuffer: Buffer;
   maxBufferSizeBytes: number;
 
@@ -75,15 +75,15 @@ export class Uint32LengthEncodedDelimiter extends Transform {
 }
 
 function createLengthEncodedStream(options?: Partial<LengthEncodedOptions>) {
-  return new Uint32LengthEncodedDelimiter({
+  return new Uint32LengthPrefixFraming({
     maxBufferSizeBytes: options?.maxBufferSizeBytes ?? 16 * 1024 * 1024, // 16MB
     preAllocatedBufferSize: options?.preAllocatedBufferSize ?? 16 * 1024, // 16KB
   });
 }
 
-export const Delimiter = {
-  createDelimitedStream: createLengthEncodedStream,
-  writeDelimited: (buf: Uint8Array) => {
+export const MessageFramer = {
+  createFramedStream: createLengthEncodedStream,
+  write: (buf: Uint8Array) => {
     const lengthPrefix = Buffer.alloc(4);
     lengthPrefix.writeUInt32BE(buf.length, 0);
     return Buffer.concat([lengthPrefix, buf]);

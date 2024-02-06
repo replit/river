@@ -1,14 +1,14 @@
-import { Delimiter } from './delim';
+import { MessageFramer } from './messageFraming';
 import { describe, test, expect, vi } from 'vitest';
 
-describe('Uint32LengthEncodedDelimiter', () => {
+describe('MessageFramer', () => {
   const encodeMessage = (message: string) => {
-    return Delimiter.writeDelimited(Buffer.from(message));
+    return MessageFramer.write(Buffer.from(message));
   };
 
   test('basic transform', () => {
     const spy = vi.fn();
-    const parser = Delimiter.createDelimitedStream();
+    const parser = MessageFramer.createFramedStream();
 
     parser.on('data', spy);
     parser.write(encodeMessage('content 1'));
@@ -26,7 +26,7 @@ describe('Uint32LengthEncodedDelimiter', () => {
 
   test('handles partial messages across chunks', () => {
     const spy = vi.fn();
-    const parser = Delimiter.createDelimitedStream();
+    const parser = MessageFramer.createFramedStream();
 
     const msg = encodeMessage('content 1');
     const part1 = msg.subarray(0, 5); // Split the encoded message
@@ -45,7 +45,7 @@ describe('Uint32LengthEncodedDelimiter', () => {
 
   test('multiple messages in a single chunk', () => {
     const spy = vi.fn();
-    const parser = Delimiter.createDelimitedStream();
+    const parser = MessageFramer.createFramedStream();
 
     const message1 = encodeMessage('first message');
     const message2 = encodeMessage('second message');
@@ -61,7 +61,7 @@ describe('Uint32LengthEncodedDelimiter', () => {
   });
 
   test('max buffer size exceeded', () => {
-    const parser = Delimiter.createDelimitedStream({
+    const parser = MessageFramer.createFramedStream({
       maxBufferSizeBytes: 8, // Set a small max buffer size
     });
 
@@ -81,7 +81,7 @@ describe('Uint32LengthEncodedDelimiter', () => {
   test('incomplete message at stream end', () => {
     const spy = vi.fn();
     const err = vi.fn();
-    const parser = Delimiter.createDelimitedStream();
+    const parser = MessageFramer.createFramedStream();
 
     parser.on('data', spy);
     parser.on('error', err);
@@ -106,7 +106,7 @@ describe('Uint32LengthEncodedDelimiter', () => {
   });
 
   test('consistent byte length calculation with emojis and unicode', () => {
-    const parser = Delimiter.createDelimitedStream();
+    const parser = MessageFramer.createFramedStream();
     const spy = vi.fn();
     parser.on('data', spy);
 

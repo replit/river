@@ -1,7 +1,7 @@
 import { Transport, TransportClientId } from '../..';
 import { Codec, NaiveJsonCodec } from '../../../codec';
 import { log } from '../../../logging';
-import { Delimiter } from '../../transforms/delim';
+import { MessageFramer } from '../../transforms/messageFraming';
 import { type Server, type Socket } from 'node:net';
 import { StreamConnection } from '../stdio/connection';
 
@@ -33,8 +33,8 @@ export class UnixDomainSocketServerTransport extends Transport<StreamConnection>
   connectionListener = (sock: Socket) => {
     let conn: StreamConnection | undefined = undefined;
 
-    const delimStream = Delimiter.createDelimitedStream();
-    sock.pipe(delimStream).on('data', (data) => {
+    const framedMessageStream = MessageFramer.createFramedStream();
+    sock.pipe(framedMessageStream).on('data', (data) => {
       const parsedMsg = this.parseMsg(data);
       if (!parsedMsg) {
         return;
@@ -49,7 +49,7 @@ export class UnixDomainSocketServerTransport extends Transport<StreamConnection>
     });
 
     const cleanup = () => {
-      delimStream.destroy();
+      framedMessageStream.destroy();
       if (conn) {
         this.onDisconnect(conn);
       }

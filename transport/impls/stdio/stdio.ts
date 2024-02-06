@@ -2,7 +2,7 @@ import { Codec } from '../../../codec';
 import { NaiveJsonCodec } from '../../../codec/json';
 import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
-import { Delimiter } from '../../transforms/delim';
+import { MessageFramer } from '../../transforms/messageFraming';
 import { Transport } from '../../transport';
 import { StreamConnection } from './connection';
 
@@ -37,8 +37,8 @@ export class StdioTransport extends Transport<StreamConnection> {
     const options = { ...defaultOptions, ...providedOptions };
     super(options.codec, clientId);
 
-    const delimStream = Delimiter.createDelimitedStream();
-    this.input = input.pipe(delimStream);
+    const framedMessageStream = MessageFramer.createFramedStream();
+    this.input = input.pipe(framedMessageStream);
     this.output = output;
 
     let conn: StreamConnection | undefined = undefined;
@@ -53,7 +53,7 @@ export class StdioTransport extends Transport<StreamConnection> {
     });
 
     const cleanup = () => {
-      delimStream.destroy();
+      framedMessageStream.destroy();
       if (conn) {
         this.onDisconnect(conn);
       }

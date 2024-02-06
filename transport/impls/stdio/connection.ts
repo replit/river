@@ -1,5 +1,5 @@
 import { Connection, Transport, TransportClientId } from '../..';
-import { Delimiter } from '../../transforms/delim';
+import { MessageFramer } from '../../transforms/messageFraming';
 
 export class StreamConnection extends Connection {
   output: NodeJS.WritableStream;
@@ -18,7 +18,7 @@ export class StreamConnection extends Connection {
       return false;
     }
 
-    return this.output.write(Delimiter.writeDelimited(payload));
+    return this.output.write(MessageFramer.write(payload));
   }
 
   async close() {
