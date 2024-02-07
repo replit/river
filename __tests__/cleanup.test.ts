@@ -55,6 +55,8 @@ describe('procedures should leave no trace after finishing', async () => {
         'server should cleanup connection after client closes',
       ).toEqual(0),
     );
+    await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
+    await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
   });
 
   test('closing a transport from the server cleans up connection on the client', async () => {
@@ -82,6 +84,8 @@ describe('procedures should leave no trace after finishing', async () => {
         'client should cleanup connection after server closes',
       ).toEqual(0),
     );
+    await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
+    await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
   });
 
   test('rpc', async () => {

@@ -332,6 +332,9 @@ export abstract class Transport<ConnType extends Connection> {
     );
     const outstanding = this.sendQueue.get(msg.to) || [];
     outstanding.push(msg.id);
+    log?.debug(
+      `${this.clientId} -- now at ${outstanding.length} outstanding messages to ${msg.to}`,
+    );
     this.sendQueue.set(msg.to, outstanding);
     this.createNewConnection(msg.to);
     return msg.id;

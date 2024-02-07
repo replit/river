@@ -24,6 +24,7 @@ export async function ensureTransportIsClean(t: Transport<Connection>) {
     t.eventDispatcher.numberOfListeners('connectionStatus'),
     `transport ${t.clientId} should not have open connection handlers after the test`,
   ).equal(0);
+  ensureTransportQueuesAreEventuallyEmpty(t);
 }
 
 export function waitFor<T>(cb: () => T | Promise<T>) {
@@ -35,24 +36,24 @@ export async function ensureTransportQueuesAreEventuallyEmpty(
 ) {
   await waitFor(() =>
     expect(
-      t.sendQueue.size,
+      t.sendQueue,
       `transport ${t.clientId} should not have any messages waiting to send after the test`,
-    ).toEqual(0),
+    ).toStrictEqual(new Map()),
   );
   await waitFor(() =>
     expect(
-      t.sendBuffer.size,
+      t.sendBuffer,
       `transport ${t.clientId} should not have any un-acked messages after the test`,
-    ).toEqual(0),
+    ).toStrictEqual(new Map()),
   );
 }
 
 export async function ensureServerIsClean(s: Server<unknown>) {
   return waitFor(() =>
     expect(
-      s.streams.size,
+      s.streams,
       `server should not have any open streams after the test`,
-    ).toEqual(0),
+    ).toStrictEqual(new Map()),
   );
 }
 
