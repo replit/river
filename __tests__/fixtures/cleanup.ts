@@ -13,6 +13,10 @@ export async function ensureTransportIsClean(t: Transport<Connection>) {
     `transport ${t.clientId} should be closed after the test`,
   ).to.not.equal('open');
   expect(
+    t.sessions,
+    `transport ${t.clientId} should not have open sessions after the test`,
+  ).toStrictEqual(new Map());
+  expect(
     t.connections,
     `transport ${t.clientId} should not have open connections after the test`,
   ).toStrictEqual(new Map());
@@ -37,13 +41,17 @@ export async function ensureTransportQueuesAreEventuallyEmpty(
 ) {
   await waitFor(() =>
     expect(
-      t.sendQueue,
+      new Map(
+        [...t.sessions].map(([client, sess]) => [client, sess.sendQueue]),
+      ),
       `transport ${t.clientId} should not have any messages waiting to send after the test`,
     ).toStrictEqual(new Map()),
   );
   await waitFor(() =>
     expect(
-      t.sendBuffer,
+      new Map(
+        [...t.sessions].map(([client, sess]) => [client, sess.sendBuffer]),
+      ),
       `transport ${t.clientId} should not have any un-acked messages after the test`,
     ).toStrictEqual(new Map()),
   );

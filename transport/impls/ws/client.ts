@@ -127,20 +127,30 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
     }
 
     if ('ws' in res && res.ws.readyState === res.ws.OPEN) {
-      if (res.ws === this.connections.get(to)?.ws) {
+      const existingWs = this.sessions.get(to)?.connection?.ws;
+      if (res.ws === existingWs) {
         // this is our current connection
         // we reach this state when createNewConnection is called multiple times
         // concurrently
         return;
       }
 
-      log?.info(`${this.clientId} -- websocket ok`);
-      const conn = new WebSocketConnection(this, to, res.ws);
-      this.onConnect(conn);
+      log?.info(`${this.clientId} -- websocket to ${to} ok`);
+      const conn = new WebSocketConnection(res.ws);
+      this.onConnect(conn, to);
+      conn.onData((data) => this.handleMsg(this.parseMsg(data)));
       res.ws.onclose = () => {
         this.reconnectPromises.delete(to);
-        this.onDisconnect(conn);
+        log?.info(`${this.clientId} -- websocket to ${to} disconnected`);
+        this.onDisconnect(conn, to);
       };
+
+      res.ws.onerror = (msg) => {
+        log?.warn(
+          `${this.clientId} -- websocket to ${to} had an error: ${msg}`,
+        );
+      };
+
       this.state = 'open';
       return;
     }

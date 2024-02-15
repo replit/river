@@ -1,4 +1,5 @@
-export { Transport, Connection } from './transport';
+export { Transport } from './transport';
+export { Connection, Session } from './session';
 export {
   TransportMessageSchema,
   OpaqueTransportMessageSchema,

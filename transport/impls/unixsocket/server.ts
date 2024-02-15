@@ -1,9 +1,10 @@
-import { Transport, TransportClientId } from '../..';
+import { Session } from '../../session';
 import { Codec, NaiveJsonCodec } from '../../../codec';
 import { log } from '../../../logging';
-import { MessageFramer } from '../../transforms/messageFraming';
 import { type Server, type Socket } from 'node:net';
 import { StreamConnection } from '../stdio/connection';
+import { Transport } from '../../transport';
+import { TransportClientId } from '../../message';
 
 interface Options {
   codec: Codec;
@@ -24,43 +25,42 @@ export class UnixDomainSocketServerTransport extends Transport<StreamConnection>
     const options = { ...defaultOptions, ...providedOptions };
     super(options.codec, clientId);
     this.server = server;
-    server.addListener('connection', this.connectionListener);
+    server.addListener('connection', this.connectionHandler);
     server.on('listening', () => {
       log?.info(`${this.clientId} -- server is listening`);
     });
   }
 
-  connectionListener = (sock: Socket) => {
-    let conn: StreamConnection | undefined = undefined;
+  connectionHandler = (sock: Socket) => {
+    log?.info(`${this.clientId} -- new incoming uds connection`);
+    const conn: StreamConnection = new StreamConnection(sock, sock);
 
-    const framedMessageStream = MessageFramer.createFramedStream();
-    sock.pipe(framedMessageStream).on('data', (data) => {
-      const parsedMsg = this.parseMsg(data);
-      if (!parsedMsg) {
-        return;
+    let session: Session<StreamConnection> | undefined = undefined;
+    conn.onData((data) => {
+      const parsed = this.parseMsg(data);
+      if (!parsed) return;
+      if (!session) {
+        session = this.onConnect(conn, parsed.from);
       }
 
-      if (!conn) {
-        conn = new StreamConnection(this, parsedMsg.from, sock);
-        this.onConnect(conn);
-      }
-
-      this.handleMsg(parsedMsg);
+      this.handleMsg(parsed);
     });
 
-    const cleanup = () => {
-      framedMessageStream.destroy();
-      if (conn) {
-        this.onDisconnect(conn);
-      }
-    };
+    const cleanup = () => this.onDisconnect(conn, session?.connectedTo);
+    sock.on('close', () => {
+      log?.info(
+        `${this.clientId} -- uds to ${
+          session?.connectedTo ?? 'unknown'
+        } disconnected`,
+      );
+      cleanup();
+    });
 
-    sock.on('close', cleanup);
     sock.on('error', (err) => {
       log?.warn(
-        `${this.clientId} -- socket error in connection to ${
-          conn?.connectedTo ?? 'unknown'
-        }: ${err}`,
+        `${this.clientId} -- uds to ${
+          session?.connectedTo ?? 'unknown'
+        } got an error: ${err}`,
       );
       cleanup();
     });
@@ -73,7 +73,7 @@ export class UnixDomainSocketServerTransport extends Transport<StreamConnection>
   }
 
   async close() {
-    this.server.removeListener('connection', this.connectionListener);
+    this.server.removeListener('connection', this.connectionHandler);
     super.close();
   }
 }

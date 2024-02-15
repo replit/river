@@ -1,4 +1,4 @@
-import { Connection, Transport } from '../transport/transport';
+import { Transport } from '../transport/transport';
 import {
   AnyService,
   ProcErrors,
@@ -24,6 +24,7 @@ import { nanoid } from 'nanoid';
 import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
 import { ServiceDefs } from './defs';
+import { Connection } from '../transport';
 
 // helper to make next, yield, and return all the same type
 export type AsyncIter<T> = AsyncGenerator<T, T, unknown>;
@@ -224,20 +225,10 @@ export const createClient = <Srv extends Server<ServiceDefs>>(
     }
   }, []) as ServerClient<Srv>;
 
-export const CONNECTION_GRACE_PERIOD_MS = 5_000; // 5s
-export function rejectAfterDisconnectGrace(
-  from: TransportClientId,
-  cb: () => void,
-) {
-  let timeout: ReturnType<typeof setTimeout> | undefined = undefined;
-  return (evt: EventMap['connectionStatus']) => {
-    if (evt.status === 'connect' && evt.conn.connectedTo === from) {
-      clearTimeout(timeout);
-      timeout = undefined;
-    }
-
-    if (evt.status === 'disconnect' && evt.conn.connectedTo === from) {
-      timeout = setTimeout(cb, CONNECTION_GRACE_PERIOD_MS);
+export function onSessionDisconnect(from: TransportClientId, cb: () => void) {
+  return (evt: EventMap['sessionStatus']) => {
+    if (evt.status === 'disconnect' && evt.session.connectedTo === from) {
+      cb();
     }
   };
 }
@@ -266,7 +257,7 @@ function handleRpc(
   const responsePromise = new Promise((resolve) => {
     // on disconnect, set a timer to return an error
     // on (re)connect, clear the timer
-    const onConnectionStatus = rejectAfterDisconnectGrace(serverId, () => {
+    const onSessionStatus = onSessionDisconnect(serverId, () => {
       cleanup();
       resolve(
         Err({
@@ -278,7 +269,7 @@ function handleRpc(
 
     function cleanup() {
       transport.removeEventListener('message', onMessage);
-      transport.removeEventListener('connectionStatus', onConnectionStatus);
+      transport.removeEventListener('sessionStatus', onSessionStatus);
     }
 
     function onMessage(msg: OpaqueTransportMessage) {
@@ -298,7 +289,7 @@ function handleRpc(
     }
 
     transport.addEventListener('message', onMessage);
-    transport.addEventListener('connectionStatus', onConnectionStatus);
+    transport.addEventListener('sessionStatus', onSessionStatus);
   });
   return responsePromise;
 }
@@ -372,7 +363,7 @@ function handleStream(
     inputStream.end();
     outputStream.end();
     transport.removeEventListener('message', onMessage);
-    transport.removeEventListener('connectionStatus', onConnectionStatus);
+    transport.removeEventListener('sessionStatus', onSessionStatus);
   }
 
   const closeHandler = () => {
@@ -381,7 +372,7 @@ function handleStream(
   };
 
   // close stream after disconnect + grace period elapses
-  const onConnectionStatus = rejectAfterDisconnectGrace(serverId, () => {
+  const onSessionStatus = onSessionDisconnect(serverId, () => {
     outputStream.push(
       Err({
         code: UNEXPECTED_DISCONNECT,
@@ -392,7 +383,7 @@ function handleStream(
   });
 
   transport.addEventListener('message', onMessage);
-  transport.addEventListener('connectionStatus', onConnectionStatus);
+  transport.addEventListener('sessionStatus', onSessionStatus);
   return [inputStream, outputStream, closeHandler];
 }
 
@@ -436,7 +427,7 @@ function handleSubscribe(
   function cleanup() {
     outputStream.end();
     transport.removeEventListener('message', onMessage);
-    transport.removeEventListener('connectionStatus', onConnectionStatus);
+    transport.removeEventListener('sessionStatus', onSessionStatus);
   }
 
   const closeHandler = () => {
@@ -445,7 +436,7 @@ function handleSubscribe(
   };
 
   // close stream after disconnect + grace period elapses
-  const onConnectionStatus = rejectAfterDisconnectGrace(serverId, () => {
+  const onSessionStatus = onSessionDisconnect(serverId, () => {
     outputStream.push(
       Err({
         code: UNEXPECTED_DISCONNECT,
@@ -456,7 +447,7 @@ function handleSubscribe(
   });
 
   transport.addEventListener('message', onMessage);
-  transport.addEventListener('connectionStatus', onConnectionStatus);
+  transport.addEventListener('sessionStatus', onSessionStatus);
   return [outputStream, closeHandler];
 }
 
@@ -509,7 +500,7 @@ function handleUpload(
   const responsePromise = new Promise((resolve) => {
     // on disconnect, set a timer to return an error
     // on (re)connect, clear the timer
-    const onConnectionStatus = rejectAfterDisconnectGrace(serverId, () => {
+    const onSessionStatus = onSessionDisconnect(serverId, () => {
       cleanup();
       resolve(
         Err({
@@ -522,7 +513,7 @@ function handleUpload(
     function cleanup() {
       inputStream.end();
       transport.removeEventListener('message', onMessage);
-      transport.removeEventListener('connectionStatus', onConnectionStatus);
+      transport.removeEventListener('sessionStatus', onSessionStatus);
     }
 
     function onMessage(msg: OpaqueTransportMessage) {
@@ -538,7 +529,7 @@ function handleUpload(
     }
 
     transport.addEventListener('message', onMessage);
-    transport.addEventListener('connectionStatus', onConnectionStatus);
+    transport.addEventListener('sessionStatus', onSessionStatus);
   });
   return [inputStream, responsePromise];
 }

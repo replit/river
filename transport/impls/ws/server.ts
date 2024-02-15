@@ -5,6 +5,7 @@ import { Transport } from '../../transport';
 import { WebSocketServer } from 'ws';
 import { WebSocket } from 'isomorphic-ws';
 import { WebSocketConnection } from './connection';
+import { Session } from '../../session';
 
 interface Options {
   codec: Codec;
@@ -33,32 +34,34 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
   }
 
   connectionHandler = (ws: WebSocket) => {
-    let conn: WebSocketConnection | undefined = undefined;
-
-    ws.onmessage = (msg) => {
-      // when we establish WebSocketConnection, ws.onmessage
-      // gets overriden so this only runs on the first valid message
-      // the websocket receives
-      const parsedMsg = this.parseMsg(msg.data as Uint8Array);
-      if (parsedMsg && !conn) {
-        conn = new WebSocketConnection(this, parsedMsg.from, ws);
-        this.onConnect(conn);
-        this.handleMsg(parsedMsg);
+    log?.info(`${this.clientId} -- new incoming ws connection`);
+    const conn = new WebSocketConnection(ws);
+    let session: Session<WebSocketConnection> | undefined = undefined;
+    conn.onData((data) => {
+      const parsed = this.parseMsg(data);
+      if (!parsed) return;
+      if (!session) {
+        session = this.onConnect(conn, parsed.from);
       }
-    };
+
+      this.handleMsg(parsed);
+    });
 
     // close is always emitted, even on error, ok to do cleanup here
     ws.onclose = () => {
-      if (conn) {
-        this.onDisconnect(conn);
-      }
+      log?.info(
+        `${this.clientId} -- websocket to ${
+          session?.connectedTo ?? 'unknown'
+        } disconnected`,
+      );
+      this.onDisconnect(conn, session?.connectedTo);
     };
 
     ws.onerror = (msg) => {
       log?.warn(
-        `${this.clientId} -- ws error from client ${
-          conn?.connectedTo ?? 'unknown'
-        }: ${msg}`,
+        `${this.clientId} -- websocket to ${
+          session?.connectedTo ?? 'unknown'
+        } got an error: ${msg}`,
       );
     };
   };

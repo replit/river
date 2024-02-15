@@ -47,7 +47,6 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
     const onClientConnect = vi.fn();
     const onClientDisconnect = vi.fn();
     const clientHandler = (evt: EventMap['connectionStatus']) => {
-      if (evt.conn.connectedTo !== serverTransport.clientId) return;
       if (evt.status === 'connect') return onClientConnect();
       if (evt.status === 'disconnect') return onClientDisconnect();
     };
@@ -55,16 +54,8 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
     const onServerConnect = vi.fn();
     const onServerDisconnect = vi.fn();
     const serverHandler = (evt: EventMap['connectionStatus']) => {
-      if (
-        evt.status === 'connect' &&
-        evt.conn.connectedTo === clientTransport.clientId
-      )
-        return onServerConnect();
-      if (
-        evt.status === 'disconnect' &&
-        evt.conn.connectedTo === clientTransport.clientId
-      )
-        return onServerDisconnect();
+      if (evt.status === 'connect') return onServerConnect();
+      if (evt.status === 'disconnect') return onServerDisconnect();
     };
 
     clientTransport.addEventListener('connectionStatus', clientHandler);

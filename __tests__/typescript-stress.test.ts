@@ -3,12 +3,13 @@ import { Procedure, ServiceBuilder, serializeService } from '../router/builder';
 import { Type } from '@sinclair/typebox';
 import { MessageId, OpaqueTransportMessage } from '../transport/message';
 import { createServer } from '../router/server';
-import { Connection, Transport } from '../transport/transport';
+import { Transport } from '../transport/transport';
 import { NaiveJsonCodec } from '../codec/json';
 import { createClient } from '../router/client';
 import { Ok } from '../router/result';
 import { buildServiceDefs } from '../router/defs';
 import { TestServiceConstructor } from './fixtures/services';
+import { Connection } from '../transport';
 
 const input = Type.Union([
   Type.Object({ a: Type.Number() }),

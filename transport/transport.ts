@@ -12,40 +12,14 @@ import {
 } from './message';
 import { log } from '../logging';
 import { EventDispatcher, EventHandler, EventTypes } from './events';
-
-/**
- * A 1:1 connection between two transports. Once this is created,
- * the {@link Connection} is expected to take over responsibility for
- * reading and writing messages from the underlying connection.
- *
- * 1) Messages received on the {@link Connection} are dispatched back to the {@link Transport}
- *    via {@link Transport.onMessage}. The {@link Transport} then notifies any registered message listeners.
- * 2) When {@link Transport.send}(msg) is called, the transport looks up the appropriate
- *    connection in the {@link connections} map via `msg.to` and calls {@link send}(bytes)
- *    so the connection can send it.
- */
-export abstract class Connection {
-  connectedTo: TransportClientId;
-  transport: Transport<Connection>;
-
-  constructor(
-    transport: Transport<Connection>,
-    connectedTo: TransportClientId,
-  ) {
-    this.connectedTo = connectedTo;
-    this.transport = transport;
-  }
-
-  abstract send(msg: Uint8Array): boolean;
-  abstract close(): void;
-}
+import { Connection, Session } from './session';
 
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
 /**
- * Transports manage the lifecycle (creation/deletion) of connections. Its responsibilities include:
+ * Transports manage the lifecycle (creation/deletion) of sessions and connections. Its responsibilities include:
  * 
- *  1) Constructing a new {@link Connection} on {@link TransportMessage}s from new clients.
+ *  1) Constructing a new {@link Session} and {@link Connection} on {@link TransportMessage}s from new clients.
  *     After constructing the {@link Connection}, {@link onConnect} is called which adds it to the connection map.
  *  2) Delegating message listening of the connection to the newly created {@link Connection}.
  *     From this point on, the {@link Connection} is responsible for *reading* and *writing*
@@ -59,10 +33,10 @@ export type TransportStatus = 'open' | 'closed' | 'destroyed';
  *  incoming  │
  *  messages  │
  *            ▼
- *      ┌─────────────┐   1:N   ┌────────────┐
- *      │  Transport  │ ◄─────► │ Connection │
- *      └─────────────┘         └────────────┘
- *            ▲
+ *      ┌─────────────┐   1:N   ┌───────────┐   1:1*  ┌────────────┐
+ *      │  Transport  │ ◄─────► │  Session  │ ◄─────► │ Connection │
+ *      └─────────────┘         └───────────┘         └────────────┘
+ *            ▲                               * (may or may not be initialized yet)
  *            │
  *            ▼
  *      ┌───────────┐
@@ -90,20 +64,17 @@ export abstract class Transport<ConnType extends Connection> {
   clientId: TransportClientId;
 
   /**
-   * An array of message IDs that are waiting to be sent over the WebSocket connection.
-   * This builds up if the WebSocket is down for a period of time.
+   * The map of {@link Session}s managed by this transport.
    */
-  sendQueue: Map<TransportClientId, Array<MessageId>>;
+  sessions: Map<TransportClientId, Session<ConnType>>;
 
-  /**
-   * The buffer of messages that have been sent but not yet acknowledged.
-   */
-  sendBuffer: Map<MessageId, OpaqueTransportMessage>;
-
-  /**
-   * The map of {@link Connection}s managed by this transport.
-   */
-  connections: Map<TransportClientId, ConnType>;
+  get connections() {
+    return new Map(
+      [...this.sessions]
+        .map(([client, session]) => [client, session.connection])
+        .filter((entry): entry is [string, ConnType] => entry[1] !== undefined),
+    );
+  }
 
   /**
    * The event dispatcher for handling events of type EventTypes.
@@ -118,9 +89,7 @@ export abstract class Transport<ConnType extends Connection> {
    */
   constructor(codec: Codec, clientId: TransportClientId) {
     this.eventDispatcher = new EventDispatcher();
-    this.sendBuffer = new Map();
-    this.sendQueue = new Map();
-    this.connections = new Map();
+    this.sessions = new Map();
     this.codec = codec;
     this.clientId = clientId;
     this.state = 'open';
@@ -141,60 +110,62 @@ export abstract class Transport<ConnType extends Connection> {
    */
   abstract createNewConnection(to: TransportClientId): Promise<void>;
 
+  sessionByClientId(clientId: TransportClientId): Session<ConnType> {
+    const session = this.sessions.get(clientId);
+    if (!session) {
+      const err = `${this.clientId} -- (invariant violation) no existing session for ${clientId}`;
+      log?.error(err);
+      throw new Error(err);
+    }
+
+    return session;
+  }
+
   /**
-   * The downstream implementation needs to call this when a new connection is established.
+   * The downstream implementation needs to call this when a new connection is established
+   * and we know the identity of the connected client.
    * @param conn The connection object.
    */
-  onConnect(conn: ConnType) {
-    log?.info(`${this.clientId} -- new connection to ${conn.connectedTo}`);
-    this.connections.set(conn.connectedTo, conn);
-
+  onConnect(conn: ConnType, connectedTo: TransportClientId): Session<ConnType> {
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'connect',
       conn,
     });
 
-    // send outstanding
-    const outstanding = this.sendQueue.get(conn.connectedTo);
-    if (!outstanding) {
-      return;
+    let session = this.sessions.get(connectedTo);
+    if (session) {
+      return session.reopen(conn);
     }
 
-    for (const id of outstanding) {
-      const msg = this.sendBuffer.get(id);
-      if (!msg) {
-        log?.warn(
-          `${this.clientId} -- tried to resend a message we received an ack for`,
-        );
-        continue;
-      }
+    session = new Session<ConnType>(connectedTo, conn);
+    this.sessions.set(session.connectedTo, session);
 
-      this.send(msg);
-    }
+    log?.info(`${this.clientId} -- new session with ${session.connectedTo}`);
+    this.eventDispatcher.dispatchEvent('sessionStatus', {
+      status: 'connect',
+      session,
+    });
 
-    this.sendQueue.delete(conn.connectedTo);
+    return session;
   }
 
   /**
    * The downstream implementation needs to call this when a connection is closed.
    * @param conn The connection object.
    */
-  onDisconnect(conn: ConnType) {
-    log?.info(`${this.clientId} -- disconnect from ${conn.connectedTo}`);
-    conn.close();
-    this.connections.delete(conn.connectedTo);
+  onDisconnect(conn: ConnType, connectedTo: TransportClientId | undefined) {
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'disconnect',
       conn,
     });
-  }
 
-  /**
-   * Handles a message received by this transport. Thin wrapper around {@link handleMsg} and {@link parseMsg}.
-   * @param msg The message to handle.
-   */
-  onMessage(msg: Uint8Array) {
-    return this.handleMsg(this.parseMsg(msg));
+    // if connectedTo is not set, we've disconnect before the first message is received
+    // therefore there is no associated session
+    if (connectedTo) {
+      log?.info(`${this.clientId} -- session disconnect from ${connectedTo}`);
+      const session = this.sessionByClientId(connectedTo);
+      session.closeInnerConnection();
+    }
   }
 
   /**
@@ -211,18 +182,7 @@ export abstract class Transport<ConnType extends Connection> {
       return null;
     }
 
-    if (Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
-      // JSON can't express the difference between `undefined` and `null`, so we need to patch that.
-      return {
-        ...parsedMsg,
-        serviceName:
-          parsedMsg.serviceName === null ? undefined : parsedMsg.serviceName,
-        procedureName:
-          parsedMsg.procedureName === null
-            ? undefined
-            : parsedMsg.procedureName,
-      };
-    } else {
+    if (!Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
       log?.warn(
         `${this.clientId} -- received invalid msg: ${JSON.stringify(
           parsedMsg,
@@ -230,6 +190,15 @@ export abstract class Transport<ConnType extends Connection> {
       );
       return null;
     }
+
+    // JSON can't express the difference between `undefined` and `null`, so we need to patch that.
+    return {
+      ...parsedMsg,
+      serviceName:
+        parsedMsg.serviceName === null ? undefined : parsedMsg.serviceName,
+      procedureName:
+        parsedMsg.procedureName === null ? undefined : parsedMsg.procedureName,
+    };
   }
 
   /**
@@ -242,11 +211,15 @@ export abstract class Transport<ConnType extends Connection> {
       return;
     }
 
+    // got a msg so we know the other end is alive, reset the grace period
+    const session = this.sessionByClientId(msg.to);
+    session.cancelGrace();
+
     if (isAck(msg.controlFlags) && Value.Check(TransportAckSchema, msg)) {
       // process ack
       log?.debug(`${this.clientId} -- received ack: ${JSON.stringify(msg)}`);
-      if (this.sendBuffer.has(msg.payload.ack)) {
-        this.sendBuffer.delete(msg.payload.ack);
+      if (session.sendBuffer.has(msg.payload.ack)) {
+        session.sendBuffer.delete(msg.payload.ack);
       }
     } else {
       // regular river message
@@ -309,12 +282,21 @@ export abstract class Transport<ConnType extends Connection> {
       return msg.id;
     }
 
-    let conn = this.connections.get(msg.to);
+    let session = this.sessions.get(msg.to);
+    if (!session) {
+      log?.info(
+        `${this.clientId} -- no session for ${msg.to}, creating a new one`,
+      );
+      session = new Session<ConnType>(msg.to, undefined);
+      this.sessions.set(msg.to, session);
+    }
+
+    let conn = session?.connection;
 
     // we only use sendBuffer to track messages that we expect an ack from,
     // messages with the ack flag are not responded to
     if (!isAck(msg.controlFlags)) {
-      this.sendBuffer.set(msg.id, msg);
+      session.sendBuffer.set(msg.id, msg);
     }
 
     if (conn) {
@@ -330,12 +312,12 @@ export abstract class Transport<ConnType extends Connection> {
         msg.to
       } not ready, attempting reconnect and queuing ${JSON.stringify(msg)}`,
     );
-    const outstanding = this.sendQueue.get(msg.to) || [];
+    const outstanding = session.sendQueue || [];
     outstanding.push(msg.id);
     log?.debug(
       `${this.clientId} -- now at ${outstanding.length} outstanding messages to ${msg.to}`,
     );
-    this.sendQueue.set(msg.to, outstanding);
+    session.sendQueue = outstanding;
     this.createNewConnection(msg.to);
     return msg.id;
   }
@@ -346,11 +328,11 @@ export abstract class Transport<ConnType extends Connection> {
    * Closes the transport. Any messages sent while the transport is closed will be silently discarded.
    */
   async close() {
-    for (const conn of this.connections.values()) {
-      conn.close();
+    for (const session of this.sessions.values()) {
+      session.closeInnerConnection();
     }
 
-    this.connections.clear();
+    this.sessions.clear();
     this.state = 'closed';
     log?.info(`${this.clientId} -- closed transport`);
   }
@@ -361,11 +343,11 @@ export abstract class Transport<ConnType extends Connection> {
    * Destroys the transport. Any messages sent while the transport is destroyed will throw an error.
    */
   async destroy() {
-    for (const conn of this.connections.values()) {
-      conn.close();
+    for (const session of this.sessions.values()) {
+      session.closeInnerConnection();
     }
 
-    this.connections.clear();
+    this.sessions.clear();
     this.state = 'destroyed';
     log?.info(`${this.clientId} -- destroyed transport`);
   }

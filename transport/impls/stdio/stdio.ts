@@ -2,7 +2,7 @@ import { Codec } from '../../../codec';
 import { NaiveJsonCodec } from '../../../codec/json';
 import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
-import { MessageFramer } from '../../transforms/messageFraming';
+import { Session } from '../../session';
 import { Transport } from '../../transport';
 import { StreamConnection } from './connection';
 
@@ -37,33 +37,37 @@ export class StdioTransport extends Transport<StreamConnection> {
     const options = { ...defaultOptions, ...providedOptions };
     super(options.codec, clientId);
 
-    const framedMessageStream = MessageFramer.createFramedStream();
-    this.input = input.pipe(framedMessageStream);
+    this.input = input;
     this.output = output;
+    this.setupConn(new StreamConnection(this.input, this.output));
+  }
 
-    let conn: StreamConnection | undefined = undefined;
-    this.input.on('data', (msg) => {
-      const parsedMsg = this.parseMsg(msg);
-      if (parsedMsg && !this.connections.has(parsedMsg.from)) {
-        conn = new StreamConnection(this, parsedMsg.from, this.output);
-        this.onConnect(conn);
+  setupConn(conn: StreamConnection) {
+    let session: Session<StreamConnection> | undefined = undefined;
+    conn.onData((data) => {
+      const parsed = this.parseMsg(data);
+      if (!parsed) return;
+      if (!session) {
+        session = this.onConnect(conn, parsed.from);
       }
 
-      this.handleMsg(parsedMsg);
+      this.handleMsg(parsed);
     });
 
-    const cleanup = () => {
-      framedMessageStream.destroy();
-      if (conn) {
-        this.onDisconnect(conn);
-      }
-    };
+    const cleanup = () => this.onDisconnect(conn, session?.connectedTo);
+    this.input.on('close', () => {
+      log?.info(
+        `${this.clientId} -- uds to ${
+          session?.connectedTo ?? 'unknown'
+        } disconnected`,
+      );
+      cleanup();
+    });
 
-    this.input.on('close', cleanup);
     this.input.on('error', (err) => {
       log?.warn(
         `${this.clientId} -- stdio error in connection to ${
-          conn?.connectedTo ?? 'unknown'
+          session?.connectedTo ?? 'unknown'
         }: ${err}`,
       );
       cleanup();
@@ -76,7 +80,6 @@ export class StdioTransport extends Transport<StreamConnection> {
     }
 
     log?.info(`${this.clientId} -- establishing a new stream to ${to}`);
-    const conn = new StreamConnection(this, to, this.output);
-    this.onConnect(conn);
+    this.setupConn(new StreamConnection(this.input, this.output));
   }
 }

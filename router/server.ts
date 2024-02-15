@@ -1,5 +1,5 @@
 import { Static } from '@sinclair/typebox';
-import { Connection, Transport } from '../transport/transport';
+import { Transport } from '../transport/transport';
 import { AnyProcedure, AnyService, PayloadType } from './builder';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
@@ -24,6 +24,7 @@ import {
 } from './result';
 import { EventMap } from '../transport/events';
 import { ServiceDefs } from './defs';
+import { Connection } from '../transport';
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -76,7 +77,7 @@ class RiverServer<Services extends ServiceDefs> {
     this.streamMap = new Map();
     this.clientStreams = new Map();
     this.transport.addEventListener('message', this.handler);
-    this.transport.addEventListener('connectionStatus', this.onDisconnect);
+    this.transport.addEventListener('sessionStatus', this.onDisconnect);
   }
 
   get streams() {
@@ -105,12 +106,12 @@ class RiverServer<Services extends ServiceDefs> {
   };
 
   // cleanup streams on unexpected disconnections
-  onDisconnect = async (evt: EventMap['connectionStatus']) => {
+  onDisconnect = async (evt: EventMap['sessionStatus']) => {
     if (evt.status !== 'disconnect') {
       return;
     }
 
-    const disconnectedClientId = evt.conn.connectedTo;
+    const disconnectedClientId = evt.session.connectedTo;
     log?.info(
       `${this.transport.clientId} -- got unexpected disconnect from ${disconnectedClientId}, cleaning up streams`,
     );
@@ -128,7 +129,7 @@ class RiverServer<Services extends ServiceDefs> {
 
   async close() {
     this.transport.removeEventListener('message', this.handler);
-    this.transport.removeEventListener('connectionStatus', this.onDisconnect);
+    this.transport.removeEventListener('sessionStatus', this.onDisconnect);
     await Promise.all([...this.streamMap.keys()].map(this.cleanupStream));
   }
 
