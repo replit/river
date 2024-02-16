@@ -27,7 +27,7 @@ describe('sending and receiving across unix sockets works', async () => {
   await onUdsServeReady(server, socketPath);
 
   beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['nextTick'] });
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
@@ -43,9 +43,7 @@ describe('sending and receiving across unix sockets works', async () => {
     new UnixDomainSocketServerTransport(server, 'SERVER'),
   ];
 
-  bindLogger(console.log);
-  setLevel('debug');
-  test.only('basic send/receive', async () => {
+  test('basic send/receive', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const messages = [
       {

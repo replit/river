@@ -8,6 +8,17 @@ const waitUntilOptions = {
   interval: 5, // check every 5ms
 };
 
+async function waitForTransportToFinish(t: Transport<Connection>) {
+  await ensureTransportQueuesAreEventuallyEmpty(t);
+
+  // should wait for end of the test
+  await t.close();
+
+  // advance fake timer so we hit the disconnect grace to end the session
+  await vi.runAllTimersAsync();
+  await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS);
+}
+
 async function ensureTransportIsClean(t: Transport<Connection>) {
   expect(
     t.state,
@@ -41,8 +52,6 @@ async function ensureTransportIsClean(t: Transport<Connection>) {
   ];
 
   await Promise.all(promises);
-  // TODO(jackyzha0): we sometimes drop acks in the protocol so this fails
-  // await ensureTransportQueuesAreEventuallyEmpty(t)
 }
 
 export function waitFor<T>(cb: () => T | Promise<T>) {
@@ -101,10 +110,7 @@ export async function testFinishesCleanly({
   server: Server<unknown>;
 }>) {
   if (clientTransports) {
-    await Promise.all(clientTransports.map((t) => t.close()));
-    // advance fake timer so we hit the disconnect grace to end the session
-    vi.runOnlyPendingTimers();
-    vi.advanceTimersByTime(DISCONNECT_GRACE_MS);
+    await Promise.all(clientTransports.map(waitForTransportToFinish));
     await Promise.all(clientTransports.map(ensureTransportIsClean));
   }
 
@@ -115,7 +121,7 @@ export async function testFinishesCleanly({
   }
 
   if (serverTransport) {
-    await serverTransport.close();
+    await waitForTransportToFinish(serverTransport);
     await ensureTransportIsClean(serverTransport);
   }
 }

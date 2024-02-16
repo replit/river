@@ -1,4 +1,12 @@
-import { afterAll, assert, beforeAll, describe, expect, test, vi } from 'vitest';
+import {
+  afterAll,
+  assert,
+  beforeAll,
+  describe,
+  expect,
+  test,
+  vi,
+} from 'vitest';
 import {
   createLocalWebSocketClient,
   createWebSocketServer,
@@ -21,7 +29,10 @@ import {
 } from './fixtures/services';
 import { UNCAUGHT_ERROR } from '../router/result';
 import { codecs } from '../codec/codec.test';
-import { DEFAULT_WS_RETRY_INTERVAL_MS, WebSocketClientTransport } from '../transport/impls/ws/client';
+import {
+  DEFAULT_WS_RETRY_INTERVAL_MS,
+  WebSocketClientTransport,
+} from '../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
 import { testFinishesCleanly } from './fixtures/cleanup';
 import { buildServiceDefs } from '../router/defs';
@@ -37,7 +48,7 @@ describe.each(codecs)(
 
     beforeAll(() => {
       vi.useFakeTimers();
-    })
+    });
 
     afterAll(() => {
       webSocketServer.close();

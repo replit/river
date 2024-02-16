@@ -13,7 +13,6 @@ import {
 import { log } from '../logging';
 import { EventDispatcher, EventHandler, EventTypes } from './events';
 import { Connection, DISCONNECT_GRACE_MS, Session } from './session';
-import { vi } from 'vitest';
 
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
@@ -355,7 +354,7 @@ export abstract class Transport<ConnType extends Connection> {
     }
 
     this.state = 'closed';
-    log?.info(`${this.clientId} -- closed transport`);
+    log?.info(`${this.clientId} -- manually closed transport`);
   }
 
   /**
@@ -370,6 +369,6 @@ export abstract class Transport<ConnType extends Connection> {
 
     this.sessions.clear();
     this.state = 'destroyed';
-    log?.info(`${this.clientId} -- destroyed transport`);
+    log?.info(`${this.clientId} -- manually destroyed transport`);
   }
 }

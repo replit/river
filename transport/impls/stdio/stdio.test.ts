@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, vi, afterAll } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import stream from 'node:stream';
 import { StdioTransport } from './stdio';
 import {
@@ -8,11 +8,11 @@ import {
 import { testFinishesCleanly } from '../../../__tests__/fixtures/cleanup';
 
 describe('sending and receiving across node streams works', () => {
-  beforeAll(() => {
+  beforeEach(() => {
     vi.useFakeTimers();
   });
 
-  afterAll(() => {
+  afterEach(() => {
     vi.useRealTimers();
   });
 

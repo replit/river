@@ -1,9 +1,8 @@
 import { Transport, TransportClientId } from '../..';
 import { Codec, NaiveJsonCodec } from '../../../codec';
 import { createConnection } from 'node:net';
-import { StreamConnection } from '../stdio/connection';
 import { log } from '../../../logging';
-import { MessageFramer } from '../../transforms/messageFraming';
+import { UdsConnection } from './connection';
 
 interface Options {
   codec: Codec;
@@ -13,7 +12,7 @@ const defaultOptions: Options = {
   codec: NaiveJsonCodec,
 };
 
-export class UnixDomainSocketClientTransport extends Transport<StreamConnection> {
+export class UnixDomainSocketClientTransport extends Transport<UdsConnection> {
   path: string;
   serverId: TransportClientId;
 
@@ -34,13 +33,9 @@ export class UnixDomainSocketClientTransport extends Transport<StreamConnection>
   // but the server hasn't created the socket file yet
   async createNewConnection(to: string): Promise<void> {
     const sock = createConnection(this.path);
-    const conn = new StreamConnection(sock);
+    const conn = new UdsConnection(sock);
     this.onConnect(conn, to);
-    // conn.onData((data) => this.handleMsg(this.parseMsg(data)));
-    const framedMessageStream = MessageFramer.createFramedStream();
-    sock.pipe(framedMessageStream).on('data', (data) => {
-      this.handleMsg(this.parseMsg(data));
-    });
+    conn.onData((data) => this.handleMsg(this.parseMsg(data)));
     const cleanup = () => this.onDisconnect(conn, to);
 
     sock.on('close', cleanup);

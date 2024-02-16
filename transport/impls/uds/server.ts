@@ -2,10 +2,9 @@ import { Session } from '../../session';
 import { Codec, NaiveJsonCodec } from '../../../codec';
 import { log } from '../../../logging';
 import { type Server, type Socket } from 'node:net';
-import { StreamConnection } from '../stdio/connection';
 import { Transport } from '../../transport';
 import { TransportClientId } from '../../message';
-import { MessageFramer } from '../../transforms/messageFraming';
+import { UdsConnection } from './connection';
 
 interface Options {
   codec: Codec;
@@ -15,7 +14,7 @@ const defaultOptions: Options = {
   codec: NaiveJsonCodec,
 };
 
-export class UnixDomainSocketServerTransport extends Transport<StreamConnection> {
+export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
   server: Server;
 
   constructor(
@@ -34,11 +33,9 @@ export class UnixDomainSocketServerTransport extends Transport<StreamConnection>
 
   connectionHandler = (sock: Socket) => {
     log?.info(`${this.clientId} -- new incoming uds connection`);
-    const conn = new StreamConnection(sock);
-
-    const framedMessageStream = MessageFramer.createFramedStream();
-    let session: Session<StreamConnection> | undefined = undefined;
-    sock.pipe(framedMessageStream).on('data', (data) => {
+    let session: Session<UdsConnection> | undefined = undefined;
+    const conn = new UdsConnection(sock);
+    conn.onData((data) => {
       const parsed = this.parseMsg(data);
       if (!parsed) return;
       if (!session) {
