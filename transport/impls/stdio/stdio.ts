@@ -80,6 +80,8 @@ export class StdioTransport extends Transport<StreamConnection> {
     }
 
     log?.info(`${this.clientId} -- establishing a new stream to ${to}`);
-    this.setupConn(new StreamConnection(this.input, this.output));
+    const conn = new StreamConnection(this.input, this.output)
+    this.setupConn(conn);
+    this.onConnect(conn, to);
   }
 }

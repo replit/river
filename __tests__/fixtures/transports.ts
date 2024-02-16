@@ -5,11 +5,11 @@ import {
   createWebSocketServer,
   createWsTransports,
   getUnixSocketPath,
-  onUnixSocketServeReady,
+  onUdsServeReady,
   onWsServerReady,
 } from '../../util/testHelpers';
-import { UnixDomainSocketClientTransport } from '../../transport/impls/unixsocket/client';
-import { UnixDomainSocketServerTransport } from '../../transport/impls/unixsocket/server';
+import { UnixDomainSocketClientTransport } from '../../transport/impls/uds/client';
+import { UnixDomainSocketServerTransport } from '../../transport/impls/uds/server';
 
 export const transports: Array<{
   name: string;
@@ -40,7 +40,7 @@ export const transports: Array<{
     setup: async () => {
       const socketPath = getUnixSocketPath();
       const server = net.createServer();
-      await onUnixSocketServeReady(server, socketPath);
+      await onUdsServeReady(server, socketPath);
       return {
         cleanup: async () => {
           server.close();

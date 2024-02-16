@@ -1,4 +1,4 @@
-import { afterAll, assert, describe, expect, test } from 'vitest';
+import { afterAll, assert, beforeAll, describe, expect, test, vi } from 'vitest';
 import {
   createLocalWebSocketClient,
   createWebSocketServer,
@@ -21,7 +21,7 @@ import {
 } from './fixtures/services';
 import { UNCAUGHT_ERROR } from '../router/result';
 import { codecs } from '../codec/codec.test';
-import { WebSocketClientTransport } from '../transport/impls/ws/client';
+import { DEFAULT_WS_RETRY_INTERVAL_MS, WebSocketClientTransport } from '../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
 import { testFinishesCleanly } from './fixtures/cleanup';
 import { buildServiceDefs } from '../router/defs';
@@ -35,9 +35,14 @@ describe.each(codecs)(
     const getTransports = () =>
       createWsTransports(port, webSocketServer, codec);
 
+    beforeAll(() => {
+      vi.useFakeTimers();
+    })
+
     afterAll(() => {
       webSocketServer.close();
       httpServer.close();
+      vi.useRealTimers();
     });
 
     test('rpc', async () => {
@@ -322,10 +327,14 @@ describe.each(codecs)(
 
         if (i == 10) {
           clientTransport.connections.forEach((conn) => conn.ws.close());
+          await vi.runOnlyPendingTimersAsync();
+          await vi.advanceTimersByTimeAsync(DEFAULT_WS_RETRY_INTERVAL_MS);
         }
 
         if (i == 42) {
           clientTransport.connections.forEach((conn) => conn.ws.terminate());
+          await vi.runOnlyPendingTimersAsync();
+          await vi.advanceTimersByTimeAsync(DEFAULT_WS_RETRY_INTERVAL_MS);
         }
 
         await client.test.add.rpc({

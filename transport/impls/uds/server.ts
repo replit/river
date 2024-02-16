@@ -5,6 +5,7 @@ import { type Server, type Socket } from 'node:net';
 import { StreamConnection } from '../stdio/connection';
 import { Transport } from '../../transport';
 import { TransportClientId } from '../../message';
+import { MessageFramer } from '../../transforms/messageFraming';
 
 interface Options {
   codec: Codec;
@@ -33,10 +34,11 @@ export class UnixDomainSocketServerTransport extends Transport<StreamConnection>
 
   connectionHandler = (sock: Socket) => {
     log?.info(`${this.clientId} -- new incoming uds connection`);
-    const conn: StreamConnection = new StreamConnection(sock, sock);
+    const conn = new StreamConnection(sock);
 
+    const framedMessageStream = MessageFramer.createFramedStream();
     let session: Session<StreamConnection> | undefined = undefined;
-    conn.onData((data) => {
+    sock.pipe(framedMessageStream).on('data', (data) => {
       const parsed = this.parseMsg(data);
       if (!parsed) return;
       if (!session) {

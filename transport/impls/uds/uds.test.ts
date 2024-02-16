@@ -1,9 +1,17 @@
-import { describe, test, expect, afterAll } from 'vitest';
+import {
+  describe,
+  test,
+  expect,
+  afterAll,
+  vi,
+  afterEach,
+  beforeEach,
+} from 'vitest';
 import { UnixDomainSocketClientTransport } from './client';
 import { UnixDomainSocketServerTransport } from './server';
 import {
   getUnixSocketPath,
-  onUnixSocketServeReady,
+  onUdsServeReady,
   payloadToTransportMessage,
   waitForMessage,
 } from '../../../util/testHelpers';
@@ -11,11 +19,20 @@ import { testFinishesCleanly } from '../../../__tests__/fixtures/cleanup';
 import { BinaryCodec } from '../../../codec';
 import { msg } from '../..';
 import net from 'node:net';
+import { bindLogger, setLevel } from '../../../logging';
 
 describe('sending and receiving across unix sockets works', async () => {
   const socketPath = getUnixSocketPath();
   const server = net.createServer();
-  await onUnixSocketServeReady(server, socketPath);
+  await onUdsServeReady(server, socketPath);
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['nextTick'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   afterAll(async () => {
     server.close();
@@ -26,7 +43,9 @@ describe('sending and receiving across unix sockets works', async () => {
     new UnixDomainSocketServerTransport(server, 'SERVER'),
   ];
 
-  test('basic send/receive', async () => {
+  bindLogger(console.log);
+  setLevel('debug');
+  test.only('basic send/receive', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const messages = [
       {

@@ -56,7 +56,7 @@ export function onWsServerReady(server: http.Server): Promise<number> {
   });
 }
 
-export function onUnixSocketServeReady(
+export function onUdsServeReady(
   server: net.Server,
   path: string,
 ): Promise<void> {

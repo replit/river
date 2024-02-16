@@ -108,7 +108,6 @@ export class Session<ConnType extends Connection> {
   reopen(conn: ConnType) {
     this.connection = conn;
     this.cancelGrace();
-    return this;
   }
 
   resetBufferedMessages() {
@@ -121,9 +120,10 @@ export class Session<ConnType extends Connection> {
     this.connection = undefined;
   }
 
-  beginGrace() {
+  beginGrace(cb: () => void) {
     this.graceExpiryTimeout = setTimeout(() => {
       this.resetBufferedMessages();
+      cb();
     }, DISCONNECT_GRACE_MS);
   }
 

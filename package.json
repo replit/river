@@ -28,13 +28,13 @@
       "import": "./dist/transport/impls/ws/server.js",
       "require": "./dist/transport/impls/ws/server.cjs"
     },
-    "./transport/unixsocket/client": {
-      "import": "./dist/transport/impls/unixsocket/client.js",
-      "require": "./dist/transport/impls/unixsocket/client.cjs"
+    "./transport/uds/client": {
+      "import": "./dist/transport/impls/uds/client.js",
+      "require": "./dist/transport/impls/uds/client.cjs"
     },
-    "./transport/unixsocket/server": {
-      "import": "./dist/transport/impls/unixsocket/server.js",
-      "require": "./dist/transport/impls/unixsocket/server.cjs"
+    "./transport/uds/server": {
+      "import": "./dist/transport/impls/uds/server.js",
+      "require": "./dist/transport/impls/uds/server.cjs"
     },
     "./transport/stdio": {
       "import": "./dist/transport/impls/stdio/stdio.js",

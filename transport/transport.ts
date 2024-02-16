@@ -12,7 +12,8 @@ import {
 } from './message';
 import { log } from '../logging';
 import { EventDispatcher, EventHandler, EventTypes } from './events';
-import { Connection, Session } from './session';
+import { Connection, DISCONNECT_GRACE_MS, Session } from './session';
+import { vi } from 'vitest';
 
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
@@ -132,20 +133,37 @@ export abstract class Transport<ConnType extends Connection> {
       conn,
     });
 
-    let session = this.sessions.get(connectedTo);
-    if (session) {
-      return session.reopen(conn);
+    const session = this.sessions.get(connectedTo);
+    if (session === undefined) {
+      return this.createSession(connectedTo, conn);
     }
 
-    session = new Session<ConnType>(connectedTo, conn);
-    this.sessions.set(session.connectedTo, session);
+    session.reopen(conn);
+    log?.info(`${this.clientId} -- connected to ${connectedTo}`);
 
-    log?.info(`${this.clientId} -- new session with ${session.connectedTo}`);
+    // if there are any unacked messages in the sendQueue, send them now
+    for (const id of session.sendQueue) {
+      const msg = session.sendBuffer.get(id);
+      if (msg) {
+        this.send(msg);
+      }
+    }
+
+    session.sendQueue = [];
+    return session;
+  }
+
+  private createSession(
+    connectedTo: TransportClientId,
+    conn: ConnType | undefined,
+  ) {
+    log?.info(`${this.clientId} -- new session to ${connectedTo}`);
+    const session = new Session<ConnType>(connectedTo, conn);
+    this.sessions.set(session.connectedTo, session);
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'connect',
       session,
     });
-
     return session;
   }
 
@@ -162,9 +180,16 @@ export abstract class Transport<ConnType extends Connection> {
     // if connectedTo is not set, we've disconnect before the first message is received
     // therefore there is no associated session
     if (connectedTo) {
-      log?.info(`${this.clientId} -- session disconnect from ${connectedTo}`);
       const session = this.sessionByClientId(connectedTo);
-      session.closeInnerConnection();
+      log?.info(
+        `${this.clientId} -- connection disconnect from ${connectedTo}, ${DISCONNECT_GRACE_MS}ms until session disconnect`,
+      );
+
+      session.beginGrace(() => {
+        log?.info(`${this.clientId} -- session disconnect from ${connectedTo}`);
+        session.closeInnerConnection();
+        this.sessions.delete(session.connectedTo);
+      });
     }
   }
 
@@ -212,7 +237,7 @@ export abstract class Transport<ConnType extends Connection> {
     }
 
     // got a msg so we know the other end is alive, reset the grace period
-    const session = this.sessionByClientId(msg.to);
+    const session = this.sessionByClientId(msg.from);
     session.cancelGrace();
 
     if (isAck(msg.controlFlags) && Value.Check(TransportAckSchema, msg)) {
@@ -287,8 +312,7 @@ export abstract class Transport<ConnType extends Connection> {
       log?.info(
         `${this.clientId} -- no session for ${msg.to}, creating a new one`,
       );
-      session = new Session<ConnType>(msg.to, undefined);
-      this.sessions.set(msg.to, session);
+      session = this.createSession(msg.to, undefined);
     }
 
     let conn = session?.connection;
@@ -312,12 +336,10 @@ export abstract class Transport<ConnType extends Connection> {
         msg.to
       } not ready, attempting reconnect and queuing ${JSON.stringify(msg)}`,
     );
-    const outstanding = session.sendQueue || [];
-    outstanding.push(msg.id);
+    session.sendQueue.push(msg.id);
     log?.debug(
-      `${this.clientId} -- now at ${outstanding.length} outstanding messages to ${msg.to}`,
+      `${this.clientId} -- now at ${session.sendQueue.length} outstanding messages to ${msg.to}`,
     );
-    session.sendQueue = outstanding;
     this.createNewConnection(msg.to);
     return msg.id;
   }
@@ -332,7 +354,6 @@ export abstract class Transport<ConnType extends Connection> {
       session.closeInnerConnection();
     }
 
-    this.sessions.clear();
     this.state = 'closed';
     log?.info(`${this.clientId} -- closed transport`);
   }

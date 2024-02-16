@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { describe, test, expect, afterAll } from 'vitest';
+import { describe, test, expect, afterAll, beforeAll, vi } from 'vitest';
 import {
   createWebSocketServer,
   createWsTransports,
@@ -18,9 +18,14 @@ describe('sending and receiving across websockets works', async () => {
   const port = await onWsServerReady(server);
   const wss = await createWebSocketServer(server);
 
+  beforeAll(() => {
+    vi.useFakeTimers();
+  });
+
   afterAll(() => {
     wss.close();
     server.close();
+    vi.useRealTimers();
   });
 
   test('basic send/receive', async () => {
@@ -105,9 +110,14 @@ describe('reconnect', async () => {
   const port = await onWsServerReady(server);
   const wss = await createWebSocketServer(server);
 
+  beforeAll(() => {
+    vi.useFakeTimers();
+  });
+
   afterAll(() => {
     wss.close();
     server.close();
+    vi.useRealTimers();
   });
 
   test('ws connection is recreated after unclean disconnect', async () => {

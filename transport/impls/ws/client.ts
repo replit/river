@@ -12,8 +12,9 @@ interface Options {
   codec: Codec;
 }
 
+export const DEFAULT_WS_RETRY_INTERVAL_MS = 250
 const defaultOptions: Options = {
-  retryIntervalMs: 250,
+  retryIntervalMs: DEFAULT_WS_RETRY_INTERVAL_MS,
   retryAttemptsMax: 5,
   codec: NaiveJsonCodec,
 };
@@ -155,6 +156,7 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
       return;
     }
 
+
     // otherwise try and reconnect again
     this.reconnectPromises.delete(to);
     if (attempt >= this.options.retryAttemptsMax) {
@@ -163,14 +165,13 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
       );
     } else {
       // linear backoff
+      const backoffMs = this.options.retryIntervalMs * attempt
       log?.warn(
-        `${this.clientId} -- websocket to ${to} failed, trying again in ${
-          this.options.retryIntervalMs * attempt
-        }ms`,
+        `${this.clientId} -- websocket to ${to} failed, trying again in ${backoffMs}ms`,
       );
       setTimeout(
         () => this.createNewConnection(to, attempt + 1),
-        this.options.retryIntervalMs * attempt,
+        backoffMs
       );
     }
   }

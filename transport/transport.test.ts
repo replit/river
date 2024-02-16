@@ -1,4 +1,4 @@
-import { describe, test, expect, afterAll, vi } from 'vitest';
+import { describe, test, expect, afterAll, vi, beforeAll } from 'vitest';
 import {
   createDummyTransportMessage,
   waitForMessage,
@@ -11,6 +11,15 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
   const { getTransports, cleanup } = await setup();
 
   afterAll(cleanup);
+
+  beforeAll(() => {
+    vi.useFakeTimers();
+  });
+
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
   test('connection is recreated after clean disconnect', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const msg1 = createDummyTransportMessage();
