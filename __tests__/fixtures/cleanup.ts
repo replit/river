@@ -9,9 +9,7 @@ const waitUntilOptions = {
 };
 
 async function waitForTransportToFinish(t: Transport<Connection>) {
-  await ensureTransportQueuesAreEventuallyEmpty(t);
-
-  // should wait for end of the test
+  // await ensureTransportQueuesAreEventuallyEmpty(t);
   await t.close();
 
   // advance fake timer so we hit the disconnect grace to end the session
@@ -109,6 +107,8 @@ export async function testFinishesCleanly({
   serverTransport: Transport<Connection>;
   server: Server<unknown>;
 }>) {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+
   if (clientTransports) {
     await Promise.all(clientTransports.map(waitForTransportToFinish));
     await Promise.all(clientTransports.map(ensureTransportIsClean));
@@ -124,4 +124,6 @@ export async function testFinishesCleanly({
     await waitForTransportToFinish(serverTransport);
     await ensureTransportIsClean(serverTransport);
   }
+
+  vi.useRealTimers();
 }

@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect } from 'vitest';
 import stream from 'node:stream';
 import { StdioTransport } from './stdio';
 import {
@@ -8,14 +8,6 @@ import {
 import { testFinishesCleanly } from '../../../__tests__/fixtures/cleanup';
 
 describe('sending and receiving across node streams works', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   test('basic send/receive', async () => {
     const clientToServer = new stream.PassThrough();
     const serverToClient = new stream.PassThrough();

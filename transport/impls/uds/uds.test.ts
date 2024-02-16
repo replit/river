@@ -1,12 +1,4 @@
-import {
-  describe,
-  test,
-  expect,
-  afterAll,
-  vi,
-  afterEach,
-  beforeEach,
-} from 'vitest';
+import { describe, test, expect, afterAll } from 'vitest';
 import { UnixDomainSocketClientTransport } from './client';
 import { UnixDomainSocketServerTransport } from './server';
 import {
@@ -19,20 +11,11 @@ import { testFinishesCleanly } from '../../../__tests__/fixtures/cleanup';
 import { BinaryCodec } from '../../../codec';
 import { msg } from '../..';
 import net from 'node:net';
-import { bindLogger, setLevel } from '../../../logging';
 
 describe('sending and receiving across unix sockets works', async () => {
   const socketPath = getUnixSocketPath();
   const server = net.createServer();
   await onUdsServeReady(server, socketPath);
-
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
 
   afterAll(async () => {
     server.close();

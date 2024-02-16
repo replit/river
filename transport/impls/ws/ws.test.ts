@@ -110,14 +110,9 @@ describe('reconnect', async () => {
   const port = await onWsServerReady(server);
   const wss = await createWebSocketServer(server);
 
-  beforeAll(() => {
-    vi.useFakeTimers();
-  });
-
   afterAll(() => {
     wss.close();
     server.close();
-    vi.useRealTimers();
   });
 
   test('ws connection is recreated after unclean disconnect', async () => {
