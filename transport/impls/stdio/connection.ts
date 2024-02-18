@@ -11,13 +11,13 @@ export class StreamConnection extends Connection {
 
   constructor(input: NodeJS.ReadableStream, output: NodeJS.WritableStream) {
     super();
-    this.input = input;
-    this.output = output;
     this.framer = MessageFramer.createFramedStream();
+    this.input = input.pipe(this.framer);
+    this.output = output;
   }
 
   onData(cb: (msg: Uint8Array) => void) {
-    this.input.pipe(this.framer).on('data', cb);
+    this.input.on('data', cb);
   }
 
   send(payload: Uint8Array) {
@@ -28,7 +28,7 @@ export class StreamConnection extends Connection {
   }
 
   async close() {
-    this.framer.destroy();
     this.output.end();
+    this.framer.destroy();
   }
 }

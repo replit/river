@@ -42,12 +42,14 @@ export class StdioTransport extends Transport<StreamConnection> {
     this.setupConn(new StreamConnection(this.input, this.output));
   }
 
-  setupConn(conn: StreamConnection) {
+  setupConn(conn: StreamConnection, to?: TransportClientId) {
     let session: Session<StreamConnection> | undefined = undefined;
+
+    const receiver = () => session?.connectedTo ?? 'unknown';
     conn.onData((data) => {
       const parsed = this.parseMsg(data);
       if (!parsed) return;
-      if (!session) {
+      if (!session && !this.connections.has(parsed.from)) {
         session = this.onConnect(conn, parsed.from);
       }
 
@@ -56,22 +58,28 @@ export class StdioTransport extends Transport<StreamConnection> {
 
     const cleanup = () => this.onDisconnect(conn, session?.connectedTo);
     this.input.on('close', () => {
+      if (!session) return;
       log?.info(
-        `${this.clientId} -- uds to ${
-          session?.connectedTo ?? 'unknown'
-        } disconnected`,
+        `${this.clientId} -- stream conn (id: ${
+          conn.id
+        }) to ${receiver()} disconnected`,
       );
       cleanup();
     });
 
     this.input.on('error', (err) => {
+      if (!session) return;
       log?.warn(
-        `${this.clientId} -- stdio error in connection to ${
-          session?.connectedTo ?? 'unknown'
-        }: ${err}`,
+        `${this.clientId} -- error in stream connection (id: ${
+          conn.id
+        }) to ${receiver()}: ${err}`,
       );
       cleanup();
     });
+
+    if (to) {
+      session = this.onConnect(conn, to);
+    }
   }
 
   async createNewConnection(to: TransportClientId) {
@@ -80,8 +88,6 @@ export class StdioTransport extends Transport<StreamConnection> {
     }
 
     log?.info(`${this.clientId} -- establishing a new stream to ${to}`);
-    const conn = new StreamConnection(this.input, this.output);
-    this.setupConn(conn);
-    this.onConnect(conn, to);
+    this.setupConn(new StreamConnection(this.input, this.output), to);
   }
 }

@@ -36,7 +36,9 @@ describe('bandwidth', async () => {
     bench(
       `${name} -- raw transport send and recv`,
       async () => {
-        const id = clientTransport.send(dummyPayloadSmall());
+        const msg = dummyPayloadSmall();
+        const id = msg.id;
+        clientTransport.send(msg);
         await waitForMessage(serverTransport, (msg) => msg.id === id);
         return;
       },

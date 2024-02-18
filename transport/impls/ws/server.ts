@@ -34,9 +34,12 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
   }
 
   connectionHandler = (ws: WebSocket) => {
-    log?.info(`${this.clientId} -- new incoming ws connection`);
     const conn = new WebSocketConnection(ws);
+    log?.info(
+      `${this.clientId} -- new incoming ws connection (id: ${conn.id})`,
+    );
     let session: Session<WebSocketConnection> | undefined = undefined;
+    const client = () => session?.connectedTo ?? 'unknown';
     conn.onData((data) => {
       const parsed = this.parseMsg(data);
       if (!parsed) return;
@@ -49,19 +52,21 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
 
     // close is always emitted, even on error, ok to do cleanup here
     ws.onclose = () => {
+      if (!session) return;
       log?.info(
-        `${this.clientId} -- websocket to ${
-          session?.connectedTo ?? 'unknown'
-        } disconnected`,
+        `${this.clientId} -- websocket (id: ${
+          conn.id
+        }) to ${client()} disconnected`,
       );
       this.onDisconnect(conn, session?.connectedTo);
     };
 
     ws.onerror = (msg) => {
+      if (!session) return;
       log?.warn(
-        `${this.clientId} -- websocket to ${
-          session?.connectedTo ?? 'unknown'
-        } got an error: ${msg}`,
+        `${this.clientId} -- websocket (id: ${
+          conn.id
+        }) to ${client()} got an error: ${msg}`,
       );
     };
   };

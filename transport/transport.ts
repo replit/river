@@ -2,7 +2,6 @@ import { Codec } from '../codec/types';
 import { Value } from '@sinclair/typebox/value';
 import {
   ControlFlags,
-  MessageId,
   OpaqueTransportMessage,
   OpaqueTransportMessageSchema,
   TransportAckSchema,
@@ -132,19 +131,40 @@ export abstract class Transport<ConnType extends Connection> {
       conn,
     });
 
+    log?.info(
+      `${this.clientId} -- connection to ${connectedTo} (id: ${conn.id})`,
+    );
     const session = this.sessions.get(connectedTo);
     if (session === undefined) {
+      // new session, create and return
       return this.createSession(connectedTo, conn);
     }
 
-    session.reopen(conn);
-    log?.info(`${this.clientId} -- connected to ${connectedTo}`);
+    // otherwise, this is a duplicate session from the same user, let's consider
+    // the old one as dead and call this one canonical
+    if (session.connection && session.connection.id === conn.id) {
+      session.connection?.close();
+      session.connection = undefined;
+      log?.info(
+        `${this.clientId} -- closing old inner connection (id: ${conn.id}) from session (id: ${session.id}) to ${connectedTo}`,
+      );
+    }
+
+    session.connection = conn;
+    session.cancelGrace();
 
     // if there are any unacked messages in the sendQueue, send them now
     for (const id of session.sendQueue) {
       const msg = session.sendBuffer.get(id);
       if (msg) {
-        this.send(msg);
+        const ok = this.send(msg);
+        if (!ok) {
+          // this should never happen unless the transport has an
+          // incorrect implementation of `createNewConnection`
+          const msg = `${this.clientId} -- failed to send queued message to ${connectedTo} in session (id: ${session.id}) (if you hit this code path something is seriously wrong)`;
+          log?.error(msg);
+          throw new Error(msg);
+        }
       }
     }
 
@@ -156,8 +176,10 @@ export abstract class Transport<ConnType extends Connection> {
     connectedTo: TransportClientId,
     conn: ConnType | undefined,
   ) {
-    log?.info(`${this.clientId} -- new session to ${connectedTo}`);
     const session = new Session<ConnType>(connectedTo, conn);
+    log?.info(
+      `${this.clientId} -- new session (id: ${session.id}) to ${connectedTo}`,
+    );
     this.sessions.set(session.connectedTo, session);
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'connect',
@@ -181,13 +203,26 @@ export abstract class Transport<ConnType extends Connection> {
     if (connectedTo) {
       const session = this.sessionByClientId(connectedTo);
       log?.info(
-        `${this.clientId} -- connection disconnect from ${connectedTo}, ${DISCONNECT_GRACE_MS}ms until session disconnect`,
+        `${this.clientId} -- connection (id: ${conn.id}) disconnect from ${connectedTo}, ${DISCONNECT_GRACE_MS}ms until session (id: ${session.id}) disconnect`,
       );
 
+      if (session.connection && session.connection.id === conn.id) {
+        session.connection?.close();
+        session.connection = undefined;
+        log?.info(
+          `${this.clientId} -- closing inner connection (id: ${conn.id}) from session (id: ${session.id}) to ${connectedTo}`,
+        );
+      }
+
       session.beginGrace(() => {
-        log?.info(`${this.clientId} -- session disconnect from ${connectedTo}`);
-        session.closeInnerConnection();
+        log?.info(
+          `${this.clientId} -- session ${session.id} disconnect from ${connectedTo}`,
+        );
         this.sessions.delete(session.connectedTo);
+        this.eventDispatcher.dispatchEvent('sessionStatus', {
+          status: 'disconnect',
+          session,
+        });
       });
     }
   }
@@ -290,7 +325,7 @@ export abstract class Transport<ConnType extends Connection> {
    * @param msg The message to send.
    * @returns The ID of the sent message.
    */
-  send(msg: OpaqueTransportMessage): MessageId {
+  send(msg: OpaqueTransportMessage): boolean {
     if (this.state === 'destroyed') {
       const err = 'transport is destroyed, cant send';
       log?.error(`${this.clientId} -- ` + err + `: ${JSON.stringify(msg)}`);
@@ -303,7 +338,7 @@ export abstract class Transport<ConnType extends Connection> {
           msg,
         )}`,
       );
-      return msg.id;
+      return false;
     }
 
     let session = this.sessions.get(msg.to);
@@ -326,21 +361,26 @@ export abstract class Transport<ConnType extends Connection> {
       log?.debug(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
       const ok = conn.send(this.codec.toBuffer(msg));
       if (ok) {
-        return msg.id;
+        return true;
       }
     }
 
-    log?.info(
-      `${this.clientId} -- connection to ${
-        msg.to
-      } not ready, attempting reconnect and queuing ${JSON.stringify(msg)}`,
-    );
+    if (conn) {
+      log?.info(
+        `${this.clientId} -- connection (id: ${conn.id}) to ${msg.to} doesn't exist, attempting to connect and queuing msg ${msg.id}`,
+      );
+    } else {
+      log?.info(
+        `${this.clientId} -- connection to ${msg.to} doesn't exist, attempting to connect and queuing msg ${msg.id}`,
+      );
+    }
+
     session.sendQueue.push(msg.id);
     log?.debug(
       `${this.clientId} -- now at ${session.sendQueue.length} outstanding messages to ${msg.to}`,
     );
     this.createNewConnection(msg.to);
-    return msg.id;
+    return false;
   }
 
   /**
@@ -350,7 +390,8 @@ export abstract class Transport<ConnType extends Connection> {
    */
   async close() {
     for (const session of this.sessions.values()) {
-      session.closeInnerConnection();
+      session.connection?.close();
+      session.connection = undefined;
     }
 
     this.state = 'closed';
@@ -364,10 +405,10 @@ export abstract class Transport<ConnType extends Connection> {
    */
   async destroy() {
     for (const session of this.sessions.values()) {
-      session.closeInnerConnection();
+      session.connection?.close();
+      session.connection = undefined;
     }
 
-    this.sessions.clear();
     this.state = 'destroyed';
     log?.info(`${this.clientId} -- manually destroyed transport`);
   }

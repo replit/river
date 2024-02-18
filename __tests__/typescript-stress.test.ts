@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { Procedure, ServiceBuilder, serializeService } from '../router/builder';
 import { Type } from '@sinclair/typebox';
-import { MessageId, OpaqueTransportMessage } from '../transport/message';
+import { OpaqueTransportMessage } from '../transport/message';
 import { createServer } from '../router/server';
 import { Transport } from '../transport/transport';
 import { NaiveJsonCodec } from '../codec/json';
@@ -103,9 +103,8 @@ export class MockTransport extends Transport<Connection> {
     super(NaiveJsonCodec, clientId);
   }
 
-  send(msg: OpaqueTransportMessage): MessageId {
-    const id = msg.id;
-    return id;
+  send(_msg: OpaqueTransportMessage): boolean {
+    return true;
   }
 
   async createNewConnection() {}

@@ -1,13 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  assert,
-  beforeEach,
-  describe,
-  expect,
-  test,
-  vi,
-} from 'vitest';
+import { afterAll, assert, describe, expect, test, vi } from 'vitest';
 import http from 'node:http';
 import {
   createLocalWebSocketClient,
@@ -40,14 +31,6 @@ describe('procedures should handle unexpected disconnects', async () => {
     httpServer.close();
   });
 
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   test('rpc', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
@@ -59,6 +42,7 @@ describe('procedures should handle unexpected disconnects', async () => {
     expect(clientTransport.connections.size).toEqual(1);
     expect(serverTransport.connections.size).toEqual(1);
 
+    vi.useFakeTimers();
     clientTransport.connections.forEach((conn) => conn.ws.close());
     clientTransport.tryReconnecting = false;
     const procPromise = client.test.add.rpc({ n: 4 });
@@ -66,7 +50,7 @@ describe('procedures should handle unexpected disconnects', async () => {
 
     // after we've disconnected, hit end of grace period
     await vi.runOnlyPendingTimersAsync();
-    await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS);
+    await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS + 1);
 
     // we should get an error + expect the streams to be cleaned up
     await expect(procPromise).resolves.toMatchObject(
@@ -75,6 +59,7 @@ describe('procedures should handle unexpected disconnects', async () => {
       }),
     );
 
+    vi.useRealTimers();
     waitFor(() => expect(clientTransport.connections.size).toEqual(0));
     waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     await ensureServerIsClean(server);
@@ -95,6 +80,7 @@ describe('procedures should handle unexpected disconnects', async () => {
     expect(clientTransport.connections.size).toEqual(1);
     expect(serverTransport.connections.size).toEqual(1);
 
+    vi.useFakeTimers();
     clientTransport.connections.forEach((conn) => conn.ws.close());
     clientTransport.tryReconnecting = false;
     const nextResPromise = iterNext(output);
@@ -111,6 +97,7 @@ describe('procedures should handle unexpected disconnects', async () => {
       }),
     );
 
+    vi.useRealTimers();
     waitFor(() => expect(clientTransport.connections.size).toEqual(0));
     waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     await ensureServerIsClean(server);
@@ -171,6 +158,7 @@ describe('procedures should handle unexpected disconnects', async () => {
     expect(serverTransport.connections.size).toEqual(2);
 
     // kill the connection for client2
+    vi.useFakeTimers();
     client2Transport.connections.forEach((conn) => conn.ws.close());
     client2Transport.tryReconnecting = false;
 
@@ -188,6 +176,7 @@ describe('procedures should handle unexpected disconnects', async () => {
         code: UNEXPECTED_DISCONNECT,
       }),
     );
+    vi.useRealTimers();
 
     // client1 who is still connected can still add values and receive updates
     assert((await add2Promise).ok);
@@ -223,6 +212,7 @@ describe('procedures should handle unexpected disconnects', async () => {
     await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
     await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
 
+    vi.useFakeTimers();
     clientTransport.connections.forEach((conn) => conn.ws.close());
     clientTransport.tryReconnecting = false;
 
@@ -236,9 +226,12 @@ describe('procedures should handle unexpected disconnects', async () => {
         code: UNEXPECTED_DISCONNECT,
       }),
     );
+    vi.useRealTimers();
 
     waitFor(() => expect(clientTransport.connections.size).toEqual(0));
     waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     await ensureServerIsClean(server);
   });
 });
+
+describe.todo('procedures should handle unexpected server crashes');

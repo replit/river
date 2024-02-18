@@ -7,16 +7,18 @@ import {
 
 export class UdsConnection extends Connection {
   sock: Socket;
+  input: NodeJS.ReadableStream;
   framer: Uint32LengthPrefixFraming;
 
   constructor(sock: Socket) {
     super();
-    this.sock = sock;
     this.framer = MessageFramer.createFramedStream();
+    this.sock = sock;
+    this.input = sock.pipe(this.framer);
   }
 
   onData(cb: (msg: Uint8Array) => void) {
-    this.sock.pipe(this.framer).on('data', cb);
+    this.input.on('data', cb);
   }
 
   send(payload: Uint8Array) {
@@ -28,7 +30,7 @@ export class UdsConnection extends Connection {
   }
 
   async close() {
-    this.framer.destroy();
     this.sock.destroy();
+    this.framer.destroy();
   }
 }

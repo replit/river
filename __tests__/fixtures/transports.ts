@@ -1,6 +1,7 @@
 import { Connection, Transport } from '../../transport';
 import http from 'node:http';
 import net from 'node:net';
+import stream from 'node:stream';
 import {
   createWebSocketServer,
   createWsTransports,
@@ -10,6 +11,7 @@ import {
 } from '../../util/testHelpers';
 import { UnixDomainSocketClientTransport } from '../../transport/impls/uds/client';
 import { UnixDomainSocketServerTransport } from '../../transport/impls/uds/server';
+import { StdioTransport } from '../../transport/impls/stdio/stdio';
 
 export const transports: Array<{
   name: string;
@@ -48,6 +50,23 @@ export const transports: Array<{
         getTransports: () => [
           new UnixDomainSocketClientTransport(socketPath, 'client', 'SERVER'),
           new UnixDomainSocketServerTransport(server, 'SERVER'),
+        ],
+      };
+    },
+  },
+  {
+    name: 'node stream',
+    setup: async () => {
+      const clientToServer = new stream.PassThrough();
+      const serverToClient = new stream.PassThrough();
+      return {
+        cleanup: async () => {
+          clientToServer.end();
+          serverToClient.end();
+        },
+        getTransports: () => [
+          new StdioTransport('client', clientToServer, serverToClient),
+          new StdioTransport('server', serverToClient, clientToServer),
         ],
       };
     },

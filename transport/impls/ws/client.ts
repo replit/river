@@ -136,19 +136,21 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
         return;
       }
 
-      log?.info(`${this.clientId} -- websocket to ${to} ok`);
       const conn = new WebSocketConnection(res.ws);
+      log?.info(`${this.clientId} -- websocket (id: ${conn.id}) to ${to} ok`);
       this.onConnect(conn, to);
       conn.onData((data) => this.handleMsg(this.parseMsg(data)));
       res.ws.onclose = () => {
         this.reconnectPromises.delete(to);
-        log?.info(`${this.clientId} -- websocket to ${to} disconnected`);
+        log?.info(
+          `${this.clientId} -- websocket (id: ${conn.id}) to ${to} disconnected`,
+        );
         this.onDisconnect(conn, to);
       };
 
       res.ws.onerror = (msg) => {
         log?.warn(
-          `${this.clientId} -- websocket to ${to} had an error: ${msg}`,
+          `${this.clientId} -- websocket (id: ${conn.id}) to ${to} had an error: ${msg}`,
         );
       };
 

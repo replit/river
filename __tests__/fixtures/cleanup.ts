@@ -8,13 +8,15 @@ const waitUntilOptions = {
   interval: 5, // check every 5ms
 };
 
-async function waitForTransportToFinish(t: Transport<Connection>) {
+export async function waitForTransportToFinish(t: Transport<Connection>) {
   // await ensureTransportQueuesAreEventuallyEmpty(t);
+  // ^ this is buggy because current protocol sometimes drops acks
+  //   should be fixed when we rewrite our acks to be more reliable
   await t.close();
 
   // advance fake timer so we hit the disconnect grace to end the session
-  await vi.runAllTimersAsync();
-  await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS);
+  await vi.runOnlyPendingTimersAsync();
+  await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS + 1);
 }
 
 async function ensureTransportIsClean(t: Transport<Connection>) {

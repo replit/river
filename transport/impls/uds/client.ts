@@ -41,7 +41,7 @@ export class UnixDomainSocketClientTransport extends Transport<UdsConnection> {
     sock.on('close', cleanup);
     sock.on('error', (err) => {
       log?.warn(
-        `${this.clientId} -- socket error in connection to ${to}: ${err}`,
+        `${this.clientId} -- socket error in connection (id: ${conn.id}) to ${to}: ${err}`,
       );
       cleanup();
     });

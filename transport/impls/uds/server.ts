@@ -32,9 +32,13 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
   }
 
   connectionHandler = (sock: Socket) => {
-    log?.info(`${this.clientId} -- new incoming uds connection`);
     let session: Session<UdsConnection> | undefined = undefined;
     const conn = new UdsConnection(sock);
+    log?.info(
+      `${this.clientId} -- new incoming uds connection (id: ${conn.id})`,
+    );
+
+    const client = () => session?.connectedTo ?? 'unknown';
     conn.onData((data) => {
       const parsed = this.parseMsg(data);
       if (!parsed) return;
@@ -47,19 +51,19 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
 
     const cleanup = () => this.onDisconnect(conn, session?.connectedTo);
     sock.on('close', () => {
+      if (!session) return;
       log?.info(
-        `${this.clientId} -- uds to ${
-          session?.connectedTo ?? 'unknown'
-        } disconnected`,
+        `${this.clientId} -- uds (id: ${conn.id}) to ${client()} disconnected`,
       );
       cleanup();
     });
 
     sock.on('error', (err) => {
+      if (!session) return;
       log?.warn(
-        `${this.clientId} -- uds to ${
-          session?.connectedTo ?? 'unknown'
-        } got an error: ${err}`,
+        `${this.clientId} -- uds (id: ${
+          conn.id
+        }) to ${client()} got an error: ${err}`,
       );
       cleanup();
     });
@@ -72,7 +76,7 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
   }
 
   async close() {
-    this.server.removeListener('connection', this.connectionHandler);
     super.close();
+    this.server.removeListener('connection', this.connectionHandler);
   }
 }

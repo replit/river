@@ -1,9 +1,12 @@
-import { nanoid } from 'nanoid';
+import { customAlphabet } from 'nanoid';
 import {
   MessageId,
   OpaqueTransportMessage,
   TransportClientId,
 } from './message';
+
+const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvxyz', 4);
+const unsafeId = () => nanoid();
 
 /**
  * A 1:1 connection between two transports. Once this is created,
@@ -11,6 +14,11 @@ import {
  * reading and writing messages from the underlying connection.
  */
 export abstract class Connection {
+  id: string;
+  constructor() {
+    this.id = `conn-${unsafeId()}`; // for debugging, no collision safety needed
+  }
+
   /**
    * Handle adding a callback for when a message is received.
    * @param msg The message that was received.
@@ -98,26 +106,16 @@ export class Session<ConnType extends Connection> {
   private graceExpiryTimeout?: ReturnType<typeof setTimeout>;
 
   constructor(connectedTo: TransportClientId, conn: ConnType | undefined) {
-    this.id = nanoid();
+    this.id = `sess-${unsafeId()}`; // for debugging, no collision safety needed
     this.sendQueue = [];
     this.sendBuffer = new Map();
     this.connectedTo = connectedTo;
     this.connection = conn;
   }
 
-  reopen(conn: ConnType) {
-    this.connection = conn;
-    this.cancelGrace();
-  }
-
   resetBufferedMessages() {
     this.sendQueue = [];
     this.sendBuffer.clear();
-  }
-
-  closeInnerConnection() {
-    this.connection?.close();
-    this.connection = undefined;
   }
 
   beginGrace(cb: () => void) {
