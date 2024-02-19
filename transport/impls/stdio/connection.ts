@@ -21,14 +21,13 @@ export class StreamConnection extends Connection {
   }
 
   send(payload: Uint8Array) {
-    if (!this.output.writable) {
-      return false;
-    }
     return this.output.write(MessageFramer.write(payload));
   }
 
+  // doesn't touch the underlying connection
   async close() {
     this.output.end();
+    this.input.unpipe(this.framer);
     this.framer.destroy();
   }
 }

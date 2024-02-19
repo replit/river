@@ -146,10 +146,14 @@ export abstract class Transport<ConnType extends Connection> {
     to: TransportClientId,
   ): Promise<ConnType>;
 
+  /**
+   * Manually attempts to connect to a client.
+   * @param to The client ID of the node to connect to.
+   */
   async connect(to: TransportClientId, attempt = 0) {
     if (this.state !== 'open' || !this.tryReconnecting) {
       log?.info(
-        `${this.clientId} -- transport state is no longer open, not attempting reconnect`,
+        `${this.clientId} -- transport state is no longer open, not attempting connection`,
       );
       return;
     }
@@ -279,6 +283,7 @@ export abstract class Transport<ConnType extends Connection> {
    * @param conn The connection object.
    */
   onDisconnect(conn: ConnType, connectedTo: TransportClientId | undefined) {
+    if (connectedTo) this.inflightConnectionPromises.delete(connectedTo);
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'disconnect',
       conn,

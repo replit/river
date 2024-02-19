@@ -1,5 +1,5 @@
 import { Transport, TransportClientId } from '../..';
-import { createConnection } from 'node:net';
+import { Socket } from 'node:net';
 import { log } from '../../../logging';
 import { UdsConnection } from './connection';
 import { TransportOptions } from '../../transport';
@@ -21,7 +21,14 @@ export class UnixDomainSocketClientTransport extends Transport<UdsConnection> {
   }
 
   async createNewOutgoingConnection(to: string) {
-    const sock = createConnection(this.path);
+    log?.info(`${this.clientId} -- establishing a new uds to ${to}`);
+    const sock = await new Promise<Socket>((resolve, reject) => {
+      const sock = new Socket();
+      sock.addListener('connect', () => resolve(sock));
+      sock.addListener('error', (err) => reject(err));
+      sock.connect(this.path);
+    });
+
     const conn = new UdsConnection(sock);
     this.onConnect(conn, to);
     conn.onData((data) => this.handleMsg(this.parseMsg(data)));

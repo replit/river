@@ -82,16 +82,11 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
     });
 
     if ('ws' in wsRes) {
-      if (wsRes.ws.readyState !== wsRes.ws.OPEN) {
-        throw new Error(`ws readystate not open`);
-      }
-
       const conn = new WebSocketConnection(wsRes.ws);
       log?.info(`${this.clientId} -- websocket (id: ${conn.id}) to ${to} ok`);
       this.onConnect(conn, to);
       conn.onData((data) => this.handleMsg(this.parseMsg(data)));
       wsRes.ws.onclose = () => {
-        this.inflightConnectionPromises.delete(to);
         log?.info(
           `${this.clientId} -- websocket (id: ${conn.id}) to ${to} disconnected`,
         );
@@ -105,7 +100,6 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
         );
       };
 
-      this.state = 'open';
       return conn;
     } else {
       throw new Error(wsRes.err);

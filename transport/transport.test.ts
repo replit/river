@@ -10,17 +10,13 @@ import {
   testFinishesCleanly,
   waitFor,
 } from '../__tests__/fixtures/cleanup';
-import { bindLogger, setLevel } from '../logging';
+import { bindLogger } from '../logging';
 
-bindLogger(console.log, true);
-setLevel('info');
-
-// TODO: debug stdio transport
-describe.each([transports[2]])('transport -- $name', async ({ setup }) => {
+describe.each(transports)('transport -- $name', async ({ setup }) => {
   const { getTransports, cleanup } = await setup();
   afterAll(cleanup);
 
-  test.only('connection is recreated after clean client disconnect', async () => {
+  test('connection is recreated after clean client disconnect', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
@@ -32,7 +28,6 @@ describe.each([transports[2]])('transport -- $name', async ({ setup }) => {
     clientTransport.send(msg1);
     await expect(msg1Promise).resolves.toStrictEqual(msg1.payload);
 
-    console.log('### DISCONNECT');
     clientTransport.connections.forEach((conn) => conn.close());
 
     // by this point the client should have reconnected
@@ -42,18 +37,11 @@ describe.each([transports[2]])('transport -- $name', async ({ setup }) => {
       (recv) => recv.id === msg2.id,
     );
     await expect(msg2Promise).resolves.toStrictEqual(msg2.payload);
-
-    console.log('### FINISHED');
     await testFinishesCleanly({
       clientTransports: [clientTransport],
       serverTransport,
     });
   });
-
-  test.todo(
-    'multiple concurrent connections from the same client',
-    async () => {},
-  );
 
   test('both client and server transport get connect/disconnect notifs', async () => {
     const [clientTransport, serverTransport] = getTransports();
@@ -169,6 +157,7 @@ describe.each([transports[2]])('transport -- $name', async ({ setup }) => {
     // session    >  c------------x  | (disconnected)
     // connection >  c--x   c-----x  | (disconnected)
     vi.useFakeTimers({ shouldAdvanceTime: true });
+    clientTransport.tryReconnecting = false;
     clientTransport.connections.forEach((conn) => conn.close());
     await waitFor(() => expect(clientConnConnect).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(clientConnDisconnect).toHaveBeenCalledTimes(2));

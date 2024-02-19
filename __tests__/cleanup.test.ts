@@ -48,7 +48,9 @@ describe('procedures should leave no trace after finishing', async () => {
     expect(serverTransport.connections.size).toEqual(1);
 
     // should be back to 0 connections after client closes
+    clientTransport.tryReconnecting = false;
     await clientTransport.close();
+
     expect(clientTransport.connections.size).toEqual(0);
     await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
     await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
@@ -77,7 +79,9 @@ describe('procedures should leave no trace after finishing', async () => {
     expect(serverTransport.connections.size).toEqual(1);
 
     // should be back to 0 connections after client closes
+    clientTransport.tryReconnecting = false;
     await serverTransport.close();
+
     expect(serverTransport.connections.size).toEqual(0);
     await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
     await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
