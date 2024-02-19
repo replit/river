@@ -66,7 +66,7 @@ export const transports: Array<{
         },
         getTransports: () => [
           new StdioTransport('client', clientToServer, serverToClient),
-          new StdioTransport('server', serverToClient, clientToServer),
+          new StdioTransport('SERVER', serverToClient, clientToServer),
         ],
       };
     },

@@ -56,7 +56,9 @@ export class StdioTransport extends Transport<StreamConnection> {
       this.handleMsg(parsed);
     });
 
-    const cleanup = () => this.onDisconnect(conn, session?.connectedTo);
+    const cleanup = (session: Session<StreamConnection>) =>
+      this.onDisconnect(conn, session.connectedTo);
+
     this.input.on('close', () => {
       if (!session) return;
       log?.info(
@@ -64,7 +66,7 @@ export class StdioTransport extends Transport<StreamConnection> {
           conn.id
         }) to ${receiver()} disconnected`,
       );
-      cleanup();
+      cleanup(session);
     });
 
     this.input.on('error', (err) => {
@@ -74,7 +76,7 @@ export class StdioTransport extends Transport<StreamConnection> {
           conn.id
         }) to ${receiver()}: ${err}`,
       );
-      cleanup();
+      cleanup(session);
     });
 
     if (to) {
@@ -88,6 +90,9 @@ export class StdioTransport extends Transport<StreamConnection> {
     }
 
     log?.info(`${this.clientId} -- establishing a new stream to ${to}`);
+
+    // wait 250 ms then open
+    await new Promise((resolve) => setTimeout(resolve, 250));
     this.setupConn(new StreamConnection(this.input, this.output), to);
   }
 }

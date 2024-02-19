@@ -109,7 +109,7 @@ export abstract class Transport<ConnType extends Connection> {
    */
   abstract createNewConnection(to: TransportClientId): Promise<void>;
 
-  sessionByClientId(clientId: TransportClientId): Session<ConnType> {
+  private sessionByClientId(clientId: TransportClientId): Session<ConnType> {
     const session = this.sessions.get(clientId);
     if (!session) {
       const err = `${this.clientId} -- (invariant violation) no existing session for ${clientId}`;
@@ -118,6 +118,19 @@ export abstract class Transport<ConnType extends Connection> {
     }
 
     return session;
+  }
+
+  private closeStaleConnectionForSession(
+    conn: ConnType,
+    session: Session<ConnType>,
+  ) {
+    // only close the connection if the stale one is the one we have a handle to
+    if (!session.connection || session.connection.id !== conn.id) return;
+    session.connection?.close();
+    session.connection = undefined;
+    log?.info(
+      `${this.clientId} -- closing old inner connection (id: ${conn.id}) from session (id: ${session.id}) to ${session.connectedTo}`,
+    );
   }
 
   /**
@@ -132,7 +145,7 @@ export abstract class Transport<ConnType extends Connection> {
     });
 
     log?.info(
-      `${this.clientId} -- connection to ${connectedTo} (id: ${conn.id})`,
+      `${this.clientId} -- new connection (id: ${conn.id}) to ${connectedTo}`,
     );
     const session = this.sessions.get(connectedTo);
     if (session === undefined) {
@@ -142,14 +155,7 @@ export abstract class Transport<ConnType extends Connection> {
 
     // otherwise, this is a duplicate session from the same user, let's consider
     // the old one as dead and call this one canonical
-    if (session.connection && session.connection.id === conn.id) {
-      session.connection?.close();
-      session.connection = undefined;
-      log?.info(
-        `${this.clientId} -- closing old inner connection (id: ${conn.id}) from session (id: ${session.id}) to ${connectedTo}`,
-      );
-    }
-
+    this.closeStaleConnectionForSession(conn, session);
     session.connection = conn;
     session.cancelGrace();
 
@@ -206,14 +212,7 @@ export abstract class Transport<ConnType extends Connection> {
         `${this.clientId} -- connection (id: ${conn.id}) disconnect from ${connectedTo}, ${DISCONNECT_GRACE_MS}ms until session (id: ${session.id}) disconnect`,
       );
 
-      if (session.connection && session.connection.id === conn.id) {
-        session.connection?.close();
-        session.connection = undefined;
-        log?.info(
-          `${this.clientId} -- closing inner connection (id: ${conn.id}) from session (id: ${session.id}) to ${connectedTo}`,
-        );
-      }
-
+      this.closeStaleConnectionForSession(conn, session);
       session.beginGrace(() => {
         log?.info(
           `${this.clientId} -- session ${session.id} disconnect from ${connectedTo}`,
@@ -360,14 +359,9 @@ export abstract class Transport<ConnType extends Connection> {
     if (conn) {
       log?.debug(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
       const ok = conn.send(this.codec.toBuffer(msg));
-      if (ok) {
-        return true;
-      }
-    }
-
-    if (conn) {
+      if (ok) return true;
       log?.info(
-        `${this.clientId} -- connection (id: ${conn.id}) to ${msg.to} doesn't exist, attempting to connect and queuing msg ${msg.id}`,
+        `${this.clientId} -- connection (id: ${conn.id}) to ${msg.to} probably died, attempting to reconnect and queuing msg ${msg.id}`,
       );
     } else {
       log?.info(
