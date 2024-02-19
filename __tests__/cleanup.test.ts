@@ -19,6 +19,7 @@ import {
 } from './fixtures/cleanup';
 import { buildServiceDefs } from '../router/defs';
 
+// TODO: use testFinishesCleanly
 describe('procedures should leave no trace after finishing', async () => {
   const httpServer = http.createServer();
   const port = await onWsServerReady(httpServer);

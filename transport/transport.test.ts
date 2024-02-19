@@ -5,9 +5,13 @@ import {
 } from '../util/testHelpers';
 import { EventMap } from '../transport/events';
 import { transports } from '../__tests__/fixtures/transports';
-import { testFinishesCleanly, waitFor } from '../__tests__/fixtures/cleanup';
-import { DISCONNECT_GRACE_MS } from './session';
+import {
+  advanceFakeTimersByDisconnectGrace,
+  testFinishesCleanly,
+  waitFor,
+} from '../__tests__/fixtures/cleanup';
 
+// TODO: debug stdio transport
 describe.each([transports[0], transports[1]])(
   'transport -- $name',
   async ({ setup }) => {
@@ -179,8 +183,7 @@ describe.each([transports[0], transports[1]])(
         expect(serverConnDisconnect).toHaveBeenCalledTimes(2),
       );
 
-      await vi.runOnlyPendingTimersAsync();
-      await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS + 1);
+      await advanceFakeTimersByDisconnectGrace();
       await waitFor(() => expect(clientSessConnect).toHaveBeenCalledTimes(1));
       await waitFor(() =>
         expect(clientSessDisconnect).toHaveBeenCalledTimes(1),
@@ -231,6 +234,7 @@ describe.each([transports[0], transports[1]])(
           `transport ${clientTransport.clientId} should not have open connections after the test`,
         ).toStrictEqual(new Map()),
       );
+
       await clientTransport.close();
       await serverTransport.close();
     });

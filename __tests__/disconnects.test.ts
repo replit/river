@@ -13,13 +13,17 @@ import {
   UploadableServiceConstructor,
 } from './fixtures/services';
 import { createClient, createServer } from '../router';
-import { ensureServerIsClean, waitFor } from './fixtures/cleanup';
+import {
+  advanceFakeTimersByDisconnectGrace,
+  ensureServerIsClean,
+  waitFor,
+} from './fixtures/cleanup';
 import { Err, UNEXPECTED_DISCONNECT } from '../router/result';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { buildServiceDefs } from '../router/defs';
-import { DISCONNECT_GRACE_MS } from '../transport/session';
 
+// TODO: use testFinishesCleanly
 describe('procedures should handle unexpected disconnects', async () => {
   const httpServer = http.createServer();
   const port = await onWsServerReady(httpServer);
@@ -49,8 +53,7 @@ describe('procedures should handle unexpected disconnects', async () => {
     // end procedure
 
     // after we've disconnected, hit end of grace period
-    await vi.runOnlyPendingTimersAsync();
-    await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS + 1);
+    await advanceFakeTimersByDisconnectGrace();
 
     // we should get an error + expect the streams to be cleaned up
     await expect(procPromise).resolves.toMatchObject(
@@ -87,8 +90,7 @@ describe('procedures should handle unexpected disconnects', async () => {
     // end procedure
 
     // after we've disconnected, hit end of grace period
-    await vi.runOnlyPendingTimersAsync();
-    await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS);
+    await advanceFakeTimersByDisconnectGrace();
 
     // we should get an error + expect the streams to be cleaned up
     await expect(nextResPromise).resolves.toMatchObject(
@@ -164,13 +166,12 @@ describe('procedures should handle unexpected disconnects', async () => {
 
     // client1 who is still connected can still add values and receive updates
     const add2Promise = client1.subscribable.add.rpc({ n: 2 });
+    const nextResPromise = iterNext(subscription2);
 
     // after we've disconnected, hit end of grace period
-    await vi.runOnlyPendingTimersAsync();
-    await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS);
+    await advanceFakeTimersByDisconnectGrace();
 
     // we should get an error from the subscription on client2
-    const nextResPromise = iterNext(subscription2);
     await expect(nextResPromise).resolves.toMatchObject(
       Err({
         code: UNEXPECTED_DISCONNECT,
@@ -217,8 +218,7 @@ describe('procedures should handle unexpected disconnects', async () => {
     clientTransport.tryReconnecting = false;
 
     // after we've disconnected, hit end of grace period
-    await vi.runOnlyPendingTimersAsync();
-    await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS);
+    await advanceFakeTimersByDisconnectGrace();
 
     // we should get an error + expect the streams to be cleaned up
     await expect(addResult).resolves.toMatchObject(

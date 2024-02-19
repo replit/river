@@ -13,7 +13,10 @@ export async function waitForTransportToFinish(t: Transport<Connection>) {
   // ^ this is buggy because current protocol sometimes drops acks
   //   should be fixed when we rewrite our acks to be more reliable
   await t.close();
+  await advanceFakeTimersByDisconnectGrace();
+}
 
+export async function advanceFakeTimersByDisconnectGrace() {
   // advance fake timer so we hit the disconnect grace to end the session
   await vi.runOnlyPendingTimersAsync();
   await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS + 1);
