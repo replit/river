@@ -4,7 +4,6 @@ import { Type } from '@sinclair/typebox';
 import { OpaqueTransportMessage } from '../transport/message';
 import { createServer } from '../router/server';
 import { Transport } from '../transport/transport';
-import { NaiveJsonCodec } from '../codec/json';
 import { createClient } from '../router/client';
 import { Ok } from '../router/result';
 import { buildServiceDefs } from '../router/defs';
@@ -100,14 +99,17 @@ export const StupidlyLargeService = <Name extends string>(name: Name) =>
 // mock transport
 export class MockTransport extends Transport<Connection> {
   constructor(clientId: string) {
-    super(NaiveJsonCodec, clientId);
+    super(clientId);
   }
 
   send(_msg: OpaqueTransportMessage): boolean {
     return true;
   }
 
-  async createNewConnection() {}
+  async createNewOutgoingConnection(): Promise<Connection> {
+    throw new Error('unimplemented');
+  }
+
   async close() {}
 }
 

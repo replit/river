@@ -1,18 +1,9 @@
 import { Session } from '../../session';
-import { Codec, NaiveJsonCodec } from '../../../codec';
 import { log } from '../../../logging';
 import { type Server, type Socket } from 'node:net';
-import { Transport } from '../../transport';
+import { Transport, TransportOptions } from '../../transport';
 import { TransportClientId } from '../../message';
 import { UdsConnection } from './connection';
-
-interface Options {
-  codec: Codec;
-}
-
-const defaultOptions: Options = {
-  codec: NaiveJsonCodec,
-};
 
 export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
   server: Server;
@@ -20,10 +11,9 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
   constructor(
     server: Server,
     clientId: TransportClientId,
-    providedOptions?: Partial<Options>,
+    providedOptions?: Partial<TransportOptions>,
   ) {
-    const options = { ...defaultOptions, ...providedOptions };
-    super(options.codec, clientId);
+    super(clientId, providedOptions);
     this.server = server;
     server.addListener('connection', this.connectionHandler);
     server.on('listening', () => {
@@ -69,10 +59,10 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
     });
   };
 
-  async createNewConnection(to: string): Promise<void> {
+  async createNewOutgoingConnection(to: string): Promise<UdsConnection> {
     const err = `${this.clientId} -- failed to send msg to ${to}, client probably dropped`;
     log?.warn(err);
-    return;
+    throw new Error(err);
   }
 
   async close() {

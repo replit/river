@@ -1,29 +1,20 @@
-import { Codec } from '../../../codec';
-import { NaiveJsonCodec } from '../../../codec/json';
 import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
 import { Session } from '../../session';
-import { Transport } from '../../transport';
+import { Transport, TransportOptions } from '../../transport';
 import { StreamConnection } from './connection';
 
-interface Options {
-  codec: Codec;
-}
-
-const defaultOptions: Options = {
-  codec: NaiveJsonCodec,
-};
-
 /**
- * A transport implementation that uses standard input and output streams.
+ * A server-side transport implementation that uses standard input and output streams.
+ * This will sit idle until a client connects.
  * @extends Transport
  */
-export class StdioTransport extends Transport<StreamConnection> {
+export class StdioServerTransport extends Transport<StreamConnection> {
   input: NodeJS.ReadableStream = process.stdin;
   output: NodeJS.WritableStream = process.stdout;
 
   /**
-   * Constructs a new StdioTransport instance.
+   * Constructs a new StdioServerTransport instance.
    * @param clientId - The ID of the client associated with this transport.
    * @param input - The readable stream to use as input. Defaults to process.stdin.
    * @param output - The writable stream to use as output. Defaults to process.stdout.
@@ -32,20 +23,16 @@ export class StdioTransport extends Transport<StreamConnection> {
     clientId: TransportClientId,
     input: NodeJS.ReadableStream = process.stdin,
     output: NodeJS.WritableStream = process.stdout,
-    providedOptions?: Partial<Options>,
+    providedOptions?: Partial<TransportOptions>,
   ) {
-    const options = { ...defaultOptions, ...providedOptions };
-    super(options.codec, clientId);
-
+    super(clientId, providedOptions);
     this.input = input;
     this.output = output;
-    this.setupConn(new StreamConnection(this.input, this.output));
-  }
 
-  setupConn(conn: StreamConnection, to?: TransportClientId) {
     let session: Session<StreamConnection> | undefined = undefined;
-
     const receiver = () => session?.connectedTo ?? 'unknown';
+
+    const conn = new StreamConnection(this.input, this.output);
     conn.onData((data) => {
       const parsed = this.parseMsg(data);
       if (!parsed) return;
@@ -78,21 +65,11 @@ export class StdioTransport extends Transport<StreamConnection> {
       );
       cleanup(session);
     });
-
-    if (to) {
-      session = this.onConnect(conn, to);
-    }
   }
 
-  async createNewConnection(to: TransportClientId) {
-    if (this.state === 'destroyed') {
-      throw new Error('cant reopen a destroyed connection');
-    }
-
-    log?.info(`${this.clientId} -- establishing a new stream to ${to}`);
-
-    // wait 250 ms then open
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    this.setupConn(new StreamConnection(this.input, this.output), to);
+  async createNewOutgoingConnection(to: string): Promise<StreamConnection> {
+    const err = `${this.clientId} -- failed to send msg to ${to}, client probably dropped`;
+    log?.warn(err);
+    throw new Error(err);
   }
 }

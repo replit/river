@@ -36,9 +36,13 @@
       "import": "./dist/transport/impls/uds/server.js",
       "require": "./dist/transport/impls/uds/server.cjs"
     },
-    "./transport/stdio": {
-      "import": "./dist/transport/impls/stdio/stdio.js",
-      "require": "./dist/transport/impls/stdio/stdio.cjs"
+    "./transport/stdio/client": {
+      "import": "./dist/transport/impls/stdio/client.js",
+      "require": "./dist/transport/impls/stdio/client.cjs"
+    },
+    "./transport/stdio/server": {
+      "import": "./dist/transport/impls/stdio/server.js",
+      "require": "./dist/transport/impls/stdio/server.cjs"
     },
     "./test-util": {
       "import": "./dist/util/testHelpers.js",

@@ -16,7 +16,7 @@ export type Logger = {
  * The global River logger instance.
  */
 export let log: Logger | undefined;
-const defaultLoggingLevel: LoggingLevel = 'warn';
+const defaultLoggingLevel: LoggingLevel = 'info';
 
 /**
  * Binds the given write function to River's logger {@link log}.

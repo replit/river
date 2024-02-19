@@ -11,7 +11,8 @@ import {
 } from '../../util/testHelpers';
 import { UnixDomainSocketClientTransport } from '../../transport/impls/uds/client';
 import { UnixDomainSocketServerTransport } from '../../transport/impls/uds/server';
-import { StdioTransport } from '../../transport/impls/stdio/stdio';
+import { StdioClientTransport } from '../../transport/impls/stdio/client';
+import { StdioServerTransport } from '../../transport/impls/stdio/server';
 
 export const transports: Array<{
   name: string;
@@ -65,8 +66,13 @@ export const transports: Array<{
           serverToClient.end();
         },
         getTransports: () => [
-          new StdioTransport('client', clientToServer, serverToClient),
-          new StdioTransport('SERVER', serverToClient, clientToServer),
+          new StdioClientTransport(
+            'client',
+            clientToServer,
+            serverToClient,
+            'SERVER',
+          ),
+          new StdioServerTransport('SERVER', serverToClient, clientToServer),
         ],
       };
     },

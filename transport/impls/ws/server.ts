@@ -1,19 +1,10 @@
-import { Codec, NaiveJsonCodec } from '../../../codec';
 import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
-import { Transport } from '../../transport';
+import { Transport, TransportOptions } from '../../transport';
 import { WebSocketServer } from 'ws';
 import { WebSocket } from 'isomorphic-ws';
 import { WebSocketConnection } from './connection';
 import { Session } from '../../session';
-
-interface Options {
-  codec: Codec;
-}
-
-const defaultOptions: Options = {
-  codec: NaiveJsonCodec,
-};
 
 export class WebSocketServerTransport extends Transport<WebSocketConnection> {
   wss: WebSocketServer;
@@ -21,10 +12,9 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
   constructor(
     wss: WebSocketServer,
     clientId: TransportClientId,
-    providedOptions?: Partial<Options>,
+    providedOptions?: Partial<TransportOptions>,
   ) {
-    const options = { ...defaultOptions, ...providedOptions };
-    super(options.codec, clientId);
+    super(clientId, providedOptions);
     this.wss = wss;
     wss.on('listening', () => {
       log?.info(`${this.clientId} -- server is listening`);
@@ -71,10 +61,10 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
     };
   };
 
-  async createNewConnection(to: string) {
+  async createNewOutgoingConnection(to: string): Promise<WebSocketConnection> {
     const err = `${this.clientId} -- failed to send msg to ${to}, client probably dropped`;
     log?.warn(err);
-    return;
+    throw new Error(err);
   }
 
   async close() {

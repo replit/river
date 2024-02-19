@@ -12,8 +12,22 @@ import {
 import { log } from '../logging';
 import { EventDispatcher, EventHandler, EventTypes } from './events';
 import { Connection, DISCONNECT_GRACE_MS, Session } from './session';
+import { NaiveJsonCodec } from '../codec';
 
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
+
+export interface TransportOptions {
+  retryIntervalMs: number;
+  retryAttemptsMax: number;
+  codec: Codec;
+}
+
+export const DEFAULT_WS_RETRY_INTERVAL_MS = 250;
+export const defaultTransportOptions: TransportOptions = {
+  retryIntervalMs: DEFAULT_WS_RETRY_INTERVAL_MS,
+  retryAttemptsMax: 5,
+  codec: NaiveJsonCodec,
+};
 
 /**
  * Transports manage the lifecycle (creation/deletion) of sessions and connections. Its responsibilities include:
@@ -67,6 +81,9 @@ export abstract class Transport<ConnType extends Connection> {
    */
   sessions: Map<TransportClientId, Session<ConnType>>;
 
+  /**
+   * The map of {@link Connection}s managed by this transport.
+   */
   get connections() {
     return new Map(
       [...this.sessions]
@@ -81,33 +98,94 @@ export abstract class Transport<ConnType extends Connection> {
   eventDispatcher: EventDispatcher<EventTypes>;
 
   /**
+   * The map of reconnect promises for each client ID.
+   */
+  inflightConnectionPromises: Map<TransportClientId, Promise<ConnType>>;
+  tryReconnecting: boolean = true;
+
+  /**
+   * The options for this transport.
+   */
+  options: TransportOptions;
+
+  /**
    * Creates a new Transport instance.
    * This should also set up {@link onConnect}, and {@link onDisconnect} listeners.
    * @param codec The codec used to encode and decode messages.
    * @param clientId The client ID of this transport.
    */
-  constructor(codec: Codec, clientId: TransportClientId) {
+  constructor(
+    clientId: TransportClientId,
+    providedOptions?: Partial<TransportOptions>,
+  ) {
+    this.options = { ...defaultTransportOptions, ...providedOptions };
     this.eventDispatcher = new EventDispatcher();
     this.sessions = new Map();
-    this.codec = codec;
+    this.codec = this.options.codec;
     this.clientId = clientId;
     this.state = 'open';
+    this.inflightConnectionPromises = new Map();
   }
 
   /**
    * Abstract method that creates a new {@link Connection} object.
-   * This should call {@link onConnect} when the connection is established.
+   * This should call {@link onConnect} when the connection is established
+   * and {@link onDisconnect} when the connection is closed.
+   *
    * The downstream implementation needs to implement this. If the downstream
    * transport cannot make new outgoing connections (e.g. a server transport),
    * it is ok to log an error and return.
    *
-   * Consumers of river should never need to call this directly.
+   * You should never need to call this directly.
    * Instead, look for a `reopen` method on the transport.
    *
    * @param to The client ID of the node to connect to.
    * @returns The new connection object.
    */
-  abstract createNewConnection(to: TransportClientId): Promise<void>;
+  protected abstract createNewOutgoingConnection(
+    to: TransportClientId,
+  ): Promise<ConnType>;
+
+  async connect(to: TransportClientId, attempt = 0) {
+    if (this.state !== 'open' || !this.tryReconnecting) {
+      log?.info(
+        `${this.clientId} -- transport state is no longer open, not attempting reconnect`,
+      );
+      return;
+    }
+
+    let reconnectPromise = this.inflightConnectionPromises.get(to);
+    if (!reconnectPromise) {
+      reconnectPromise = this.createNewOutgoingConnection(to);
+      this.inflightConnectionPromises.set(to, reconnectPromise);
+    }
+
+    try {
+      const conn = await reconnectPromise;
+      if (this.state !== 'open') {
+        this.inflightConnectionPromises.delete(to);
+        conn.close();
+        return;
+      }
+
+      this.state = 'open';
+    } catch (err: unknown) {
+      // retry on failure
+      this.inflightConnectionPromises.delete(to);
+      if (attempt >= this.options.retryAttemptsMax) {
+        throw new Error(
+          `${this.clientId} -- connection to ${to} failed after ${attempt} attempts (${err}), giving up`,
+        );
+      } else {
+        // linear backoff
+        const backoffMs = this.options.retryIntervalMs * attempt;
+        log?.warn(
+          `${this.clientId} -- connection to ${to} failed (${err}), trying again in ${backoffMs}ms`,
+        );
+        setTimeout(() => this.connect(to, attempt + 1), backoffMs);
+      }
+    }
+  }
 
   private sessionByClientId(clientId: TransportClientId): Session<ConnType> {
     const session = this.sessions.get(clientId);
@@ -144,14 +222,19 @@ export abstract class Transport<ConnType extends Connection> {
       conn,
     });
 
-    log?.info(
-      `${this.clientId} -- new connection (id: ${conn.id}) to ${connectedTo}`,
-    );
     const session = this.sessions.get(connectedTo);
     if (session === undefined) {
       // new session, create and return
-      return this.createSession(connectedTo, conn);
+      const newSession = this.createSession(connectedTo, conn);
+      log?.info(
+        `${this.clientId} -- new connection (id: ${conn.id}) for new session (id: ${newSession.id}) to ${connectedTo}`,
+      );
+      return newSession;
     }
+
+    log?.info(
+      `${this.clientId} -- new connection (id: ${conn.id}) for existing session (id: ${session.id}) to ${connectedTo}`,
+    );
 
     // otherwise, this is a duplicate session from the same user, let's consider
     // the old one as dead and call this one canonical
@@ -183,9 +266,6 @@ export abstract class Transport<ConnType extends Connection> {
     conn: ConnType | undefined,
   ) {
     const session = new Session<ConnType>(connectedTo, conn);
-    log?.info(
-      `${this.clientId} -- new session (id: ${session.id}) to ${connectedTo}`,
-    );
     this.sessions.set(session.connectedTo, session);
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'connect',
@@ -214,14 +294,14 @@ export abstract class Transport<ConnType extends Connection> {
 
       this.closeStaleConnectionForSession(conn, session);
       session.beginGrace(() => {
-        log?.info(
-          `${this.clientId} -- session ${session.id} disconnect from ${connectedTo}`,
-        );
         this.sessions.delete(session.connectedTo);
         this.eventDispatcher.dispatchEvent('sessionStatus', {
           status: 'disconnect',
           session,
         });
+        log?.info(
+          `${this.clientId} -- session ${session.id} disconnect from ${connectedTo}`,
+        );
       });
     }
   }
@@ -342,10 +422,10 @@ export abstract class Transport<ConnType extends Connection> {
 
     let session = this.sessions.get(msg.to);
     if (!session) {
-      log?.info(
-        `${this.clientId} -- no session for ${msg.to}, creating a new one`,
-      );
       session = this.createSession(msg.to, undefined);
+      log?.info(
+        `${this.clientId} -- no session for ${msg.to}, created a new one (id: ${session.id})`,
+      );
     }
 
     let conn = session?.connection;
@@ -361,11 +441,11 @@ export abstract class Transport<ConnType extends Connection> {
       const ok = conn.send(this.codec.toBuffer(msg));
       if (ok) return true;
       log?.info(
-        `${this.clientId} -- connection (id: ${conn.id}) to ${msg.to} probably died, attempting to reconnect and queuing msg ${msg.id}`,
+        `${this.clientId} -- failed to send on connection (id: ${conn.id}) to ${msg.to}, queuing msg ${msg.id}`,
       );
     } else {
       log?.info(
-        `${this.clientId} -- connection to ${msg.to} doesn't exist, attempting to connect and queuing msg ${msg.id}`,
+        `${this.clientId} -- connection to ${msg.to} doesn't exist, queuing msg ${msg.id}`,
       );
     }
 
@@ -373,7 +453,6 @@ export abstract class Transport<ConnType extends Connection> {
     log?.debug(
       `${this.clientId} -- now at ${session.sendQueue.length} outstanding messages to ${msg.to}`,
     );
-    this.createNewConnection(msg.to);
     return false;
   }
 
