@@ -15,7 +15,7 @@ import {
 import { createClient, createServer } from '../router';
 import {
   advanceFakeTimersByDisconnectGrace,
-  ensureServerIsClean,
+  testFinishesCleanly,
   waitFor,
 } from './fixtures/cleanup';
 import { Err, UNEXPECTED_DISCONNECT } from '../router/result';
@@ -23,7 +23,7 @@ import { WebSocketServerTransport } from '../transport/impls/ws/server';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { buildServiceDefs } from '../router/defs';
 
-// TODO: use testFinishesCleanly
+// TODO matrix this with all the transports
 describe('procedures should handle unexpected disconnects', async () => {
   const httpServer = http.createServer();
   const port = await onWsServerReady(httpServer);
@@ -46,9 +46,10 @@ describe('procedures should handle unexpected disconnects', async () => {
     expect(clientTransport.connections.size).toEqual(1);
     expect(serverTransport.connections.size).toEqual(1);
 
-    vi.useFakeTimers();
-    clientTransport.connections.forEach((conn) => conn.ws.close());
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     clientTransport.tryReconnecting = false;
+    clientTransport.connections.forEach((conn) => conn.ws.close());
+
     const procPromise = client.test.add.rpc({ n: 4 });
     // end procedure
 
@@ -65,7 +66,11 @@ describe('procedures should handle unexpected disconnects', async () => {
     vi.useRealTimers();
     waitFor(() => expect(clientTransport.connections.size).toEqual(0));
     waitFor(() => expect(serverTransport.connections.size).toEqual(0));
-    await ensureServerIsClean(server);
+    return testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+      server,
+    });
   });
 
   test('stream', async () => {
@@ -83,9 +88,10 @@ describe('procedures should handle unexpected disconnects', async () => {
     expect(clientTransport.connections.size).toEqual(1);
     expect(serverTransport.connections.size).toEqual(1);
 
-    vi.useFakeTimers();
-    clientTransport.connections.forEach((conn) => conn.ws.close());
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     clientTransport.tryReconnecting = false;
+    clientTransport.connections.forEach((conn) => conn.ws.close());
+
     const nextResPromise = iterNext(output);
     // end procedure
 
@@ -102,7 +108,11 @@ describe('procedures should handle unexpected disconnects', async () => {
     vi.useRealTimers();
     waitFor(() => expect(clientTransport.connections.size).toEqual(0));
     waitFor(() => expect(serverTransport.connections.size).toEqual(0));
-    await ensureServerIsClean(server);
+    return testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+      server,
+    });
   });
 
   test('subscription', async () => {
@@ -160,9 +170,9 @@ describe('procedures should handle unexpected disconnects', async () => {
     expect(serverTransport.connections.size).toEqual(2);
 
     // kill the connection for client2
-    vi.useFakeTimers();
-    client2Transport.connections.forEach((conn) => conn.ws.close());
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     client2Transport.tryReconnecting = false;
+    client2Transport.connections.forEach((conn) => conn.ws.close());
 
     // client1 who is still connected can still add values and receive updates
     const add2Promise = client1.subscribable.add.rpc({ n: 2 });
@@ -193,8 +203,11 @@ describe('procedures should handle unexpected disconnects', async () => {
     // cleanup client1 (client2 is already disconnected)
     close1();
     await client1Transport.close();
-
-    await ensureServerIsClean(server);
+    return testFinishesCleanly({
+      clientTransports: [client1Transport, client2Transport],
+      serverTransport,
+      server,
+    });
   });
 
   test('upload', async () => {
@@ -213,9 +226,9 @@ describe('procedures should handle unexpected disconnects', async () => {
     await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
     await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
 
-    vi.useFakeTimers();
-    clientTransport.connections.forEach((conn) => conn.ws.close());
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     clientTransport.tryReconnecting = false;
+    clientTransport.connections.forEach((conn) => conn.ws.close());
 
     // after we've disconnected, hit end of grace period
     await advanceFakeTimersByDisconnectGrace();
@@ -230,8 +243,10 @@ describe('procedures should handle unexpected disconnects', async () => {
 
     waitFor(() => expect(clientTransport.connections.size).toEqual(0));
     waitFor(() => expect(serverTransport.connections.size).toEqual(0));
-    await ensureServerIsClean(server);
+    return testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+      server,
+    });
   });
 });
-
-describe.todo('procedures should handle unexpected server crashes');

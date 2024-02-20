@@ -305,6 +305,7 @@ function handleStream(
   const inputStream = pushable({ objectMode: true });
   const outputStream = pushable({ objectMode: true });
   let firstMessage = true;
+  let healthyClose = true;
 
   if (init) {
     const m = msg(
@@ -339,6 +340,7 @@ function handleStream(
     }
 
     // after ending input stream, send a close message to the server
+    if (!healthyClose) return;
     transport.send(closeStream(transport.clientId, serverId, streamId));
   })();
 
@@ -366,11 +368,6 @@ function handleStream(
     transport.removeEventListener('sessionStatus', onSessionStatus);
   }
 
-  const closeHandler = () => {
-    cleanup();
-    transport.send(closeStream(transport.clientId, serverId, streamId));
-  };
-
   // close stream after disconnect + grace period elapses
   const onSessionStatus = onSessionDisconnect(serverId, () => {
     outputStream.push(
@@ -379,12 +376,13 @@ function handleStream(
         message: `${serverId} unexpectedly disconnected`,
       }),
     );
+    healthyClose = false;
     cleanup();
   });
 
   transport.addEventListener('message', onMessage);
   transport.addEventListener('sessionStatus', onSessionStatus);
-  return [inputStream, outputStream, closeHandler];
+  return [inputStream, outputStream, cleanup];
 }
 
 function handleSubscribe(
@@ -405,6 +403,7 @@ function handleSubscribe(
   );
   m.controlFlags |= ControlFlags.StreamOpenBit;
   transport.send(m);
+  let healthyClose = true;
 
   // transport -> output
   const outputStream = pushable({ objectMode: true });
@@ -432,6 +431,7 @@ function handleSubscribe(
 
   const closeHandler = () => {
     cleanup();
+    if (!healthyClose) return;
     transport.send(closeStream(transport.clientId, serverId, streamId));
   };
 
@@ -443,6 +443,7 @@ function handleSubscribe(
         message: `${serverId} unexpectedly disconnected`,
       }),
     );
+    healthyClose = false;
     cleanup();
   });
 
@@ -461,6 +462,7 @@ function handleUpload(
   const streamId = nanoid();
   const inputStream = pushable({ objectMode: true });
   let firstMessage = true;
+  let healthyClose = true;
 
   if (input) {
     const m = msg(
@@ -494,6 +496,7 @@ function handleUpload(
       transport.send(m);
     }
 
+    if (!healthyClose) return;
     transport.send(closeStream(transport.clientId, serverId, streamId));
   })();
 
@@ -501,6 +504,7 @@ function handleUpload(
     // on disconnect, set a timer to return an error
     // on (re)connect, clear the timer
     const onSessionStatus = onSessionDisconnect(serverId, () => {
+      healthyClose = false;
       cleanup();
       resolve(
         Err({

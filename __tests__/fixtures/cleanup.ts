@@ -10,10 +10,9 @@ const waitUntilOptions = {
 
 export async function waitForTransportToFinish(t: Transport<Connection>) {
   // await ensureTransportQueuesAreEventuallyEmpty(t);
-  // ^ this is buggy because current protocol sometimes drops acks
+  // ^ TODO: this is buggy because current protocol sometimes drops acks
   //   should be fixed when we rewrite our acks to be more reliable
   await t.close();
-  await advanceFakeTimersByDisconnectGrace();
 }
 
 export async function advanceFakeTimersByDisconnectGrace() {
@@ -116,6 +115,7 @@ export async function testFinishesCleanly({
 
   if (clientTransports) {
     await Promise.all(clientTransports.map(waitForTransportToFinish));
+    await advanceFakeTimersByDisconnectGrace();
     await Promise.all(clientTransports.map(ensureTransportIsClean));
   }
 
@@ -127,6 +127,7 @@ export async function testFinishesCleanly({
 
   if (serverTransport) {
     await waitForTransportToFinish(serverTransport);
+    await advanceFakeTimersByDisconnectGrace();
     await ensureTransportIsClean(serverTransport);
   }
 

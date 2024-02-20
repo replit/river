@@ -40,7 +40,6 @@ interface ProcStream {
   id: string;
   serviceName: string;
   procedureName: string;
-  procedure: AnyProcedure;
   incoming: Pushable<PayloadType>;
   outgoing: Pushable<Result<Static<PayloadType>, Static<RiverError>>>;
   promises: {
@@ -55,9 +54,9 @@ class RiverServer<Services extends ServiceDefs> {
   contextMap: Map<AnyService, ServiceContextWithState<object>>;
   // map of streamId to ProcStream
   streamMap: Map<string, ProcStream>;
-
   // map of client to their open streams by streamId
   clientStreams: Map<TransportClientId, Set<string>>;
+  disconnectedSessions: Set<TransportClientId>;
 
   constructor(
     transport: Transport<Connection>,
@@ -67,6 +66,7 @@ class RiverServer<Services extends ServiceDefs> {
     this.transport = transport;
     this.services = services;
     this.contextMap = new Map();
+    this.disconnectedSessions = new Set();
     for (const service of Object.values(services)) {
       this.contextMap.set(service, {
         ...extendedContext,
@@ -121,9 +121,11 @@ class RiverServer<Services extends ServiceDefs> {
       return;
     }
 
+    this.disconnectedSessions.add(disconnectedClientId);
     await Promise.all(
       Array.from(streamsFromThisClient).map(this.cleanupStream),
     );
+    this.disconnectedSessions.delete(disconnectedClientId);
     this.clientStreams.delete(disconnectedClientId);
   };
 
@@ -173,7 +175,10 @@ class RiverServer<Services extends ServiceDefs> {
         // we ended, send a close bit back to the client
         // only subscriptions and streams have streams the
         // handler can close
-        if (procedure.type === 'subscription' || procedure.type === 'stream') {
+        // also, if the client has disconnected, we don't need to send a close
+        const needsClose =
+          procedure.type === 'subscription' || procedure.type === 'stream';
+        if (needsClose && !this.disconnectedSessions.has(message.from)) {
           this.transport.send(
             closeStream(
               this.transport.clientId,
@@ -249,8 +254,8 @@ class RiverServer<Services extends ServiceDefs> {
         }
       })();
     } else if (procedure.type === 'upload') {
-      if (procHasInitMessage) {
-        inputHandler = (async () => {
+      inputHandler = (async () => {
+        if (procHasInitMessage) {
           const initMessage = await incoming.next();
           if (initMessage.done) {
             return;
@@ -262,24 +267,28 @@ class RiverServer<Services extends ServiceDefs> {
               initMessage.value,
               incoming,
             );
-            outgoing.push(outputMessage);
+
+            if (!this.disconnectedSessions.has(message.from)) {
+              outgoing.push(outputMessage);
+            }
           } catch (err) {
             errorHandler(err);
           }
-        })();
-      } else {
-        inputHandler = (async () => {
+        } else {
           try {
             const outputMessage = await procedure.handler(
               serviceContext,
               incoming,
             );
-            outgoing.push(outputMessage);
+
+            if (!this.disconnectedSessions.has(message.from)) {
+              outgoing.push(outputMessage);
+            }
           } catch (err) {
             errorHandler(err);
           }
-        })();
-      }
+        }
+      })();
     } else {
       // procedure is inferred to be never here as this is not a valid procedure type
       // we cast just to log
@@ -297,7 +306,6 @@ class RiverServer<Services extends ServiceDefs> {
       outgoing,
       serviceName: message.serviceName,
       procedureName: message.procedureName,
-      procedure,
       promises: { inputHandler, outputHandler },
     };
 
@@ -317,7 +325,8 @@ class RiverServer<Services extends ServiceDefs> {
     message: OpaqueTransportMessage,
     isInit?: boolean,
   ) {
-    const procedure = procStream.procedure;
+    const { serviceName, procedureName } = procStream;
+    const procedure = this.services[serviceName].procedures[procedureName];
     const procHasInitMessage = 'init' in procedure;
 
     if (
@@ -329,9 +338,11 @@ class RiverServer<Services extends ServiceDefs> {
       procStream.incoming.push(message.payload as PayloadType);
     } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
       log?.error(
-        `${this.transport.clientId} -- procedure ${procStream.serviceName}.${
-          procStream.procedureName
-        } received invalid payload: ${JSON.stringify(message.payload)}`,
+        `${
+          this.transport.clientId
+        } -- procedure ${serviceName}.${procedureName} received invalid payload: ${JSON.stringify(
+          message.payload,
+        )}`,
       );
     }
 
@@ -365,6 +376,7 @@ class RiverServer<Services extends ServiceDefs> {
       return;
     }
 
+    // end the streams and wait for the handlers to finish
     stream.incoming.end();
     await stream.promises.inputHandler;
     stream.outgoing.end();

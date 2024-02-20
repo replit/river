@@ -10,7 +10,6 @@ import {
   testFinishesCleanly,
   waitFor,
 } from '../__tests__/fixtures/cleanup';
-import { bindLogger } from '../logging';
 
 describe.each(transports)('transport -- $name', async ({ setup }) => {
   const { getTransports, cleanup } = await setup();
