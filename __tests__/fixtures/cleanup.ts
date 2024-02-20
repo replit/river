@@ -13,6 +13,12 @@ export async function waitForTransportToFinish(t: Transport<Connection>) {
   // ^ TODO: this is buggy because current protocol sometimes drops acks
   //   should be fixed when we rewrite our acks to be more reliable
   await t.close();
+  await waitFor(() =>
+    expect(
+      t.connections,
+      `transport ${t.clientId} should not have open connections after the test`,
+    ).toStrictEqual(new Map()),
+  );
 }
 
 export async function advanceFakeTimersByDisconnectGrace() {
@@ -34,12 +40,7 @@ async function ensureTransportIsClean(t: Transport<Connection>) {
         `transport ${t.clientId} should not have open sessions after the test`,
       ).toStrictEqual(new Map()),
     ),
-    waitFor(() =>
-      expect(
-        t.connections,
-        `transport ${t.clientId} should not have open connections after the test`,
-      ).toStrictEqual(new Map()),
-    ),
+
     waitFor(() =>
       expect(
         t.eventDispatcher.numberOfListeners('message'),
