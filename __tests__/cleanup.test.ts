@@ -16,6 +16,7 @@ import {
   ensureTransportQueuesAreEventuallyEmpty,
   testFinishesCleanly,
   waitFor,
+  waitForTransportToFinish,
 } from './fixtures/cleanup';
 import { buildServiceDefs } from '../router/defs';
 
@@ -52,7 +53,7 @@ describe('procedures should leave no trace after finishing', async () => {
     clientTransport.tryReconnecting = false;
     await clientTransport.close();
 
-    expect(clientTransport.connections.size).toEqual(0);
+    await waitForTransportToFinish(clientTransport);
     await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
     await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
 
@@ -84,7 +85,7 @@ describe('procedures should leave no trace after finishing', async () => {
     clientTransport.tryReconnecting = false;
     await serverTransport.close();
 
-    expect(serverTransport.connections.size).toEqual(0);
+    await waitForTransportToFinish(serverTransport);
     await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
     await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
     await testFinishesCleanly({

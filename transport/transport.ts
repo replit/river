@@ -471,7 +471,6 @@ export abstract class Transport<ConnType extends Connection> {
   async close() {
     for (const session of this.sessions.values()) {
       session.connection?.close();
-      session.connection = undefined;
     }
 
     this.state = 'closed';
@@ -486,7 +485,6 @@ export abstract class Transport<ConnType extends Connection> {
   async destroy() {
     for (const session of this.sessions.values()) {
       session.connection?.close();
-      session.connection = undefined;
     }
 
     this.state = 'destroyed';

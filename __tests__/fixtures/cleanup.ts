@@ -109,7 +109,7 @@ export async function testFinishesCleanly({
   server: Server<unknown>;
 }>) {
   console.log('### faking timers');
-  vi.useFakeTimers({ shouldAdvanceTime: true, shouldClearNativeTimers: true });
+  vi.useFakeTimers({ shouldAdvanceTime: true });
 
   if (clientTransports) {
     await Promise.all(clientTransports.map(waitForTransportToFinish));
