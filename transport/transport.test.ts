@@ -11,7 +11,7 @@ import {
   waitFor,
 } from '../__tests__/fixtures/cleanup';
 
-describe.each([transports[0]])('transport -- $name', async ({ setup }) => {
+describe.each(transports)('transport -- $name', async ({ setup }) => {
   const { getTransports, cleanup } = await setup();
   afterAll(cleanup);
 
