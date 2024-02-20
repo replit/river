@@ -50,6 +50,10 @@ export function bindLogger(write: (msg: string) => void, color?: boolean) {
   };
 }
 
+export function unbindLogger() {
+  log = undefined;
+}
+
 /**
  * Sets the minimum logging level for the logger.
  * @param level - The minimum logging level to set.
