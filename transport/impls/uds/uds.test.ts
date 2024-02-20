@@ -11,7 +11,6 @@ import { testFinishesCleanly } from '../../../__tests__/fixtures/cleanup';
 import { BinaryCodec } from '../../../codec';
 import { msg } from '../..';
 import net from 'node:net';
-import { bindLogger, setLevel, unbindLogger } from '../../../logging';
 
 describe('sending and receiving across unix sockets works', async () => {
   const socketPath = getUnixSocketPath();
@@ -28,8 +27,6 @@ describe('sending and receiving across unix sockets works', async () => {
   ];
 
   test('basic send/receive', async () => {
-    bindLogger(console.log);
-    setLevel('debug');
     const [clientTransport, serverTransport] = getTransports();
     const messages = [
       {
@@ -58,16 +55,13 @@ describe('sending and receiving across unix sockets works', async () => {
       await expect(p).resolves.toStrictEqual(transportMessage.payload);
     }
 
-    console.log('### finishing');
     await testFinishesCleanly({
       clientTransports: [clientTransport],
       serverTransport,
     });
-
-    unbindLogger();
   });
 
-  test.skip('multiple connections + binary codec', async () => {
+  test('multiple connections + binary codec', async () => {
     const clientId1 = 'client1';
     const clientId2 = 'client2';
     const serverId = 'SERVER';

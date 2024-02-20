@@ -298,9 +298,7 @@ export abstract class Transport<ConnType extends Connection> {
       );
 
       this.closeStaleConnectionForSession(conn, session);
-      console.log('### setting grace timeout');
       session.beginGrace(() => {
-        console.log('### grace hit');
         this.sessions.delete(session.connectedTo);
         this.eventDispatcher.dispatchEvent('sessionStatus', {
           status: 'disconnect',
