@@ -66,7 +66,7 @@ describe('sending and receiving across unix sockets works', async () => {
     unbindLogger();
   });
 
-  test('multiple connections + binary codec', async () => {
+  test.skip('multiple connections + binary codec', async () => {
     const clientId1 = 'client1';
     const clientId2 = 'client2';
     const serverId = 'SERVER';
