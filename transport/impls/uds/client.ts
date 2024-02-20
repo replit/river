@@ -24,8 +24,8 @@ export class UnixDomainSocketClientTransport extends Transport<UdsConnection> {
     log?.info(`${this.clientId} -- establishing a new uds to ${to}`);
     const sock = await new Promise<Socket>((resolve, reject) => {
       const sock = new Socket();
-      sock.addListener('connect', () => resolve(sock));
-      sock.addListener('error', (err) => reject(err));
+      sock.on('connect', () => resolve(sock));
+      sock.on('error', (err) => reject(err));
       sock.connect(this.path);
     });
 

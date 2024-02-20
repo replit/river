@@ -64,7 +64,6 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
     const serverConnConnect = vi.fn();
     const serverConnDisconnect = vi.fn();
     const serverConnHandler = (evt: EventMap['connectionStatus']) => {
-      console.log('server conn', evt.status);
       if (evt.status === 'connect') return serverConnConnect();
       if (evt.status === 'disconnect') return serverConnDisconnect();
     };

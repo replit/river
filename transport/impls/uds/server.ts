@@ -39,13 +39,13 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
       this.handleMsg(parsed);
     });
 
-    const cleanup = () => this.onDisconnect(conn, session?.connectedTo);
     sock.on('close', () => {
+      console.log('close');
       if (!session) return;
       log?.info(
         `${this.clientId} -- uds (id: ${conn.id}) to ${client()} disconnected`,
       );
-      cleanup();
+      this.onDisconnect(conn, session?.connectedTo);
     });
 
     sock.on('error', (err) => {
@@ -55,7 +55,6 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
           conn.id
         }) to ${client()} got an error: ${err}`,
       );
-      cleanup();
     });
   };
 
