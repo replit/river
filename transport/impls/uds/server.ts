@@ -40,7 +40,6 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
     });
 
     sock.on('close', () => {
-      console.log('close');
       if (!session) return;
       log?.info(
         `${this.clientId} -- uds (id: ${conn.id}) to ${client()} disconnected`,

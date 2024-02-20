@@ -22,11 +22,7 @@ export class UdsConnection extends Connection {
   }
 
   send(payload: Uint8Array) {
-    if (this.sock.writable) {
-      return this.sock.write(MessageFramer.write(payload));
-    } else {
-      return false;
-    }
+    return this.sock.write(MessageFramer.write(payload));
   }
 
   async close() {
