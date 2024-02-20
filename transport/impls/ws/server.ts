@@ -16,10 +16,6 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
   ) {
     super(clientId, providedOptions);
     this.wss = wss;
-    wss.on('listening', () => {
-      log?.info(`${this.clientId} -- server is listening`);
-    });
-
     this.wss.on('connection', this.connectionHandler);
   }
 
