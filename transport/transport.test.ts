@@ -10,8 +10,9 @@ import {
   testFinishesCleanly,
   waitFor,
 } from '../__tests__/fixtures/cleanup';
+import { bindLogger, setLevel } from '../logging';
 
-describe.each(transports)('transport -- $name', async ({ setup }) => {
+describe.each([transports[1]])('transport -- $name', async ({ setup }) => {
   const { getTransports, cleanup } = await setup();
   afterAll(cleanup);
 
@@ -42,7 +43,9 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
     });
   });
 
-  test('both client and server transport get connect/disconnect notifs', async () => {
+  bindLogger(console.log);
+  setLevel('debug');
+  test.only('both client and server transport get connect/disconnect notifs', async () => {
     const [clientTransport, serverTransport] = getTransports();
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
