@@ -21,6 +21,11 @@ export class UnixDomainSocketClientTransport extends Transport<UdsConnection> {
   }
 
   async createNewOutgoingConnection(to: string) {
+    const oldConnection = this.connections.get(to);
+    if (oldConnection) {
+      oldConnection.close();
+    }
+
     log?.info(`${this.clientId} -- establishing a new uds to ${to}`);
     const sock = await new Promise<Socket>((resolve, reject) => {
       const sock = new Socket();
@@ -30,7 +35,6 @@ export class UnixDomainSocketClientTransport extends Transport<UdsConnection> {
     });
 
     const conn = new UdsConnection(sock);
-    this.onConnect(conn, to);
     conn.onData((data) => this.handleMsg(this.parseMsg(data)));
     const cleanup = () => {
       this.onDisconnect(conn, to);
@@ -42,9 +46,9 @@ export class UnixDomainSocketClientTransport extends Transport<UdsConnection> {
       log?.warn(
         `${this.clientId} -- socket error in connection (id: ${conn.id}) to ${to}: ${err}`,
       );
-      cleanup();
     });
 
+    this.onConnect(conn, to);
     return conn;
   }
 }

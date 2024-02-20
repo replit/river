@@ -48,7 +48,6 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
     });
 
     sock.on('error', (err) => {
-      if (!session) return;
       log?.warn(
         `${this.clientId} -- uds (id: ${
           conn.id
