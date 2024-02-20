@@ -121,6 +121,7 @@ export async function testFinishesCleanly({
 
   // server sits on top of server transport so we clean it up first
   if (server) {
+    await advanceFakeTimersByDisconnectGrace();
     await ensureServerIsClean(server);
     await server.close();
   }

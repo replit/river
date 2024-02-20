@@ -63,7 +63,6 @@ describe('procedures should handle unexpected disconnects', async () => {
       }),
     );
 
-    vi.useRealTimers();
     waitFor(() => expect(clientTransport.connections.size).toEqual(0));
     waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     return testFinishesCleanly({
@@ -105,7 +104,6 @@ describe('procedures should handle unexpected disconnects', async () => {
       }),
     );
 
-    vi.useRealTimers();
     waitFor(() => expect(clientTransport.connections.size).toEqual(0));
     waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     return testFinishesCleanly({
@@ -187,7 +185,6 @@ describe('procedures should handle unexpected disconnects', async () => {
         code: UNEXPECTED_DISCONNECT,
       }),
     );
-    vi.useRealTimers();
 
     // client1 who is still connected can still add values and receive updates
     assert((await add2Promise).ok);
@@ -239,7 +236,6 @@ describe('procedures should handle unexpected disconnects', async () => {
         code: UNEXPECTED_DISCONNECT,
       }),
     );
-    vi.useRealTimers();
 
     waitFor(() => expect(clientTransport.connections.size).toEqual(0));
     waitFor(() => expect(serverTransport.connections.size).toEqual(0));

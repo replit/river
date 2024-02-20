@@ -168,7 +168,6 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
     await waitFor(() => expect(clientSessDisconnect).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(serverSessConnect).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(serverSessDisconnect).toHaveBeenCalledTimes(1));
-    vi.useRealTimers();
 
     // teardown
     clientTransport.removeEventListener('connectionStatus', clientConnHandler);
