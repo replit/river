@@ -33,29 +33,24 @@ async function ensureTransportIsClean(t: Transport<Connection>) {
     t.state,
     `transport ${t.clientId} should be closed after the test`,
   ).to.not.equal('open');
-  const promises = [
-    waitFor(() =>
-      expect(
-        t.sessions,
-        `transport ${t.clientId} should not have open sessions after the test`,
-      ).toStrictEqual(new Map()),
-    ),
-
-    waitFor(() =>
-      expect(
-        t.eventDispatcher.numberOfListeners('message'),
-        `transport ${t.clientId} should not have open message handlers after the test`,
-      ).equal(0),
-    ),
-    waitFor(() =>
-      expect(
-        t.eventDispatcher.numberOfListeners('connectionStatus'),
-        `transport ${t.clientId} should not have open connection handlers after the test`,
-      ).equal(0),
-    ),
-  ];
-
-  await Promise.all(promises);
+  await waitFor(() =>
+    expect(
+      t.sessions,
+      `transport ${t.clientId} should not have open sessions after the test`,
+    ).toStrictEqual(new Map()),
+  );
+  await waitFor(() =>
+    expect(
+      t.eventDispatcher.numberOfListeners('message'),
+      `transport ${t.clientId} should not have open message handlers after the test`,
+    ).equal(0),
+  );
+  await waitFor(() =>
+    expect(
+      t.eventDispatcher.numberOfListeners('connectionStatus'),
+      `transport ${t.clientId} should not have open connection handlers after the test`,
+    ).equal(0),
+  );
 }
 
 export function waitFor<T>(cb: () => T | Promise<T>) {
@@ -114,7 +109,7 @@ export async function testFinishesCleanly({
   server: Server<unknown>;
 }>) {
   console.log('### faking timers');
-  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.useFakeTimers({ shouldAdvanceTime: true, shouldClearNativeTimers: true });
 
   if (clientTransports) {
     await Promise.all(clientTransports.map(waitForTransportToFinish));
