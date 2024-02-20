@@ -30,7 +30,7 @@ export class UnixDomainSocketServerTransport extends ServerTransport<UdsConnecti
 
     const client = () => session?.connectedTo ?? 'unknown';
     conn.addDataListener(
-      this.receiveBootSequence(conn, (establishedSession) => {
+      this.receiveWithBootSequence(conn, (establishedSession) => {
         session = establishedSession;
       }),
     );

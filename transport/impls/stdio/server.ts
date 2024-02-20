@@ -34,7 +34,7 @@ export class StdioServerTransport extends ServerTransport<StreamConnection> {
 
     const conn = new StreamConnection(this.input, this.output);
     conn.addDataListener(
-      this.receiveBootSequence(conn, (establishedSession) => {
+      this.receiveWithBootSequence(conn, (establishedSession) => {
         session = establishedSession;
       }),
     );

@@ -27,7 +27,7 @@ export class WebSocketServerTransport extends ServerTransport<WebSocketConnectio
     let session: Session<WebSocketConnection> | undefined = undefined;
     const client = () => session?.connectedTo ?? 'unknown';
     conn.addDataListener(
-      this.receiveBootSequence(conn, (establishedSession) => {
+      this.receiveWithBootSequence(conn, (establishedSession) => {
         session = establishedSession;
       }),
     );

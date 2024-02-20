@@ -35,7 +35,7 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
     });
 
     const conn = new UdsConnection(sock);
-    conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
+    conn.addDataListener(this.receiveWithBootSequence(conn));
     const cleanup = () => {
       this.onDisconnect(conn, to);
       this.connect(to);
@@ -48,7 +48,6 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
       );
     });
 
-    this.onConnect(conn, to);
     return conn;
   }
 }

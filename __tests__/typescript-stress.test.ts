@@ -3,7 +3,7 @@ import { Procedure, ServiceBuilder, serializeService } from '../router/builder';
 import { Type } from '@sinclair/typebox';
 import { OpaqueTransportMessage } from '../transport/message';
 import { createServer } from '../router/server';
-import { Transport, Connection } from '../transport';
+import { Transport, Connection, Session } from '../transport';
 import { createClient } from '../router/client';
 import { Ok } from '../router/result';
 import { buildServiceDefs } from '../router/defs';
@@ -97,6 +97,13 @@ export const StupidlyLargeService = <Name extends string>(name: Name) =>
 
 // mock transport
 export class MockTransport extends Transport<Connection> {
+  receiveWithBootSequence(
+    _conn: Connection,
+    _sessionCb: (sess: Session<Connection>) => void,
+  ): (data: Uint8Array) => void {
+    throw new Error('Method not implemented.');
+  }
+
   constructor(clientId: string) {
     super(clientId);
   }

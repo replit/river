@@ -82,11 +82,8 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
 
     if ('ws' in wsRes) {
       const conn = new WebSocketConnection(wsRes.ws);
-      log?.info(
-        `${this.clientId} -- websocket (id: ${conn.debugId}) to ${to} ok`,
-      );
-      this.onConnect(conn, to);
-      conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
+      log?.info(`${this.clientId} -- websocket (id: ${conn.debugId}) to ${to} ok`);
+      conn.addDataListener(this.receiveWithBootSequence(conn));
       wsRes.ws.onclose = () => {
         log?.info(
           `${this.clientId} -- websocket (id: ${conn.debugId}) to ${to} disconnected`,

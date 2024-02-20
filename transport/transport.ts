@@ -8,12 +8,17 @@ import {
   TransportClientId,
   isAck,
   reply,
+  ControlMessageHandshakeRequestSchema,
+  ControlMessageHandshakeResponseSchema,
+  msg,
+  PROTOCOL_VERSION,
 } from './message';
 import { log } from '../logging';
 import { EventDispatcher, EventHandler, EventTypes } from './events';
 import { Connection, DISCONNECT_GRACE_MS, Session } from './session';
 import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
+import { nanoid } from 'nanoid';
 
 /**
  * Represents the possible states of a transport.
@@ -166,11 +171,14 @@ export abstract class Transport<ConnType extends Connection> {
   }
 
   /**
-   * The downstream implementation needs to call this when a new connection is established
+   * Called when a new connection is established
    * and we know the identity of the connected client.
    * @param conn The connection object.
    */
-  onConnect(conn: ConnType, connectedTo: TransportClientId): Session<ConnType> {
+  protected onConnect(
+    conn: ConnType,
+    connectedTo: TransportClientId,
+  ): Session<ConnType> {
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'connect',
       conn,
@@ -291,6 +299,17 @@ export abstract class Transport<ConnType extends Connection> {
         parsedMsg.procedureName === null ? undefined : parsedMsg.procedureName,
     };
   }
+
+  /**
+   * Abstract method that receives a message with boot sequence.
+   * @param conn The connection object.
+   * @param sessionCb The callback to call with the established session.
+   * @returns The callback to call when a message is received.
+   */
+  abstract receiveWithBootSequence(
+    conn: ConnType,
+    sessionCb: (sess: Session<ConnType>) => void,
+  ): (data: Uint8Array) => void;
 
   /**
    * Called when a message is received by this transport.
@@ -511,7 +530,13 @@ export abstract class ClientTransport<
         return;
       }
 
+      // send boot sequence
       this.state = 'open';
+      const responseMsg = msg(this.clientId, to, nanoid(), {
+        type: 'HANDSHAKE_REQ',
+        protocolVersion: PROTOCOL_VERSION,
+      } satisfies Static<typeof ControlMessageHandshakeRequestSchema>);
+      conn.send(this.codec.toBuffer(responseMsg));
     } catch (err: unknown) {
       // retry on failure
       this.inflightConnectionPromises.delete(to);
@@ -531,6 +556,49 @@ export abstract class ClientTransport<
     }
   }
 
+  receiveWithBootSequence(
+    conn: ConnType,
+    sessionCb?: (sess: Session<ConnType>) => void,
+  ) {
+    let firstMessage: boolean = true;
+    let session: Session<ConnType> | undefined = undefined;
+    return (data: Uint8Array) => {
+      const parsed = this.parseMsg(data);
+      if (!parsed) return;
+
+      if (firstMessage) {
+        if (
+          !Value.Check(ControlMessageHandshakeResponseSchema, parsed.payload)
+        ) {
+          log?.warn(
+            `${
+              this.clientId
+            } -- received invalid handshake resp: ${JSON.stringify(parsed)}`,
+          );
+          return;
+        }
+
+        if (!parsed.payload.status.ok) {
+          log?.warn(
+            `${
+              this.clientId
+            } -- received failed handshake resp: ${JSON.stringify(parsed)}`,
+          );
+          return;
+        }
+
+        // everything is ok
+        if (session) return;
+        firstMessage = false;
+        session = this.onConnect(conn, parsed.from);
+        sessionCb?.(session);
+        return;
+      }
+
+      this.handleMsg(parsed);
+    };
+  }
+
   onDisconnect(conn: ConnType, connectedTo: string | undefined): void {
     if (connectedTo) this.inflightConnectionPromises.delete(connectedTo);
     super.onDisconnect(conn, connectedTo);
@@ -540,10 +608,10 @@ export abstract class ClientTransport<
 export abstract class ServerTransport<
   ConnType extends Connection,
 > extends Transport<ConnType> {
-  receiveBootSequence = <Conn extends ConnType>(
-    conn: Conn,
-    sessionCb: (sess: Session<ConnType>) => void,
-  ) => {
+  receiveWithBootSequence(
+    conn: ConnType,
+    sessionCb?: (sess: Session<ConnType>) => void,
+  ) {
     let session: Session<ConnType> | undefined = undefined;
     let firstMessage: boolean = true;
     return (data: Uint8Array) => {
@@ -551,40 +619,42 @@ export abstract class ServerTransport<
       if (!parsed) return;
 
       if (firstMessage) {
-        // // double check protocol version here
-        // if (!Value.Check(ControlMessageHandshakeRequestSchema, parsed)) {
-        //   const responseMsg = reply(parsed, {
-        //     type: 'HANDSHAKE_RESP',
-        //     status: {
-        //       ok: false,
-        //       reason: 'VERSION_MISMATCH',
-        //     },
-        //   } satisfies Static<typeof ControlMessageHandshakeResponseSchema>);
-        //   conn.send(this.codec.toBuffer(responseMsg));
-        //   log?.warn(
-        //     `${
-        //       this.clientId
-        //     } -- received invalid handshake msg: ${JSON.stringify(parsed)}`,
-        //   );
-        //   return;
-        // }
+        // double check protocol version here
+        if (
+          !Value.Check(ControlMessageHandshakeRequestSchema, parsed.payload)
+        ) {
+          const responseMsg = reply(parsed, {
+            type: 'HANDSHAKE_RESP',
+            status: {
+              ok: false,
+              reason: 'VERSION_MISMATCH',
+            },
+          } satisfies Static<typeof ControlMessageHandshakeResponseSchema>);
+          conn.send(this.codec.toBuffer(responseMsg));
+          log?.warn(
+            `${
+              this.clientId
+            } -- received invalid handshake msg: ${JSON.stringify(parsed)}`,
+          );
+          return;
+        }
 
-        // firstMessage = false;
-        // const responseMsg = reply(parsed, {
-        //   type: 'HANDSHAKE_RESP',
-        //   status: {
-        //     ok: true,
-        //   },
-        // } satisfies Static<typeof ControlMessageHandshakeResponseSchema>);
-        // conn.send(this.codec.toBuffer(responseMsg));
+        const responseMsg = reply(parsed, {
+          type: 'HANDSHAKE_RESP',
+          status: {
+            ok: true,
+          },
+        } satisfies Static<typeof ControlMessageHandshakeResponseSchema>);
+        conn.send(this.codec.toBuffer(responseMsg));
 
-        // everything is ok, tell the other side and start the session
-        session ||= this.onConnect(conn, parsed.from);
-        sessionCb(session);
-        // return;
+        if (session) return;
+        firstMessage = false;
+        session = this.onConnect(conn, parsed.from);
+        sessionCb?.(session);
+        return;
       }
 
       this.handleMsg(parsed);
     };
-  };
+  }
 }
