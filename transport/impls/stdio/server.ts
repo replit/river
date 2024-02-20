@@ -62,10 +62,4 @@ export class StdioServerTransport extends ServerTransport<StreamConnection> {
       cleanup(session);
     });
   }
-
-  async createNewOutgoingConnection(to: string): Promise<StreamConnection> {
-    const err = `${this.clientId} -- failed to send msg to ${to}, client probably dropped`;
-    log?.warn(err);
-    throw new Error(err);
-  }
 }

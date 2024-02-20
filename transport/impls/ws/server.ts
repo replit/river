@@ -53,12 +53,6 @@ export class WebSocketServerTransport extends ServerTransport<WebSocketConnectio
     };
   };
 
-  async createNewOutgoingConnection(to: string): Promise<WebSocketConnection> {
-    const err = `${this.clientId} -- failed to send msg to ${to}, client probably dropped`;
-    log?.warn(err);
-    throw new Error(err);
-  }
-
   async close() {
     super.close();
     this.wss.off('connection', this.connectionHandler);

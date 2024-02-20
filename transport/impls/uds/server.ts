@@ -54,12 +54,6 @@ export class UnixDomainSocketServerTransport extends ServerTransport<UdsConnecti
     });
   };
 
-  async createNewOutgoingConnection(to: string): Promise<UdsConnection> {
-    const err = `${this.clientId} -- failed to send msg to ${to}, client probably dropped`;
-    log?.warn(err);
-    throw new Error(err);
-  }
-
   async close() {
     super.close();
     this.server.removeListener('connection', this.connectionHandler);
