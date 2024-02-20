@@ -17,6 +17,7 @@ export async function waitForTransportToFinish(t: Transport<Connection>) {
 
 export async function advanceFakeTimersByDisconnectGrace() {
   // advance fake timer so we hit the disconnect grace to end the session
+  console.log('### advancing timers');
   await vi.runOnlyPendingTimersAsync();
   await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS + 1);
 }
@@ -111,6 +112,7 @@ export async function testFinishesCleanly({
   serverTransport: Transport<Connection>;
   server: Server<unknown>;
 }>) {
+  console.log('### faking timers');
   vi.useFakeTimers({ shouldAdvanceTime: true });
 
   if (clientTransports) {

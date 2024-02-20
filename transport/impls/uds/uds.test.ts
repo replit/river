@@ -58,6 +58,7 @@ describe('sending and receiving across unix sockets works', async () => {
       await expect(p).resolves.toStrictEqual(transportMessage.payload);
     }
 
+    console.log('### finishing');
     await testFinishesCleanly({
       clientTransports: [clientTransport],
       serverTransport,
