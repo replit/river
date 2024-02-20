@@ -1,4 +1,4 @@
-import { Connection, Transport } from '../../transport';
+import { ClientTransport, Connection, ServerTransport } from '../../transport';
 import http from 'node:http';
 import net from 'node:net';
 import {
@@ -14,8 +14,10 @@ import { UnixDomainSocketServerTransport } from '../../transport/impls/uds/serve
 export const transports: Array<{
   name: string;
   setup: () => Promise<{
-    // client, server
-    getTransports: () => [Transport<Connection>, Transport<Connection>];
+    getTransports: () => [
+      ClientTransport<Connection>,
+      ServerTransport<Connection>,
+    ];
     cleanup: () => Promise<void>;
   }>;
 }> = [

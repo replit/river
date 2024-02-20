@@ -1,11 +1,11 @@
 import { Session } from '../../session';
 import { log } from '../../../logging';
 import { type Server, type Socket } from 'node:net';
-import { Transport, TransportOptions } from '../../transport';
+import { ServerTransport, TransportOptions } from '../../transport';
 import { TransportClientId } from '../../message';
 import { UdsConnection } from './connection';
 
-export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
+export class UnixDomainSocketServerTransport extends ServerTransport<UdsConnection> {
   server: Server;
 
   constructor(
@@ -29,15 +29,11 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
     );
 
     const client = () => session?.connectedTo ?? 'unknown';
-    conn.addDataListener((data) => {
-      const parsed = this.parseMsg(data);
-      if (!parsed) return;
-      if (!session) {
-        session = this.onConnect(conn, parsed.from);
-      }
-
-      this.handleMsg(parsed);
-    });
+    conn.addDataListener(
+      this.receiveBootSequence(conn, (establishedSession) => {
+        session = establishedSession;
+      }),
+    );
 
     sock.on('close', () => {
       if (!session) return;

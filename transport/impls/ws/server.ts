@@ -1,12 +1,12 @@
 import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
-import { Transport, TransportOptions } from '../../transport';
+import { ServerTransport, TransportOptions } from '../../transport';
 import { WebSocketServer } from 'ws';
 import { WebSocket } from 'isomorphic-ws';
 import { WebSocketConnection } from './connection';
 import { Session } from '../../session';
 
-export class WebSocketServerTransport extends Transport<WebSocketConnection> {
+export class WebSocketServerTransport extends ServerTransport<WebSocketConnection> {
   wss: WebSocketServer;
 
   constructor(
@@ -26,15 +26,11 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
     );
     let session: Session<WebSocketConnection> | undefined = undefined;
     const client = () => session?.connectedTo ?? 'unknown';
-    conn.addDataListener((data) => {
-      const parsed = this.parseMsg(data);
-      if (!parsed) return;
-      if (!session) {
-        session = this.onConnect(conn, parsed.from);
-      }
-
-      this.handleMsg(parsed);
-    });
+    conn.addDataListener(
+      this.receiveBootSequence(conn, (establishedSession) => {
+        session = establishedSession;
+      }),
+    );
 
     // close is always emitted, even on error, ok to do cleanup here
     ws.onclose = () => {

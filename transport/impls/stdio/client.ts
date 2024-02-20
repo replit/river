@@ -1,6 +1,6 @@
 import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
-import { Transport, TransportOptions } from '../../transport';
+import { ClientTransport, TransportOptions } from '../../transport';
 import { StreamConnection } from './connection';
 
 /**
@@ -8,7 +8,7 @@ import { StreamConnection } from './connection';
  * Will eagerly connect as soon as it's initialized.
  * @extends Transport
  */
-export class StdioClientTransport extends Transport<StreamConnection> {
+export class StdioClientTransport extends ClientTransport<StreamConnection> {
   input: NodeJS.ReadableStream = process.stdin;
   output: NodeJS.WritableStream = process.stdout;
   serverId: TransportClientId;

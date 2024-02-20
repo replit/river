@@ -1,7 +1,7 @@
 import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
 import { Session } from '../../session';
-import { Transport, TransportOptions } from '../../transport';
+import { ServerTransport, TransportOptions } from '../../transport';
 import { StreamConnection } from './connection';
 
 /**
@@ -9,7 +9,7 @@ import { StreamConnection } from './connection';
  * This will sit idle until a client connects.
  * @extends Transport
  */
-export class StdioServerTransport extends Transport<StreamConnection> {
+export class StdioServerTransport extends ServerTransport<StreamConnection> {
   input: NodeJS.ReadableStream = process.stdin;
   output: NodeJS.WritableStream = process.stdout;
 
@@ -33,15 +33,11 @@ export class StdioServerTransport extends Transport<StreamConnection> {
     const receiver = () => session?.connectedTo ?? 'unknown';
 
     const conn = new StreamConnection(this.input, this.output);
-    conn.addDataListener((data) => {
-      const parsed = this.parseMsg(data);
-      if (!parsed) return;
-      if (!session && !this.connections.has(parsed.from)) {
-        session = this.onConnect(conn, parsed.from);
-      }
-
-      this.handleMsg(parsed);
-    });
+    conn.addDataListener(
+      this.receiveBootSequence(conn, (establishedSession) => {
+        session = establishedSession;
+      }),
+    );
 
     const cleanup = (session: Session<StreamConnection>) =>
       this.onDisconnect(conn, session.connectedTo);
