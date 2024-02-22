@@ -225,7 +225,7 @@ export const createClient = <Srv extends Server<ServiceDefs>>(
     }
   }, []) as ServerClient<Srv>;
 
-export function onSessionDisconnect(from: TransportClientId, cb: () => void) {
+function createOnSessionDisconnect(from: TransportClientId, cb: () => void) {
   return (evt: EventMap['sessionStatus']) => {
     if (evt.status === 'disconnect' && evt.session.connectedTo === from) {
       cb();
