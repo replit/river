@@ -44,8 +44,8 @@ export const DISCONNECT_GRACE_MS = 3_000; // 3s
  * A session is a collection of stateful information from another peer that outlives a single connection.
  *
  * This includes:
- * 1) A queue of messages that are waiting to be sent over the WebSocket connection.
- *    This builds up if the WebSocket is down for a period of time.
+ * 1) A queue of messages that are waiting to be sent over the connection.
+ *    This builds up if the connection is down for a period of time.
  * 2) A buffer of messages that have been sent but not yet acknowledged.
  * 3) The active connection associated with this session
  *
