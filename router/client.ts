@@ -257,7 +257,7 @@ function handleRpc(
   const responsePromise = new Promise((resolve) => {
     // on disconnect, set a timer to return an error
     // on (re)connect, clear the timer
-    const onSessionStatus = onSessionDisconnect(serverId, () => {
+    const onSessionDisconnect = createOnSessionDisconnect(serverId, () => {
       cleanup();
       resolve(
         Err({
