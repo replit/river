@@ -225,7 +225,10 @@ export const createClient = <Srv extends Server<ServiceDefs>>(
     }
   }, []) as ServerClient<Srv>;
 
-function createOnSessionDisconnect(from: TransportClientId, cb: () => void) {
+function createSessionDisconnectHandler(
+  from: TransportClientId,
+  cb: () => void,
+) {
   return (evt: EventMap['sessionStatus']) => {
     if (evt.status === 'disconnect' && evt.session.connectedTo === from) {
       cb();
@@ -257,7 +260,7 @@ function handleRpc(
   const responsePromise = new Promise((resolve) => {
     // on disconnect, set a timer to return an error
     // on (re)connect, clear the timer
-    const onSessionDisconnect = createOnSessionDisconnect(serverId, () => {
+    const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
       cleanup();
       resolve(
         Err({
@@ -369,7 +372,7 @@ function handleStream(
   }
 
   // close stream after disconnect + grace period elapses
-  const onSessionStatus = onSessionDisconnect(serverId, () => {
+  const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
     outputStream.push(
       Err({
         code: UNEXPECTED_DISCONNECT,
@@ -436,7 +439,7 @@ function handleSubscribe(
   };
 
   // close stream after disconnect + grace period elapses
-  const onSessionStatus = onSessionDisconnect(serverId, () => {
+  const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
     outputStream.push(
       Err({
         code: UNEXPECTED_DISCONNECT,
@@ -503,7 +506,7 @@ function handleUpload(
   const responsePromise = new Promise((resolve) => {
     // on disconnect, set a timer to return an error
     // on (re)connect, clear the timer
-    const onSessionStatus = onSessionDisconnect(serverId, () => {
+    const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
       healthyClose = false;
       cleanup();
       resolve(
