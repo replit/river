@@ -3,12 +3,10 @@ import { describe, test, expect, afterAll } from 'vitest';
 import {
   createWebSocketServer,
   createWsTransports,
-  createDummyTransportMessage,
   onWsServerReady,
   createLocalWebSocketClient,
   waitForMessage,
 } from '../../../util/testHelpers';
-import { msg } from '../..';
 import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
 import { testFinishesCleanly } from '../../../__tests__/fixtures/cleanup';
@@ -30,7 +28,7 @@ describe('sending and receiving across websockets works', async () => {
       serverTransport,
       (recv) => recv.id === msg.id,
     );
-    clientTransport.send(msg);
+    clientTransport.send(serverTransport.clientId, msg);
     await expect(msgPromise).resolves.toStrictEqual(msg.payload);
 
     await testFinishesCleanly({

@@ -2,14 +2,7 @@ import WebSocket from 'isomorphic-ws';
 import { WebSocketServer } from 'ws';
 import http from 'node:http';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
-import {
-  Connection,
-  OpaqueTransportMessage,
-  Transport,
-  TransportClientId,
-  TransportMessage,
-  msg,
-} from '../transport';
+import { Connection, OpaqueTransportMessage, Transport } from '../transport';
 import { pushable } from 'it-pushable';
 import { Codec } from '../codec';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
@@ -98,33 +91,6 @@ export function createWsTransports(
     ),
     new WebSocketServerTransport(wss, 'SERVER', options),
   ];
-}
-
-/**
- * Converts a payload object to a transport message with reasonable defaults.
- * This should only be used for testing.
- * @param payload - The payload object to be converted.
- * @param streamId - The optional stream ID.
- * @returns The transport message.
- */
-export function payloadToTransportMessage<Payload extends object>(
-  payload: Payload,
-  streamId?: string,
-  from: TransportClientId = 'client',
-  to: TransportClientId = 'SERVER',
-): TransportMessage<Payload> {
-  return msg(from, to, streamId ?? 'stream', payload, 'service', 'procedure');
-}
-
-/**
- * Creates a dummy opaque transport message for testing purposes.
- * @returns The created opaque transport message.
- */
-export function createDummyTransportMessage(): OpaqueTransportMessage {
-  return payloadToTransportMessage({
-    msg: 'cool',
-    test: Math.random(),
-  });
 }
 
 /**

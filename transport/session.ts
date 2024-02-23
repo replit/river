@@ -1,12 +1,15 @@
 import { customAlphabet } from 'nanoid';
 import {
-  MessageId,
   OpaqueTransportMessage,
+  PartialTransportMessage,
   TransportClientId,
+  TransportMessage,
 } from './message';
 
-const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvxyz', 4);
-const unsafeId = () => nanoid();
+const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvxyz', 6);
+export const unsafeId = () => nanoid();
+
+type SequenceNumber = number;
 
 /**
  * A connection is the actual raw underlying transport connection.
@@ -97,15 +100,9 @@ export const DISCONNECT_GRACE_MS = 3_000; // 3s
  */
 export class Session<ConnType extends Connection> {
   /**
-   * An array of message IDs that are waiting to be sent over the connection.
-   * This builds up if the there is no connection for a period of time.
-   */
-  sendQueue: Array<MessageId>;
-
-  /**
    * The buffer of messages that have been sent but not yet acknowledged.
    */
-  sendBuffer: Map<MessageId, OpaqueTransportMessage>;
+  sendBuffer: Array<OpaqueTransportMessage> = [];
 
   /**
    * The active connection associated with this session
@@ -113,9 +110,14 @@ export class Session<ConnType extends Connection> {
   connection?: ConnType;
 
   /**
+   * The ID of the client this session is connected from.
+   */
+  from: TransportClientId;
+
+  /**
    * The ID of the client this session is connected to.
    */
-  connectedTo: TransportClientId;
+  to: TransportClientId;
 
   /**
    * The unique ID of this session.
@@ -123,22 +125,36 @@ export class Session<ConnType extends Connection> {
   debugId: string;
 
   /**
+   * Number of messages we've sent along this session (excluding handshake)
+   */
+  seq: SequenceNumber = 0;
+
+  /**
+   * Number of unique messages we've received this session (excluding handshake)
+   */
+  ack: SequenceNumber = 0;
+
+  /**
    * A timeout that is used to close the session if the connection is not re-established
    * within a certain period of time.
    */
   private graceExpiryTimeout?: ReturnType<typeof setTimeout>;
 
-  constructor(connectedTo: TransportClientId, conn: ConnType | undefined) {
+  constructor(
+    from: TransportClientId,
+    connectedTo: TransportClientId,
+    conn: ConnType | undefined,
+  ) {
     this.debugId = `sess-${unsafeId()}`; // for debugging, no collision safety needed
-    this.sendQueue = [];
-    this.sendBuffer = new Map();
-    this.connectedTo = connectedTo;
+    this.from = from;
+    this.to = connectedTo;
     this.connection = conn;
   }
 
   resetBufferedMessages() {
-    this.sendQueue = [];
-    this.sendBuffer.clear();
+    this.sendBuffer = [];
+    this.seq = 0;
+    this.ack = 0;
   }
 
   beginGrace(cb: () => void) {
@@ -154,5 +170,18 @@ export class Session<ConnType extends Connection> {
 
   get connected() {
     return this.connection !== undefined;
+  }
+
+  constructMsg<Payload extends object>(
+    partialMsg: PartialTransportMessage<Payload>,
+  ): TransportMessage<Payload> {
+    return {
+      ...partialMsg,
+      id: unsafeId(),
+      to: this.to,
+      from: this.from,
+      seq: this.seq++,
+      ack: this.ack,
+    };
   }
 }

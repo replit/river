@@ -1,24 +1,23 @@
 import { Codec } from '../codec/types';
 import { Value } from '@sinclair/typebox/value';
 import {
-  ControlFlags,
   OpaqueTransportMessage,
   OpaqueTransportMessageSchema,
-  ControlMessageAckSchema,
   TransportClientId,
-  isAck,
-  reply,
   ControlMessageHandshakeRequestSchema,
   ControlMessageHandshakeResponseSchema,
-  msg,
-  PROTOCOL_VERSION,
+  bootRequestMessage,
+  bootResponseMessage,
+  PartialTransportMessage,
+  TransportMessage,
+  ControlFlags,
+  ControlMessagePayloadSchema,
 } from './message';
 import { log } from '../logging';
 import { EventDispatcher, EventHandler, EventTypes } from './events';
 import { Connection, DISCONNECT_GRACE_MS, Session } from './session';
 import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
-import { nanoid } from 'nanoid';
 
 /**
  * Represents the possible states of a transport.
@@ -164,7 +163,7 @@ export abstract class Transport<ConnType extends Connection> {
     session.connection?.close();
     session.connection = undefined;
     log?.info(
-      `${this.clientId} -- closing old inner connection (id: ${conn.debugId}) from session (id: ${session.debugId}) to ${session.connectedTo}`,
+      `${this.clientId} -- closing old inner connection (id: ${conn.debugId}) from session (id: ${session.debugId}) to ${session.to}`,
     );
   }
 
@@ -216,21 +215,22 @@ export abstract class Transport<ConnType extends Connection> {
     session.cancelGrace();
 
     // if there are any unacked messages in the sendQueue, send them now
-    for (const id of session.sendQueue) {
-      const msg = session.sendBuffer.get(id);
-      if (msg) {
-        const ok = this.send(msg);
-        if (!ok) {
-          // this should never happen unless the transport has an
-          // incorrect implementation of `createNewOutgoingConnection`
-          const msg = `${this.clientId} -- failed to send queued message to ${connectedTo} in session (id: ${session.debugId}) (if you hit this code path something is seriously wrong)`;
-          log?.error(msg);
-          throw new Error(msg);
-        }
-      }
-    }
-
-    session.sendQueue = [];
+    // for (const id of session.sendQueue) {
+    //   const msg = session.sendBuffer.get(id);
+    //   if (msg) {
+    //     const ok = this.send(msg);
+    //     if (!ok) {
+    //       // this should never happen unless the transport has an
+    //       // incorrect implementation of `createNewOutgoingConnection`
+    //       const msg = `${this.clientId} -- failed to send queued message to ${connectedTo} in session (id: ${session.debugId}) (if you hit this code path something is seriously wrong)`;
+    //       log?.error(msg);
+    //       throw new Error(msg);
+    //     }
+    //   }
+    // }
+    //
+    // session.sendQueue = [];
+    // TODO: refactor these
     return session;
   }
 
@@ -238,8 +238,8 @@ export abstract class Transport<ConnType extends Connection> {
     connectedTo: TransportClientId,
     conn: ConnType | undefined,
   ) {
-    const session = new Session<ConnType>(connectedTo, conn);
-    this.sessions.set(session.connectedTo, session);
+    const session = new Session<ConnType>(this.clientId, connectedTo, conn);
+    this.sessions.set(session.to, session);
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'connect',
       session,
@@ -267,7 +267,7 @@ export abstract class Transport<ConnType extends Connection> {
 
     this.closeStaleConnectionForSession(conn, session);
     session.beginGrace(() => {
-      this.sessions.delete(session.connectedTo);
+      this.sessions.delete(session.to);
       this.eventDispatcher.dispatchEvent('sessionStatus', {
         status: 'disconnect',
         session,
@@ -325,31 +325,21 @@ export abstract class Transport<ConnType extends Connection> {
     const session = this.sessionByClientId(msg.from);
     session.cancelGrace();
 
-    if (
-      isAck(msg.controlFlags) &&
-      Value.Check(ControlMessageAckSchema, msg.payload)
-    ) {
-      // process ack
-      log?.debug(`${this.clientId} -- received ack: ${JSON.stringify(msg)}`);
-      if (session.sendBuffer.has(msg.payload.ack)) {
-        session.sendBuffer.delete(msg.payload.ack);
-      }
-    } else {
-      // regular river message
-      log?.debug(`${this.clientId} -- received msg: ${JSON.stringify(msg)}`);
-      this.eventDispatcher.dispatchEvent('message', msg);
-
-      if (!isAck(msg.controlFlags)) {
-        const ackMsg = reply(msg, {
-          type: 'ACK',
-          ack: msg.id,
-        } satisfies Static<typeof ControlMessageAckSchema>);
-        ackMsg.controlFlags = ControlFlags.AckBit;
-        ackMsg.from = this.clientId;
-
-        this.send(ackMsg);
-      }
+    log?.debug(`${this.clientId} -- received msg: ${JSON.stringify(msg)}`);
+    if (msg.seq !== session.ack + 1) {
+      log?.warn(
+        `${
+          this.clientId
+        } -- received out-of-order msg, discarding: ${JSON.stringify(msg)}`,
+      );
+      return;
     }
+
+    session.sendBuffer = session.sendBuffer.filter(
+      (unacked) => unacked.seq < msg.ack,
+    );
+    this.eventDispatcher.dispatchEvent('message', msg);
+    session.ack = msg.seq;
   }
 
   /**
@@ -380,9 +370,12 @@ export abstract class Transport<ConnType extends Connection> {
    * Sends a message over this transport, delegating to the appropriate connection to actually
    * send the message.
    * @param msg The message to send.
-   * @returns The ID of the sent message.
+   * @returns The ID of the sent message or undefined if it wasn't sent
    */
-  send(msg: OpaqueTransportMessage): boolean {
+  send(
+    to: TransportClientId,
+    msg: PartialTransportMessage,
+  ): string | undefined {
     if (this.state === 'destroyed') {
       const err = 'transport is destroyed, cant send';
       log?.error(`${this.clientId} -- ` + err + `: ${JSON.stringify(msg)}`);
@@ -395,43 +388,59 @@ export abstract class Transport<ConnType extends Connection> {
           msg,
         )}`,
       );
-      return false;
+      return undefined;
     }
 
-    let session = this.sessions.get(msg.to);
+    let session = this.sessions.get(to);
     if (!session) {
       // this case happens on the client as .send()
       // can be called without a session existing so we
       // must create the session here
-      session = this.createSession(msg.to, undefined);
+      session = this.createSession(to, undefined);
       log?.info(
-        `${this.clientId} -- no session for ${msg.to}, created a new one (id: ${session.debugId})`,
+        `${this.clientId} -- no session for ${to}, created a new one (id: ${session.debugId})`,
       );
     }
 
-    // we only use sendBuffer to track messages that we expect an ack from,
-    // messages with the ack flag are not responded to
-    if (!isAck(msg.controlFlags)) {
-      session.sendBuffer.set(msg.id, msg);
-    }
-
-    const conn = session.connection;
+    let conn = session?.connection;
+    const fullMsg: TransportMessage = session.constructMsg(msg);
     if (conn) {
       log?.debug(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
-      const ok = conn.send(this.codec.toBuffer(msg));
-      if (ok) return true;
+      const ok = this.rawSend(conn, fullMsg);
+      if (ok) return fullMsg.id;
       log?.info(
-        `${this.clientId} -- failed to send on connection (id: ${conn.debugId}) to ${msg.to}, queuing msg ${msg.id}`,
+        `${this.clientId} -- failed to send on connection (id: ${conn.debugId}) to ${fullMsg.to}, queuing msg ${fullMsg.id}`,
       );
     } else {
       log?.info(
-        `${this.clientId} -- connection to ${msg.to} doesn't exist, queuing msg ${msg.id}`,
+        `${this.clientId} -- connection to ${to} doesn't exist, queuing msg ${fullMsg.id}`,
       );
     }
 
-    session.sendQueue.push(msg.id);
+    session.sendBuffer.push(fullMsg);
     log?.debug(
-      `${this.clientId} -- now at ${session.sendQueue.length} outstanding messages to ${msg.to}`,
+      `${this.clientId} -- now at ${session.sendBuffer.length} outstanding messages to ${to}`,
+    );
+    return undefined;
+  }
+
+  // control helpers
+  sendCloseStream(to: TransportClientId, streamId: string) {
+    return this.send(to, {
+      streamId: streamId,
+      controlFlags: ControlFlags.StreamClosedBit,
+      payload: {
+        type: 'CLOSE' as const,
+      } satisfies Static<typeof ControlMessagePayloadSchema>,
+    });
+  }
+
+  protected rawSend(conn: ConnType, msg: OpaqueTransportMessage): boolean {
+    log?.debug(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
+    const ok = conn.send(this.codec.toBuffer(msg));
+    if (ok) return true;
+    log?.info(
+      `${this.clientId} -- failed to send on connection (id: ${conn.debugId}) to ${msg.to}, queuing msg ${msg.id}`,
     );
     return false;
   }
@@ -546,10 +555,7 @@ export abstract class ClientTransport<
 
       // send boot sequence
       this.state = 'open';
-      const responseMsg = msg(this.clientId, to, nanoid(), {
-        type: 'HANDSHAKE_REQ',
-        protocolVersion: PROTOCOL_VERSION,
-      } satisfies Static<typeof ControlMessageHandshakeRequestSchema>);
+      const responseMsg = bootRequestMessage(this.clientId, to);
       conn.send(this.codec.toBuffer(responseMsg));
     } catch (error: unknown) {
       const errStr = error instanceof Error ? error.message : `${error}`;
@@ -617,8 +623,7 @@ export abstract class ServerTransport<
 > extends Transport<ConnType> {
   protected handleConnection(conn: ConnType) {
     let session: Session<ConnType> | undefined = undefined;
-    const client = () => session?.connectedTo ?? 'unknown';
-
+    const client = () => session?.to ?? 'unknown';
     const bootHandler = this.receiveWithBootSequence(
       conn,
       (establishedSession) => {
@@ -639,7 +644,7 @@ export abstract class ServerTransport<
           conn.debugId
         }) to ${client()} disconnected`,
       );
-      this.onDisconnect(conn, session.connectedTo);
+      this.onDisconnect(conn, session?.to);
     });
 
     conn.addErrorListener((err) => {
@@ -662,13 +667,11 @@ export abstract class ServerTransport<
 
       // double check protocol version here
       if (!Value.Check(ControlMessageHandshakeRequestSchema, parsed.payload)) {
-        const responseMsg = reply(parsed, {
-          type: 'HANDSHAKE_RESP',
-          status: {
-            ok: false,
-            reason: 'VERSION_MISMATCH',
-          },
-        } satisfies Static<typeof ControlMessageHandshakeResponseSchema>);
+        const responseMsg = bootResponseMessage(
+          this.clientId,
+          parsed.from,
+          false,
+        );
         conn.send(this.codec.toBuffer(responseMsg));
         log?.warn(
           `${this.clientId} -- received invalid handshake msg: ${JSON.stringify(
@@ -678,12 +681,10 @@ export abstract class ServerTransport<
         return;
       }
 
-      const responseMsg = reply(parsed, {
-        type: 'HANDSHAKE_RESP',
-        status: {
-          ok: true,
-        },
-      } satisfies Static<typeof ControlMessageHandshakeResponseSchema>);
+      log?.debug(
+        `${this.clientId} -- handshake from ${parsed.from} ok, responding with handshake success`,
+      );
+      const responseMsg = bootResponseMessage(this.clientId, parsed.from, true);
       conn.send(this.codec.toBuffer(responseMsg));
 
       // we have the session

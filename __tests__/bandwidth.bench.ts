@@ -6,18 +6,13 @@ import { createClient } from '../router/client';
 import { buildServiceDefs } from '../router/defs';
 import { transports } from './fixtures/transports';
 
-let smallId = 0;
+let n = 0;
 const dummyPayloadSmall = () => ({
-  id: `${smallId++}`,
-  from: 'client',
-  to: 'SERVER',
-  serviceName: 'test',
-  procedureName: 'test',
   streamId: 'test',
   controlFlags: 0,
   payload: {
     msg: 'cool',
-    n: smallId * 1.5,
+    n: n++,
   },
 });
 
@@ -37,8 +32,7 @@ describe('bandwidth', async () => {
       `${name} -- raw transport send and recv`,
       async () => {
         const msg = dummyPayloadSmall();
-        const id = msg.id;
-        clientTransport.send(msg);
+        const id = clientTransport.send(serverTransport.clientId, msg);
         await waitForMessage(serverTransport, (msg) => msg.id === id);
         return;
       },
