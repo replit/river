@@ -345,7 +345,7 @@ export abstract class Transport<ConnType extends Connection> {
    * Sends a message over this transport, delegating to the appropriate connection to actually
    * send the message.
    * @param msg The message to send.
-   * @returns The ID of the sent message or undefined if the transport is closed
+   * @returns The ID of the sent message or undefined if it wasn't sent
    */
   send(
     to: TransportClientId,
