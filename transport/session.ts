@@ -9,9 +9,10 @@ const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvxyz', 4);
 const unsafeId = () => nanoid();
 
 /**
- * A 1:1 connection between two transports. Once this is created,
- * the {@link Connection} is expected to take over responsibility for
- * reading and writing messages from the underlying connection.
+ * A connection is the actual raw underlying transport connection.
+ * It’s responsible for dispatching to/from the actual connection itself
+ * This should be instantiated as soon as the client/server has a connection
+ * It’s tied to the lifecycle of the underlying transport connection (i.e. if the WS drops, this connection should be deleted)
  */
 export abstract class Connection {
   id: string;
@@ -41,16 +42,11 @@ export abstract class Connection {
 export const DISCONNECT_GRACE_MS = 3_000; // 3s
 
 /**
- * A session is a collection of stateful information from another peer that outlives a single connection.
- *
- * This includes:
- * 1) A queue of messages that are waiting to be sent over the connection.
- *    This builds up if the connection is down for a period of time.
- * 2) A buffer of messages that have been sent but not yet acknowledged.
- * 3) The active connection associated with this session
- *
- * This can be pretty confusing so let's illustrate the lifetimes
- * of a session and a connection from the server and client perspectives.
+ * A session is a higher-level abstraction that operates over the span of potentially multiple transport-level connections
+ * - It’s responsible for tracking any metadata for a particular client that might need to be persisted across connections (i.e. the sendBuffer and sendQueue)
+ * - This will only be considered disconnected if
+ *    - the server tells the client that we’ve reconnected but it doesn’t recognize us anymore (server definitely died) or
+ *    - we hit a grace period after a connection disconnect
  *
  * Here's a legend for what each of the numbers means. A '-' indicates the
  * session/connection is connected and ' ' means it is disconnected.
