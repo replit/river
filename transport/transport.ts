@@ -432,14 +432,13 @@ export abstract class Transport<ConnType extends Connection> {
       );
     }
 
-    let conn = session?.connection;
-
     // we only use sendBuffer to track messages that we expect an ack from,
     // messages with the ack flag are not responded to
     if (!isAck(msg.controlFlags)) {
       session.sendBuffer.set(msg.id, msg);
     }
 
+    const conn = session.connection;
     if (conn) {
       log?.debug(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
       const ok = conn.send(this.codec.toBuffer(msg));
