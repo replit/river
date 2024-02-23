@@ -1,10 +1,15 @@
 import { customAlphabet } from 'nanoid';
 import {
+  ControlFlags,
+  ControlMessageAckSchema,
   OpaqueTransportMessage,
   PartialTransportMessage,
   TransportClientId,
   TransportMessage,
 } from './message';
+import { Codec } from '../codec';
+import { log } from '../logging';
+import { Static } from '@sinclair/typebox';
 
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvxyz', 6);
 export const unsafeId = () => nanoid();
@@ -63,7 +68,8 @@ export abstract class Connection {
   abstract close(): void;
 }
 
-export const DISCONNECT_GRACE_MS = 3_000; // 3s
+export const HEARTBEAT_INTERVAL_MS = 250; // 250ms
+export const DISCONNECT_GRACE_MS = 3_000; // 3s -> 12x heartbeat
 
 /**
  * A session is a higher-level abstraction that operates over the span of potentially multiple transport-level connections
@@ -99,25 +105,19 @@ export const DISCONNECT_GRACE_MS = 3_000; // 3s
  * ```
  */
 export class Session<ConnType extends Connection> {
+  private codec: Codec;
+
   /**
    * The buffer of messages that have been sent but not yet acknowledged.
    */
-  sendBuffer: Array<OpaqueTransportMessage> = [];
+  private sendBuffer: Array<OpaqueTransportMessage> = [];
 
   /**
    * The active connection associated with this session
    */
   connection?: ConnType;
-
-  /**
-   * The ID of the client this session is connected from.
-   */
-  from: TransportClientId;
-
-  /**
-   * The ID of the client this session is connected to.
-   */
-  to: TransportClientId;
+  readonly from: TransportClientId;
+  readonly to: TransportClientId;
 
   /**
    * The unique ID of this session.
@@ -127,20 +127,17 @@ export class Session<ConnType extends Connection> {
   /**
    * Number of messages we've sent along this session (excluding handshake)
    */
-  seq: SequenceNumber = 0;
+  private seq: SequenceNumber = 0;
 
   /**
    * Number of unique messages we've received this session (excluding handshake)
    */
-  ack: SequenceNumber = 0;
-
-  /**
-   * A timeout that is used to close the session if the connection is not re-established
-   * within a certain period of time.
-   */
+  private ack: SequenceNumber = 0;
   private graceExpiryTimeout?: ReturnType<typeof setTimeout>;
+  private heartbeat?: ReturnType<typeof setInterval>;
 
   constructor(
+    codec: Codec,
     from: TransportClientId,
     connectedTo: TransportClientId,
     conn: ConnType | undefined,
@@ -149,6 +146,45 @@ export class Session<ConnType extends Connection> {
     this.from = from;
     this.to = connectedTo;
     this.connection = conn;
+    this.codec = codec;
+
+    // setup heartbeat
+    this.heartbeat = setInterval(this.sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+  }
+
+  send(msg: PartialTransportMessage, skipRetry?: boolean): string {
+    const fullMsg: TransportMessage = this.constructMsg(msg);
+    log?.debug(`${this.from} -- sending ${JSON.stringify(msg)}`);
+
+    if (this.connection) {
+      const ok = this.connection.send(this.codec.toBuffer(msg));
+      if (ok) return fullMsg.id;
+    }
+
+    if (skipRetry) return fullMsg.id;
+    log?.info(
+      `${this.from} -- failed to send to ${fullMsg.to}, queuing msg ${fullMsg.id}`,
+    );
+    this.addToSendBuff(fullMsg);
+    return fullMsg.id;
+  }
+
+  sendHeartbeat() {
+    this.send(
+      {
+        streamId: 'heartbeat',
+        controlFlags: ControlFlags.AckBit,
+        payload: {
+          type: 'ACK',
+        } satisfies Static<typeof ControlMessageAckSchema>,
+      },
+      true,
+    );
+  }
+
+  rawSend(msg: OpaqueTransportMessage): boolean {
+    if (!this.connection) return false;
+    return this.connection.send(this.codec.toBuffer(msg));
   }
 
   resetBufferedMessages() {
@@ -157,9 +193,51 @@ export class Session<ConnType extends Connection> {
     this.ack = 0;
   }
 
+  sendBufferedMessages() {
+    this.sendHeartbeat();
+    for (const msg of this.sendBuffer) {
+      const ok = this.rawSend(msg);
+      if (!ok) {
+        // this should never happen unless the transport has an
+        // incorrect implementation of `createNewOutgoingConnection`
+        const msg = `${this.from} -- failed to send queued message to ${this.to} in session (id: ${this.debugId}) (if you hit this code path something is seriously wrong)`;
+        log?.error(msg);
+        throw new Error(msg);
+      }
+    }
+  }
+
+  updateBookkeeping(ack: number, seq: number) {
+    this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq < ack);
+    this.ack = seq;
+  }
+
+  addToSendBuff(msg: TransportMessage) {
+    this.sendBuffer.push(msg);
+    log?.debug(
+      `${this.from} -- send buff to ${this.to} now has ${this.sendBuffer.length}`,
+    );
+  }
+
+  closeStaleConnection(conn?: ConnType) {
+    if (!this.connection || this.connection !== conn) return;
+    log?.info(
+      `${this.from} -- closing old inner connection (id: ${this.connection.debugId}) from session (id: ${this.debugId}) to ${this.to}`,
+    );
+    this.connection.close();
+    this.connection = undefined;
+  }
+
+  replaceWithNewConnection(newConn: ConnType) {
+    this.closeStaleConnection();
+    this.cancelGrace();
+    this.connection = newConn;
+  }
+
   beginGrace(cb: () => void) {
     this.graceExpiryTimeout = setTimeout(() => {
       this.resetBufferedMessages();
+      clearInterval(this.heartbeat);
       cb();
     }, DISCONNECT_GRACE_MS);
   }
@@ -170,6 +248,10 @@ export class Session<ConnType extends Connection> {
 
   get connected() {
     return this.connection !== undefined;
+  }
+
+  get nextExpectedSeq() {
+    return this.ack + 1;
   }
 
   constructMsg<Payload extends object>(
@@ -183,5 +265,19 @@ export class Session<ConnType extends Connection> {
       seq: this.seq++,
       ack: this.ack,
     };
+  }
+
+  /**
+   * Closes the out-going connection but doesn't remove the listeners
+   * for incoming messages. The connection will eventually call onClose
+   * when it is ready to be cleaned up and only then will {@link connection} be set back
+   * to undefined
+   */
+  halfCloseConnection() {
+    this.connection?.close();
+  }
+
+  inspectSendBuffer(): readonly OpaqueTransportMessage[] {
+    return this.sendBuffer;
   }
 }

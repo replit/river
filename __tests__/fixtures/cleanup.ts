@@ -63,9 +63,9 @@ export async function ensureTransportQueuesAreEventuallyEmpty(
         [...t.sessions]
           .map(
             ([client, sess]) =>
-              [client, sess.sendBuffer] as [
+              [client, sess.inspectSendBuffer()] as [
                 string,
-                Array<OpaqueTransportMessage>,
+                readonly OpaqueTransportMessage[],
               ],
           )
           .filter((entry) => entry[1].length > 0),

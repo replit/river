@@ -37,17 +37,17 @@ export interface TransportOptions {
 /**
  * The default maximum jitter for exponential backoff.
  */
-export const DEFAULT_WS_JITTER_MAX_MS = 500;
+export const DEFAULT_RECONNECT_JITTER_MAX_MS = 500;
 
 /**
  * The default retry interval for reconnecting to a transport.
  * The actual interval is an exponent backoff calculated as follows:
  * ms = retryIntervalMs * (2 ** attempt) + jitter
  */
-export const DEFAULT_WS_RETRY_INTERVAL_MS = 250;
+export const DEFAULT_RECONNECT_INTERVAL_MS = 250;
 export const defaultTransportOptions: TransportOptions = {
-  retryIntervalMs: DEFAULT_WS_RETRY_INTERVAL_MS,
-  retryJitterMs: DEFAULT_WS_JITTER_MAX_MS,
+  retryIntervalMs: DEFAULT_RECONNECT_INTERVAL_MS,
+  retryJitterMs: DEFAULT_RECONNECT_JITTER_MAX_MS,
   retryAttemptsMax: 5,
   codec: NaiveJsonCodec,
 };
@@ -153,20 +153,6 @@ export abstract class Transport<ConnType extends Connection> {
     return session;
   }
 
-  private closeStaleConnectionForSession(
-    conn: ConnType,
-    session: Session<ConnType>,
-  ) {
-    // only close the connection if the stale one is the one we have a handle to
-    if (!session.connection || session.connection.debugId !== conn.debugId)
-      return;
-    session.connection?.close();
-    session.connection = undefined;
-    log?.info(
-      `${this.clientId} -- closing old inner connection (id: ${conn.debugId}) from session (id: ${session.debugId}) to ${session.to}`,
-    );
-  }
-
   /**
    * This is called immediately after a new connection is established and we
    * may or may not know the identity of the connected client.
@@ -210,27 +196,8 @@ export abstract class Transport<ConnType extends Connection> {
 
     // otherwise, this is a duplicate session from the same user, let's consider
     // the old one as dead and call this one canonical
-    this.closeStaleConnectionForSession(conn, session);
-    session.connection = conn;
-    session.cancelGrace();
-
-    // if there are any unacked messages in the sendQueue, send them now
-    // for (const id of session.sendQueue) {
-    //   const msg = session.sendBuffer.get(id);
-    //   if (msg) {
-    //     const ok = this.send(msg);
-    //     if (!ok) {
-    //       // this should never happen unless the transport has an
-    //       // incorrect implementation of `createNewOutgoingConnection`
-    //       const msg = `${this.clientId} -- failed to send queued message to ${connectedTo} in session (id: ${session.debugId}) (if you hit this code path something is seriously wrong)`;
-    //       log?.error(msg);
-    //       throw new Error(msg);
-    //     }
-    //   }
-    // }
-    //
-    // session.sendQueue = [];
-    // TODO: refactor these
+    session.replaceWithNewConnection(conn);
+    session.sendBufferedMessages();
     return session;
   }
 
@@ -238,7 +205,12 @@ export abstract class Transport<ConnType extends Connection> {
     connectedTo: TransportClientId,
     conn: ConnType | undefined,
   ) {
-    const session = new Session<ConnType>(this.clientId, connectedTo, conn);
+    const session = new Session<ConnType>(
+      this.codec,
+      this.clientId,
+      connectedTo,
+      conn,
+    );
     this.sessions.set(session.to, session);
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'connect',
@@ -265,7 +237,7 @@ export abstract class Transport<ConnType extends Connection> {
       `${this.clientId} -- connection (id: ${conn.debugId}) disconnect from ${connectedTo}, ${DISCONNECT_GRACE_MS}ms until session (id: ${session.debugId}) disconnect`,
     );
 
-    this.closeStaleConnectionForSession(conn, session);
+    session.closeStaleConnection(conn);
     session.beginGrace(() => {
       this.sessions.delete(session.to);
       this.eventDispatcher.dispatchEvent('sessionStatus', {
@@ -326,7 +298,7 @@ export abstract class Transport<ConnType extends Connection> {
     session.cancelGrace();
 
     log?.debug(`${this.clientId} -- received msg: ${JSON.stringify(msg)}`);
-    if (msg.seq !== session.ack + 1) {
+    if (msg.seq !== session.nextExpectedSeq) {
       log?.warn(
         `${
           this.clientId
@@ -335,11 +307,8 @@ export abstract class Transport<ConnType extends Connection> {
       return;
     }
 
-    session.sendBuffer = session.sendBuffer.filter(
-      (unacked) => unacked.seq < msg.ack,
-    );
+    session.updateBookkeeping(msg.ack, msg.seq);
     this.eventDispatcher.dispatchEvent('message', msg);
-    session.ack = msg.seq;
   }
 
   /**
@@ -370,7 +339,7 @@ export abstract class Transport<ConnType extends Connection> {
    * Sends a message over this transport, delegating to the appropriate connection to actually
    * send the message.
    * @param msg The message to send.
-   * @returns The ID of the sent message or undefined if it wasn't sent
+   * @returns The ID of the sent message or undefined if the transport is closed
    */
   send(
     to: TransportClientId,
@@ -402,26 +371,7 @@ export abstract class Transport<ConnType extends Connection> {
       );
     }
 
-    let conn = session?.connection;
-    const fullMsg: TransportMessage = session.constructMsg(msg);
-    if (conn) {
-      log?.debug(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
-      const ok = this.rawSend(conn, fullMsg);
-      if (ok) return fullMsg.id;
-      log?.info(
-        `${this.clientId} -- failed to send on connection (id: ${conn.debugId}) to ${fullMsg.to}, queuing msg ${fullMsg.id}`,
-      );
-    } else {
-      log?.info(
-        `${this.clientId} -- connection to ${to} doesn't exist, queuing msg ${fullMsg.id}`,
-      );
-    }
-
-    session.sendBuffer.push(fullMsg);
-    log?.debug(
-      `${this.clientId} -- now at ${session.sendBuffer.length} outstanding messages to ${to}`,
-    );
-    return fullMsg.id;
+    return session.send(msg);
   }
 
   // control helpers
@@ -435,16 +385,6 @@ export abstract class Transport<ConnType extends Connection> {
     });
   }
 
-  protected rawSend(conn: ConnType, msg: OpaqueTransportMessage): boolean {
-    log?.debug(`${this.clientId} -- sending ${JSON.stringify(msg)}`);
-    const ok = conn.send(this.codec.toBuffer(msg));
-    if (ok) return true;
-    log?.info(
-      `${this.clientId} -- failed to send on connection (id: ${conn.debugId}) to ${msg.to}, queuing msg ${msg.id}`,
-    );
-    return false;
-  }
-
   /**
    * Default close implementation for transports. You should override this in the downstream
    * implementation if you need to do any additional cleanup and call super.close() at the end.
@@ -452,7 +392,7 @@ export abstract class Transport<ConnType extends Connection> {
    */
   async close() {
     for (const session of this.sessions.values()) {
-      session.connection?.close();
+      session.halfCloseConnection();
     }
 
     this.state = 'closed';
@@ -466,7 +406,7 @@ export abstract class Transport<ConnType extends Connection> {
    */
   async destroy() {
     for (const session of this.sessions.values()) {
-      session.connection?.close();
+      session.closeStaleConnection();
     }
 
     this.state = 'destroyed';
