@@ -1,13 +1,17 @@
 import { describe, expect, test } from 'vitest';
 import { Procedure, ServiceBuilder, serializeService } from '../router/builder';
 import { Type } from '@sinclair/typebox';
-import { OpaqueTransportMessage } from '../transport/message';
+import {
+  PartialTransportMessage,
+  TransportClientId,
+} from '../transport/message';
 import { createServer } from '../router/server';
 import { Transport, Connection, Session } from '../transport';
 import { createClient } from '../router/client';
 import { Ok } from '../router/result';
 import { buildServiceDefs } from '../router/defs';
 import { TestServiceConstructor } from './fixtures/services';
+import { nanoid } from 'nanoid';
 
 const input = Type.Union([
   Type.Object({ a: Type.Number() }),
@@ -108,8 +112,11 @@ export class MockTransport extends Transport<Connection> {
     super(clientId);
   }
 
-  send(_msg: OpaqueTransportMessage): boolean {
-    return true;
+  send(
+    _to: TransportClientId,
+    _msg: PartialTransportMessage,
+  ): string | undefined {
+    return nanoid();
   }
 
   protected handleConnection(_conn: Connection, _to: string): void {}

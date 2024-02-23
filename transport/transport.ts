@@ -421,7 +421,7 @@ export abstract class Transport<ConnType extends Connection> {
     log?.debug(
       `${this.clientId} -- now at ${session.sendBuffer.length} outstanding messages to ${to}`,
     );
-    return undefined;
+    return fullMsg.id;
   }
 
   // control helpers

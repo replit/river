@@ -18,6 +18,7 @@ import {
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import net from 'node:net';
+import { PartialTransportMessage } from '../transport/message';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -100,6 +101,23 @@ export function createWsTransports(
  */
 export async function iterNext<T>(iter: AsyncIterableIterator<T>) {
   return await iter.next().then((res) => res.value);
+}
+
+export function payloadToTransportMessage<Payload extends object>(
+  payload: Payload,
+): PartialTransportMessage<Payload> {
+  return {
+    streamId: 'stream',
+    controlFlags: 0,
+    payload,
+  };
+}
+
+export function createDummyTransportMessage() {
+  return payloadToTransportMessage({
+    msg: 'cool',
+    test: Math.random(),
+  });
 }
 
 /**

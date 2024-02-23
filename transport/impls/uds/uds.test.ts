@@ -9,8 +9,8 @@ import {
 } from '../../../util/testHelpers';
 import { testFinishesCleanly } from '../../../__tests__/fixtures/cleanup';
 import { BinaryCodec } from '../../../codec';
-import { msg } from '../..';
 import net from 'node:net';
+import { PartialTransportMessage } from '../../message';
 
 describe('sending and receiving across unix sockets works', async () => {
   const socketPath = getUnixSocketPath();
@@ -40,19 +40,14 @@ describe('sending and receiving across unix sockets works', async () => {
     ];
 
     for (const msg of messages) {
-      const transportMessage = payloadToTransportMessage(
-        msg,
-        'stream',
-        clientTransport.clientId,
+      const transportMessage = payloadToTransportMessage(msg);
+      const msgId = clientTransport.send(
         serverTransport.clientId,
+        transportMessage,
       );
-
-      const p = waitForMessage(
-        serverTransport,
-        (incoming) => incoming.id === transportMessage.id,
-      );
-      clientTransport.send(transportMessage);
-      await expect(p).resolves.toStrictEqual(transportMessage.payload);
+      await expect(
+        waitForMessage(serverTransport, (incoming) => incoming.id === msgId),
+      ).resolves.toStrictEqual(transportMessage.payload);
     }
 
     await testFinishesCleanly({
@@ -71,17 +66,8 @@ describe('sending and receiving across unix sockets works', async () => {
       { codec: BinaryCodec },
     );
 
-    const makeDummyMessage = (from: string, to: string, message: string) => {
-      return msg(
-        from,
-        to,
-        'stream',
-        {
-          msg: message,
-        },
-        'service',
-        'proc',
-      );
+    const makeDummyMessage = (message: string): PartialTransportMessage => {
+      return payloadToTransportMessage({ message });
     };
 
     const initClient = async (id: string) => {
@@ -93,13 +79,11 @@ describe('sending and receiving across unix sockets works', async () => {
       );
 
       // client to server
-      const initMsg = makeDummyMessage(id, serverId, 'hello\nserver');
-      const initMsgPromise = waitForMessage(
-        serverTransport,
-        (recv) => recv.id === initMsg.id,
-      );
-      client.send(initMsg);
-      await expect(initMsgPromise).resolves.toStrictEqual(initMsg.payload);
+      const initMsg = makeDummyMessage('hello\nserver');
+      const initMsgId = client.send(serverId, initMsg);
+      await expect(
+        waitForMessage(serverTransport, (recv) => recv.id === initMsgId),
+      ).resolves.toStrictEqual(initMsg.payload);
       return client;
     };
 
@@ -107,15 +91,16 @@ describe('sending and receiving across unix sockets works', async () => {
     const client2Transport = await initClient(clientId2);
 
     // sending messages from server to client shouldn't leak between clients
-    const msg1 = makeDummyMessage(serverId, clientId1, 'hello\nclient1');
-    const msg2 = makeDummyMessage(serverId, clientId2, 'hello\nclient2');
+    const msg1 = makeDummyMessage('hello\nclient1');
+    const msg2 = makeDummyMessage('hello\nclient2');
+    const msg1Id = serverTransport.send(clientId1, msg1);
+    const msg2Id = serverTransport.send(clientId2, msg2);
+
     const promises = Promise.all([
       // true means reject if we receive any message that isn't the one we are expecting
-      waitForMessage(client2Transport, (recv) => recv.id === msg2.id, true),
-      waitForMessage(client1Transport, (recv) => recv.id === msg1.id, true),
+      waitForMessage(client2Transport, (recv) => recv.id === msg2Id, true),
+      waitForMessage(client1Transport, (recv) => recv.id === msg1Id, true),
     ]);
-    serverTransport.send(msg1);
-    serverTransport.send(msg2);
     await expect(promises).resolves.toStrictEqual(
       expect.arrayContaining([msg1.payload, msg2.payload]),
     );

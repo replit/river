@@ -9,9 +9,7 @@ const waitUntilOptions = {
 };
 
 export async function waitForTransportToFinish(t: Transport<Connection>) {
-  // await ensureTransportQueuesAreEventuallyEmpty(t);
-  // ^ TODO: this is buggy because current protocol sometimes drops acks
-  //   should be fixed when we rewrite our acks to be more reliable
+  await ensureTransportQueuesAreEventuallyEmpty(t);
   await t.close();
   await waitFor(() =>
     expect(
@@ -64,27 +62,15 @@ export async function ensureTransportQueuesAreEventuallyEmpty(
       new Map(
         [...t.sessions]
           .map(
-            ([client, sess]) => [client, sess.sendQueue] as [string, string[]],
+            ([client, sess]) =>
+              [client, sess.sendBuffer] as [
+                string,
+                Array<OpaqueTransportMessage>,
+              ],
           )
           .filter((entry) => entry[1].length > 0),
       ),
       `transport ${t.clientId} should not have any messages waiting to send after the test`,
-    ).toStrictEqual(new Map()),
-  );
-  await waitFor(() =>
-    expect(
-      new Map(
-        [...t.sessions]
-          .map(
-            ([client, sess]) =>
-              [client, sess.sendBuffer] as [
-                string,
-                Map<string, OpaqueTransportMessage>,
-              ],
-          )
-          .filter((entry) => entry[1].size > 0),
-      ),
-      `transport ${t.clientId} should not have any un-acked messages after the test`,
     ).toStrictEqual(new Map()),
   );
 }
