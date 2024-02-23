@@ -76,15 +76,15 @@ class RiverServer<Services extends ServiceDefs> {
 
     this.streamMap = new Map();
     this.clientStreams = new Map();
-    this.transport.addEventListener('message', this.handler);
-    this.transport.addEventListener('sessionStatus', this.onDisconnect);
+    this.transport.addEventListener('message', this.onMessage);
+    this.transport.addEventListener('sessionStatus', this.onSessionStatus);
   }
 
   get streams() {
     return this.streamMap;
   }
 
-  handler = async (message: OpaqueTransportMessage) => {
+  onMessage = async (message: OpaqueTransportMessage) => {
     if (message.to !== this.transport.clientId) {
       log?.info(
         `${this.transport.clientId} -- got msg with destination that isn't the server, ignoring`,
@@ -106,7 +106,7 @@ class RiverServer<Services extends ServiceDefs> {
   };
 
   // cleanup streams on unexpected disconnections
-  onDisconnect = async (evt: EventMap['sessionStatus']) => {
+  onSessionStatus = async (evt: EventMap['sessionStatus']) => {
     if (evt.status !== 'disconnect') {
       return;
     }
@@ -130,8 +130,8 @@ class RiverServer<Services extends ServiceDefs> {
   };
 
   async close() {
-    this.transport.removeEventListener('message', this.handler);
-    this.transport.removeEventListener('sessionStatus', this.onDisconnect);
+    this.transport.removeEventListener('message', this.onMessage);
+    this.transport.removeEventListener('sessionStatus', this.onSessionStatus);
     await Promise.all([...this.streamMap.keys()].map(this.cleanupStream));
   }
 
