@@ -15,9 +15,9 @@ const unsafeId = () => nanoid();
  * It’s tied to the lifecycle of the underlying transport connection (i.e. if the WS drops, this connection should be deleted)
  */
 export abstract class Connection {
-  id: string;
+  debugId: string;
   constructor() {
-    this.id = `conn-${unsafeId()}`; // for debugging, no collision safety needed
+    this.debugId = `conn-${unsafeId()}`; // for debugging, no collision safety needed
   }
 
   /**
@@ -99,7 +99,7 @@ export class Session<ConnType extends Connection> {
   /**
    * The unique ID of this session.
    */
-  id: string;
+  debugId: string;
 
   /**
    * A timeout that is used to close the session if the connection is not re-established
@@ -108,7 +108,7 @@ export class Session<ConnType extends Connection> {
   private graceExpiryTimeout?: ReturnType<typeof setTimeout>;
 
   constructor(connectedTo: TransportClientId, conn: ConnType | undefined) {
-    this.id = `sess-${unsafeId()}`; // for debugging, no collision safety needed
+    this.debugId = `sess-${unsafeId()}`; // for debugging, no collision safety needed
     this.sendQueue = [];
     this.sendBuffer = new Map();
     this.connectedTo = connectedTo;

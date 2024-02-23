@@ -207,11 +207,11 @@ export abstract class Transport<ConnType extends Connection> {
     session: Session<ConnType>,
   ) {
     // only close the connection if the stale one is the one we have a handle to
-    if (!session.connection || session.connection.id !== conn.id) return;
+    if (!session.connection || session.connection.debugId !== conn.debugId) return;
     session.connection?.close();
     session.connection = undefined;
     log?.info(
-      `${this.clientId} -- closing old inner connection (id: ${conn.id}) from session (id: ${session.id}) to ${session.connectedTo}`,
+      `${this.clientId} -- closing old inner connection (id: ${conn.debugId}) from session (id: ${session.debugId}) to ${session.connectedTo}`,
     );
   }
 
@@ -231,13 +231,13 @@ export abstract class Transport<ConnType extends Connection> {
       // new session, create and return
       const newSession = this.createSession(connectedTo, conn);
       log?.info(
-        `${this.clientId} -- new connection (id: ${conn.id}) for new session (id: ${newSession.id}) to ${connectedTo}`,
+        `${this.clientId} -- new connection (id: ${conn.debugId}) for new session (id: ${newSession.debugId}) to ${connectedTo}`,
       );
       return newSession;
     }
 
     log?.info(
-      `${this.clientId} -- new connection (id: ${conn.id}) for existing session (id: ${session.id}) to ${connectedTo}`,
+      `${this.clientId} -- new connection (id: ${conn.debugId}) for existing session (id: ${session.debugId}) to ${connectedTo}`,
     );
 
     // otherwise, this is a duplicate session from the same user, let's consider
@@ -254,7 +254,7 @@ export abstract class Transport<ConnType extends Connection> {
         if (!ok) {
           // this should never happen unless the transport has an
           // incorrect implementation of `createNewOutgoingConnection`
-          const msg = `${this.clientId} -- failed to send queued message to ${connectedTo} in session (id: ${session.id}) (if you hit this code path something is seriously wrong)`;
+          const msg = `${this.clientId} -- failed to send queued message to ${connectedTo} in session (id: ${session.debugId}) (if you hit this code path something is seriously wrong)`;
           log?.error(msg);
           throw new Error(msg);
         }
@@ -294,7 +294,7 @@ export abstract class Transport<ConnType extends Connection> {
     if (!connectedTo) return;
     const session = this.sessionByClientId(connectedTo);
     log?.info(
-      `${this.clientId} -- connection (id: ${conn.id}) disconnect from ${connectedTo}, ${DISCONNECT_GRACE_MS}ms until session (id: ${session.id}) disconnect`,
+      `${this.clientId} -- connection (id: ${conn.debugId}) disconnect from ${connectedTo}, ${DISCONNECT_GRACE_MS}ms until session (id: ${session.debugId}) disconnect`,
     );
 
     this.closeStaleConnectionForSession(conn, session);
@@ -305,7 +305,7 @@ export abstract class Transport<ConnType extends Connection> {
         session,
       });
       log?.info(
-        `${this.clientId} -- session ${session.id} disconnect from ${connectedTo}`,
+        `${this.clientId} -- session ${session.debugId} disconnect from ${connectedTo}`,
       );
     });
   }
@@ -428,7 +428,7 @@ export abstract class Transport<ConnType extends Connection> {
     if (!session) {
       session = this.createSession(msg.to, undefined);
       log?.info(
-        `${this.clientId} -- no session for ${msg.to}, created a new one (id: ${session.id})`,
+        `${this.clientId} -- no session for ${msg.to}, created a new one (id: ${session.debugId})`,
       );
     }
 
@@ -444,7 +444,7 @@ export abstract class Transport<ConnType extends Connection> {
       const ok = conn.send(this.codec.toBuffer(msg));
       if (ok) return true;
       log?.info(
-        `${this.clientId} -- failed to send on connection (id: ${conn.id}) to ${msg.to}, queuing msg ${msg.id}`,
+        `${this.clientId} -- failed to send on connection (id: ${conn.debugId}) to ${msg.to}, queuing msg ${msg.id}`,
       );
     } else {
       log?.info(

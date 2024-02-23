@@ -83,12 +83,12 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
 
     if ('ws' in wsRes) {
       const conn = new WebSocketConnection(wsRes.ws);
-      log?.info(`${this.clientId} -- websocket (id: ${conn.id}) to ${to} ok`);
+      log?.info(`${this.clientId} -- websocket (id: ${conn.debugId}) to ${to} ok`);
       this.onConnect(conn, to);
       conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
       wsRes.ws.onclose = () => {
         log?.info(
-          `${this.clientId} -- websocket (id: ${conn.id}) to ${to} disconnected`,
+          `${this.clientId} -- websocket (id: ${conn.debugId}) to ${to} disconnected`,
         );
         this.onDisconnect(conn, to);
         this.connect(to);
@@ -96,7 +96,7 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
 
       wsRes.ws.onerror = (msg) => {
         log?.warn(
-          `${this.clientId} -- websocket (id: ${conn.id}) to ${to} had an error: ${msg}`,
+          `${this.clientId} -- websocket (id: ${conn.debugId}) to ${to} had an error: ${msg}`,
         );
       };
 

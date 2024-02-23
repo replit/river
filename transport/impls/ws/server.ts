@@ -22,7 +22,7 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
   connectionHandler = (ws: WebSocket) => {
     const conn = new WebSocketConnection(ws);
     log?.info(
-      `${this.clientId} -- new incoming ws connection (id: ${conn.id})`,
+      `${this.clientId} -- new incoming ws connection (id: ${conn.debugId})`,
     );
     let session: Session<WebSocketConnection> | undefined = undefined;
     const client = () => session?.connectedTo ?? 'unknown';
@@ -41,7 +41,7 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
       if (!session) return;
       log?.info(
         `${this.clientId} -- websocket (id: ${
-          conn.id
+          conn.debugId
         }) to ${client()} disconnected`,
       );
       this.onDisconnect(conn, session?.connectedTo);
@@ -51,7 +51,7 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
       if (!session) return;
       log?.warn(
         `${this.clientId} -- websocket (id: ${
-          conn.id
+          conn.debugId
         }) to ${client()} got an error: ${msg}`,
       );
     };

@@ -25,7 +25,7 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
     let session: Session<UdsConnection> | undefined = undefined;
     const conn = new UdsConnection(sock);
     log?.info(
-      `${this.clientId} -- new incoming uds connection (id: ${conn.id})`,
+      `${this.clientId} -- new incoming uds connection (id: ${conn.debugId})`,
     );
 
     const client = () => session?.connectedTo ?? 'unknown';
@@ -42,7 +42,7 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
     sock.on('close', () => {
       if (!session) return;
       log?.info(
-        `${this.clientId} -- uds (id: ${conn.id}) to ${client()} disconnected`,
+        `${this.clientId} -- uds (id: ${conn.debugId}) to ${client()} disconnected`,
       );
       this.onDisconnect(conn, session?.connectedTo);
     });
@@ -50,7 +50,7 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
     sock.on('error', (err) => {
       log?.warn(
         `${this.clientId} -- uds (id: ${
-          conn.id
+          conn.debugId
         }) to ${client()} got an error: ${err}`,
       );
     });

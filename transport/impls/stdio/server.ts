@@ -50,7 +50,7 @@ export class StdioServerTransport extends Transport<StreamConnection> {
       if (!session) return;
       log?.info(
         `${this.clientId} -- stream conn (id: ${
-          conn.id
+          conn.debugId
         }) to ${receiver()} disconnected`,
       );
       cleanup(session);
@@ -60,7 +60,7 @@ export class StdioServerTransport extends Transport<StreamConnection> {
       if (!session) return;
       log?.warn(
         `${this.clientId} -- error in stream connection (id: ${
-          conn.id
+          conn.debugId
         }) to ${receiver()}: ${err}`,
       );
       cleanup(session);
