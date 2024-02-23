@@ -291,7 +291,7 @@ export abstract class Transport<ConnType extends Connection> {
 
     // if connectedTo is not set, we've disconnect before the first message is received
     // therefore there is no associated session
-    if (!connectedTo) return
+    if (!connectedTo) return;
     const session = this.sessionByClientId(connectedTo);
     log?.info(
       `${this.clientId} -- connection (id: ${conn.id}) disconnect from ${connectedTo}, ${DISCONNECT_GRACE_MS}ms until session (id: ${session.id}) disconnect`,
@@ -415,7 +415,8 @@ export abstract class Transport<ConnType extends Connection> {
       throw new Error(err);
     } else if (this.state === 'closed') {
       log?.info(
-        `${this.clientId
+        `${
+          this.clientId
         } -- transport closed when sending, discarding : ${JSON.stringify(
           msg,
         )}`,

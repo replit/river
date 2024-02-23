@@ -85,7 +85,7 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
       const conn = new WebSocketConnection(wsRes.ws);
       log?.info(`${this.clientId} -- websocket (id: ${conn.id}) to ${to} ok`);
       this.onConnect(conn, to);
-      conn.onData((data) => this.handleMsg(this.parseMsg(data)));
+      conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
       wsRes.ws.onclose = () => {
         log?.info(
           `${this.clientId} -- websocket (id: ${conn.id}) to ${to} disconnected`,

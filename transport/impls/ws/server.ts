@@ -26,7 +26,7 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
     );
     let session: Session<WebSocketConnection> | undefined = undefined;
     const client = () => session?.connectedTo ?? 'unknown';
-    conn.onData((data) => {
+    conn.addDataListener((data) => {
       const parsed = this.parseMsg(data);
       if (!parsed) return;
       if (!session) {

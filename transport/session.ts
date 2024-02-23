@@ -24,7 +24,7 @@ export abstract class Connection {
    * Handle adding a callback for when a message is received.
    * @param msg The message that was received.
    */
-  abstract onData(cb: (msg: Uint8Array) => void): void;
+  abstract addDataListener(cb: (msg: Uint8Array) => void): void;
 
   /**
    * Sends a message over the connection.

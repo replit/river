@@ -33,7 +33,7 @@ export class StdioServerTransport extends Transport<StreamConnection> {
     const receiver = () => session?.connectedTo ?? 'unknown';
 
     const conn = new StreamConnection(this.input, this.output);
-    conn.onData((data) => {
+    conn.addDataListener((data) => {
       const parsed = this.parseMsg(data);
       if (!parsed) return;
       if (!session && !this.connections.has(parsed.from)) {

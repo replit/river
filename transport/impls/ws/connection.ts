@@ -10,7 +10,7 @@ export class WebSocketConnection extends Connection {
     this.ws.binaryType = 'arraybuffer';
   }
 
-  onData(cb: (msg: Uint8Array) => void) {
+  addDataListener(cb: (msg: Uint8Array) => void) {
     this.ws.onmessage = (msg) => cb(msg.data as Uint8Array);
   }
 

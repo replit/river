@@ -17,7 +17,7 @@ export class UdsConnection extends Connection {
     this.input = sock.pipe(this.framer);
   }
 
-  onData(cb: (msg: Uint8Array) => void) {
+  addDataListener(cb: (msg: Uint8Array) => void) {
     this.input.on('data', cb);
   }
 

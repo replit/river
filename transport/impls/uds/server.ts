@@ -29,7 +29,7 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
     );
 
     const client = () => session?.connectedTo ?? 'unknown';
-    conn.onData((data) => {
+    conn.addDataListener((data) => {
       const parsed = this.parseMsg(data);
       if (!parsed) return;
       if (!session) {

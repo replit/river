@@ -16,7 +16,7 @@ export class StreamConnection extends Connection {
     this.output = output;
   }
 
-  onData(cb: (msg: Uint8Array) => void) {
+  addDataListener(cb: (msg: Uint8Array) => void) {
     this.input.on('data', cb);
   }
 
