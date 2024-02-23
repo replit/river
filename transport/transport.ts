@@ -253,7 +253,7 @@ export abstract class Transport<ConnType extends Connection> {
         const ok = this.send(msg);
         if (!ok) {
           // this should never happen unless the transport has an
-          // incorrect implementation of `createNewConnection`
+          // incorrect implementation of `createNewOutgoingConnection`
           const msg = `${this.clientId} -- failed to send queued message to ${connectedTo} in session (id: ${session.id}) (if you hit this code path something is seriously wrong)`;
           log?.error(msg);
           throw new Error(msg);
