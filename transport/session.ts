@@ -49,7 +49,18 @@ export const DISCONNECT_GRACE_MS = 3_000; // 3s
  * 2) A buffer of messages that have been sent but not yet acknowledged.
  * 3) The active connection associated with this session
  *
- * On the server:
+ * This can be pretty confusing so let's illustrate the lifetimes
+ * of a session and a connection from the server and client perspectives.
+ *
+ * Here's a legend for what each of the numbers means. A '-' indicates the
+ * session/connection is connected and ' ' means it is disconnected.
+ *
+ * 1. connectionStatus :: connect
+ * 2. sessionStatus    :: connect
+ * 3. connectionStatus :: disconnect
+ * 4. sessionStatus    :: disconnect
+ *
+ * From the server's perspective:
  * ```plaintext
  * session         2-----------------------4
  * connection  ----1---------3   1-------3
@@ -58,7 +69,7 @@ export const DISCONNECT_GRACE_MS = 3_000; // 3s
  *                   before connectionStatus event is fired
  * ```
  *
- * On the client:
+ * From the client's perspective:
  * ```plaintext
  * session     2---------------------------4
  * connection      1---------3   1-------3
@@ -66,11 +77,6 @@ export const DISCONNECT_GRACE_MS = 3_000; // 3s
  *             ^---^ session is created as soon
  *                   as we send an outgoing message
  * ```
- *
- * 1. connectionStatus :: connect
- * 2. sessionStatus    :: connect
- * 3. connectionStatus :: disconnect
- * 4. sessionStatus    :: disconnect
  */
 export class Session<ConnType extends Connection> {
   /**
