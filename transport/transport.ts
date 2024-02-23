@@ -207,7 +207,8 @@ export abstract class Transport<ConnType extends Connection> {
     session: Session<ConnType>,
   ) {
     // only close the connection if the stale one is the one we have a handle to
-    if (!session.connection || session.connection.debugId !== conn.debugId) return;
+    if (!session.connection || session.connection.debugId !== conn.debugId)
+      return;
     session.connection?.close();
     session.connection = undefined;
     log?.info(
