@@ -38,7 +38,7 @@ async function ensureTransportIsClean(t: Transport<Connection>) {
     t.state,
     `transport ${t.clientId} should be closed after the test`,
   ).to.not.equal('open');
-  await ensureTransportQueuesAreEventuallyEmpty(t);
+  await ensureTransportBuffersAreEventuallyEmpty(t);
   await waitFor(() =>
     expect(
       t.sessions,
@@ -63,7 +63,7 @@ export function waitFor<T>(cb: () => T | Promise<T>) {
   return vi.waitFor(cb, waitUntilOptions);
 }
 
-export async function ensureTransportQueuesAreEventuallyEmpty(
+export async function ensureTransportBuffersAreEventuallyEmpty(
   t: Transport<Connection>,
 ) {
   await waitFor(() =>

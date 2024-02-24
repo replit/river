@@ -73,7 +73,7 @@ export const DISCONNECT_GRACE_MS = 3_000; // 3s -> 12x heartbeat
 
 /**
  * A session is a higher-level abstraction that operates over the span of potentially multiple transport-level connections
- * - It’s responsible for tracking any metadata for a particular client that might need to be persisted across connections (i.e. the sendBuffer and sendQueue)
+ * - It’s responsible for tracking any metadata for a particular client that might need to be persisted across connections (i.e. the sendBuffer, ack, seq)
  * - This will only be considered disconnected if
  *    - the server tells the client that we’ve reconnected but it doesn’t recognize us anymore (server definitely died) or
  *    - we hit a grace period after a connection disconnect
@@ -190,11 +190,6 @@ export class Session<ConnType extends Connection> {
     );
   }
 
-  rawSend(msg: OpaqueTransportMessage): boolean {
-    if (!this.connection) return false;
-    return this.connection.send(this.codec.toBuffer(msg));
-  }
-
   resetBufferedMessages() {
     this.sendBuffer = [];
     this.seq = 0;
@@ -202,12 +197,19 @@ export class Session<ConnType extends Connection> {
   }
 
   sendBufferedMessages() {
+    if (!this.connection) {
+      const msg = `${this.from} -- tried sending buffered messages without a connection (if you hit this code path something is seriously wrong)`;
+      log?.error(msg);
+      throw new Error(msg);
+    }
+
     for (const msg of this.sendBuffer) {
-      const ok = this.rawSend(msg);
+      log?.debug(`${this.from} -- resending ${JSON.stringify(msg)}`);
+      const ok = this.connection.send(this.codec.toBuffer(msg));
       if (!ok) {
         // this should never happen unless the transport has an
         // incorrect implementation of `createNewOutgoingConnection`
-        const msg = `${this.from} -- failed to send queued message to ${this.to} in session (id: ${this.debugId}) (if you hit this code path something is seriously wrong)`;
+        const msg = `${this.from} -- failed to send buffered message to ${this.to} in session (id: ${this.debugId}) (if you hit this code path something is seriously wrong)`;
         log?.error(msg);
         throw new Error(msg);
       }
@@ -222,7 +224,7 @@ export class Session<ConnType extends Connection> {
   addToSendBuff(msg: TransportMessage) {
     this.sendBuffer.push(msg);
     log?.debug(
-      `${this.from} -- send buff to ${this.to} now has ${this.sendBuffer.length}`,
+      `${this.from} -- send buff to ${this.to} now tracking ${this.sendBuffer.length}`,
     );
   }
 

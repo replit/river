@@ -13,7 +13,6 @@ import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
 import { testFinishesCleanly } from '../../../__tests__/fixtures/cleanup';
 import { PartialTransportMessage } from '../../message';
-import { bindLogger, setLevel } from '../../../logging';
 
 describe('sending and receiving across websockets works', async () => {
   const server = http.createServer();
@@ -25,9 +24,7 @@ describe('sending and receiving across websockets works', async () => {
     server.close();
   });
 
-  bindLogger(console.log);
-  setLevel('debug');
-  test.only('basic send/receive', async () => {
+  test('basic send/receive', async () => {
     const [clientTransport, serverTransport] = createWsTransports(port, wss);
     const msg = createDummyTransportMessage();
     const msgId = clientTransport.send(serverTransport.clientId, msg);
