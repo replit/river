@@ -1,7 +1,11 @@
 import { expect, vi } from 'vitest';
 import { Connection, OpaqueTransportMessage, Transport } from '../../transport';
 import { Server } from '../../router';
-import { DISCONNECT_GRACE_MS } from '../../transport/session';
+import {
+  DISCONNECT_GRACE_MS,
+  HEARTBEAT_INTERVAL_MS,
+} from '../../transport/session';
+import { log } from '../../logging';
 
 const waitUntilOptions = {
   timeout: 250, // these are all local connections so anything above 250ms is sus
@@ -9,7 +13,6 @@ const waitUntilOptions = {
 };
 
 export async function waitForTransportToFinish(t: Transport<Connection>) {
-  await ensureTransportQueuesAreEventuallyEmpty(t);
   await t.close();
   await waitFor(() =>
     expect(
@@ -22,6 +25,11 @@ export async function waitForTransportToFinish(t: Transport<Connection>) {
 export async function advanceFakeTimersByDisconnectGrace() {
   // advance fake timer so we hit the disconnect grace to end the session
   await vi.runOnlyPendingTimersAsync();
+
+  // wait for heartbeat to propagate
+  await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS + 1);
+
+  // then, disconnect timer
   await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS + 1);
 }
 
@@ -30,6 +38,7 @@ async function ensureTransportIsClean(t: Transport<Connection>) {
     t.state,
     `transport ${t.clientId} should be closed after the test`,
   ).to.not.equal('open');
+  await ensureTransportQueuesAreEventuallyEmpty(t);
   await waitFor(() =>
     expect(
       t.sessions,
@@ -93,6 +102,7 @@ export async function testFinishesCleanly({
   serverTransport: Transport<Connection>;
   server: Server<unknown>;
 }>) {
+  log?.info('*** end of test cleanup ***');
   vi.useFakeTimers({ shouldAdvanceTime: true });
 
   if (clientTransports) {

@@ -149,23 +149,31 @@ export class Session<ConnType extends Connection> {
     this.codec = codec;
 
     // setup heartbeat
-    this.heartbeat = setInterval(this.sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+    this.heartbeat = setInterval(
+      () => this.sendHeartbeat(),
+      HEARTBEAT_INTERVAL_MS,
+    );
   }
 
   send(msg: PartialTransportMessage, skipRetry?: boolean): string {
     const fullMsg: TransportMessage = this.constructMsg(msg);
-    log?.debug(`${this.from} -- sending ${JSON.stringify(msg)}`);
+    log?.debug(`${this.from} -- sending ${JSON.stringify(fullMsg)}`);
 
     if (this.connection) {
-      const ok = this.connection.send(this.codec.toBuffer(msg));
+      const ok = this.connection.send(this.codec.toBuffer(fullMsg));
       if (ok) return fullMsg.id;
+      log?.info(
+        `${this.from} -- failed to send ${fullMsg.id} to ${fullMsg.to}, connection is probably dead`,
+      );
+    } else {
+      log?.info(
+        `${this.from} -- failed to send ${fullMsg.id} to ${fullMsg.to}, connection not ready yet`,
+      );
     }
 
     if (skipRetry) return fullMsg.id;
-    log?.info(
-      `${this.from} -- failed to send to ${fullMsg.to}, queuing msg ${fullMsg.id}`,
-    );
     this.addToSendBuff(fullMsg);
+    log?.info(`${this.from} -- queuing msg ${fullMsg.id}`);
     return fullMsg.id;
   }
 
@@ -194,7 +202,6 @@ export class Session<ConnType extends Connection> {
   }
 
   sendBufferedMessages() {
-    this.sendHeartbeat();
     for (const msg of this.sendBuffer) {
       const ok = this.rawSend(msg);
       if (!ok) {
@@ -208,8 +215,8 @@ export class Session<ConnType extends Connection> {
   }
 
   updateBookkeeping(ack: number, seq: number) {
-    this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq < ack);
-    this.ack = seq;
+    this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq > ack);
+    this.ack = seq + 1;
   }
 
   addToSendBuff(msg: TransportMessage) {
@@ -251,20 +258,23 @@ export class Session<ConnType extends Connection> {
   }
 
   get nextExpectedSeq() {
-    return this.ack + 1;
+    return this.ack;
   }
 
   constructMsg<Payload extends object>(
     partialMsg: PartialTransportMessage<Payload>,
   ): TransportMessage<Payload> {
-    return {
+    const msg = {
       ...partialMsg,
       id: unsafeId(),
       to: this.to,
       from: this.from,
-      seq: this.seq++,
+      seq: this.seq,
       ack: this.ack,
     };
+
+    this.seq++;
+    return msg;
   }
 
   /**

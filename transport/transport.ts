@@ -300,15 +300,17 @@ export abstract class Transport<ConnType extends Connection> {
     log?.debug(`${this.clientId} -- received msg: ${JSON.stringify(msg)}`);
     if (msg.seq !== session.nextExpectedSeq) {
       log?.warn(
-        `${
-          this.clientId
-        } -- received out-of-order msg, discarding: ${JSON.stringify(msg)}`,
+        `${this.clientId} -- received out-of-order msg (got: ${
+          msg.seq
+        }, wanted: ${session.nextExpectedSeq}), discarding: ${JSON.stringify(
+          msg,
+        )}`,
       );
       return;
     }
 
-    session.updateBookkeeping(msg.ack, msg.seq);
     this.eventDispatcher.dispatchEvent('message', msg);
+    session.updateBookkeeping(msg.ack, msg.seq);
   }
 
   /**
@@ -496,6 +498,7 @@ export abstract class ClientTransport<
       // send boot sequence
       this.state = 'open';
       const responseMsg = bootRequestMessage(this.clientId, to);
+      log?.debug(`${this.clientId} -- sending boot handshake to ${to}`);
       conn.send(this.codec.toBuffer(responseMsg));
     } catch (error: unknown) {
       const errStr = error instanceof Error ? error.message : `${error}`;
