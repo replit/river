@@ -408,7 +408,7 @@ export abstract class Transport<ConnType extends Connection> {
    */
   async destroy() {
     for (const session of this.sessions.values()) {
-      session.closeStaleConnection();
+      session.closeStaleConnection(session.connection);
     }
 
     this.state = 'destroyed';
