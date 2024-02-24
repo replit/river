@@ -69,7 +69,8 @@ export abstract class Connection {
 }
 
 export const HEARTBEAT_INTERVAL_MS = 250; // 250ms
-export const DISCONNECT_GRACE_MS = 3_000; // 3s -> 12x heartbeat
+export const HEARTBEATS_TILL_DEAD = 4; // can miss max of 4 heartbeats before we consider the connection dead
+export const SESSION_DISCONNECT_GRACE_MS = 3_000; // 3s
 
 /**
  * A session is a higher-level abstraction that operates over the span of potentially multiple transport-level connections
@@ -133,7 +134,21 @@ export class Session<ConnType extends Connection> {
    * Number of unique messages we've received this session (excluding handshake)
    */
   private ack: SequenceNumber = 0;
-  private graceExpiryTimeout?: ReturnType<typeof setTimeout>;
+
+  /**
+   * The grace period between when the inner connection is disconnected
+   * and when we should consider the entire session disconnected.
+   */
+  private disconnectionGrace?: ReturnType<typeof setTimeout>;
+
+  /**
+   * Number of heartbeats we've sent without a response.
+   */
+  private heartbeatMisses: number;
+
+  /**
+   * The interval for sending heartbeats.
+   */
   private heartbeat?: ReturnType<typeof setInterval>;
 
   constructor(
@@ -149,6 +164,7 @@ export class Session<ConnType extends Connection> {
     this.codec = codec;
 
     // setup heartbeat
+    this.heartbeatMisses = 0;
     this.heartbeat = setInterval(
       () => this.sendHeartbeat(),
       HEARTBEAT_INTERVAL_MS,
@@ -163,7 +179,7 @@ export class Session<ConnType extends Connection> {
       const ok = this.connection.send(this.codec.toBuffer(fullMsg));
       if (ok) return fullMsg.id;
       log?.info(
-        `${this.from} -- failed to send ${fullMsg.id} to ${fullMsg.to}, connection is probably dead`,
+        `${this.from} -- failed to send ${fullMsg.id} to ${fullMsg.to}, connection (id: ${this.connection.debugId}) is probably dead`,
       );
     } else {
       log?.info(
@@ -173,11 +189,21 @@ export class Session<ConnType extends Connection> {
 
     if (skipRetry) return fullMsg.id;
     this.addToSendBuff(fullMsg);
-    log?.info(`${this.from} -- queuing msg ${fullMsg.id}`);
+    log?.info(
+      `${this.from} -- buffering msg ${fullMsg.id} until connection is healthy again`,
+    );
     return fullMsg.id;
   }
 
   sendHeartbeat() {
+    if (this.heartbeatMisses >= HEARTBEATS_TILL_DEAD) {
+      log?.info(
+        `${this.from} -- closing connection to ${this.to} due to inactivity`,
+      );
+      this.halfCloseConnection();
+      return;
+    }
+
     this.send(
       {
         streamId: 'heartbeat',
@@ -188,6 +214,7 @@ export class Session<ConnType extends Connection> {
       },
       true,
     );
+    this.heartbeatMisses++;
   }
 
   resetBufferedMessages() {
@@ -217,6 +244,7 @@ export class Session<ConnType extends Connection> {
   }
 
   updateBookkeeping(ack: number, seq: number) {
+    this.heartbeatMisses = 0;
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq > ack);
     this.ack = seq + 1;
   }
@@ -238,21 +266,21 @@ export class Session<ConnType extends Connection> {
   }
 
   replaceWithNewConnection(newConn: ConnType) {
-    this.closeStaleConnection();
+    this.closeStaleConnection(this.connection);
     this.cancelGrace();
     this.connection = newConn;
   }
 
   beginGrace(cb: () => void) {
-    this.graceExpiryTimeout = setTimeout(() => {
+    this.disconnectionGrace = setTimeout(() => {
       this.resetBufferedMessages();
       clearInterval(this.heartbeat);
       cb();
-    }, DISCONNECT_GRACE_MS);
+    }, SESSION_DISCONNECT_GRACE_MS);
   }
 
   cancelGrace() {
-    clearTimeout(this.graceExpiryTimeout);
+    clearTimeout(this.disconnectionGrace);
   }
 
   get connected() {

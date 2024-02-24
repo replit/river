@@ -12,10 +12,11 @@ import {
   TransportMessage,
   ControlFlags,
   ControlMessagePayloadSchema,
+  isAck,
 } from './message';
 import { log } from '../logging';
 import { EventDispatcher, EventHandler, EventTypes } from './events';
-import { Connection, DISCONNECT_GRACE_MS, Session } from './session';
+import { Connection, SESSION_DISCONNECT_GRACE_MS, Session } from './session';
 import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 
@@ -234,7 +235,7 @@ export abstract class Transport<ConnType extends Connection> {
     if (!connectedTo) return;
     const session = this.sessionByClientId(connectedTo);
     log?.info(
-      `${this.clientId} -- connection (id: ${conn.debugId}) disconnect from ${connectedTo}, ${DISCONNECT_GRACE_MS}ms until session (id: ${session.debugId}) disconnect`,
+      `${this.clientId} -- connection (id: ${conn.debugId}) disconnect from ${connectedTo}, ${SESSION_DISCONNECT_GRACE_MS}ms until session (id: ${session.debugId}) disconnect`,
     );
 
     session.closeStaleConnection(conn);
@@ -309,7 +310,10 @@ export abstract class Transport<ConnType extends Connection> {
       return;
     }
 
-    this.eventDispatcher.dispatchEvent('message', msg);
+    if (!isAck(msg.controlFlags)) {
+      this.eventDispatcher.dispatchEvent('message', msg);
+    }
+
     session.updateBookkeeping(msg.ack, msg.seq);
   }
 

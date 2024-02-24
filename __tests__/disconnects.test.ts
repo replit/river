@@ -22,6 +22,7 @@ import { Err, UNEXPECTED_DISCONNECT } from '../router/result';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { buildServiceDefs } from '../router/defs';
+import { bindLogger } from '../logging';
 
 // TODO matrix this with all the transports
 describe('procedures should handle unexpected disconnects', async () => {

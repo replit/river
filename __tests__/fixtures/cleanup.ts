@@ -2,7 +2,7 @@ import { expect, vi } from 'vitest';
 import { Connection, OpaqueTransportMessage, Transport } from '../../transport';
 import { Server } from '../../router';
 import {
-  DISCONNECT_GRACE_MS,
+  SESSION_DISCONNECT_GRACE_MS,
   HEARTBEAT_INTERVAL_MS,
 } from '../../transport/session';
 import { log } from '../../logging';
@@ -30,7 +30,7 @@ export async function advanceFakeTimersByDisconnectGrace() {
   await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS + 1);
 
   // then, disconnect timer
-  await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS + 1);
+  await vi.advanceTimersByTimeAsync(SESSION_DISCONNECT_GRACE_MS + 1);
 }
 
 async function ensureTransportIsClean(t: Transport<Connection>) {
