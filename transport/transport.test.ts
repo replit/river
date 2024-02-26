@@ -9,9 +9,9 @@ import {
   testFinishesCleanly,
   waitFor,
 } from '../__tests__/fixtures/cleanup';
-import { matrix } from '../__tests__/fixtures/matrix';
+import { testMatrix } from '../__tests__/fixtures/matrix';
 
-describe.each(matrix)(
+describe.each(testMatrix())(
   'transport-agnostic behaviour tests ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };

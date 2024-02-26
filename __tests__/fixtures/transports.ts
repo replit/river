@@ -19,8 +19,9 @@ import { TransportOptions } from '../../transport/transport';
 import { WebSocketClientTransport } from '../../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../../transport/impls/ws/server';
 
+export type ValidTransports = 'ws' | 'unix sockets';
 export const transports: Array<{
-  name: string;
+  name: ValidTransports;
   setup: (opts?: Partial<TransportOptions>) => Promise<{
     getClientTransport: (id: TransportClientId) => ClientTransport<Connection>;
     getServerTransport: () => ServerTransport<Connection>;

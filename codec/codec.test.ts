@@ -3,8 +3,9 @@ import { BinaryCodec } from './binary';
 import { NaiveJsonCodec } from './json';
 import { describe, test, expect } from 'vitest';
 
+export type ValidCodecs = 'naive' | 'binary';
 export const codecs: Array<{
-  name: string;
+  name: ValidCodecs;
   codec: Codec;
 }> = [
   { name: 'naive', codec: NaiveJsonCodec },

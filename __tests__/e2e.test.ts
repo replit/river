@@ -15,9 +15,9 @@ import {
 import { UNCAUGHT_ERROR } from '../router/result';
 import { testFinishesCleanly } from './fixtures/cleanup';
 import { buildServiceDefs } from '../router/defs';
-import { matrix } from './fixtures/matrix';
+import { testMatrix } from './fixtures/matrix';
 
-describe.each(matrix)(
+describe.each(testMatrix())(
   'client <-> server integration test ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
