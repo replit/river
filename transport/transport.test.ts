@@ -234,14 +234,14 @@ describe.each(testMatrix())(
       const clientId2 = 'client2';
       const serverId = 'SERVER';
       const serverTransport = getServerTransport();
-  
+
       const makeDummyMessage = (message: string): PartialTransportMessage => {
         return payloadToTransportMessage({ message });
       };
-  
+
       const initClient = async (id: string) => {
         const client = getClientTransport(id);
-  
+
         // client to server
         const initMsg = makeDummyMessage('hello\nserver');
         const initMsgId = client.send(serverId, initMsg);
@@ -250,16 +250,16 @@ describe.each(testMatrix())(
         ).resolves.toStrictEqual(initMsg.payload);
         return client;
       };
-  
+
       const client1Transport = await initClient(clientId1);
       const client2Transport = await initClient(clientId2);
-  
+
       // sending messages from server to client shouldn't leak between clients
       const msg1 = makeDummyMessage('hello\nclient1');
       const msg2 = makeDummyMessage('hello\nclient2');
       const msg1Id = serverTransport.send(clientId1, msg1);
       const msg2Id = serverTransport.send(clientId2, msg2);
-  
+
       const promises = Promise.all([
         // true means reject if we receive any message that isn't the one we are expecting
         waitForMessage(client2Transport, (recv) => recv.id === msg2Id, true),
@@ -268,11 +268,11 @@ describe.each(testMatrix())(
       await expect(promises).resolves.toStrictEqual(
         expect.arrayContaining([msg1.payload, msg2.payload]),
       );
-  
+
       await testFinishesCleanly({
         clientTransports: [client1Transport, client2Transport],
         serverTransport,
       });
-    })
+    });
   },
 );

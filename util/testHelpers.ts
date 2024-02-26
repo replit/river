@@ -1,10 +1,8 @@
 import WebSocket from 'isomorphic-ws';
 import { WebSocketServer } from 'ws';
 import http from 'node:http';
-import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { Connection, OpaqueTransportMessage, Transport } from '../transport';
 import { pushable } from 'it-pushable';
-import { WebSocketServerTransport } from '../transport/impls/ws/server';
 import {
   PayloadType,
   Procedure,
@@ -18,7 +16,6 @@ import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import net from 'node:net';
 import { PartialTransportMessage } from '../transport/message';
-import { TransportOptions } from '../transport/transport';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -69,28 +66,6 @@ export async function createLocalWebSocketClient(port: number) {
   const sock = new WebSocket(`ws://localhost:${port}`);
   sock.binaryType = 'arraybuffer';
   return sock;
-}
-
-/**
- * Creates a pair of WebSocket transports for testing purposes.
- * @param port - The port number to use for the client transport. This should be acquired after starting a server via {@link createWebSocketServer}.
- * @param wss - The WebSocketServer instance to use for the server transport.
- * @returns An array containing the client and server {@link WebSocketClientTransport} instances.
- */
-export function createWsTransports(
-  port: number,
-  wss: WebSocketServer,
-  opts?: Partial<TransportOptions>,
-): [WebSocketClientTransport, WebSocketServerTransport] {
-  return [
-    new WebSocketClientTransport(
-      () => createLocalWebSocketClient(port),
-      'client',
-      'SERVER',
-      opts,
-    ),
-    new WebSocketServerTransport(wss, 'SERVER', opts),
-  ];
 }
 
 /**

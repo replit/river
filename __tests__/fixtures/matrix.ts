@@ -38,9 +38,7 @@ type Selector = [ValidTransports, ValidCodecs];
  * @param selector An optional tuple specifying a transport and codec to filter the matrix.
  * @returns An array of TestMatrixEntry objects representing the combinations of transport and codec.
  */
-export const testMatrix = (
-  selector?: Selector,
-): Array<TestMatrixEntry> =>
+export const testMatrix = (selector?: Selector): Array<TestMatrixEntry> =>
   transports
     .map((transport) =>
       // If a selector is provided, filter transport + codecs to match the selector; otherwise, use all codecs.
