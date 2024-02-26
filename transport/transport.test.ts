@@ -12,11 +12,12 @@ import {
 } from '../__tests__/fixtures/cleanup';
 
 describe.each(transports)('transport -- $name', async ({ setup }) => {
-  const { getTransports, cleanup } = await setup();
+  const { getClientTransport, getServerTransport, cleanup } = await setup();
   afterAll(cleanup);
 
   test('connection is recreated after clean client disconnect', async () => {
-    const [clientTransport, serverTransport] = getTransports();
+    const clientTransport = getClientTransport('client');
+    const serverTransport = getServerTransport();
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 
@@ -40,7 +41,8 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
   });
 
   test('both client and server transport get connect/disconnect notifs', async () => {
-    const [clientTransport, serverTransport] = getTransports();
+    const clientTransport = getClientTransport('client');
+    const serverTransport = getServerTransport();
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 
@@ -171,7 +173,8 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
   });
 
   test('transport connection is not recreated after destroy', async () => {
-    const [clientTransport, serverTransport] = getTransports();
+    const clientTransport = getClientTransport('client');
+    const serverTransport = getServerTransport();
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 

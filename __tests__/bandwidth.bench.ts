@@ -20,10 +20,11 @@ const dummyPayloadSmall = () => ({
 const BENCH_DURATION = 10_000;
 describe('bandwidth', async () => {
   for (const { name, setup } of transports) {
-    const { getTransports, cleanup } = await setup();
+    const { getClientTransport, getServerTransport, cleanup } = await setup();
     afterAll(cleanup);
 
-    const [clientTransport, serverTransport] = getTransports();
+    const clientTransport = getClientTransport('client');
+    const serverTransport = getServerTransport();
     const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
     const server = createServer(serverTransport, serviceDefs);
     const client = createClient<typeof server>(clientTransport);

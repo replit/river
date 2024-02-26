@@ -4,7 +4,6 @@ import http from 'node:http';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { Connection, OpaqueTransportMessage, Transport } from '../transport';
 import { pushable } from 'it-pushable';
-import { Codec } from '../codec';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
 import {
   PayloadType,
@@ -19,6 +18,7 @@ import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import net from 'node:net';
 import { PartialTransportMessage } from '../transport/message';
+import { TransportOptions } from '../transport/transport';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -80,17 +80,16 @@ export async function createLocalWebSocketClient(port: number) {
 export function createWsTransports(
   port: number,
   wss: WebSocketServer,
-  codec?: Codec,
+  opts?: Partial<TransportOptions>,
 ): [WebSocketClientTransport, WebSocketServerTransport] {
-  const options = codec ? { codec } : undefined;
   return [
     new WebSocketClientTransport(
       () => createLocalWebSocketClient(port),
       'client',
       'SERVER',
-      options,
+      opts,
     ),
-    new WebSocketServerTransport(wss, 'SERVER', options),
+    new WebSocketServerTransport(wss, 'SERVER', opts),
   ];
 }
 

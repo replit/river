@@ -261,7 +261,7 @@ export class Session<ConnType extends Connection> {
   addToSendBuff(msg: TransportMessage) {
     this.sendBuffer.push(msg);
     log?.debug(
-      `${this.from} -- send buff to ${this.to} now tracking ${this.sendBuffer.length}`,
+      `${this.from} -- send buff to ${this.to} now tracking ${this.sendBuffer.length} messages`,
     );
   }
 
