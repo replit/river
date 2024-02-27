@@ -37,7 +37,10 @@ export const transports: Array<{
       const port = await onWsServerReady(server);
       let wss = await createWebSocketServer(server);
 
-      const transports: (WebSocketClientTransport | WebSocketServerTransport)[] = [];
+      const transports: (
+        | WebSocketClientTransport
+        | WebSocketServerTransport
+      )[] = [];
       return {
         simulatePhantomDisconnect() {
           for (const transport of transports) {
@@ -57,17 +60,21 @@ export const transports: Array<{
           return clientTransport;
         },
         getServerTransport: () => {
-          const serverTransport = new WebSocketServerTransport(wss, 'SERVER', opts)
-          transports.push(serverTransport)
-          return serverTransport
+          const serverTransport = new WebSocketServerTransport(
+            wss,
+            'SERVER',
+            opts,
+          );
+          transports.push(serverTransport);
+          return serverTransport;
         },
         async restartServer() {
-          wss.close()
-          server.close()
+          wss.close();
+          server.close();
           server = http.createServer();
-          await new Promise<void>(resolve => {
+          await new Promise<void>((resolve) => {
             server.listen(port, resolve);
-          })
+          });
           wss = await createWebSocketServer(server);
         },
         cleanup: async () => {
@@ -116,8 +123,8 @@ export const transports: Array<{
           return serverTransport;
         },
         async restartServer() {
-          server.close()
-          server = net.createServer()
+          server.close();
+          server = net.createServer();
           await onUdsServeReady(server, socketPath);
         },
         cleanup: async () => {

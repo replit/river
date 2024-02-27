@@ -269,13 +269,9 @@ describe.each(testMatrix())(
   async ({ transport, codec }) => {
     test('restarts the world in case of server crash', async () => {
       const opts = { codec: codec.codec };
-      const {
-        getClientTransport,
-        getServerTransport,
-        restartServer,
-        cleanup,
-      } = await transport.setup(opts);
-      
+      const { getClientTransport, getServerTransport, restartServer, cleanup } =
+        await transport.setup(opts);
+
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const msg1 = createDummyTransportMessage();
@@ -286,7 +282,7 @@ describe.each(testMatrix())(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
 
-      await restartServer()
+      await restartServer();
 
       // by this point the client should have reconnected
       const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
@@ -298,7 +294,7 @@ describe.each(testMatrix())(
         clientTransports: [clientTransport],
         serverTransport,
       }).finally(cleanup);
-    })
+    });
 
     test('recovers from phantom disconnects', async () => {
       const opts = { codec: codec.codec };
