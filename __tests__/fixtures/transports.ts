@@ -49,7 +49,7 @@ export const transports: Array<{
             }
           }
         },
-        getClientTransport: (id) => {
+        getClientTransport(id) {
           const clientTransport = new WebSocketClientTransport(
             () => createLocalWebSocketClient(port),
             id,
@@ -59,7 +59,7 @@ export const transports: Array<{
           transports.push(clientTransport);
           return clientTransport;
         },
-        getServerTransport: () => {
+        getServerTransport() {
           const serverTransport = new WebSocketServerTransport(
             wss,
             'SERVER',
@@ -103,7 +103,7 @@ export const transports: Array<{
             }
           }
         },
-        getClientTransport: (id) => {
+        getClientTransport(id) {
           const clientTransport = new UnixDomainSocketClientTransport(
             socketPath,
             id,
@@ -113,7 +113,7 @@ export const transports: Array<{
           transports.push(clientTransport);
           return clientTransport;
         },
-        getServerTransport: () => {
+        getServerTransport() {
           const serverTransport = new UnixDomainSocketServerTransport(
             server,
             'SERVER',
