@@ -53,32 +53,32 @@ describe.each(testMatrix())(
       const msg1 = createDummyTransportMessage();
       const msg2 = createDummyTransportMessage();
 
-      const clientConnConnect = vi.fn();
-      const clientConnDisconnect = vi.fn();
+      const clientConnStart = vi.fn();
+      const clientConnStop = vi.fn();
       const clientConnHandler = (evt: EventMap['connectionStatus']) => {
-        if (evt.status === 'connect') return clientConnConnect();
-        if (evt.status === 'disconnect') return clientConnDisconnect();
+        if (evt.status === 'connect') return clientConnStart();
+        if (evt.status === 'disconnect') return clientConnStop();
       };
 
-      const clientSessConnect = vi.fn();
-      const clientSessDisconnect = vi.fn();
+      const clientSessStart = vi.fn();
+      const clientSessStop = vi.fn();
       const clientSessHandler = (evt: EventMap['sessionStatus']) => {
-        if (evt.status === 'connect') return clientSessConnect();
-        if (evt.status === 'disconnect') return clientSessDisconnect();
+        if (evt.status === 'connect') return clientSessStart();
+        if (evt.status === 'disconnect') return clientSessStop();
       };
 
-      const serverConnConnect = vi.fn();
-      const serverConnDisconnect = vi.fn();
+      const serverConnStart = vi.fn();
+      const serverConnStop = vi.fn();
       const serverConnHandler = (evt: EventMap['connectionStatus']) => {
-        if (evt.status === 'connect') return serverConnConnect();
-        if (evt.status === 'disconnect') return serverConnDisconnect();
+        if (evt.status === 'connect') return serverConnStart();
+        if (evt.status === 'disconnect') return serverConnStop();
       };
 
-      const serverSessConnect = vi.fn();
-      const serverSessDisconnect = vi.fn();
+      const serverSessStart = vi.fn();
+      const serverSessStop = vi.fn();
       const serverSessHandler = (evt: EventMap['sessionStatus']) => {
-        if (evt.status === 'connect') return serverSessConnect();
-        if (evt.status === 'disconnect') return serverSessDisconnect();
+        if (evt.status === 'connect') return serverSessStart();
+        if (evt.status === 'disconnect') return serverSessStop();
       };
 
       clientTransport.addEventListener('connectionStatus', clientConnHandler);
@@ -93,15 +93,15 @@ describe.each(testMatrix())(
       // x = disconnect
       // session    >  | (connecting)
       // connection >  | (connecting)
-      expect(clientConnConnect).toHaveBeenCalledTimes(0);
-      expect(serverConnConnect).toHaveBeenCalledTimes(0);
-      expect(clientConnDisconnect).toHaveBeenCalledTimes(0);
-      expect(serverConnDisconnect).toHaveBeenCalledTimes(0);
+      expect(clientConnStart).toHaveBeenCalledTimes(0);
+      expect(serverConnStart).toHaveBeenCalledTimes(0);
+      expect(clientConnStop).toHaveBeenCalledTimes(0);
+      expect(serverConnStop).toHaveBeenCalledTimes(0);
 
-      expect(clientSessConnect).toHaveBeenCalledTimes(0);
-      expect(serverSessConnect).toHaveBeenCalledTimes(0);
-      expect(clientSessDisconnect).toHaveBeenCalledTimes(0);
-      expect(serverSessDisconnect).toHaveBeenCalledTimes(0);
+      expect(clientSessStart).toHaveBeenCalledTimes(0);
+      expect(serverSessStart).toHaveBeenCalledTimes(0);
+      expect(clientSessStop).toHaveBeenCalledTimes(0);
+      expect(serverSessStop).toHaveBeenCalledTimes(0);
 
       const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
       await expect(
@@ -110,15 +110,15 @@ describe.each(testMatrix())(
 
       // session    >  c--| (connected)
       // connection >  c--| (connected)
-      expect(clientConnConnect).toHaveBeenCalledTimes(1);
-      expect(serverConnConnect).toHaveBeenCalledTimes(1);
-      expect(clientConnDisconnect).toHaveBeenCalledTimes(0);
-      expect(serverConnDisconnect).toHaveBeenCalledTimes(0);
+      expect(clientConnStart).toHaveBeenCalledTimes(1);
+      expect(serverConnStart).toHaveBeenCalledTimes(1);
+      expect(clientConnStop).toHaveBeenCalledTimes(0);
+      expect(serverConnStop).toHaveBeenCalledTimes(0);
 
-      expect(clientSessConnect).toHaveBeenCalledTimes(1);
-      expect(serverSessConnect).toHaveBeenCalledTimes(1);
-      expect(clientSessDisconnect).toHaveBeenCalledTimes(0);
-      expect(serverSessDisconnect).toHaveBeenCalledTimes(0);
+      expect(clientSessStart).toHaveBeenCalledTimes(1);
+      expect(serverSessStart).toHaveBeenCalledTimes(1);
+      expect(clientSessStop).toHaveBeenCalledTimes(0);
+      expect(serverSessStop).toHaveBeenCalledTimes(0);
 
       // clean disconnect + reconnect within grace period
       clientTransport.connections.forEach((conn) => conn.close());
@@ -126,19 +126,15 @@ describe.each(testMatrix())(
       // wait for connection status to propagate to server
       // session    >  c------| (connected)
       // connection >  c--x   | (disconnected)
-      await waitFor(() => expect(clientConnConnect).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(serverConnConnect).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(clientConnDisconnect).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(serverConnDisconnect).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(serverConnStart).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(serverConnStop).toHaveBeenCalledTimes(1));
 
-      await waitFor(() => expect(clientSessConnect).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(serverSessConnect).toHaveBeenCalledTimes(1));
-      await waitFor(() =>
-        expect(clientSessDisconnect).toHaveBeenCalledTimes(0),
-      );
-      await waitFor(() =>
-        expect(serverSessDisconnect).toHaveBeenCalledTimes(0),
-      );
+      await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(serverSessStart).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(0));
+      await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(0));
 
       // by this point the client should have reconnected
       // session    >  c----------| (connected)
@@ -147,15 +143,15 @@ describe.each(testMatrix())(
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
       ).resolves.toStrictEqual(msg2.payload);
-      expect(clientConnConnect).toHaveBeenCalledTimes(2);
-      expect(serverConnConnect).toHaveBeenCalledTimes(2);
-      expect(clientConnDisconnect).toHaveBeenCalledTimes(1);
-      expect(serverConnDisconnect).toHaveBeenCalledTimes(1);
+      expect(clientConnStart).toHaveBeenCalledTimes(2);
+      expect(serverConnStart).toHaveBeenCalledTimes(2);
+      expect(clientConnStop).toHaveBeenCalledTimes(1);
+      expect(serverConnStop).toHaveBeenCalledTimes(1);
 
-      expect(clientSessConnect).toHaveBeenCalledTimes(1);
-      expect(clientSessDisconnect).toHaveBeenCalledTimes(0);
-      expect(serverSessConnect).toHaveBeenCalledTimes(1);
-      expect(serverSessDisconnect).toHaveBeenCalledTimes(0);
+      expect(clientSessStart).toHaveBeenCalledTimes(1);
+      expect(clientSessStop).toHaveBeenCalledTimes(0);
+      expect(serverSessStart).toHaveBeenCalledTimes(1);
+      expect(serverSessStop).toHaveBeenCalledTimes(0);
 
       // disconnect session entirely
       // session    >  c------------x  | (disconnected)
@@ -163,24 +159,16 @@ describe.each(testMatrix())(
       vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.tryReconnecting = false;
       clientTransport.connections.forEach((conn) => conn.close());
-      await waitFor(() => expect(clientConnConnect).toHaveBeenCalledTimes(2));
-      await waitFor(() => expect(serverConnConnect).toHaveBeenCalledTimes(2));
-      await waitFor(() =>
-        expect(clientConnDisconnect).toHaveBeenCalledTimes(2),
-      );
-      await waitFor(() =>
-        expect(serverConnDisconnect).toHaveBeenCalledTimes(2),
-      );
+      await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(serverConnStart).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(serverConnStop).toHaveBeenCalledTimes(2));
 
       await advanceFakeTimersByDisconnectGrace();
-      await waitFor(() => expect(clientSessConnect).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(serverSessConnect).toHaveBeenCalledTimes(1));
-      await waitFor(() =>
-        expect(clientSessDisconnect).toHaveBeenCalledTimes(1),
-      );
-      await waitFor(() =>
-        expect(serverSessDisconnect).toHaveBeenCalledTimes(1),
-      );
+      await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(serverSessStart).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(1));
 
       // teardown
       clientTransport.removeEventListener(
@@ -292,32 +280,32 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
       const msg1 = createDummyTransportMessage();
 
-      const clientConnConnect = vi.fn();
-      const clientConnDisconnect = vi.fn();
+      const clientConnStart = vi.fn();
+      const clientConnStop = vi.fn();
       const clientConnHandler = (evt: EventMap['connectionStatus']) => {
-        if (evt.status === 'connect') return clientConnConnect();
-        if (evt.status === 'disconnect') return clientConnDisconnect();
+        if (evt.status === 'connect') return clientConnStart();
+        if (evt.status === 'disconnect') return clientConnStop();
       };
 
-      const clientSessConnect = vi.fn();
-      const clientSessDisconnect = vi.fn();
+      const clientSessStart = vi.fn();
+      const clientSessStop = vi.fn();
       const clientSessHandler = (evt: EventMap['sessionStatus']) => {
-        if (evt.status === 'connect') return clientSessConnect();
-        if (evt.status === 'disconnect') return clientSessDisconnect();
+        if (evt.status === 'connect') return clientSessStart();
+        if (evt.status === 'disconnect') return clientSessStop();
       };
 
-      const serverConnConnect = vi.fn();
-      const serverConnDisconnect = vi.fn();
+      const serverConnStart = vi.fn();
+      const serverConnStop = vi.fn();
       const serverConnHandler = (evt: EventMap['connectionStatus']) => {
-        if (evt.status === 'connect') return serverConnConnect();
-        if (evt.status === 'disconnect') return serverConnDisconnect();
+        if (evt.status === 'connect') return serverConnStart();
+        if (evt.status === 'disconnect') return serverConnStop();
       };
 
-      const serverSessConnect = vi.fn();
-      const serverSessDisconnect = vi.fn();
+      const serverSessStart = vi.fn();
+      const serverSessStop = vi.fn();
       const serverSessHandler = (evt: EventMap['sessionStatus']) => {
-        if (evt.status === 'connect') return serverSessConnect();
-        if (evt.status === 'disconnect') return serverSessDisconnect();
+        if (evt.status === 'connect') return serverSessStart();
+        if (evt.status === 'disconnect') return serverSessStop();
       };
 
       clientTransport.addEventListener('connectionStatus', clientConnHandler);
@@ -330,14 +318,14 @@ describe.each(testMatrix())(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
 
-      expect(clientConnConnect).toHaveBeenCalledTimes(1);
-      expect(serverConnConnect).toHaveBeenCalledTimes(1);
-      expect(clientConnDisconnect).toHaveBeenCalledTimes(0);
-      expect(serverConnDisconnect).toHaveBeenCalledTimes(0);
-      expect(clientSessConnect).toHaveBeenCalledTimes(1);
-      expect(serverSessConnect).toHaveBeenCalledTimes(1);
-      expect(clientSessDisconnect).toHaveBeenCalledTimes(0);
-      expect(serverSessDisconnect).toHaveBeenCalledTimes(0);
+      expect(clientConnStart).toHaveBeenCalledTimes(1);
+      expect(serverConnStart).toHaveBeenCalledTimes(1);
+      expect(clientConnStop).toHaveBeenCalledTimes(0);
+      expect(serverConnStop).toHaveBeenCalledTimes(0);
+      expect(clientSessStart).toHaveBeenCalledTimes(1);
+      expect(serverSessStart).toHaveBeenCalledTimes(1);
+      expect(clientSessStop).toHaveBeenCalledTimes(0);
+      expect(serverSessStop).toHaveBeenCalledTimes(0);
 
       // now, let's wait until the connection is considered dead
       simulatePhantomDisconnect();
@@ -346,23 +334,15 @@ describe.each(testMatrix())(
         await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS + 1);
       }
 
-      await waitFor(() => expect(clientConnConnect).toHaveBeenCalledTimes(2));
-      await waitFor(() => expect(serverConnConnect).toHaveBeenCalledTimes(2));
-      await waitFor(() =>
-        expect(clientConnDisconnect).toHaveBeenCalledTimes(1),
-      );
-      await waitFor(() =>
-        expect(serverConnDisconnect).toHaveBeenCalledTimes(1),
-      );
+      await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(serverConnStart).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(serverConnStop).toHaveBeenCalledTimes(1));
 
-      await waitFor(() => expect(clientSessConnect).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(serverSessConnect).toHaveBeenCalledTimes(1));
-      await waitFor(() =>
-        expect(clientSessDisconnect).toHaveBeenCalledTimes(0),
-      );
-      await waitFor(() =>
-        expect(serverSessDisconnect).toHaveBeenCalledTimes(0),
-      );
+      await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(serverSessStart).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(0));
+      await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(0));
 
       // teardown
       clientTransport.removeEventListener(
