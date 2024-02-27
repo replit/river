@@ -12,7 +12,6 @@ export const enum ControlFlags {
   AckBit = 0b0001,
   StreamOpenBit = 0b0010,
   StreamClosedBit = 0b0100,
-  HandshakeBit = 0b1000,
 }
 
 /**
