@@ -18,6 +18,7 @@ type TestMatrixEntry = {
         id: TransportClientId,
       ) => ClientTransport<Connection>;
       getServerTransport: () => ServerTransport<Connection>;
+      restartServer: () => Promise<void>;
       cleanup: () => Promise<void>;
     }>;
   };

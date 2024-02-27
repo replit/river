@@ -26,25 +26,22 @@ export const transports: Array<{
     getClientTransport: (id: TransportClientId) => ClientTransport<Connection>;
     getServerTransport: () => ServerTransport<Connection>;
     simulatePhantomDisconnect: () => void;
+    restartServer: () => Promise<void>;
     cleanup: () => Promise<void>;
   }>;
 }> = [
   {
     name: 'ws',
     setup: async (opts) => {
-      const server = http.createServer();
+      let server = http.createServer();
       const port = await onWsServerReady(server);
-      const wss = await createWebSocketServer(server);
+      let wss = await createWebSocketServer(server);
 
-      const clients: WebSocketClientTransport[] = [];
+      const transports: (WebSocketClientTransport | WebSocketServerTransport)[] = [];
       return {
         simulatePhantomDisconnect() {
-          for (const serverConn of wss.clients) {
-            serverConn.removeAllListeners('message');
-          }
-
-          for (const client of clients) {
-            for (const conn of client.connections.values()) {
+          for (const transport of transports) {
+            for (const conn of transport.connections.values()) {
               conn.ws.removeAllListeners('message');
             }
           }
@@ -56,11 +53,23 @@ export const transports: Array<{
             'SERVER',
             opts,
           );
-          clients.push(clientTransport);
+          transports.push(clientTransport);
           return clientTransport;
         },
-        getServerTransport: () =>
-          new WebSocketServerTransport(wss, 'SERVER', opts),
+        getServerTransport: () => {
+          const serverTransport = new WebSocketServerTransport(wss, 'SERVER', opts)
+          transports.push(serverTransport)
+          return serverTransport
+        },
+        async restartServer() {
+          wss.close()
+          server.close()
+          server = http.createServer();
+          await new Promise<void>(resolve => {
+            server.listen(port, resolve);
+          })
+          wss = await createWebSocketServer(server);
+        },
         cleanup: async () => {
           wss.close();
           server.close();
@@ -72,7 +81,7 @@ export const transports: Array<{
     name: 'unix sockets',
     setup: async (opts) => {
       const socketPath = getUnixSocketPath();
-      const server = net.createServer();
+      let server = net.createServer();
       await onUdsServeReady(server, socketPath);
 
       const transports: (
@@ -105,6 +114,11 @@ export const transports: Array<{
           );
           transports.push(serverTransport);
           return serverTransport;
+        },
+        async restartServer() {
+          server.close()
+          server = net.createServer()
+          await onUdsServeReady(server, socketPath);
         },
         cleanup: async () => {
           server.close();

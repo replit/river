@@ -15,7 +15,7 @@ import { PartialTransportMessage } from './message';
 import { HEARTBEATS_TILL_DEAD, HEARTBEAT_INTERVAL_MS } from './session';
 
 describe.each(testMatrix())(
-  'transport behaviour tests ($transport.name transport, $codec.name codec)',
+  'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
     const { getClientTransport, getServerTransport, cleanup } =
@@ -265,8 +265,41 @@ describe.each(testMatrix())(
 );
 
 describe.each(testMatrix())(
-  'transport-agnostic behaviour tests ($transport.name transport, $codec.name codec)',
+  'transport connection edge cases ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
+    test('restarts the world in case of server crash', async () => {
+      const opts = { codec: codec.codec };
+      const {
+        getClientTransport,
+        getServerTransport,
+        restartServer,
+        cleanup,
+      } = await transport.setup(opts);
+      
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const msg1 = createDummyTransportMessage();
+      const msg2 = createDummyTransportMessage();
+
+      const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+      await expect(
+        waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
+      ).resolves.toStrictEqual(msg1.payload);
+
+      await restartServer()
+
+      // by this point the client should have reconnected
+      const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
+      await expect(
+        waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
+      ).resolves.toStrictEqual(msg2.payload);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      }).finally(cleanup);
+    })
+
     test('recovers from phantom disconnects', async () => {
       const opts = { codec: codec.codec };
       const {
@@ -358,9 +391,7 @@ describe.each(testMatrix())(
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
-      }).finally(() => {
-        cleanup();
-      });
+      }).finally(cleanup);
     });
   },
 );
