@@ -112,6 +112,8 @@ export class MockTransport extends Transport<Connection> {
     return true;
   }
 
+  protected handleConnection(_conn: Connection, _to: string): void {}
+
   async createNewOutgoingConnection(): Promise<Connection> {
     throw new Error('unimplemented');
   }

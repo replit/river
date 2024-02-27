@@ -510,15 +510,8 @@ export abstract class ClientTransport<
 
   /**
    * Abstract method that creates a new {@link Connection} object.
-   * This should call {@link onConnect} when the connection is established
-   * and {@link onDisconnect} when the connection is closed.
-   *
-   * The downstream implementation needs to implement this. If the downstream
-   * transport cannot make new outgoing connections (e.g. a server transport),
-   * it is ok to log an error and return.
-   *
-   * You should never need to call this directly.
-   * Instead, look for a `reopen` method on the transport.
+   * This should call {@link handleConnection} when the connection is created.
+   * The downstream client implementation needs to implement this.
    *
    * @param to The client ID of the node to connect to.
    * @returns The new connection object.
