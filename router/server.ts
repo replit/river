@@ -105,7 +105,7 @@ class RiverServer<Services extends ServiceDefs> {
     await this.pushToStream(procStream, message, isInitMessage);
   };
 
-  // cleanup streams on unexpected disconnections
+  // cleanup streams on session close
   onSessionStatus = async (evt: EventMap['sessionStatus']) => {
     if (evt.status !== 'disconnect') {
       return;
@@ -254,13 +254,12 @@ class RiverServer<Services extends ServiceDefs> {
         }
       })();
     } else if (procedure.type === 'upload') {
-      inputHandler = (async () => {
-        if (procHasInitMessage) {
+      if (procHasInitMessage) {
+        inputHandler = (async () => {
           const initMessage = await incoming.next();
           if (initMessage.done) {
             return;
           }
-
           try {
             const outputMessage = await procedure.handler(
               serviceContext,
@@ -274,7 +273,9 @@ class RiverServer<Services extends ServiceDefs> {
           } catch (err) {
             errorHandler(err);
           }
-        } else {
+        })();
+      } else {
+        inputHandler = (async () => {
           try {
             const outputMessage = await procedure.handler(
               serviceContext,
@@ -287,8 +288,8 @@ class RiverServer<Services extends ServiceDefs> {
           } catch (err) {
             errorHandler(err);
           }
-        }
-      })();
+        })();
+      }
     } else {
       // procedure is inferred to be never here as this is not a valid procedure type
       // we cast just to log

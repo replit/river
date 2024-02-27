@@ -14,17 +14,37 @@ import { EventDispatcher, EventHandler, EventTypes } from './events';
 import { Connection, DISCONNECT_GRACE_MS, Session } from './session';
 import { NaiveJsonCodec } from '../codec';
 
+/**
+ * Represents the possible states of a transport.
+ *
+ * @typedef {('open' | 'closed' | 'destroyed')} TransportStatus
+ * @property {'open'} open - The transport is open and operational (note that this doesn't mean it is actively connected)
+ * @property {'closed'} closed - The transport is closed and not operational, but can be reopened.
+ * @property {'destroyed'} destroyed - The transport is permanently destroyed and cannot be reopened.
+ */
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
 export interface TransportOptions {
   retryIntervalMs: number;
+  retryJitterMs: number;
   retryAttemptsMax: number;
   codec: Codec;
 }
 
+/**
+ * The default maximum jitter for exponential backoff.
+ */
+export const DEFAULT_WS_JITTER_MAX_MS = 500;
+
+/**
+ * The default retry interval for reconnecting to a transport.
+ * The actual interval is an exponent backoff calculated as follows:
+ * ms = retryIntervalMs * (2 ** attempt) + jitter
+ */
 export const DEFAULT_WS_RETRY_INTERVAL_MS = 250;
 export const defaultTransportOptions: TransportOptions = {
   retryIntervalMs: DEFAULT_WS_RETRY_INTERVAL_MS,
+  retryJitterMs: DEFAULT_WS_JITTER_MAX_MS,
   retryAttemptsMax: 5,
   codec: NaiveJsonCodec,
 };
@@ -167,6 +187,9 @@ export abstract class Transport<ConnType extends Connection> {
     try {
       const conn = await reconnectPromise;
       if (this.state !== 'open') {
+        // we only delete on open here as this allows us to cache successful
+        // connection requests so that subsequent connect calls can reuse it until
+        // it we know for sure that it is unhealthy
         this.inflightConnectionPromises.delete(to);
         conn.close();
         return;
@@ -181,8 +204,9 @@ export abstract class Transport<ConnType extends Connection> {
           `${this.clientId} -- connection to ${to} failed after ${attempt} attempts (${err}), giving up`,
         );
       } else {
-        // linear backoff
-        const backoffMs = this.options.retryIntervalMs * attempt;
+        // exponential backoff + jitter
+        const jitter = Math.floor(Math.random() * this.options.retryJitterMs);
+        const backoffMs = this.options.retryIntervalMs * 2 ** attempt + jitter;
         log?.warn(
           `${this.clientId} -- connection to ${to} failed (${err}), trying again in ${backoffMs}ms`,
         );
@@ -427,6 +451,9 @@ export abstract class Transport<ConnType extends Connection> {
 
     let session = this.sessions.get(msg.to);
     if (!session) {
+      // this case happens on the client as .send()
+      // can be called without a session existing so we
+      // must create the session here
       session = this.createSession(msg.to, undefined);
       log?.info(
         `${this.clientId} -- no session for ${msg.to}, created a new one (id: ${session.debugId})`,

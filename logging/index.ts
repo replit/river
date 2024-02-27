@@ -50,6 +50,10 @@ export function bindLogger(write: (msg: string) => void, color?: boolean) {
   };
 }
 
+/**
+ * Unbinds the logger so subsequent logs do not call
+ * the write callback previously provided to {@link bindLogger}
+ */
 export function unbindLogger() {
   log = undefined;
 }
