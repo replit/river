@@ -69,8 +69,16 @@ export const transports: Array<{
           return serverTransport;
         },
         async restartServer() {
-          wss.close();
-          server.close();
+          for (const transport of transports) {
+            if (transport.clientId !== 'SERVER') continue;
+            for (const conn of transport.connections.values()) {
+              conn.ws.terminate();
+            }
+          }
+
+          await new Promise<void>((resolve) => {
+            server.close(() => resolve());
+          });
           server = http.createServer();
           await new Promise<void>((resolve) => {
             server.listen(port, resolve);
@@ -123,7 +131,16 @@ export const transports: Array<{
           return serverTransport;
         },
         async restartServer() {
-          server.close();
+          for (const transport of transports) {
+            if (transport.clientId !== 'SERVER') continue;
+            for (const conn of transport.connections.values()) {
+              conn.sock.destroy();
+            }
+          }
+
+          await new Promise<void>((resolve) => {
+            server.close(() => resolve());
+          });
           server = net.createServer();
           await onUdsServeReady(server, socketPath);
         },

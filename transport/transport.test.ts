@@ -267,29 +267,94 @@ describe.each(testMatrix())(
 describe.each(testMatrix())(
   'transport connection edge cases ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
-    test('restarts the world in case of server crash', async () => {
+    test('messages should not be resent when reconnecting to a new server', async () => {
       const opts = { codec: codec.codec };
       const { getClientTransport, getServerTransport, restartServer, cleanup } =
         await transport.setup(opts);
 
       const clientTransport = getClientTransport('client');
-      const serverTransport = getServerTransport();
-      const msg1 = createDummyTransportMessage();
-      const msg2 = createDummyTransportMessage();
+      let serverTransport = getServerTransport();
 
+      const clientConnStart = vi.fn();
+      const clientConnStop = vi.fn();
+      const clientConnHandler = (evt: EventMap['connectionStatus']) => {
+        if (evt.status === 'connect') return clientConnStart();
+        if (evt.status === 'disconnect') return clientConnStop();
+      };
+
+      const clientSessStart = vi.fn();
+      const clientSessStop = vi.fn();
+      const clientSessHandler = (evt: EventMap['sessionStatus']) => {
+        if (evt.status === 'connect') return clientSessStart();
+        if (evt.status === 'disconnect') return clientSessStop();
+      };
+      clientTransport.addEventListener('connectionStatus', clientConnHandler);
+      clientTransport.addEventListener('sessionStatus', clientSessHandler);
+
+      const msg1 = createDummyTransportMessage();
       const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
 
+      expect(clientConnStart).toHaveBeenCalledTimes(1);
+      expect(clientSessStart).toHaveBeenCalledTimes(1);
+      expect(clientConnStop).toHaveBeenCalledTimes(0);
+      expect(clientSessStop).toHaveBeenCalledTimes(0);
+
+      // bring client side connections down and stop trying to reconnect
+      clientTransport.tryReconnecting = false;
+      clientTransport.connections.forEach((conn) => conn.close());
+
+      // buffer some messages
+      clientTransport.send(
+        serverTransport.clientId,
+        createDummyTransportMessage(),
+      );
+      clientTransport.send(
+        serverTransport.clientId,
+        createDummyTransportMessage(),
+      );
+
+      await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(0));
+
+      // kill old server and make a new transport with the new server
       await restartServer();
+      serverTransport = getServerTransport();
+      expect(serverTransport.sessions.size).toBe(0);
 
-      // by this point the client should have reconnected
-      const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
+      // eagerly reconnect client
+      clientTransport.tryReconnecting = true;
+      clientTransport.connect('SERVER');
+
+      await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(1));
+
+      // when we reconnect, send another message
+      const msg4 = createDummyTransportMessage();
+      const msg4Id = clientTransport.send(serverTransport.clientId, msg4);
       await expect(
-        waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
-      ).resolves.toStrictEqual(msg2.payload);
+        // ensure that when the server gets it, it's not msg2 or msg3
+        // true indicates to reject any other messages
+        waitForMessage(serverTransport, (recv) => recv.id === msg4Id, true),
+      ).resolves.toStrictEqual(msg4.payload);
 
+      expect(clientConnStart).toHaveBeenCalledTimes(2);
+      expect(clientSessStart).toHaveBeenCalledTimes(2);
+      expect(clientConnStop).toHaveBeenCalledTimes(1);
+      expect(clientSessStop).toHaveBeenCalledTimes(1);
+
+      // teardown
+      clientTransport.removeEventListener(
+        'connectionStatus',
+        clientConnHandler,
+      );
+      clientTransport.removeEventListener('sessionStatus', clientSessHandler);
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,

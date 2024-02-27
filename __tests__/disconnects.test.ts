@@ -52,8 +52,8 @@ describe.each(testMatrix())(
         }),
       );
 
-      waitFor(() => expect(clientTransport.connections.size).toEqual(0));
-      waitFor(() => expect(serverTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
       return testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -94,8 +94,8 @@ describe.each(testMatrix())(
         }),
       );
 
-      waitFor(() => expect(clientTransport.connections.size).toEqual(0));
-      waitFor(() => expect(serverTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
       return testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -170,9 +170,9 @@ describe.each(testMatrix())(
       expect(result.payload).toStrictEqual({ result: 3 });
 
       // at this point, only client1 is connected
-      waitFor(() => expect(client1Transport.connections.size).toEqual(1));
-      waitFor(() => expect(client2Transport.connections.size).toEqual(0));
-      waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(client1Transport.connections.size).toEqual(1));
+      await waitFor(() => expect(client2Transport.connections.size).toEqual(0));
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
 
       // cleanup client1 (client2 is already disconnected)
       close1();
@@ -216,8 +216,8 @@ describe.each(testMatrix())(
         }),
       );
 
-      waitFor(() => expect(clientTransport.connections.size).toEqual(0));
-      waitFor(() => expect(serverTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
       return testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,

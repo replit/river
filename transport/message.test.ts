@@ -65,8 +65,8 @@ describe('message helpers', () => {
   });
 
   test('bootResponseMessage', () => {
-    const mSuccess = bootResponseMessage('a', 'b', true);
-    const mFail = bootResponseMessage('a', 'b', false);
+    const mSuccess = bootResponseMessage('a', '001', 'b', true);
+    const mFail = bootResponseMessage('a', '001', 'b', false);
 
     expect(mSuccess.from).toBe('a');
     expect(mSuccess.to).toBe('b');
