@@ -26,6 +26,7 @@ import { WebSocketServerTransport } from '../transport/impls/ws/server';
 import { testFinishesCleanly } from './fixtures/cleanup';
 import { buildServiceDefs } from '../router/defs';
 
+// TODO test matrix this over transports
 describe.each(codecs)(
   'client <-> server integration test ($name codec)',
   async ({ codec }) => {

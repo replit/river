@@ -3,7 +3,6 @@ import { Transform, TransformCallback, TransformOptions } from 'node:stream';
 export interface LengthEncodedOptions extends TransformOptions {
   /** Maximum in-memory buffer size before we throw */
   maxBufferSizeBytes: number;
-  preAllocatedBufferSize: number;
 }
 
 /**
@@ -14,14 +13,10 @@ export class Uint32LengthPrefixFraming extends Transform {
   receivedBuffer: Buffer;
   maxBufferSizeBytes: number;
 
-  constructor({
-    preAllocatedBufferSize,
-    maxBufferSizeBytes,
-    ...options
-  }: LengthEncodedOptions) {
+  constructor({ maxBufferSizeBytes, ...options }: LengthEncodedOptions) {
     super(options);
     this.maxBufferSizeBytes = maxBufferSizeBytes;
-    this.receivedBuffer = Buffer.alloc(preAllocatedBufferSize);
+    this.receivedBuffer = Buffer.alloc(0);
   }
 
   _transform(chunk: Buffer, _encoding: BufferEncoding, cb: TransformCallback) {
@@ -77,7 +72,6 @@ export class Uint32LengthPrefixFraming extends Transform {
 function createLengthEncodedStream(options?: Partial<LengthEncodedOptions>) {
   return new Uint32LengthPrefixFraming({
     maxBufferSizeBytes: options?.maxBufferSizeBytes ?? 16 * 1024 * 1024, // 16MB
-    preAllocatedBufferSize: options?.preAllocatedBufferSize ?? 16 * 1024, // 16KB
   });
 }
 

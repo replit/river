@@ -3,7 +3,7 @@ import { UnixDomainSocketClientTransport } from './client';
 import { UnixDomainSocketServerTransport } from './server';
 import {
   getUnixSocketPath,
-  onUnixSocketServeReady,
+  onUdsServeReady,
   payloadToTransportMessage,
   waitForMessage,
 } from '../../../util/testHelpers';
@@ -15,7 +15,7 @@ import net from 'node:net';
 describe('sending and receiving across unix sockets works', async () => {
   const socketPath = getUnixSocketPath();
   const server = net.createServer();
-  await onUnixSocketServeReady(server, socketPath);
+  await onUdsServeReady(server, socketPath);
 
   afterAll(async () => {
     server.close();

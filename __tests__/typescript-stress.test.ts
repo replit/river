@@ -1,10 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { Procedure, ServiceBuilder, serializeService } from '../router/builder';
 import { Type } from '@sinclair/typebox';
-import { MessageId, OpaqueTransportMessage } from '../transport/message';
+import { OpaqueTransportMessage } from '../transport/message';
 import { createServer } from '../router/server';
-import { Connection, Transport } from '../transport/transport';
-import { NaiveJsonCodec } from '../codec/json';
+import { Transport, Connection } from '../transport';
 import { createClient } from '../router/client';
 import { Ok } from '../router/result';
 import { buildServiceDefs } from '../router/defs';
@@ -99,15 +98,17 @@ export const StupidlyLargeService = <Name extends string>(name: Name) =>
 // mock transport
 export class MockTransport extends Transport<Connection> {
   constructor(clientId: string) {
-    super(NaiveJsonCodec, clientId);
+    super(clientId);
   }
 
-  send(msg: OpaqueTransportMessage): MessageId {
-    const id = msg.id;
-    return id;
+  send(_msg: OpaqueTransportMessage): boolean {
+    return true;
   }
 
-  async createNewConnection() {}
+  async createNewOutgoingConnection(): Promise<Connection> {
+    throw new Error('unimplemented');
+  }
+
   async close() {}
 }
 

@@ -1,18 +1,10 @@
-import { Codec, NaiveJsonCodec } from '../../../codec';
 import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
-import { Transport } from '../../transport';
+import { Transport, TransportOptions } from '../../transport';
 import { WebSocketServer } from 'ws';
 import { WebSocket } from 'isomorphic-ws';
 import { WebSocketConnection } from './connection';
-
-interface Options {
-  codec: Codec;
-}
-
-const defaultOptions: Options = {
-  codec: NaiveJsonCodec,
-};
+import { Session } from '../../session';
 
 export class WebSocketServerTransport extends Transport<WebSocketConnection> {
   wss: WebSocketServer;
@@ -20,53 +12,55 @@ export class WebSocketServerTransport extends Transport<WebSocketConnection> {
   constructor(
     wss: WebSocketServer,
     clientId: TransportClientId,
-    providedOptions?: Partial<Options>,
+    providedOptions?: Partial<TransportOptions>,
   ) {
-    const options = { ...defaultOptions, ...providedOptions };
-    super(options.codec, clientId);
+    super(clientId, providedOptions);
     this.wss = wss;
-    wss.on('listening', () => {
-      log?.info(`${this.clientId} -- server is listening`);
-    });
-
     this.wss.on('connection', this.connectionHandler);
   }
 
   connectionHandler = (ws: WebSocket) => {
-    let conn: WebSocketConnection | undefined = undefined;
-
-    ws.onmessage = (msg) => {
-      // when we establish WebSocketConnection, ws.onmessage
-      // gets overriden so this only runs on the first valid message
-      // the websocket receives
-      const parsedMsg = this.parseMsg(msg.data as Uint8Array);
-      if (parsedMsg && !conn) {
-        conn = new WebSocketConnection(this, parsedMsg.from, ws);
-        this.onConnect(conn);
-        this.handleMsg(parsedMsg);
+    const conn = new WebSocketConnection(ws);
+    log?.info(
+      `${this.clientId} -- new incoming ws connection (id: ${conn.debugId})`,
+    );
+    let session: Session<WebSocketConnection> | undefined = undefined;
+    const client = () => session?.connectedTo ?? 'unknown';
+    conn.addDataListener((data) => {
+      const parsed = this.parseMsg(data);
+      if (!parsed) return;
+      if (!session) {
+        session = this.onConnect(conn, parsed.from);
       }
-    };
+
+      this.handleMsg(parsed);
+    });
 
     // close is always emitted, even on error, ok to do cleanup here
     ws.onclose = () => {
-      if (conn) {
-        this.onDisconnect(conn);
-      }
+      if (!session) return;
+      log?.info(
+        `${this.clientId} -- websocket (id: ${
+          conn.debugId
+        }) to ${client()} disconnected`,
+      );
+      this.onDisconnect(conn, session?.connectedTo);
     };
 
     ws.onerror = (msg) => {
+      if (!session) return;
       log?.warn(
-        `${this.clientId} -- ws error from client ${
-          conn?.connectedTo ?? 'unknown'
-        }: ${msg}`,
+        `${this.clientId} -- websocket (id: ${
+          conn.debugId
+        }) to ${client()} got an error: ${msg}`,
       );
     };
   };
 
-  async createNewConnection(to: string) {
+  async createNewOutgoingConnection(to: string): Promise<WebSocketConnection> {
     const err = `${this.clientId} -- failed to send msg to ${to}, client probably dropped`;
     log?.warn(err);
-    return;
+    throw new Error(err);
   }
 
   async close() {

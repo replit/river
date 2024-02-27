@@ -1,11 +1,16 @@
 import { OpaqueTransportMessage } from './message';
-import { Connection } from './transport';
+import { Connection, Session } from './session';
 
+type ConnectionStatus = 'connect' | 'disconnect';
 export interface EventMap {
   message: OpaqueTransportMessage;
   connectionStatus: {
-    status: 'connect' | 'disconnect';
+    status: ConnectionStatus;
     conn: Connection;
+  };
+  sessionStatus: {
+    status: ConnectionStatus;
+    session: Session<Connection>;
   };
 }
 

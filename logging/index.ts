@@ -16,7 +16,7 @@ export type Logger = {
  * The global River logger instance.
  */
 export let log: Logger | undefined;
-const defaultLoggingLevel: LoggingLevel = 'warn';
+const defaultLoggingLevel: LoggingLevel = 'info';
 
 /**
  * Binds the given write function to River's logger {@link log}.
@@ -48,6 +48,14 @@ export function bindLogger(write: (msg: string) => void, color?: boolean) {
       write(`[river:${error}] ${msg}`),
     minLevel: log?.minLevel ?? defaultLoggingLevel,
   };
+}
+
+/**
+ * Unbinds the logger so subsequent logs do not call
+ * the write callback previously provided to {@link bindLogger}
+ */
+export function unbindLogger() {
+  log = undefined;
 }
 
 /**

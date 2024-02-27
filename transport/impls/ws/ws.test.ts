@@ -123,7 +123,9 @@ describe('reconnect', async () => {
     await expect(msg1Promise).resolves.toStrictEqual(msg1.payload);
 
     // unclean disconnect
-    clientTransport.connections.forEach((conn) => conn.ws.terminate());
+    clientTransport.sessions.forEach(
+      (session) => session.connection?.ws.terminate(),
+    );
     const msg2Promise = waitForMessage(
       serverTransport,
       (recv) => recv.id === msg2.id,

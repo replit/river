@@ -1,4 +1,4 @@
-import { afterAll, assert, describe, expect, test } from 'vitest';
+import { afterAll, assert, describe, expect, test, vi } from 'vitest';
 import http from 'node:http';
 import {
   createWebSocketServer,
@@ -13,12 +13,14 @@ import {
 } from './fixtures/services';
 import { createClient, createServer } from '../router';
 import {
-  ensureServerIsClean,
   ensureTransportQueuesAreEventuallyEmpty,
+  testFinishesCleanly,
   waitFor,
+  waitForTransportToFinish,
 } from './fixtures/cleanup';
 import { buildServiceDefs } from '../router/defs';
 
+// TODO matrix this with all the transports
 describe('procedures should leave no trace after finishing', async () => {
   const httpServer = http.createServer();
   const port = await onWsServerReady(httpServer);
@@ -47,16 +49,19 @@ describe('procedures should leave no trace after finishing', async () => {
     expect(serverTransport.connections.size).toEqual(1);
 
     // should be back to 0 connections after client closes
-    clientTransport.close();
-    expect(clientTransport.connections.size).toEqual(0);
-    await waitFor(() =>
-      expect(
-        serverTransport.connections.size,
-        'server should cleanup connection after client closes',
-      ).toEqual(0),
-    );
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    clientTransport.tryReconnecting = false;
+    await clientTransport.close();
+
+    await waitForTransportToFinish(clientTransport);
     await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
     await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+      server,
+    });
   });
 
   test('closing a transport from the server cleans up connection on the client', async () => {
@@ -76,16 +81,18 @@ describe('procedures should leave no trace after finishing', async () => {
     expect(serverTransport.connections.size).toEqual(1);
 
     // should be back to 0 connections after client closes
-    serverTransport.close();
-    expect(serverTransport.connections.size).toEqual(0);
-    await waitFor(() =>
-      expect(
-        clientTransport.connections.size,
-        'client should cleanup connection after server closes',
-      ).toEqual(0),
-    );
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    clientTransport.tryReconnecting = false;
+    await serverTransport.close();
+
+    await waitForTransportToFinish(serverTransport);
     await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
     await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+      server,
+    });
   });
 
   test('rpc', async () => {
@@ -116,9 +123,11 @@ describe('procedures should leave no trace after finishing', async () => {
     expect(clientTransport.connections.size).toEqual(1);
     await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
     await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
-
-    // ensure we have no streams left on the server
-    await ensureServerIsClean(server);
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+      server,
+    });
   });
 
   test('stream', async () => {
@@ -170,9 +179,11 @@ describe('procedures should leave no trace after finishing', async () => {
     expect(clientTransport.connections.size).toEqual(1);
     await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
     await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
-
-    // ensure we have no streams left on the server
-    await ensureServerIsClean(server);
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+      server,
+    });
   });
 
   test('subscription', async () => {
@@ -212,9 +223,11 @@ describe('procedures should leave no trace after finishing', async () => {
     expect(clientTransport.connections.size).toEqual(1);
     await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
     await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
-
-    // ensure we have no streams left on the server
-    await ensureServerIsClean(server);
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+      server,
+    });
   });
 
   test('upload', async () => {
@@ -252,8 +265,10 @@ describe('procedures should leave no trace after finishing', async () => {
     expect(clientTransport.connections.size).toEqual(1);
     await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
     await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
-
-    // ensure we have no streams left on the server
-    await ensureServerIsClean(server);
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+      server,
+    });
   });
 });
