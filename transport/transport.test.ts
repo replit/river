@@ -12,9 +12,10 @@ import {
 } from '../__tests__/fixtures/cleanup';
 import { testMatrix } from '../__tests__/fixtures/matrix';
 import { PartialTransportMessage } from './message';
+import { HEARTBEATS_TILL_DEAD, HEARTBEAT_INTERVAL_MS } from './session';
 
 describe.each(testMatrix())(
-  'transport-agnostic behaviour tests ($transport.name transport, $codec.name codec)',
+  'transport behaviour tests ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
     const { getClientTransport, getServerTransport, cleanup } =
@@ -127,12 +128,8 @@ describe.each(testMatrix())(
       // connection >  c--x   | (disconnected)
       await waitFor(() => expect(clientConnConnect).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(serverConnConnect).toHaveBeenCalledTimes(1));
-      await waitFor(() =>
-        expect(clientConnDisconnect).toHaveBeenCalledTimes(1),
-      );
-      await waitFor(() =>
-        expect(serverConnDisconnect).toHaveBeenCalledTimes(1),
-      );
+      await waitFor(() => expect(clientConnDisconnect).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(serverConnDisconnect).toHaveBeenCalledTimes(1));
 
       await waitFor(() => expect(clientSessConnect).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(serverSessConnect).toHaveBeenCalledTimes(1));
@@ -190,10 +187,12 @@ describe.each(testMatrix())(
         'connectionStatus',
         clientConnHandler,
       );
+      clientTransport.removeEventListener('sessionStatus', clientSessHandler);
       serverTransport.removeEventListener(
         'connectionStatus',
         serverConnHandler,
       );
+      serverTransport.removeEventListener('sessionStatus', serverSessHandler);
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -272,6 +271,115 @@ describe.each(testMatrix())(
       await testFinishesCleanly({
         clientTransports: [client1Transport, client2Transport],
         serverTransport,
+      });
+    });
+  },
+);
+
+describe.each(testMatrix())(
+  'transport-agnostic behaviour tests ($transport.name transport, $codec.name codec)',
+  async ({ transport, codec }) => {
+    test('recovers from phantom disconnects', async () => {
+      const opts = { codec: codec.codec };
+      const {
+        getClientTransport,
+        getServerTransport,
+        simulatePhantomDisconnect,
+        cleanup,
+      } = await transport.setup(opts);
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const msg1 = createDummyTransportMessage();
+
+      const clientConnConnect = vi.fn();
+      const clientConnDisconnect = vi.fn();
+      const clientConnHandler = (evt: EventMap['connectionStatus']) => {
+        if (evt.status === 'connect') return clientConnConnect();
+        if (evt.status === 'disconnect') return clientConnDisconnect();
+      };
+
+      const clientSessConnect = vi.fn();
+      const clientSessDisconnect = vi.fn();
+      const clientSessHandler = (evt: EventMap['sessionStatus']) => {
+        if (evt.status === 'connect') return clientSessConnect();
+        if (evt.status === 'disconnect') return clientSessDisconnect();
+      };
+
+      const serverConnConnect = vi.fn();
+      const serverConnDisconnect = vi.fn();
+      const serverConnHandler = (evt: EventMap['connectionStatus']) => {
+        if (evt.status === 'connect') return serverConnConnect();
+        if (evt.status === 'disconnect') return serverConnDisconnect();
+      };
+
+      const serverSessConnect = vi.fn();
+      const serverSessDisconnect = vi.fn();
+      const serverSessHandler = (evt: EventMap['sessionStatus']) => {
+        if (evt.status === 'connect') return serverSessConnect();
+        if (evt.status === 'disconnect') return serverSessDisconnect();
+      };
+
+      clientTransport.addEventListener('connectionStatus', clientConnHandler);
+      clientTransport.addEventListener('sessionStatus', clientSessHandler);
+      serverTransport.addEventListener('connectionStatus', serverConnHandler);
+      serverTransport.addEventListener('sessionStatus', serverSessHandler);
+
+      const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+      await expect(
+        waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
+      ).resolves.toStrictEqual(msg1.payload);
+
+      expect(clientConnConnect).toHaveBeenCalledTimes(1);
+      expect(serverConnConnect).toHaveBeenCalledTimes(1);
+      expect(clientConnDisconnect).toHaveBeenCalledTimes(0);
+      expect(serverConnDisconnect).toHaveBeenCalledTimes(0);
+      expect(clientSessConnect).toHaveBeenCalledTimes(1);
+      expect(serverSessConnect).toHaveBeenCalledTimes(1);
+      expect(clientSessDisconnect).toHaveBeenCalledTimes(0);
+      expect(serverSessDisconnect).toHaveBeenCalledTimes(0);
+
+      // now, let's wait until the connection is considered dead
+      simulatePhantomDisconnect();
+      await vi.runOnlyPendingTimersAsync();
+      for (let i = 0; i < HEARTBEATS_TILL_DEAD; i++) {
+        await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS + 1);
+      }
+
+      await waitFor(() => expect(clientConnConnect).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(serverConnConnect).toHaveBeenCalledTimes(2));
+      await waitFor(() =>
+        expect(clientConnDisconnect).toHaveBeenCalledTimes(1),
+      );
+      await waitFor(() =>
+        expect(serverConnDisconnect).toHaveBeenCalledTimes(1),
+      );
+
+      await waitFor(() => expect(clientSessConnect).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(serverSessConnect).toHaveBeenCalledTimes(1));
+      await waitFor(() =>
+        expect(clientSessDisconnect).toHaveBeenCalledTimes(0),
+      );
+      await waitFor(() =>
+        expect(serverSessDisconnect).toHaveBeenCalledTimes(0),
+      );
+
+      // teardown
+      clientTransport.removeEventListener(
+        'connectionStatus',
+        clientConnHandler,
+      );
+      clientTransport.removeEventListener('sessionStatus', clientSessHandler);
+      serverTransport.removeEventListener(
+        'connectionStatus',
+        serverConnHandler,
+      );
+      serverTransport.removeEventListener('sessionStatus', serverSessHandler);
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      }).finally(() => {
+        cleanup();
       });
     });
   },

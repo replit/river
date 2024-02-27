@@ -13,6 +13,7 @@ type TestMatrixEntry = {
   transport: {
     name: string;
     setup: (opts?: Partial<TransportOptions>) => Promise<{
+      simulatePhantomDisconnect: () => void;
       getClientTransport: (
         id: TransportClientId,
       ) => ClientTransport<Connection>;

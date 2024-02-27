@@ -25,6 +25,7 @@ export const transports: Array<{
   setup: (opts?: Partial<TransportOptions>) => Promise<{
     getClientTransport: (id: TransportClientId) => ClientTransport<Connection>;
     getServerTransport: () => ServerTransport<Connection>;
+    simulatePhantomDisconnect: () => void;
     cleanup: () => Promise<void>;
   }>;
 }> = [
@@ -34,21 +35,36 @@ export const transports: Array<{
       const server = http.createServer();
       const port = await onWsServerReady(server);
       const wss = await createWebSocketServer(server);
-      const cleanup = async () => {
-        wss.close();
-        server.close();
-      };
+
+      const clients: WebSocketClientTransport[] = [];
       return {
-        getClientTransport: (id) =>
-          new WebSocketClientTransport(
+        simulatePhantomDisconnect() {
+          for (const serverConn of wss.clients) {
+            serverConn.removeAllListeners('message');
+          }
+
+          for (const client of clients) {
+            for (const conn of client.connections.values()) {
+              conn.ws.removeAllListeners('message');
+            }
+          }
+        },
+        getClientTransport: (id) => {
+          const clientTransport = new WebSocketClientTransport(
             () => createLocalWebSocketClient(port),
             id,
             'SERVER',
             opts,
-          ),
+          );
+          clients.push(clientTransport);
+          return clientTransport;
+        },
         getServerTransport: () =>
           new WebSocketServerTransport(wss, 'SERVER', opts),
-        cleanup,
+        cleanup: async () => {
+          wss.close();
+          server.close();
+        },
       };
     },
   },
@@ -58,11 +74,38 @@ export const transports: Array<{
       const socketPath = getUnixSocketPath();
       const server = net.createServer();
       await onUdsServeReady(server, socketPath);
+
+      const transports: (
+        | UnixDomainSocketClientTransport
+        | UnixDomainSocketServerTransport
+      )[] = [];
       return {
-        getClientTransport: (id) =>
-          new UnixDomainSocketClientTransport(socketPath, id, 'SERVER', opts),
-        getServerTransport: () =>
-          new UnixDomainSocketServerTransport(server, 'SERVER', opts),
+        simulatePhantomDisconnect() {
+          for (const transport of transports) {
+            for (const conn of transport.connections.values()) {
+              conn.sock.pause();
+            }
+          }
+        },
+        getClientTransport: (id) => {
+          const clientTransport = new UnixDomainSocketClientTransport(
+            socketPath,
+            id,
+            'SERVER',
+            opts,
+          );
+          transports.push(clientTransport);
+          return clientTransport;
+        },
+        getServerTransport: () => {
+          const serverTransport = new UnixDomainSocketServerTransport(
+            server,
+            'SERVER',
+            opts,
+          );
+          transports.push(serverTransport);
+          return serverTransport;
+        },
         cleanup: async () => {
           server.close();
         },
