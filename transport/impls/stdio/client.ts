@@ -36,14 +36,7 @@ export class StdioClientTransport extends ClientTransport<StreamConnection> {
   async createNewOutgoingConnection(to: TransportClientId) {
     log?.info(`${this.clientId} -- establishing a new stream to ${to}`);
     const conn = new StreamConnection(this.input, this.output);
-    conn.addDataListener(this.receiveWithBootSequence(conn));
-    const cleanup = () => {
-      this.onDisconnect(conn, to);
-      this.connect(to);
-    };
-
-    this.input.addListener('close', cleanup);
-    this.output.addListener('close', cleanup);
+    this.handleConnection(conn, to);
     return conn;
   }
 }

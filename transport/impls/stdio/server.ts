@@ -1,6 +1,4 @@
-import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
-import { Session } from '../../session';
 import { ServerTransport, TransportOptions } from '../../transport';
 import { StreamConnection } from './connection';
 
@@ -28,38 +26,7 @@ export class StdioServerTransport extends ServerTransport<StreamConnection> {
     super(clientId, providedOptions);
     this.input = input;
     this.output = output;
-
-    let session: Session<StreamConnection> | undefined = undefined;
-    const receiver = () => session?.connectedTo ?? 'unknown';
-
     const conn = new StreamConnection(this.input, this.output);
-    conn.addDataListener(
-      this.receiveWithBootSequence(conn, (establishedSession) => {
-        session = establishedSession;
-      }),
-    );
-
-    const cleanup = (session: Session<StreamConnection>) =>
-      this.onDisconnect(conn, session.connectedTo);
-
-    this.input.on('close', () => {
-      if (!session) return;
-      log?.info(
-        `${this.clientId} -- stream conn (id: ${
-          conn.debugId
-        }) to ${receiver()} disconnected`,
-      );
-      cleanup(session);
-    });
-
-    this.input.on('error', (err) => {
-      if (!session) return;
-      log?.warn(
-        `${this.clientId} -- error in stream connection (id: ${
-          conn.debugId
-        }) to ${receiver()}: ${err}`,
-      );
-      cleanup(session);
-    });
+    this.handleConnection(conn);
   }
 }

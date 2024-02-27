@@ -20,7 +20,7 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
     this.connect(serverId);
   }
 
-  async createNewOutgoingConnection(to: string) {
+  async createNewOutgoingConnection(to: TransportClientId) {
     const oldConnection = this.connections.get(to);
     if (oldConnection) {
       oldConnection.close();
@@ -35,19 +35,7 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
     });
 
     const conn = new UdsConnection(sock);
-    conn.addDataListener(this.receiveWithBootSequence(conn));
-    const cleanup = () => {
-      this.onDisconnect(conn, to);
-      this.connect(to);
-    };
-
-    sock.on('close', cleanup);
-    sock.on('error', (err) => {
-      log?.warn(
-        `${this.clientId} -- socket error in connection (id: ${conn.debugId}) to ${to}: ${err}`,
-      );
-    });
-
+    this.handleConnection(conn, to);
     return conn;
   }
 }

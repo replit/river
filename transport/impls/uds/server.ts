@@ -1,4 +1,3 @@
-import { Session } from '../../session';
 import { log } from '../../../logging';
 import { type Server, type Socket } from 'node:net';
 import { ServerTransport, TransportOptions } from '../../transport';
@@ -22,36 +21,11 @@ export class UnixDomainSocketServerTransport extends ServerTransport<UdsConnecti
   }
 
   connectionHandler = (sock: Socket) => {
-    let session: Session<UdsConnection> | undefined = undefined;
     const conn = new UdsConnection(sock);
+    this.handleConnection(conn);
     log?.info(
       `${this.clientId} -- new incoming uds connection (id: ${conn.debugId})`,
     );
-
-    const client = () => session?.connectedTo ?? 'unknown';
-    conn.addDataListener(
-      this.receiveWithBootSequence(conn, (establishedSession) => {
-        session = establishedSession;
-      }),
-    );
-
-    sock.on('close', () => {
-      if (!session) return;
-      log?.info(
-        `${this.clientId} -- uds (id: ${
-          conn.debugId
-        }) to ${client()} disconnected`,
-      );
-      this.onDisconnect(conn, session?.connectedTo);
-    });
-
-    sock.on('error', (err) => {
-      log?.warn(
-        `${this.clientId} -- uds (id: ${
-          conn.debugId
-        }) to ${client()} got an error: ${err}`,
-      );
-    });
   };
 
   async close() {

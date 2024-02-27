@@ -22,8 +22,6 @@ import { nanoid } from 'nanoid';
 
 /**
  * Represents the possible states of a transport.
- *
- * @typedef {('open' | 'closed' | 'destroyed')} TransportStatus
  * @property {'open'} open - The transport is open and operational (note that this doesn't mean it is actively connected)
  * @property {'closed'} closed - The transport is closed and not operational, but can be reopened.
  * @property {'destroyed'} destroyed - The transport is permanently destroyed and cannot be reopened.
@@ -169,6 +167,20 @@ export abstract class Transport<ConnType extends Connection> {
       `${this.clientId} -- closing old inner connection (id: ${conn.debugId}) from session (id: ${session.debugId}) to ${session.connectedTo}`,
     );
   }
+
+  /**
+   * This is called immediately after a new connection is established and we
+   * may or may not know the identity of the connected client.
+   *
+   * Calls addDataListener, addCloseListener, and addErrorListener on the connection
+   * with the appropriate handlers.
+   *
+   * This method is implemented by {@link ClientTransport} and {@link ServerTransport}.
+   */
+  protected abstract handleConnection(
+    conn: ConnType,
+    to: TransportClientId,
+  ): void;
 
   /**
    * Called when a new connection is established
@@ -482,6 +494,20 @@ export abstract class ClientTransport<
     this.inflightConnectionPromises = new Map();
   }
 
+  protected handleConnection(conn: ConnType, to: TransportClientId): void {
+    conn.addDataListener(this.receiveWithBootSequence(conn));
+    conn.addCloseListener(() => {
+      this.onDisconnect(conn, to);
+      this.connect(to);
+    });
+
+    conn.addErrorListener((err) => {
+      log?.warn(
+        `${this.clientId} -- error in connection (id: ${conn.debugId}) to ${to}: ${err.message}`,
+      );
+    });
+  }
+
   /**
    * Abstract method that creates a new {@link Connection} object.
    * This should call {@link onConnect} when the connection is established
@@ -608,6 +634,35 @@ export abstract class ClientTransport<
 export abstract class ServerTransport<
   ConnType extends Connection,
 > extends Transport<ConnType> {
+  protected handleConnection(conn: ConnType) {
+    let session: Session<ConnType> | undefined = undefined;
+    const client = () => session?.connectedTo ?? 'unknown';
+    conn.addDataListener(
+      this.receiveWithBootSequence(conn, (establishedSession) => {
+        session = establishedSession;
+      }),
+    );
+
+    conn.addCloseListener(() => {
+      if (!session) return;
+      log?.info(
+        `${this.clientId} -- connection (id: ${
+          conn.debugId
+        }) to ${client()} disconnected`,
+      );
+      this.onDisconnect(conn, session?.connectedTo);
+    });
+
+    conn.addErrorListener((err) => {
+      if (!session) return;
+      log?.warn(
+        `${this.clientId} -- connection (id: ${
+          conn.debugId
+        }) to ${client()} got an error: ${err}`,
+      );
+    });
+  }
+
   receiveWithBootSequence(
     conn: ConnType,
     sessionCb?: (sess: Session<ConnType>) => void,
