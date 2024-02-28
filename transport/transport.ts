@@ -579,43 +579,37 @@ export abstract class ClientTransport<
     conn: ConnType,
     sessionCb?: (sess: Session<ConnType>) => void,
   ) {
-    let firstMessage: boolean = true;
-    let session: Session<ConnType> | undefined = undefined;
-    return (data: Uint8Array) => {
+    const bootHandler = (data: Uint8Array) => {
       const parsed = this.parseMsg(data);
       if (!parsed) return;
 
-      if (firstMessage) {
-        if (
-          !Value.Check(ControlMessageHandshakeResponseSchema, parsed.payload)
-        ) {
-          log?.warn(
-            `${
-              this.clientId
-            } -- received invalid handshake resp: ${JSON.stringify(parsed)}`,
-          );
-          return;
-        }
-
-        if (!parsed.payload.status.ok) {
-          log?.warn(
-            `${
-              this.clientId
-            } -- received failed handshake resp: ${JSON.stringify(parsed)}`,
-          );
-          return;
-        }
-
-        // everything is ok
-        if (session) return;
-        firstMessage = false;
-        session = this.onConnect(conn, parsed.from);
-        sessionCb?.(session);
+      if (!Value.Check(ControlMessageHandshakeResponseSchema, parsed.payload)) {
+        log?.warn(
+          `${
+            this.clientId
+          } -- received invalid handshake resp: ${JSON.stringify(parsed)}`,
+        );
         return;
       }
 
-      this.handleMsg(parsed);
+      if (!parsed.payload.status.ok) {
+        log?.warn(
+          `${this.clientId} -- received failed handshake resp: ${JSON.stringify(
+            parsed,
+          )}`,
+        );
+        return;
+      }
+
+      // everything is ok
+      // connect the session
+      const session = this.onConnect(conn, parsed.from);
+      sessionCb?.(session);
+      conn.removeDataListener(bootHandler);
+      conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
     };
+
+    return bootHandler;
   }
 
   onDisconnect(conn: ConnType, connectedTo: string | undefined): void {
@@ -660,49 +654,42 @@ export abstract class ServerTransport<
     conn: ConnType,
     sessionCb?: (sess: Session<ConnType>) => void,
   ) {
-    let session: Session<ConnType> | undefined = undefined;
-    let firstMessage: boolean = true;
-    return (data: Uint8Array) => {
+    const bootHandler = (data: Uint8Array) => {
       const parsed = this.parseMsg(data);
       if (!parsed) return;
 
-      if (firstMessage) {
-        // double check protocol version here
-        if (
-          !Value.Check(ControlMessageHandshakeRequestSchema, parsed.payload)
-        ) {
-          const responseMsg = reply(parsed, {
-            type: 'HANDSHAKE_RESP',
-            status: {
-              ok: false,
-              reason: 'VERSION_MISMATCH',
-            },
-          } satisfies Static<typeof ControlMessageHandshakeResponseSchema>);
-          conn.send(this.codec.toBuffer(responseMsg));
-          log?.warn(
-            `${
-              this.clientId
-            } -- received invalid handshake msg: ${JSON.stringify(parsed)}`,
-          );
-          return;
-        }
-
+      // double check protocol version here
+      if (!Value.Check(ControlMessageHandshakeRequestSchema, parsed.payload)) {
         const responseMsg = reply(parsed, {
           type: 'HANDSHAKE_RESP',
           status: {
-            ok: true,
+            ok: false,
+            reason: 'VERSION_MISMATCH',
           },
         } satisfies Static<typeof ControlMessageHandshakeResponseSchema>);
         conn.send(this.codec.toBuffer(responseMsg));
-
-        if (session) return;
-        firstMessage = false;
-        session = this.onConnect(conn, parsed.from);
-        sessionCb?.(session);
+        log?.warn(
+          `${this.clientId} -- received invalid handshake msg: ${JSON.stringify(
+            parsed,
+          )}`,
+        );
         return;
       }
 
-      this.handleMsg(parsed);
+      const responseMsg = reply(parsed, {
+        type: 'HANDSHAKE_RESP',
+        status: {
+          ok: true,
+        },
+      } satisfies Static<typeof ControlMessageHandshakeResponseSchema>);
+      conn.send(this.codec.toBuffer(responseMsg));
+
+      const session = this.onConnect(conn, parsed.from);
+      sessionCb?.(session);
+      conn.removeDataListener(bootHandler);
+      conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
     };
+
+    return bootHandler;
   }
 }

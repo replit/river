@@ -20,6 +20,10 @@ export class StreamConnection extends Connection {
     this.input.on('data', cb);
   }
 
+  removeDataListener(cb: (msg: Uint8Array) => void): void {
+    this.input.off('data', cb);
+  }
+
   addCloseListener(cb: () => void): void {
     this.input.on('close', cb);
     this.output.on('close', cb);

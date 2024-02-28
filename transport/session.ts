@@ -25,6 +25,7 @@ export abstract class Connection {
    * @param msg The message that was received.
    */
   abstract addDataListener(cb: (msg: Uint8Array) => void): void;
+  abstract removeDataListener(cb: (msg: Uint8Array) => void): void;
 
   /**
    * Handle adding a callback for when the connection is closed.
