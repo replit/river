@@ -171,6 +171,15 @@ export class Session<ConnType extends Connection> {
     );
   }
 
+  /**
+   * Sends a message over the session's connection.
+   * If the connection is not ready or the message fails to send, the message can be buffered for retry unless skipped.
+   *
+   * @param msg The partial message to be sent, which will be constructed into a full message.
+   * @param skipRetry Optional. If true, the message will not be buffered for retry on failure. This should only be used for
+   * ack hearbeats, which contain information that can already be found in the other buffered messages.
+   * @returns The full transport ID of the message that was attempted to be sent.
+   */
   send(msg: PartialTransportMessage, skipRetry?: boolean): string {
     const fullMsg: TransportMessage = this.constructMsg(msg);
     log?.debug(`${this.from} -- sending ${JSON.stringify(fullMsg)}`);

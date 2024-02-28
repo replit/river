@@ -35,6 +35,14 @@ export class StreamConnection extends Connection {
   }
 
   send(payload: Uint8Array) {
+    // many of our tests are structured in a way that is roughly
+    // 1. const msg = {...}
+    // 2. const msgId = clientTransport.send(serverTransport.clientId, msg)
+    // 3. await waitForMessage(serverTransport, (msg) => msg.id === msgId)
+    //
+    // however, because we pipe two streams into each other, the stream transport
+    // actually receives the message before we even attach the listener in L3.
+    // we use setImmediate() here to schedule it for the next check phase of the event loop
     setImmediate(() => this.output.write(MessageFramer.write(payload)));
     return true;
   }
