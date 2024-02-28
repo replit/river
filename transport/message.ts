@@ -129,7 +129,7 @@ export function bootRequestMessage(
     seq: 0,
     ack: 0,
     streamId: nanoid(),
-    controlFlags: ControlFlags.StreamOpenBit | ControlFlags.HandshakeBit,
+    controlFlags: 0,
     payload: {
       type: 'HANDSHAKE_REQ',
       protocolVersion: PROTOCOL_VERSION,
@@ -149,7 +149,7 @@ export function bootResponseMessage(
     seq: 0,
     ack: 0,
     streamId: nanoid(),
-    controlFlags: ControlFlags.StreamOpenBit | ControlFlags.HandshakeBit,
+    controlFlags: 0,
     payload: (ok
       ? {
           type: 'HANDSHAKE_RESP',
@@ -203,16 +203,5 @@ export function isStreamClose(controlFlag: number): boolean {
   return (
     (controlFlag & ControlFlags.StreamClosedBit) ===
     ControlFlags.StreamClosedBit
-  );
-}
-
-/**
- * Checks if the given control flag (usually found in msg.controlFlag) is a handshake request.
- * @param controlFlag - The control flag to check.
- * @returns True if the control flag contains the HandshakeBit, false otherwise.
- */
-export function isHandshakeRequest(controlFlag: number): boolean {
-  return (
-    (controlFlag & ControlFlags.HandshakeBit) === ControlFlags.HandshakeBit
   );
 }

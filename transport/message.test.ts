@@ -4,7 +4,6 @@ import {
   bootRequestMessage,
   bootResponseMessage,
   isAck,
-  isHandshakeRequest,
   isStreamClose,
   isStreamOpen,
 } from './message';
@@ -63,7 +62,6 @@ describe('message helpers', () => {
 
     expect(m.from).toBe('a');
     expect(m.to).toBe('b');
-    expect(isHandshakeRequest(m.controlFlags)).toBe(true);
   });
 
   test('bootResponseMessage', () => {
@@ -72,12 +70,10 @@ describe('message helpers', () => {
 
     expect(mSuccess.from).toBe('a');
     expect(mSuccess.to).toBe('b');
-    expect(isHandshakeRequest(mSuccess.controlFlags)).toBe(true);
     expect(mSuccess.payload.status.ok).toBe(true);
 
     expect(mFail.from).toBe('a');
     expect(mFail.to).toBe('b');
-    expect(isHandshakeRequest(mFail.controlFlags)).toBe(true);
     expect(mFail.payload.status.ok).toBe(false);
   });
 
