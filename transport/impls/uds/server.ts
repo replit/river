@@ -1,11 +1,10 @@
-import { Session } from '../../session';
 import { log } from '../../../logging';
 import { type Server, type Socket } from 'node:net';
-import { Transport, TransportOptions } from '../../transport';
+import { ServerTransport, TransportOptions } from '../../transport';
 import { TransportClientId } from '../../message';
 import { UdsConnection } from './connection';
 
-export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
+export class UnixDomainSocketServerTransport extends ServerTransport<UdsConnection> {
   server: Server;
 
   constructor(
@@ -22,47 +21,12 @@ export class UnixDomainSocketServerTransport extends Transport<UdsConnection> {
   }
 
   connectionHandler = (sock: Socket) => {
-    let session: Session<UdsConnection> | undefined = undefined;
     const conn = new UdsConnection(sock);
+    this.handleConnection(conn);
     log?.info(
       `${this.clientId} -- new incoming uds connection (id: ${conn.debugId})`,
     );
-
-    const client = () => session?.connectedTo ?? 'unknown';
-    conn.addDataListener((data) => {
-      const parsed = this.parseMsg(data);
-      if (!parsed) return;
-      if (!session) {
-        session = this.onConnect(conn, parsed.from);
-      }
-
-      this.handleMsg(parsed);
-    });
-
-    sock.on('close', () => {
-      if (!session) return;
-      log?.info(
-        `${this.clientId} -- uds (id: ${
-          conn.debugId
-        }) to ${client()} disconnected`,
-      );
-      this.onDisconnect(conn, session?.connectedTo);
-    });
-
-    sock.on('error', (err) => {
-      log?.warn(
-        `${this.clientId} -- uds (id: ${
-          conn.debugId
-        }) to ${client()} got an error: ${err}`,
-      );
-    });
   };
-
-  async createNewOutgoingConnection(to: string): Promise<UdsConnection> {
-    const err = `${this.clientId} -- failed to send msg to ${to}, client probably dropped`;
-    log?.warn(err);
-    throw new Error(err);
-  }
 
   async close() {
     super.close();

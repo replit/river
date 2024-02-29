@@ -25,6 +25,27 @@ export abstract class Connection {
    * @param msg The message that was received.
    */
   abstract addDataListener(cb: (msg: Uint8Array) => void): void;
+  abstract removeDataListener(cb: (msg: Uint8Array) => void): void;
+
+  /**
+   * Handle adding a callback for when the connection is closed.
+   * This should also be called if an error happens.
+   * @param cb The callback to call when the connection is closed.
+   */
+  abstract addCloseListener(cb: () => void): void;
+
+  /**
+   * Handle adding a callback for when an error is received.
+   * This should only be used for logging errors, all cleanup
+   * should be delegated to addCloseListener.
+   *
+   * The implementer should take care such that the implemented
+   * connection will call both the close and error callbacks
+   * on an error.
+   *
+   * @param cb The callback to call when an error is received.
+   */
+  abstract addErrorListener(cb: (err: Error) => void): void;
 
   /**
    * Sends a message over the connection.

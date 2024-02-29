@@ -4,20 +4,24 @@ import {
   ControlFlags,
   OpaqueTransportMessage,
   OpaqueTransportMessageSchema,
-  TransportAckSchema,
+  ControlMessageAckSchema,
   TransportClientId,
   isAck,
   reply,
+  ControlMessageHandshakeRequestSchema,
+  ControlMessageHandshakeResponseSchema,
+  msg,
+  PROTOCOL_VERSION,
 } from './message';
 import { log } from '../logging';
 import { EventDispatcher, EventHandler, EventTypes } from './events';
 import { Connection, DISCONNECT_GRACE_MS, Session } from './session';
 import { NaiveJsonCodec } from '../codec';
+import { Static } from '@sinclair/typebox';
+import { nanoid } from 'nanoid';
 
 /**
  * Represents the possible states of a transport.
- *
- * @typedef {('open' | 'closed' | 'destroyed')} TransportStatus
  * @property {'open'} open - The transport is open and operational (note that this doesn't mean it is actively connected)
  * @property {'closed'} closed - The transport is closed and not operational, but can be reopened.
  * @property {'destroyed'} destroyed - The transport is permanently destroyed and cannot be reopened.
@@ -116,13 +120,6 @@ export abstract class Transport<ConnType extends Connection> {
    * The event dispatcher for handling events of type EventTypes.
    */
   eventDispatcher: EventDispatcher<EventTypes>;
-
-  /**
-   * The map of reconnect promises for each client ID.
-   */
-  inflightConnectionPromises: Map<TransportClientId, Promise<ConnType>>;
-  tryReconnecting: boolean = true;
-
   /**
    * The options for this transport.
    */
@@ -144,75 +141,6 @@ export abstract class Transport<ConnType extends Connection> {
     this.codec = this.options.codec;
     this.clientId = clientId;
     this.state = 'open';
-    this.inflightConnectionPromises = new Map();
-  }
-
-  /**
-   * Abstract method that creates a new {@link Connection} object.
-   * This should call {@link onConnect} when the connection is established
-   * and {@link onDisconnect} when the connection is closed.
-   *
-   * The downstream implementation needs to implement this. If the downstream
-   * transport cannot make new outgoing connections (e.g. a server transport),
-   * it is ok to log an error and return.
-   *
-   * You should never need to call this directly.
-   * Instead, look for a `reopen` method on the transport.
-   *
-   * @param to The client ID of the node to connect to.
-   * @returns The new connection object.
-   */
-  protected abstract createNewOutgoingConnection(
-    to: TransportClientId,
-  ): Promise<ConnType>;
-
-  /**
-   * Manually attempts to connect to a client.
-   * @param to The client ID of the node to connect to.
-   */
-  async connect(to: TransportClientId, attempt = 0) {
-    if (this.state !== 'open' || !this.tryReconnecting) {
-      log?.info(
-        `${this.clientId} -- transport state is no longer open, not attempting connection`,
-      );
-      return;
-    }
-
-    let reconnectPromise = this.inflightConnectionPromises.get(to);
-    if (!reconnectPromise) {
-      reconnectPromise = this.createNewOutgoingConnection(to);
-      this.inflightConnectionPromises.set(to, reconnectPromise);
-    }
-
-    try {
-      const conn = await reconnectPromise;
-      if (this.state !== 'open') {
-        // we only delete on open here as this allows us to cache successful
-        // connection requests so that subsequent connect calls can reuse it until
-        // it we know for sure that it is unhealthy
-        this.inflightConnectionPromises.delete(to);
-        conn.close();
-        return;
-      }
-
-      this.state = 'open';
-    } catch (err: unknown) {
-      // retry on failure
-      this.inflightConnectionPromises.delete(to);
-      if (attempt >= this.options.retryAttemptsMax) {
-        throw new Error(
-          `${this.clientId} -- connection to ${to} failed after ${attempt} attempts (${err}), giving up`,
-        );
-      } else {
-        // exponential backoff + jitter
-        const jitter = Math.floor(Math.random() * this.options.retryJitterMs);
-        const backoffMs = this.options.retryIntervalMs * 2 ** attempt + jitter;
-        log?.warn(
-          `${this.clientId} -- connection to ${to} failed (${err}), trying again in ${backoffMs}ms`,
-        );
-        setTimeout(() => this.connect(to, attempt + 1), backoffMs);
-      }
-    }
   }
 
   private sessionByClientId(clientId: TransportClientId): Session<ConnType> {
@@ -241,11 +169,27 @@ export abstract class Transport<ConnType extends Connection> {
   }
 
   /**
-   * The downstream implementation needs to call this when a new connection is established
+   * This is called immediately after a new connection is established and we
+   * may or may not know the identity of the connected client.
+   * It should attach all the necessary listeners to the connection for lifecycle
+   * events (i.e. data, close, error)
+   *
+   * This method is implemented by {@link ClientTransport} and {@link ServerTransport}.
+   */
+  protected abstract handleConnection(
+    conn: ConnType,
+    to: TransportClientId,
+  ): void;
+
+  /**
+   * Called when a new connection is established
    * and we know the identity of the connected client.
    * @param conn The connection object.
    */
-  onConnect(conn: ConnType, connectedTo: TransportClientId): Session<ConnType> {
+  protected onConnect(
+    conn: ConnType,
+    connectedTo: TransportClientId,
+  ): Session<ConnType> {
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'connect',
       conn,
@@ -308,7 +252,6 @@ export abstract class Transport<ConnType extends Connection> {
    * @param conn The connection object.
    */
   onDisconnect(conn: ConnType, connectedTo: TransportClientId | undefined) {
-    if (connectedTo) this.inflightConnectionPromises.delete(connectedTo);
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'disconnect',
       conn,
@@ -373,7 +316,7 @@ export abstract class Transport<ConnType extends Connection> {
    * You generally shouldn't need to override this in downstream transport implementations.
    * @param msg The received message.
    */
-  protected handleMsg(msg: OpaqueTransportMessage | null) {
+  handleMsg(msg: OpaqueTransportMessage | null) {
     if (!msg) {
       return;
     }
@@ -382,7 +325,10 @@ export abstract class Transport<ConnType extends Connection> {
     const session = this.sessionByClientId(msg.from);
     session.cancelGrace();
 
-    if (isAck(msg.controlFlags) && Value.Check(TransportAckSchema, msg)) {
+    if (
+      isAck(msg.controlFlags) &&
+      Value.Check(ControlMessageAckSchema, msg.payload)
+    ) {
       // process ack
       log?.debug(`${this.clientId} -- received ack: ${JSON.stringify(msg)}`);
       if (session.sendBuffer.has(msg.payload.ack)) {
@@ -394,7 +340,10 @@ export abstract class Transport<ConnType extends Connection> {
       this.eventDispatcher.dispatchEvent('message', msg);
 
       if (!isAck(msg.controlFlags)) {
-        const ackMsg = reply(msg, { ack: msg.id });
+        const ackMsg = reply(msg, {
+          type: 'ACK',
+          ack: msg.id,
+        } satisfies Static<typeof ControlMessageAckSchema>);
         ackMsg.controlFlags = ControlFlags.AckBit;
         ackMsg.from = this.clientId;
 
@@ -513,5 +462,234 @@ export abstract class Transport<ConnType extends Connection> {
 
     this.state = 'destroyed';
     log?.info(`${this.clientId} -- manually destroyed transport`);
+  }
+}
+
+export abstract class ClientTransport<
+  ConnType extends Connection,
+> extends Transport<ConnType> {
+  /**
+   * The map of reconnect promises for each client ID.
+   */
+  inflightConnectionPromises: Map<TransportClientId, Promise<ConnType>>;
+  tryReconnecting: boolean = true;
+
+  constructor(
+    clientId: TransportClientId,
+    providedOptions?: Partial<TransportOptions>,
+  ) {
+    super(clientId, providedOptions);
+    this.inflightConnectionPromises = new Map();
+  }
+
+  protected handleConnection(conn: ConnType, to: TransportClientId): void {
+    const bootHandler = this.receiveWithBootSequence(conn, () => {
+      // when we are done booting,
+      // remove boot listener and use the normal message listener
+      conn.removeDataListener(bootHandler);
+      conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
+    });
+
+    conn.addDataListener(bootHandler);
+    conn.addCloseListener(() => {
+      this.onDisconnect(conn, to);
+      this.connect(to);
+    });
+
+    conn.addErrorListener((err) => {
+      log?.warn(
+        `${this.clientId} -- error in connection (id: ${conn.debugId}) to ${to}: ${err.message}`,
+      );
+    });
+  }
+
+  /**
+   * Abstract method that creates a new {@link Connection} object.
+   * This should call {@link handleConnection} when the connection is created.
+   * The downstream client implementation needs to implement this.
+   *
+   * @param to The client ID of the node to connect to.
+   * @returns The new connection object.
+   */
+  protected abstract createNewOutgoingConnection(
+    to: TransportClientId,
+  ): Promise<ConnType>;
+
+  /**
+   * Manually attempts to connect to a client.
+   * @param to The client ID of the node to connect to.
+   */
+  async connect(to: TransportClientId, attempt = 0) {
+    if (this.state !== 'open' || !this.tryReconnecting) {
+      log?.info(
+        `${this.clientId} -- transport state is no longer open, not attempting connection`,
+      );
+      return;
+    }
+
+    let reconnectPromise = this.inflightConnectionPromises.get(to);
+    if (!reconnectPromise) {
+      reconnectPromise = this.createNewOutgoingConnection(to);
+      this.inflightConnectionPromises.set(to, reconnectPromise);
+    }
+
+    try {
+      const conn = await reconnectPromise;
+      if (this.state !== 'open') {
+        // we only delete on open here as this allows us to cache successful
+        // connection requests so that subsequent connect calls can reuse it until
+        // it we know for sure that it is unhealthy
+        this.inflightConnectionPromises.delete(to);
+        conn.close();
+        return;
+      }
+
+      // send boot sequence
+      this.state = 'open';
+      const responseMsg = msg(this.clientId, to, nanoid(), {
+        type: 'HANDSHAKE_REQ',
+        protocolVersion: PROTOCOL_VERSION,
+      } satisfies Static<typeof ControlMessageHandshakeRequestSchema>);
+      conn.send(this.codec.toBuffer(responseMsg));
+    } catch (error: unknown) {
+      const errStr = error instanceof Error ? error.message : `${error}`;
+
+      // retry on failure
+      this.inflightConnectionPromises.delete(to);
+      if (attempt >= this.options.retryAttemptsMax) {
+        const errMsg = `connection to ${to} failed after ${attempt} attempts (${errStr}), giving up`;
+        log?.error(`${this.clientId} -- ${errMsg}`);
+        throw new Error(errMsg);
+      } else {
+        // exponential backoff + jitter
+        const jitter = Math.floor(Math.random() * this.options.retryJitterMs);
+        const backoffMs = this.options.retryIntervalMs * 2 ** attempt + jitter;
+        log?.warn(
+          `${this.clientId} -- connection to ${to} failed (${errStr}), trying again in ${backoffMs}ms`,
+        );
+        setTimeout(() => this.connect(to, attempt + 1), backoffMs);
+      }
+    }
+  }
+
+  receiveWithBootSequence(
+    conn: ConnType,
+    sessionCb: (sess: Session<ConnType>) => void,
+  ) {
+    const bootHandler = (data: Uint8Array) => {
+      const parsed = this.parseMsg(data);
+      if (!parsed) return;
+
+      if (!Value.Check(ControlMessageHandshakeResponseSchema, parsed.payload)) {
+        log?.warn(
+          `${
+            this.clientId
+          } -- received invalid handshake resp: ${JSON.stringify(parsed)}`,
+        );
+        return;
+      }
+
+      if (!parsed.payload.status.ok) {
+        log?.warn(
+          `${this.clientId} -- received failed handshake resp: ${JSON.stringify(
+            parsed,
+          )}`,
+        );
+        return;
+      }
+
+      // everything is ok
+      // connect the session
+      sessionCb(this.onConnect(conn, parsed.from));
+    };
+
+    return bootHandler;
+  }
+
+  onDisconnect(conn: ConnType, connectedTo: string | undefined): void {
+    if (connectedTo) this.inflightConnectionPromises.delete(connectedTo);
+    super.onDisconnect(conn, connectedTo);
+  }
+}
+
+export abstract class ServerTransport<
+  ConnType extends Connection,
+> extends Transport<ConnType> {
+  protected handleConnection(conn: ConnType) {
+    let session: Session<ConnType> | undefined = undefined;
+    const client = () => session?.connectedTo ?? 'unknown';
+
+    const bootHandler = this.receiveWithBootSequence(
+      conn,
+      (establishedSession) => {
+        session = establishedSession;
+
+        // when we are done booting,
+        // remove boot listener and use the normal message listener
+        conn.removeDataListener(bootHandler);
+        conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
+      },
+    );
+
+    conn.addDataListener(bootHandler);
+    conn.addCloseListener(() => {
+      if (!session) return;
+      log?.info(
+        `${this.clientId} -- connection (id: ${
+          conn.debugId
+        }) to ${client()} disconnected`,
+      );
+      this.onDisconnect(conn, session.connectedTo);
+    });
+
+    conn.addErrorListener((err) => {
+      if (!session) return;
+      log?.warn(
+        `${this.clientId} -- connection (id: ${
+          conn.debugId
+        }) to ${client()} got an error: ${err}`,
+      );
+    });
+  }
+
+  receiveWithBootSequence(
+    conn: ConnType,
+    sessionCb: (sess: Session<ConnType>) => void,
+  ) {
+    const bootHandler = (data: Uint8Array) => {
+      const parsed = this.parseMsg(data);
+      if (!parsed) return;
+
+      // double check protocol version here
+      if (!Value.Check(ControlMessageHandshakeRequestSchema, parsed.payload)) {
+        const responseMsg = reply(parsed, {
+          type: 'HANDSHAKE_RESP',
+          status: {
+            ok: false,
+            reason: 'VERSION_MISMATCH',
+          },
+        } satisfies Static<typeof ControlMessageHandshakeResponseSchema>);
+        conn.send(this.codec.toBuffer(responseMsg));
+        log?.warn(
+          `${this.clientId} -- received invalid handshake msg: ${JSON.stringify(
+            parsed,
+          )}`,
+        );
+        return;
+      }
+
+      const responseMsg = reply(parsed, {
+        type: 'HANDSHAKE_RESP',
+        status: {
+          ok: true,
+        },
+      } satisfies Static<typeof ControlMessageHandshakeResponseSchema>);
+      conn.send(this.codec.toBuffer(responseMsg));
+
+      // we have the session
+      sessionCb(this.onConnect(conn, parsed.from));
+    };
+
+    return bootHandler;
   }
 }

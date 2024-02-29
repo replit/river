@@ -1,5 +1,5 @@
 import WebSocket from 'isomorphic-ws';
-import { Transport, TransportOptions } from '../../transport';
+import { ClientTransport, TransportOptions } from '../../transport';
 import { TransportClientId } from '../../message';
 import { log } from '../../../logging';
 import { WebSocketConnection } from './connection';
@@ -11,7 +11,7 @@ type WebSocketResult = { ws: WebSocket } | { err: string };
  * @class
  * @extends Transport
  */
-export class WebSocketClientTransport extends Transport<WebSocketConnection> {
+export class WebSocketClientTransport extends ClientTransport<WebSocketConnection> {
   /**
    * A function that returns a Promise that resolves to a WebSocket instance.
    */
@@ -34,7 +34,6 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
     super(sessionId, providedOptions);
     this.wsGetter = wsGetter;
     this.serverId = serverId;
-    this.inflightConnectionPromises = new Map();
 
     // eagerly connect as soon as we initialize
     this.connect(this.serverId);
@@ -86,22 +85,7 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
       log?.info(
         `${this.clientId} -- websocket (id: ${conn.debugId}) to ${to} ok`,
       );
-      this.onConnect(conn, to);
-      conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
-      wsRes.ws.onclose = () => {
-        log?.info(
-          `${this.clientId} -- websocket (id: ${conn.debugId}) to ${to} disconnected`,
-        );
-        this.onDisconnect(conn, to);
-        this.connect(to);
-      };
-
-      wsRes.ws.onerror = (msg) => {
-        log?.warn(
-          `${this.clientId} -- websocket (id: ${conn.debugId}) to ${to} had an error: ${msg}`,
-        );
-      };
-
+      this.handleConnection(conn, to);
       return conn;
     } else {
       throw new Error(wsRes.err);
@@ -110,11 +94,9 @@ export class WebSocketClientTransport extends Transport<WebSocketConnection> {
 
   async close() {
     super.close();
-    this.inflightConnectionPromises.clear();
   }
 
   async destroy() {
     super.destroy();
-    this.inflightConnectionPromises.clear();
   }
 }

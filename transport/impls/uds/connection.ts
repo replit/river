@@ -21,6 +21,18 @@ export class UdsConnection extends Connection {
     this.input.on('data', cb);
   }
 
+  removeDataListener(cb: (msg: Uint8Array) => void): void {
+    this.input.off('data', cb);
+  }
+
+  addCloseListener(cb: () => void): void {
+    this.sock.on('close', cb);
+  }
+
+  addErrorListener(cb: (err: Error) => void): void {
+    this.sock.on('error', cb);
+  }
+
   send(payload: Uint8Array) {
     return this.sock.write(MessageFramer.write(payload));
   }

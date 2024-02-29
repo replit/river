@@ -1,10 +1,10 @@
-import { Transport, TransportClientId } from '../..';
+import { TransportClientId } from '../..';
 import { Socket } from 'node:net';
 import { log } from '../../../logging';
 import { UdsConnection } from './connection';
-import { TransportOptions } from '../../transport';
+import { ClientTransport, TransportOptions } from '../../transport';
 
-export class UnixDomainSocketClientTransport extends Transport<UdsConnection> {
+export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnection> {
   path: string;
   serverId: TransportClientId;
 
@@ -20,7 +20,7 @@ export class UnixDomainSocketClientTransport extends Transport<UdsConnection> {
     this.connect(serverId);
   }
 
-  async createNewOutgoingConnection(to: string) {
+  async createNewOutgoingConnection(to: TransportClientId) {
     const oldConnection = this.connections.get(to);
     if (oldConnection) {
       oldConnection.close();
@@ -35,20 +35,7 @@ export class UnixDomainSocketClientTransport extends Transport<UdsConnection> {
     });
 
     const conn = new UdsConnection(sock);
-    conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
-    const cleanup = () => {
-      this.onDisconnect(conn, to);
-      this.connect(to);
-    };
-
-    sock.on('close', cleanup);
-    sock.on('error', (err) => {
-      log?.warn(
-        `${this.clientId} -- socket error in connection (id: ${conn.debugId}) to ${to}: ${err}`,
-      );
-    });
-
-    this.onConnect(conn, to);
+    this.handleConnection(conn, to);
     return conn;
   }
 }

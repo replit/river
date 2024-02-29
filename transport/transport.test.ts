@@ -107,13 +107,13 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
     // session    >  c--| (connected)
     // connection >  c--| (connected)
     expect(clientConnConnect).toHaveBeenCalledTimes(1);
-    expect(clientConnDisconnect).toHaveBeenCalledTimes(0);
     expect(serverConnConnect).toHaveBeenCalledTimes(1);
+    expect(clientConnDisconnect).toHaveBeenCalledTimes(0);
     expect(serverConnDisconnect).toHaveBeenCalledTimes(0);
 
     expect(clientSessConnect).toHaveBeenCalledTimes(1);
-    expect(clientSessDisconnect).toHaveBeenCalledTimes(0);
     expect(serverSessConnect).toHaveBeenCalledTimes(1);
+    expect(clientSessDisconnect).toHaveBeenCalledTimes(0);
     expect(serverSessDisconnect).toHaveBeenCalledTimes(0);
 
     // clean disconnect + reconnect within grace period
@@ -123,13 +123,13 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
     // session    >  c------| (connected)
     // connection >  c--x   | (disconnected)
     await waitFor(() => expect(clientConnConnect).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(clientConnDisconnect).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(serverConnConnect).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(clientConnDisconnect).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(serverConnDisconnect).toHaveBeenCalledTimes(1));
 
     await waitFor(() => expect(clientSessConnect).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(clientSessDisconnect).toHaveBeenCalledTimes(0));
     await waitFor(() => expect(serverSessConnect).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(clientSessDisconnect).toHaveBeenCalledTimes(0));
     await waitFor(() => expect(serverSessDisconnect).toHaveBeenCalledTimes(0));
 
     const msg2Promise = waitForMessage(
@@ -143,8 +143,8 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
     clientTransport.send(msg2);
     await expect(msg2Promise).resolves.toStrictEqual(msg2.payload);
     expect(clientConnConnect).toHaveBeenCalledTimes(2);
-    expect(clientConnDisconnect).toHaveBeenCalledTimes(1);
     expect(serverConnConnect).toHaveBeenCalledTimes(2);
+    expect(clientConnDisconnect).toHaveBeenCalledTimes(1);
     expect(serverConnDisconnect).toHaveBeenCalledTimes(1);
 
     expect(clientSessConnect).toHaveBeenCalledTimes(1);
@@ -159,14 +159,14 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
     clientTransport.tryReconnecting = false;
     clientTransport.connections.forEach((conn) => conn.close());
     await waitFor(() => expect(clientConnConnect).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(clientConnDisconnect).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(serverConnConnect).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(clientConnDisconnect).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(serverConnDisconnect).toHaveBeenCalledTimes(2));
 
     await advanceFakeTimersByDisconnectGrace();
     await waitFor(() => expect(clientSessConnect).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(clientSessDisconnect).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(serverSessConnect).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(clientSessDisconnect).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(serverSessDisconnect).toHaveBeenCalledTimes(1));
 
     // teardown

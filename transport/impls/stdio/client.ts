@@ -1,6 +1,6 @@
 import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
-import { Transport, TransportOptions } from '../../transport';
+import { ClientTransport, TransportOptions } from '../../transport';
 import { StreamConnection } from './connection';
 
 /**
@@ -8,7 +8,7 @@ import { StreamConnection } from './connection';
  * Will eagerly connect as soon as it's initialized.
  * @extends Transport
  */
-export class StdioClientTransport extends Transport<StreamConnection> {
+export class StdioClientTransport extends ClientTransport<StreamConnection> {
   input: NodeJS.ReadableStream = process.stdin;
   output: NodeJS.WritableStream = process.stdout;
   serverId: TransportClientId;
@@ -36,15 +36,7 @@ export class StdioClientTransport extends Transport<StreamConnection> {
   async createNewOutgoingConnection(to: TransportClientId) {
     log?.info(`${this.clientId} -- establishing a new stream to ${to}`);
     const conn = new StreamConnection(this.input, this.output);
-    conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
-    const cleanup = () => {
-      this.onDisconnect(conn, to);
-      this.connect(to);
-    };
-
-    this.input.addListener('close', cleanup);
-    this.output.addListener('close', cleanup);
-    this.onConnect(conn, to);
+    this.handleConnection(conn, to);
     return conn;
   }
 }

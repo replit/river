@@ -37,15 +37,44 @@ export const TransportMessageSchema = <T extends TSchema>(t: T) =>
  * and is only used internally by the library for tracking inflight messages.
  * @returns The transport message schema.
  */
-export const TransportAckSchema = TransportMessageSchema(
-  Type.Object({
-    ack: Type.String(),
-  }),
-);
+export const ControlMessageAckSchema = Type.Object({
+  type: Type.Literal('ACK'),
+  ack: Type.String(),
+});
 
-export const ControlMessagePayloadSchema = Type.Object({
+/**
+ * Defines the schema for a transport close message. This is never constructed manually and is only
+ * used internally by the library for closing and cleaning up streams.
+ */
+export const ControlMessageCloseSchema = Type.Object({
   type: Type.Literal('CLOSE'),
 });
+
+export const PROTOCOL_VERSION = 'v1';
+export const ControlMessageHandshakeRequestSchema = Type.Object({
+  type: Type.Literal('HANDSHAKE_REQ'),
+  protocolVersion: Type.Literal(PROTOCOL_VERSION),
+});
+
+export const ControlMessageHandshakeResponseSchema = Type.Object({
+  type: Type.Literal('HANDSHAKE_RESP'),
+  status: Type.Union([
+    Type.Object({
+      ok: Type.Literal(true),
+    }),
+    Type.Object({
+      ok: Type.Literal(false),
+      reason: Type.Union([Type.Literal('VERSION_MISMATCH')]),
+    }),
+  ]),
+});
+
+export const ControlMessagePayloadSchema = Type.Union([
+  ControlMessageCloseSchema,
+  ControlMessageAckSchema,
+  ControlMessageHandshakeRequestSchema,
+  ControlMessageHandshakeResponseSchema,
+]);
 
 /**
  * Defines the schema for an opaque transport message that is agnostic to any

@@ -20,11 +20,24 @@ export class StreamConnection extends Connection {
     this.input.on('data', cb);
   }
 
+  removeDataListener(cb: (msg: Uint8Array) => void): void {
+    this.input.off('data', cb);
+  }
+
+  addCloseListener(cb: () => void): void {
+    this.input.on('close', cb);
+    this.output.on('close', cb);
+  }
+
+  addErrorListener(cb: (err: Error) => void): void {
+    this.input.on('error', cb);
+    this.output.on('error', cb);
+  }
+
   send(payload: Uint8Array) {
     return this.output.write(MessageFramer.write(payload));
   }
 
-  // doesn't touch the underlying connection
   async close() {
     this.output.end();
     this.input.unpipe(this.framer);

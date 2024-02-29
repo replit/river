@@ -18,9 +18,7 @@
  * }
  * ```
  */
-export interface ServiceContext {
-  state: object | unknown;
-}
+export interface ServiceContext {}
 
 /**
  * The {@link ServiceContext} with state. This is what is passed to procedures.
