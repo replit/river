@@ -205,11 +205,13 @@ export class Session<ConnType extends Connection> {
   }
 
   sendHeartbeat() {
-    if (this.heartbeatMisses >= HEARTBEATS_TILL_DEAD) {
-      log?.info(
-        `${this.from} -- closing connection to ${this.to} due to inactivity`,
-      );
-      this.halfCloseConnection();
+    if (this.heartbeatMisses >= HEARTBEATS_TILL_DEAD && this.connection) {
+      if (this.connection) {
+        log?.info(
+          `${this.from} -- closing connection (id: ${this.connection.debugId}) to ${this.to} due to inactivity`,
+        );
+        this.halfCloseConnection();
+      }
       return;
     }
 
@@ -261,7 +263,7 @@ export class Session<ConnType extends Connection> {
   addToSendBuff(msg: TransportMessage) {
     this.sendBuffer.push(msg);
     log?.debug(
-      `${this.from} -- send buff to ${this.to} now tracking ${this.sendBuffer.length}`,
+      `${this.from} -- send buff to ${this.to} now tracking ${this.sendBuffer.length} messages`,
     );
   }
 

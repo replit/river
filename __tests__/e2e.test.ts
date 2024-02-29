@@ -1,14 +1,7 @@
 import { afterAll, assert, describe, expect, test } from 'vitest';
-import {
-  createLocalWebSocketClient,
-  createWebSocketServer,
-  createWsTransports,
-  iterNext,
-  onWsServerReady,
-} from '../util/testHelpers';
+import { iterNext } from '../util/testHelpers';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
-import http from 'node:http';
 import {
   BinaryFileServiceConstructor,
   DIV_BY_ZERO,
@@ -20,29 +13,21 @@ import {
   TestServiceConstructor,
 } from './fixtures/services';
 import { UNCAUGHT_ERROR } from '../router/result';
-import { codecs } from '../codec/codec.test';
-import { WebSocketClientTransport } from '../transport/impls/ws/client';
-import { WebSocketServerTransport } from '../transport/impls/ws/server';
 import { testFinishesCleanly } from './fixtures/cleanup';
 import { buildServiceDefs } from '../router/defs';
+import { testMatrix } from './fixtures/matrix';
 
-// TODO test matrix this over transports
-describe.each(codecs)(
-  'client <-> server integration test ($name codec)',
-  async ({ codec }) => {
-    const httpServer = http.createServer();
-    const port = await onWsServerReady(httpServer);
-    const webSocketServer = await createWebSocketServer(httpServer);
-    const getTransports = () =>
-      createWsTransports(port, webSocketServer, codec);
-
-    afterAll(() => {
-      webSocketServer.close();
-      httpServer.close();
-    });
+describe.each(testMatrix())(
+  'client <-> server integration test ($transport.name transport, $codec.name codec)',
+  async ({ transport, codec }) => {
+    const opts = { codec: codec.codec };
+    const { getClientTransport, getServerTransport, cleanup } =
+      await transport.setup(opts);
+    afterAll(cleanup);
 
     test('rpc', async () => {
-      const [clientTransport, serverTransport] = getTransports();
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -58,7 +43,8 @@ describe.each(codecs)(
     });
 
     test('fallible rpc', async () => {
-      const [clientTransport, serverTransport] = getTransports();
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([FallibleServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -83,7 +69,8 @@ describe.each(codecs)(
     });
 
     test('rpc with binary (uint8array)', async () => {
-      const [clientTransport, serverTransport] = getTransports();
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([BinaryFileServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -102,7 +89,8 @@ describe.each(codecs)(
     });
 
     test('stream', async () => {
-      const [clientTransport, serverTransport] = getTransports();
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -139,7 +127,8 @@ describe.each(codecs)(
     });
 
     test('stream with init message', async () => {
-      const [clientTransport, serverTransport] = getTransports();
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -169,7 +158,8 @@ describe.each(codecs)(
     });
 
     test('fallible stream', async () => {
-      const [clientTransport, serverTransport] = getTransports();
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([FallibleServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -202,73 +192,44 @@ describe.each(codecs)(
     });
 
     test('subscription', async () => {
-      const options = { codec };
-      const serverTransport = new WebSocketServerTransport(
-        webSocketServer,
-        'SERVER',
-        options,
-      );
-      const client1Transport = new WebSocketClientTransport(
-        () => createLocalWebSocketClient(port),
-        'client1',
-        'SERVER',
-        options,
-      );
-      const client2Transport = new WebSocketClientTransport(
-        () => createLocalWebSocketClient(port),
-        'client2',
-        'SERVER',
-        options,
-      );
-
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([SubscribableServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
-      const client1 = createClient<typeof server>(client1Transport);
-      const client2 = createClient<typeof server>(client2Transport);
-      const [subscription1, close1] =
-        await client1.subscribable.value.subscribe({});
-      let result = await iterNext(subscription1);
+      const client = createClient<typeof server>(clientTransport);
+
+      const [subscription, close] = await client.subscribable.value.subscribe(
+        {},
+      );
+      let result = await iterNext(subscription);
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 0 });
 
-      const [subscription2, close2] =
-        await client2.subscribable.value.subscribe({});
-      result = await iterNext(subscription2);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 0 });
-
-      const add1 = await client1.subscribable.add.rpc({ n: 1 });
+      const add1 = await client.subscribable.add.rpc({ n: 1 });
       assert(add1.ok);
 
-      result = await iterNext(subscription1);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 1 });
-      result = await iterNext(subscription2);
+      result = await iterNext(subscription);
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 1 });
 
-      const add2 = await client2.subscribable.add.rpc({ n: 3 });
+      const add2 = await client.subscribable.add.rpc({ n: 3 });
       assert(add2.ok);
 
-      result = await iterNext(subscription1);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 4 });
-      result = await iterNext(subscription2);
+      result = await iterNext(subscription);
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 4 });
 
-      close1();
-      close2();
-
+      close();
       await testFinishesCleanly({
-        clientTransports: [client1Transport, client2Transport],
+        clientTransports: [clientTransport],
         serverTransport,
         server,
       });
     });
 
     test('upload', async () => {
-      const [clientTransport, serverTransport] = getTransports();
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([UploadableServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -289,7 +250,8 @@ describe.each(codecs)(
     });
 
     test('upload with init message', async () => {
-      const [clientTransport, serverTransport] = getTransports();
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([UploadableServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -312,7 +274,8 @@ describe.each(codecs)(
     });
 
     test('message order is preserved in the face of disconnects', async () => {
-      const [clientTransport, serverTransport] = getTransports();
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([OrderingServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -321,12 +284,14 @@ describe.each(codecs)(
       for (let i = 0; i < 50; i++) {
         expected.push(i);
 
+        // randomly disconnect at some point
         if (i == 10) {
-          clientTransport.connections.forEach((conn) => conn.ws.close());
+          clientTransport.connections.forEach((conn) => conn.close());
         }
 
+        // again B)
         if (i == 42) {
-          clientTransport.connections.forEach((conn) => conn.ws.terminate());
+          clientTransport.connections.forEach((conn) => conn.close());
         }
 
         await client.test.add.rpc({
@@ -347,7 +312,8 @@ describe.each(codecs)(
 
     const CONCURRENCY = 10;
     test('concurrent rpcs', async () => {
-      const [clientTransport, serverTransport] = getTransports();
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([OrderingServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
@@ -371,7 +337,8 @@ describe.each(codecs)(
     });
 
     test('concurrent streams', async () => {
-      const [clientTransport, serverTransport] = getTransports();
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);

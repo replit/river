@@ -35,8 +35,8 @@ export class StreamConnection extends Connection {
   }
 
   send(payload: Uint8Array) {
-    this.output.write(MessageFramer.write(payload));
-    return true;
+    if (!this.output.writable) return false;
+    return this.output.write(MessageFramer.write(payload));
   }
 
   async close() {

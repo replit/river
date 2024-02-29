@@ -26,11 +26,10 @@ export async function advanceFakeTimersByDisconnectGrace() {
   // advance fake timer so we hit the disconnect grace to end the session
   await vi.runOnlyPendingTimersAsync();
 
-  // wait for heartbeat to propagate
-  await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS + 1);
-
-  // then, disconnect timer
-  await vi.advanceTimersByTimeAsync(SESSION_DISCONNECT_GRACE_MS + 1);
+  // wait for heartbeat + disconnect timer to propagate
+  await vi.advanceTimersByTimeAsync(
+    HEARTBEAT_INTERVAL_MS + SESSION_DISCONNECT_GRACE_MS + 1,
+  );
 }
 
 async function ensureTransportIsClean(t: Transport<Connection>) {
@@ -53,8 +52,14 @@ async function ensureTransportIsClean(t: Transport<Connection>) {
   );
   await waitFor(() =>
     expect(
+      t.eventDispatcher.numberOfListeners('sessionStatus'),
+      `transport ${t.clientId} should not have open session status handlers after the test`,
+    ).equal(0),
+  );
+  await waitFor(() =>
+    expect(
       t.eventDispatcher.numberOfListeners('connectionStatus'),
-      `transport ${t.clientId} should not have open connection handlers after the test`,
+      `transport ${t.clientId} should not have open connection status handlers after the test`,
     ).equal(0),
   );
 }

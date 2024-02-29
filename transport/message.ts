@@ -62,6 +62,7 @@ export const ControlMessageHandshakeResponseSchema = Type.Object({
   status: Type.Union([
     Type.Object({
       ok: Type.Literal(true),
+      instanceId: Type.String(),
     }),
     Type.Object({
       ok: Type.Literal(false),
@@ -139,6 +140,7 @@ export function bootRequestMessage(
 
 export function bootResponseMessage(
   from: TransportClientId,
+  instanceId: string,
   to: TransportClientId,
   ok: boolean,
 ): TransportMessage<Static<typeof ControlMessageHandshakeResponseSchema>> {
@@ -155,6 +157,7 @@ export function bootResponseMessage(
           type: 'HANDSHAKE_RESP',
           status: {
             ok: true,
+            instanceId,
           },
         }
       : {
