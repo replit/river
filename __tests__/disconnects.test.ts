@@ -193,9 +193,9 @@ describe('procedures should handle unexpected disconnects', async () => {
     expect(result.payload).toStrictEqual({ result: 3 });
 
     // at this point, only client1 is connected
-    expect(client1Transport.connections.size).toEqual(1);
-    expect(client2Transport.connections.size).toEqual(0);
-    expect(serverTransport.connections.size).toEqual(1);
+    waitFor(() => expect(client1Transport.connections.size).toEqual(1));
+    waitFor(() => expect(client2Transport.connections.size).toEqual(0));
+    waitFor(() => expect(serverTransport.connections.size).toEqual(1));
 
     // cleanup client1 (client2 is already disconnected)
     close1();

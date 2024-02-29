@@ -14,10 +14,9 @@ import { Server } from './server';
 import {
   OpaqueTransportMessage,
   ControlFlags,
-  msg,
   TransportClientId,
   isStreamClose,
-  closeStream,
+  PartialTransportMessage,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
@@ -192,7 +191,7 @@ export const createClient = <Srv extends Server<ServiceDefs>>(
       return handleRpc(
         transport,
         serverId,
-        input as object,
+        input as Record<string, unknown>,
         serviceName,
         procName,
       );
@@ -200,7 +199,7 @@ export const createClient = <Srv extends Server<ServiceDefs>>(
       return handleStream(
         transport,
         serverId,
-        input as object | undefined,
+        input as Record<string, unknown> | undefined,
         serviceName,
         procName,
       );
@@ -208,7 +207,7 @@ export const createClient = <Srv extends Server<ServiceDefs>>(
       return handleSubscribe(
         transport,
         serverId,
-        input as object,
+        input as Record<string, unknown>,
         serviceName,
         procName,
       );
@@ -216,7 +215,7 @@ export const createClient = <Srv extends Server<ServiceDefs>>(
       return handleUpload(
         transport,
         serverId,
-        input as object | undefined,
+        input as Record<string, unknown> | undefined,
         serviceName,
         procName,
       );
@@ -230,7 +229,7 @@ function createSessionDisconnectHandler(
   cb: () => void,
 ) {
   return (evt: EventMap['sessionStatus']) => {
-    if (evt.status === 'disconnect' && evt.session.connectedTo === from) {
+    if (evt.status === 'disconnect' && evt.session.to === from) {
       cb();
     }
   };
@@ -239,23 +238,18 @@ function createSessionDisconnectHandler(
 function handleRpc(
   transport: Transport<Connection>,
   serverId: TransportClientId,
-  input: object,
+  input: Record<string, unknown>,
   serviceName: string,
-  procName: string,
+  procedureName: string,
 ) {
   const streamId = nanoid();
-  const m = msg(
-    transport.clientId,
-    serverId,
+  transport.send(serverId, {
     streamId,
-    input,
     serviceName,
-    procName,
-  );
-
-  // rpc is a stream open + close
-  m.controlFlags |= ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit;
-  transport.send(m);
+    procedureName,
+    payload: input,
+    controlFlags: ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit,
+  });
 
   const responsePromise = new Promise((resolve) => {
     // on disconnect, set a timer to return an error
@@ -300,9 +294,9 @@ function handleRpc(
 function handleStream(
   transport: Transport<Connection>,
   serverId: TransportClientId,
-  init: object | undefined,
+  init: Record<string, unknown> | undefined,
   serviceName: string,
-  procName: string,
+  procedureName: string,
 ) {
   const streamId = nanoid();
   const inputStream = pushable({ objectMode: true });
@@ -311,18 +305,14 @@ function handleStream(
   let healthyClose = true;
 
   if (init) {
-    const m = msg(
-      transport.clientId,
-      serverId,
+    transport.send(serverId, {
       streamId,
-      init,
       serviceName,
-      procName,
-    );
+      procedureName,
+      payload: init,
+      controlFlags: ControlFlags.StreamOpenBit,
+    });
 
-    // first message needs the open bit.
-    m.controlFlags = ControlFlags.StreamOpenBit;
-    transport.send(m);
     firstMessage = false;
   }
 
@@ -330,21 +320,25 @@ function handleStream(
   // this gets cleaned up on inputStream.end() which is called by closeHandler
   (async () => {
     for await (const rawIn of inputStream) {
-      const m = msg(transport.clientId, serverId, streamId, rawIn as object);
+      const m: PartialTransportMessage = {
+        streamId,
+        payload: rawIn as Record<string, unknown>,
+        controlFlags: 0,
+      };
 
       if (firstMessage) {
         m.serviceName = serviceName;
-        m.procedureName = procName;
+        m.procedureName = procedureName;
         m.controlFlags |= ControlFlags.StreamOpenBit;
         firstMessage = false;
       }
 
-      transport.send(m);
+      transport.send(serverId, m);
     }
 
     // after ending input stream, send a close message to the server
     if (!healthyClose) return;
-    transport.send(closeStream(transport.clientId, serverId, streamId));
+    transport.sendCloseStream(serverId, streamId);
   })();
 
   // transport -> output
@@ -391,21 +385,19 @@ function handleStream(
 function handleSubscribe(
   transport: Transport<Connection>,
   serverId: TransportClientId,
-  input: object,
+  input: Record<string, unknown>,
   serviceName: string,
-  procName: string,
+  procedureName: string,
 ) {
   const streamId = nanoid();
-  const m = msg(
-    transport.clientId,
-    serverId,
+  transport.send(serverId, {
     streamId,
-    input,
     serviceName,
-    procName,
-  );
-  m.controlFlags |= ControlFlags.StreamOpenBit;
-  transport.send(m);
+    procedureName,
+    payload: input,
+    controlFlags: ControlFlags.StreamOpenBit,
+  });
+
   let healthyClose = true;
 
   // transport -> output
@@ -435,7 +427,7 @@ function handleSubscribe(
   const closeHandler = () => {
     cleanup();
     if (!healthyClose) return;
-    transport.send(closeStream(transport.clientId, serverId, streamId));
+    transport.sendCloseStream(serverId, streamId);
   };
 
   // close stream after disconnect + grace period elapses
@@ -458,28 +450,24 @@ function handleSubscribe(
 function handleUpload(
   transport: Transport<Connection>,
   serverId: TransportClientId,
-  input: object | undefined,
+  init: Record<string, unknown> | undefined,
   serviceName: string,
-  procName: string,
+  procedureName: string,
 ) {
   const streamId = nanoid();
   const inputStream = pushable({ objectMode: true });
   let firstMessage = true;
   let healthyClose = true;
 
-  if (input) {
-    const m = msg(
-      transport.clientId,
-      serverId,
+  if (init) {
+    transport.send(serverId, {
       streamId,
-      input as object,
       serviceName,
-      procName,
-    );
+      procedureName,
+      payload: init,
+      controlFlags: ControlFlags.StreamOpenBit,
+    });
 
-    // first message needs the open bit.
-    m.controlFlags = ControlFlags.StreamOpenBit;
-    transport.send(m);
     firstMessage = false;
   }
 
@@ -487,20 +475,25 @@ function handleUpload(
   // this gets cleaned up on inputStream.end(), which the caller should call.
   (async () => {
     for await (const rawIn of inputStream) {
-      const m = msg(transport.clientId, serverId, streamId, rawIn as object);
+      const m: PartialTransportMessage = {
+        streamId,
+        payload: rawIn as Record<string, unknown>,
+        controlFlags: 0,
+      };
 
       if (firstMessage) {
-        m.controlFlags |= ControlFlags.StreamOpenBit;
         m.serviceName = serviceName;
-        m.procedureName = procName;
+        m.procedureName = procedureName;
+        m.controlFlags |= ControlFlags.StreamOpenBit;
         firstMessage = false;
       }
 
-      transport.send(m);
+      transport.send(serverId, m);
     }
 
+    // after ending input stream, send a close message to the server
     if (!healthyClose) return;
-    transport.send(closeStream(transport.clientId, serverId, streamId));
+    transport.sendCloseStream(serverId, streamId);
   })();
 
   const responsePromise = new Promise((resolve) => {

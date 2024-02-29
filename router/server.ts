@@ -8,8 +8,6 @@ import {
   OpaqueTransportMessage,
   isStreamClose,
   isStreamOpen,
-  reply,
-  closeStream,
   TransportClientId,
 } from '../transport/message';
 import { ServiceContext, ServiceContextWithState } from './context';
@@ -111,7 +109,7 @@ class RiverServer<Services extends ServiceDefs> {
       return;
     }
 
-    const disconnectedClientId = evt.session.connectedTo;
+    const disconnectedClientId = evt.session.to;
     log?.info(
       `${this.transport.clientId} -- got unexpected disconnect from ${disconnectedClientId}, cleaning up streams`,
     );
@@ -162,6 +160,14 @@ class RiverServer<Services extends ServiceDefs> {
       return;
     }
 
+    const session = this.transport.sessions.get(message.from);
+    if (!session) {
+      log?.warn(
+        `${this.transport.clientId} -- couldn't find session for ${message.from}`,
+      );
+      return;
+    }
+
     const procedure = service.procedures[message.procedureName] as AnyProcedure;
     const incoming: ProcStream['incoming'] = pushable({ objectMode: true });
     const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
@@ -169,7 +175,11 @@ class RiverServer<Services extends ServiceDefs> {
       // sending outgoing messages back to client
       (async () => {
         for await (const response of outgoing) {
-          this.transport.send(reply(message, response));
+          this.transport.send(session.to, {
+            streamId: message.streamId,
+            controlFlags: 0,
+            payload: response,
+          });
         }
 
         // we ended, send a close bit back to the client
@@ -179,13 +189,7 @@ class RiverServer<Services extends ServiceDefs> {
         const needsClose =
           procedure.type === 'subscription' || procedure.type === 'stream';
         if (needsClose && !this.disconnectedSessions.has(message.from)) {
-          this.transport.send(
-            closeStream(
-              this.transport.clientId,
-              message.from,
-              message.streamId,
-            ),
-          );
+          this.transport.sendCloseStream(session.to, message.streamId);
         }
       })();
 

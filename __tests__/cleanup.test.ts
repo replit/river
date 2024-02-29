@@ -13,7 +13,7 @@ import {
 } from './fixtures/services';
 import { createClient, createServer } from '../router';
 import {
-  ensureTransportQueuesAreEventuallyEmpty,
+  ensureTransportBuffersAreEventuallyEmpty,
   testFinishesCleanly,
   waitFor,
   waitForTransportToFinish,
@@ -54,8 +54,8 @@ describe('procedures should leave no trace after finishing', async () => {
     await clientTransport.close();
 
     await waitForTransportToFinish(clientTransport);
-    await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
-    await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
+    await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
+    await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
 
     await testFinishesCleanly({
       clientTransports: [clientTransport],
@@ -86,8 +86,8 @@ describe('procedures should leave no trace after finishing', async () => {
     await serverTransport.close();
 
     await waitForTransportToFinish(serverTransport);
-    await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
-    await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
+    await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
+    await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     await testFinishesCleanly({
       clientTransports: [clientTransport],
       serverTransport,
@@ -121,8 +121,8 @@ describe('procedures should leave no trace after finishing', async () => {
     // check number of connections
     expect(serverTransport.connections.size).toEqual(1);
     expect(clientTransport.connections.size).toEqual(1);
-    await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
-    await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
+    await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
+    await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     await testFinishesCleanly({
       clientTransports: [clientTransport],
       serverTransport,
@@ -177,8 +177,8 @@ describe('procedures should leave no trace after finishing', async () => {
     // check number of connections
     expect(serverTransport.connections.size).toEqual(1);
     expect(clientTransport.connections.size).toEqual(1);
-    await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
-    await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
+    await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
+    await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     await testFinishesCleanly({
       clientTransports: [clientTransport],
       serverTransport,
@@ -221,8 +221,8 @@ describe('procedures should leave no trace after finishing', async () => {
     // check number of connections
     expect(serverTransport.connections.size).toEqual(1);
     expect(clientTransport.connections.size).toEqual(1);
-    await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
-    await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
+    await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
+    await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     await testFinishesCleanly({
       clientTransports: [clientTransport],
       serverTransport,
@@ -263,8 +263,8 @@ describe('procedures should leave no trace after finishing', async () => {
     // check number of connections
     expect(serverTransport.connections.size).toEqual(1);
     expect(clientTransport.connections.size).toEqual(1);
-    await ensureTransportQueuesAreEventuallyEmpty(clientTransport);
-    await ensureTransportQueuesAreEventuallyEmpty(serverTransport);
+    await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
+    await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     await testFinishesCleanly({
       clientTransports: [clientTransport],
       serverTransport,

@@ -1,12 +1,20 @@
 import { customAlphabet } from 'nanoid';
 import {
-  MessageId,
+  ControlFlags,
+  ControlMessageAckSchema,
   OpaqueTransportMessage,
+  PartialTransportMessage,
   TransportClientId,
+  TransportMessage,
 } from './message';
+import { Codec } from '../codec';
+import { log } from '../logging';
+import { Static } from '@sinclair/typebox';
 
-const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvxyz', 4);
-const unsafeId = () => nanoid();
+const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvxyz', 6);
+export const unsafeId = () => nanoid();
+
+type SequenceNumber = number;
 
 /**
  * A connection is the actual raw underlying transport connection.
@@ -60,11 +68,13 @@ export abstract class Connection {
   abstract close(): void;
 }
 
-export const DISCONNECT_GRACE_MS = 3_000; // 3s
+export const HEARTBEAT_INTERVAL_MS = 250; // 250ms
+export const HEARTBEATS_TILL_DEAD = 4; // can miss max of 4 heartbeats before we consider the connection dead
+export const SESSION_DISCONNECT_GRACE_MS = 3_000; // 3s
 
 /**
  * A session is a higher-level abstraction that operates over the span of potentially multiple transport-level connections
- * - It’s responsible for tracking any metadata for a particular client that might need to be persisted across connections (i.e. the sendBuffer and sendQueue)
+ * - It’s responsible for tracking any metadata for a particular client that might need to be persisted across connections (i.e. the sendBuffer, ack, seq)
  * - This will only be considered disconnected if
  *    - the server tells the client that we’ve reconnected but it doesn’t recognize us anymore (server definitely died) or
  *    - we hit a grace period after a connection disconnect
@@ -96,26 +106,19 @@ export const DISCONNECT_GRACE_MS = 3_000; // 3s
  * ```
  */
 export class Session<ConnType extends Connection> {
-  /**
-   * An array of message IDs that are waiting to be sent over the connection.
-   * This builds up if the there is no connection for a period of time.
-   */
-  sendQueue: Array<MessageId>;
+  private codec: Codec;
 
   /**
    * The buffer of messages that have been sent but not yet acknowledged.
    */
-  sendBuffer: Map<MessageId, OpaqueTransportMessage>;
+  private sendBuffer: Array<OpaqueTransportMessage> = [];
 
   /**
    * The active connection associated with this session
    */
   connection?: ConnType;
-
-  /**
-   * The ID of the client this session is connected to.
-   */
-  connectedTo: TransportClientId;
+  readonly from: TransportClientId;
+  readonly to: TransportClientId;
 
   /**
    * The unique ID of this session.
@@ -123,36 +126,207 @@ export class Session<ConnType extends Connection> {
   debugId: string;
 
   /**
-   * A timeout that is used to close the session if the connection is not re-established
-   * within a certain period of time.
+   * Number of messages we've sent along this session (excluding handshake)
    */
-  private graceExpiryTimeout?: ReturnType<typeof setTimeout>;
+  private seq: SequenceNumber = 0;
 
-  constructor(connectedTo: TransportClientId, conn: ConnType | undefined) {
+  /**
+   * Number of unique messages we've received this session (excluding handshake)
+   */
+  private ack: SequenceNumber = 0;
+
+  /**
+   * The grace period between when the inner connection is disconnected
+   * and when we should consider the entire session disconnected.
+   */
+  private disconnectionGrace?: ReturnType<typeof setTimeout>;
+
+  /**
+   * Number of heartbeats we've sent without a response.
+   */
+  private heartbeatMisses: number;
+
+  /**
+   * The interval for sending heartbeats.
+   */
+  private heartbeat?: ReturnType<typeof setInterval>;
+
+  constructor(
+    codec: Codec,
+    from: TransportClientId,
+    connectedTo: TransportClientId,
+    conn: ConnType | undefined,
+  ) {
     this.debugId = `sess-${unsafeId()}`; // for debugging, no collision safety needed
-    this.sendQueue = [];
-    this.sendBuffer = new Map();
-    this.connectedTo = connectedTo;
+    this.from = from;
+    this.to = connectedTo;
     this.connection = conn;
+    this.codec = codec;
+
+    // setup heartbeat
+    this.heartbeatMisses = 0;
+    this.heartbeat = setInterval(
+      () => this.sendHeartbeat(),
+      HEARTBEAT_INTERVAL_MS,
+    );
+  }
+
+  /**
+   * Sends a message over the session's connection.
+   * If the connection is not ready or the message fails to send, the message can be buffered for retry unless skipped.
+   *
+   * @param msg The partial message to be sent, which will be constructed into a full message.
+   * @param skipRetry Optional. If true, the message will not be buffered for retry on failure. This should only be used for
+   * ack hearbeats, which contain information that can already be found in the other buffered messages.
+   * @returns The full transport ID of the message that was attempted to be sent.
+   */
+  send(msg: PartialTransportMessage, skipRetry?: boolean): string {
+    const fullMsg: TransportMessage = this.constructMsg(msg);
+    log?.debug(`${this.from} -- sending ${JSON.stringify(fullMsg)}`);
+
+    if (this.connection) {
+      const ok = this.connection.send(this.codec.toBuffer(fullMsg));
+      if (ok) return fullMsg.id;
+      log?.info(
+        `${this.from} -- failed to send ${fullMsg.id} to ${fullMsg.to}, connection (id: ${this.connection.debugId}) is probably dead`,
+      );
+    } else {
+      log?.info(
+        `${this.from} -- failed to send ${fullMsg.id} to ${fullMsg.to}, connection not ready yet`,
+      );
+    }
+
+    if (skipRetry) return fullMsg.id;
+    this.addToSendBuff(fullMsg);
+    log?.info(
+      `${this.from} -- buffering msg ${fullMsg.id} until connection is healthy again`,
+    );
+    return fullMsg.id;
+  }
+
+  sendHeartbeat() {
+    if (this.heartbeatMisses >= HEARTBEATS_TILL_DEAD) {
+      log?.info(
+        `${this.from} -- closing connection to ${this.to} due to inactivity`,
+      );
+      this.halfCloseConnection();
+      return;
+    }
+
+    this.send(
+      {
+        streamId: 'heartbeat',
+        controlFlags: ControlFlags.AckBit,
+        payload: {
+          type: 'ACK',
+        } satisfies Static<typeof ControlMessageAckSchema>,
+      },
+      true,
+    );
+    this.heartbeatMisses++;
   }
 
   resetBufferedMessages() {
-    this.sendQueue = [];
-    this.sendBuffer.clear();
+    this.sendBuffer = [];
+    this.seq = 0;
+    this.ack = 0;
+  }
+
+  sendBufferedMessages() {
+    if (!this.connection) {
+      const msg = `${this.from} -- tried sending buffered messages without a connection (if you hit this code path something is seriously wrong)`;
+      log?.error(msg);
+      throw new Error(msg);
+    }
+
+    for (const msg of this.sendBuffer) {
+      log?.debug(`${this.from} -- resending ${JSON.stringify(msg)}`);
+      const ok = this.connection.send(this.codec.toBuffer(msg));
+      if (!ok) {
+        // this should never happen unless the transport has an
+        // incorrect implementation of `createNewOutgoingConnection`
+        const msg = `${this.from} -- failed to send buffered message to ${this.to} in session (id: ${this.debugId}) (if you hit this code path something is seriously wrong)`;
+        log?.error(msg);
+        throw new Error(msg);
+      }
+    }
+  }
+
+  updateBookkeeping(ack: number, seq: number) {
+    this.heartbeatMisses = 0;
+    this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq > ack);
+    this.ack = seq + 1;
+  }
+
+  addToSendBuff(msg: TransportMessage) {
+    this.sendBuffer.push(msg);
+    log?.debug(
+      `${this.from} -- send buff to ${this.to} now tracking ${this.sendBuffer.length}`,
+    );
+  }
+
+  closeStaleConnection(conn?: ConnType) {
+    if (!this.connection || this.connection !== conn) return;
+    log?.info(
+      `${this.from} -- closing old inner connection (id: ${this.connection.debugId}) from session (id: ${this.debugId}) to ${this.to}`,
+    );
+    this.connection.close();
+    this.connection = undefined;
+  }
+
+  replaceWithNewConnection(newConn: ConnType) {
+    this.closeStaleConnection(this.connection);
+    this.cancelGrace();
+    this.connection = newConn;
   }
 
   beginGrace(cb: () => void) {
-    this.graceExpiryTimeout = setTimeout(() => {
+    this.disconnectionGrace = setTimeout(() => {
       this.resetBufferedMessages();
+      clearInterval(this.heartbeat);
       cb();
-    }, DISCONNECT_GRACE_MS);
+    }, SESSION_DISCONNECT_GRACE_MS);
   }
 
   cancelGrace() {
-    clearTimeout(this.graceExpiryTimeout);
+    clearTimeout(this.disconnectionGrace);
   }
 
   get connected() {
     return this.connection !== undefined;
+  }
+
+  get nextExpectedSeq() {
+    return this.ack;
+  }
+
+  constructMsg<Payload extends object>(
+    partialMsg: PartialTransportMessage<Payload>,
+  ): TransportMessage<Payload> {
+    const msg = {
+      ...partialMsg,
+      id: unsafeId(),
+      to: this.to,
+      from: this.from,
+      seq: this.seq,
+      ack: this.ack,
+    };
+
+    this.seq++;
+    return msg;
+  }
+
+  /**
+   * Closes the out-going connection but doesn't remove the listeners
+   * for incoming messages. The connection will eventually call onClose
+   * when it is ready to be cleaned up and only then will {@link connection} be set back
+   * to undefined
+   */
+  halfCloseConnection() {
+    this.connection?.close();
+  }
+
+  inspectSendBuffer(): readonly OpaqueTransportMessage[] {
+    return this.sendBuffer;
   }
 }

@@ -2,14 +2,7 @@ import WebSocket from 'isomorphic-ws';
 import { WebSocketServer } from 'ws';
 import http from 'node:http';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
-import {
-  Connection,
-  OpaqueTransportMessage,
-  Transport,
-  TransportClientId,
-  TransportMessage,
-  msg,
-} from '../transport';
+import { Connection, OpaqueTransportMessage, Transport } from '../transport';
 import { pushable } from 'it-pushable';
 import { Codec } from '../codec';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
@@ -25,6 +18,7 @@ import {
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import net from 'node:net';
+import { PartialTransportMessage } from '../transport/message';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -101,39 +95,29 @@ export function createWsTransports(
 }
 
 /**
- * Converts a payload object to a transport message with reasonable defaults.
- * This should only be used for testing.
- * @param payload - The payload object to be converted.
- * @param streamId - The optional stream ID.
- * @returns The transport message.
- */
-export function payloadToTransportMessage<Payload extends object>(
-  payload: Payload,
-  streamId?: string,
-  from: TransportClientId = 'client',
-  to: TransportClientId = 'SERVER',
-): TransportMessage<Payload> {
-  return msg(from, to, streamId ?? 'stream', payload, 'service', 'procedure');
-}
-
-/**
- * Creates a dummy opaque transport message for testing purposes.
- * @returns The created opaque transport message.
- */
-export function createDummyTransportMessage(): OpaqueTransportMessage {
-  return payloadToTransportMessage({
-    msg: 'cool',
-    test: Math.random(),
-  });
-}
-
-/**
  * Retrieves the next value from an async iterable iterator.
  * @param iter The async iterable iterator.
  * @returns A promise that resolves to the next value from the iterator.
  */
 export async function iterNext<T>(iter: AsyncIterableIterator<T>) {
   return await iter.next().then((res) => res.value);
+}
+
+export function payloadToTransportMessage<Payload extends object>(
+  payload: Payload,
+): PartialTransportMessage<Payload> {
+  return {
+    streamId: 'stream',
+    controlFlags: 0,
+    payload,
+  };
+}
+
+export function createDummyTransportMessage() {
+  return payloadToTransportMessage({
+    msg: 'cool',
+    test: Math.random(),
+  });
 }
 
 /**

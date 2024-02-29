@@ -25,6 +25,8 @@ export const TransportMessageSchema = <T extends TSchema>(t: T) =>
     id: Type.String(),
     from: Type.String(),
     to: Type.String(),
+    seq: Type.Integer(),
+    ack: Type.Integer(),
     serviceName: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     procedureName: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     streamId: Type.String(),
@@ -39,7 +41,6 @@ export const TransportMessageSchema = <T extends TSchema>(t: T) =>
  */
 export const ControlMessageAckSchema = Type.Object({
   type: Type.Literal('ACK'),
-  ack: Type.String(),
 });
 
 /**
@@ -104,6 +105,8 @@ export type TransportMessage<
   id: string;
   from: string;
   to: string;
+  seq: number;
+  ack: number;
   serviceName?: string;
   procedureName?: string;
   streamId: string;
@@ -111,7 +114,58 @@ export type TransportMessage<
   payload: Payload;
 };
 
-export type MessageId = string;
+export type PartialTransportMessage<
+  Payload extends Record<string, unknown> | unknown = Record<string, unknown>,
+> = Omit<TransportMessage<Payload>, 'id' | 'from' | 'to' | 'seq' | 'ack'>;
+
+export function bootRequestMessage(
+  from: TransportClientId,
+  to: TransportClientId,
+): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {
+  return {
+    id: nanoid(),
+    from,
+    to,
+    seq: 0,
+    ack: 0,
+    streamId: nanoid(),
+    controlFlags: 0,
+    payload: {
+      type: 'HANDSHAKE_REQ',
+      protocolVersion: PROTOCOL_VERSION,
+    } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
+  };
+}
+
+export function bootResponseMessage(
+  from: TransportClientId,
+  to: TransportClientId,
+  ok: boolean,
+): TransportMessage<Static<typeof ControlMessageHandshakeResponseSchema>> {
+  return {
+    id: nanoid(),
+    from,
+    to,
+    seq: 0,
+    ack: 0,
+    streamId: nanoid(),
+    controlFlags: 0,
+    payload: (ok
+      ? {
+          type: 'HANDSHAKE_RESP',
+          status: {
+            ok: true,
+          },
+        }
+      : {
+          type: 'HANDSHAKE_RESP',
+          status: {
+            ok: false,
+            reason: 'VERSION_MISMATCH',
+          },
+        }) satisfies Static<typeof ControlMessageHandshakeResponseSchema>,
+  };
+}
 
 /**
  * A type alias for a transport message with an opaque payload.
@@ -119,76 +173,6 @@ export type MessageId = string;
  */
 export type OpaqueTransportMessage = TransportMessage<unknown>;
 export type TransportClientId = string;
-
-/**
- * Creates a transport message with the given parameters. You shouldn't need to call this manually unless
- * you're writing a test.
- * @param from The sender of the message.
- * @param to The intended recipient of the message.
- * @param service The name of the service the message is intended for.
- * @param proc The name of the procedure the message is intended for.
- * @param stream The ID of the stream the message is intended for.
- * @param payload The payload of the message.
- * @returns A TransportMessage object with the given parameters.
- */
-export function msg<Payload extends object>(
-  from: string,
-  to: string,
-  streamId: string,
-  payload: Payload,
-  serviceName?: string,
-  procedureName?: string,
-): TransportMessage<Payload> {
-  return {
-    id: nanoid(),
-    to,
-    from,
-    serviceName,
-    procedureName,
-    streamId,
-    controlFlags: 0,
-    payload,
-  };
-}
-
-/**
- * Creates a new transport message as a response to the given message.
- * @param msg The original message to respond to.
- * @param response The payload of the response message.
- * @returns A new transport message with appropriate to, from, and payload fields
- */
-export function reply<Payload extends object>(
-  msg: OpaqueTransportMessage,
-  response: Payload,
-): TransportMessage<Payload> {
-  return {
-    id: nanoid(),
-    streamId: msg.streamId,
-    controlFlags: 0,
-    to: msg.from,
-    from: msg.to,
-    payload: response,
-  };
-}
-
-/**
- * Create a request to close a stream
- * @param from The ID of the client initiating the close.
- * @param to The ID of the client being closed.
- * @param respondTo The transport message to respond to.
- * @returns The close message
- */
-export function closeStream(
-  from: TransportClientId,
-  to: TransportClientId,
-  stream: string,
-) {
-  const closeMessage = msg(from, to, stream, {
-    type: 'CLOSE' as const,
-  } satisfies Static<typeof ControlMessagePayloadSchema>);
-  closeMessage.controlFlags |= ControlFlags.StreamClosedBit;
-  return closeMessage;
-}
 
 /**
  * Checks if the given control flag (usually found in msg.controlFlag) is an ack message.

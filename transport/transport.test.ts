@@ -20,22 +20,19 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 
-    const msg1Promise = waitForMessage(
-      serverTransport,
-      (recv) => recv.id === msg1.id,
-    );
-    clientTransport.send(msg1);
-    await expect(msg1Promise).resolves.toStrictEqual(msg1.payload);
+    const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+    await expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
+    ).resolves.toStrictEqual(msg1.payload);
 
     clientTransport.connections.forEach((conn) => conn.close());
 
     // by this point the client should have reconnected
-    clientTransport.send(msg2);
-    const msg2Promise = waitForMessage(
-      serverTransport,
-      (recv) => recv.id === msg2.id,
-    );
-    await expect(msg2Promise).resolves.toStrictEqual(msg2.payload);
+    const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
+    await expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
+    ).resolves.toStrictEqual(msg2.payload);
+
     await testFinishesCleanly({
       clientTransports: [clientTransport],
       serverTransport,
@@ -97,12 +94,10 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
     expect(clientSessDisconnect).toHaveBeenCalledTimes(0);
     expect(serverSessDisconnect).toHaveBeenCalledTimes(0);
 
-    const msg1Promise = waitForMessage(
-      serverTransport,
-      (recv) => recv.id === msg1.id,
-    );
-    clientTransport.send(msg1);
-    await expect(msg1Promise).resolves.toStrictEqual(msg1.payload);
+    const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+    await expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
+    ).resolves.toStrictEqual(msg1.payload);
 
     // session    >  c--| (connected)
     // connection >  c--| (connected)
@@ -132,16 +127,13 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
     await waitFor(() => expect(clientSessDisconnect).toHaveBeenCalledTimes(0));
     await waitFor(() => expect(serverSessDisconnect).toHaveBeenCalledTimes(0));
 
-    const msg2Promise = waitForMessage(
-      serverTransport,
-      (recv) => recv.id === msg2.id,
-    );
-
     // by this point the client should have reconnected
     // session    >  c----------| (connected)
     // connection >  c--x   c---| (connected)
-    clientTransport.send(msg2);
-    await expect(msg2Promise).resolves.toStrictEqual(msg2.payload);
+    const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
+    await expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
+    ).resolves.toStrictEqual(msg2.payload);
     expect(clientConnConnect).toHaveBeenCalledTimes(2);
     expect(serverConnConnect).toHaveBeenCalledTimes(2);
     expect(clientConnDisconnect).toHaveBeenCalledTimes(1);
@@ -183,15 +175,13 @@ describe.each(transports)('transport -- $name', async ({ setup }) => {
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 
-    const promise1 = waitForMessage(
-      serverTransport,
-      (recv) => recv.id === msg1.id,
-    );
-    clientTransport.send(msg1);
-    await expect(promise1).resolves.toStrictEqual(msg1.payload);
+    const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+    await expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
+    ).resolves.toStrictEqual(msg1.payload);
 
     await clientTransport.destroy();
-    expect(() => clientTransport.send(msg2)).toThrow(
+    expect(() => clientTransport.send(serverTransport.clientId, msg2)).toThrow(
       new Error('transport is destroyed, cant send'),
     );
 

@@ -1,7 +1,11 @@
 import { expect, vi } from 'vitest';
 import { Connection, OpaqueTransportMessage, Transport } from '../../transport';
 import { Server } from '../../router';
-import { DISCONNECT_GRACE_MS } from '../../transport/session';
+import {
+  SESSION_DISCONNECT_GRACE_MS,
+  HEARTBEAT_INTERVAL_MS,
+} from '../../transport/session';
+import { log } from '../../logging';
 
 const waitUntilOptions = {
   timeout: 250, // these are all local connections so anything above 250ms is sus
@@ -9,9 +13,6 @@ const waitUntilOptions = {
 };
 
 export async function waitForTransportToFinish(t: Transport<Connection>) {
-  // await ensureTransportQueuesAreEventuallyEmpty(t);
-  // ^ TODO: this is buggy because current protocol sometimes drops acks
-  //   should be fixed when we rewrite our acks to be more reliable
   await t.close();
   await waitFor(() =>
     expect(
@@ -24,7 +25,12 @@ export async function waitForTransportToFinish(t: Transport<Connection>) {
 export async function advanceFakeTimersByDisconnectGrace() {
   // advance fake timer so we hit the disconnect grace to end the session
   await vi.runOnlyPendingTimersAsync();
-  await vi.advanceTimersByTimeAsync(DISCONNECT_GRACE_MS + 1);
+
+  // wait for heartbeat to propagate
+  await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS + 1);
+
+  // then, disconnect timer
+  await vi.advanceTimersByTimeAsync(SESSION_DISCONNECT_GRACE_MS + 1);
 }
 
 async function ensureTransportIsClean(t: Transport<Connection>) {
@@ -32,6 +38,7 @@ async function ensureTransportIsClean(t: Transport<Connection>) {
     t.state,
     `transport ${t.clientId} should be closed after the test`,
   ).to.not.equal('open');
+  await ensureTransportBuffersAreEventuallyEmpty(t);
   await waitFor(() =>
     expect(
       t.sessions,
@@ -56,7 +63,7 @@ export function waitFor<T>(cb: () => T | Promise<T>) {
   return vi.waitFor(cb, waitUntilOptions);
 }
 
-export async function ensureTransportQueuesAreEventuallyEmpty(
+export async function ensureTransportBuffersAreEventuallyEmpty(
   t: Transport<Connection>,
 ) {
   await waitFor(() =>
@@ -64,27 +71,15 @@ export async function ensureTransportQueuesAreEventuallyEmpty(
       new Map(
         [...t.sessions]
           .map(
-            ([client, sess]) => [client, sess.sendQueue] as [string, string[]],
+            ([client, sess]) =>
+              [client, sess.inspectSendBuffer()] as [
+                string,
+                readonly OpaqueTransportMessage[],
+              ],
           )
           .filter((entry) => entry[1].length > 0),
       ),
       `transport ${t.clientId} should not have any messages waiting to send after the test`,
-    ).toStrictEqual(new Map()),
-  );
-  await waitFor(() =>
-    expect(
-      new Map(
-        [...t.sessions]
-          .map(
-            ([client, sess]) =>
-              [client, sess.sendBuffer] as [
-                string,
-                Map<string, OpaqueTransportMessage>,
-              ],
-          )
-          .filter((entry) => entry[1].size > 0),
-      ),
-      `transport ${t.clientId} should not have any un-acked messages after the test`,
     ).toStrictEqual(new Map()),
   );
 }
@@ -107,6 +102,7 @@ export async function testFinishesCleanly({
   serverTransport: Transport<Connection>;
   server: Server<unknown>;
 }>) {
+  log?.info('*** end of test cleanup ***');
   vi.useFakeTimers({ shouldAdvanceTime: true });
 
   if (clientTransports) {
