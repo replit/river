@@ -38,6 +38,11 @@ export abstract class Connection {
    * Handle adding a callback for when an error is received.
    * This should only be used for logging errors, all cleanup
    * should be delegated to addCloseListener.
+   *
+   * The implementer should take care such that the implemented
+   * connection will call both the close and error callbacks
+   * on an error.
+   *
    * @param cb The callback to call when an error is received.
    */
   abstract addErrorListener(cb: (err: Error) => void): void;

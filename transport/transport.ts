@@ -171,9 +171,8 @@ export abstract class Transport<ConnType extends Connection> {
   /**
    * This is called immediately after a new connection is established and we
    * may or may not know the identity of the connected client.
-   *
-   * Calls addDataListener, addCloseListener, and addErrorListener on the connection
-   * with the appropriate handlers.
+   * It should attach all the necessary listeners to the connection for lifecycle
+   * events (i.e. data, close, error)
    *
    * This method is implemented by {@link ClientTransport} and {@link ServerTransport}.
    */
@@ -284,7 +283,7 @@ export abstract class Transport<ConnType extends Connection> {
    * @param msg The message to parse.
    * @returns The parsed message, or null if the message is malformed or invalid.
    */
-  parseMsg(msg: Uint8Array): OpaqueTransportMessage | null {
+  protected parseMsg(msg: Uint8Array): OpaqueTransportMessage | null {
     const parsedMsg = this.codec.fromBuffer(msg);
 
     if (parsedMsg === null) {
@@ -311,17 +310,6 @@ export abstract class Transport<ConnType extends Connection> {
         parsedMsg.procedureName === null ? undefined : parsedMsg.procedureName,
     };
   }
-
-  /**
-   * Abstract method that receives a message with boot sequence.
-   * @param conn The connection object.
-   * @param sessionCb The callback to call with the established session.
-   * @returns The callback to call when a message is received.
-   */
-  abstract receiveWithBootSequence(
-    conn: ConnType,
-    sessionCb: (sess: Session<ConnType>) => void,
-  ): (data: Uint8Array) => void;
 
   /**
    * Called when a message is received by this transport.
@@ -495,7 +483,14 @@ export abstract class ClientTransport<
   }
 
   protected handleConnection(conn: ConnType, to: TransportClientId): void {
-    conn.addDataListener(this.receiveWithBootSequence(conn));
+    const bootHandler = this.receiveWithBootSequence(conn, () => {
+      // when we are done booting,
+      // remove boot listener and use the normal message listener
+      conn.removeDataListener(bootHandler);
+      conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
+    });
+
+    conn.addDataListener(bootHandler);
     conn.addCloseListener(() => {
       this.onDisconnect(conn, to);
       this.connect(to);
@@ -556,19 +551,21 @@ export abstract class ClientTransport<
         protocolVersion: PROTOCOL_VERSION,
       } satisfies Static<typeof ControlMessageHandshakeRequestSchema>);
       conn.send(this.codec.toBuffer(responseMsg));
-    } catch (err: unknown) {
+    } catch (error: unknown) {
+      const errStr = error instanceof Error ? error.message : `${error}`;
+
       // retry on failure
       this.inflightConnectionPromises.delete(to);
       if (attempt >= this.options.retryAttemptsMax) {
-        throw new Error(
-          `${this.clientId} -- connection to ${to} failed after ${attempt} attempts (${err}), giving up`,
-        );
+        const errMsg = `connection to ${to} failed after ${attempt} attempts (${errStr}), giving up`;
+        log?.error(`${this.clientId} -- ${errMsg}`);
+        throw new Error(errMsg);
       } else {
         // exponential backoff + jitter
         const jitter = Math.floor(Math.random() * this.options.retryJitterMs);
         const backoffMs = this.options.retryIntervalMs * 2 ** attempt + jitter;
         log?.warn(
-          `${this.clientId} -- connection to ${to} failed (${err}), trying again in ${backoffMs}ms`,
+          `${this.clientId} -- connection to ${to} failed (${errStr}), trying again in ${backoffMs}ms`,
         );
         setTimeout(() => this.connect(to, attempt + 1), backoffMs);
       }
@@ -577,7 +574,7 @@ export abstract class ClientTransport<
 
   receiveWithBootSequence(
     conn: ConnType,
-    sessionCb?: (sess: Session<ConnType>) => void,
+    sessionCb: (sess: Session<ConnType>) => void,
   ) {
     const bootHandler = (data: Uint8Array) => {
       const parsed = this.parseMsg(data);
@@ -603,10 +600,7 @@ export abstract class ClientTransport<
 
       // everything is ok
       // connect the session
-      const session = this.onConnect(conn, parsed.from);
-      sessionCb?.(session);
-      conn.removeDataListener(bootHandler);
-      conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
+      sessionCb(this.onConnect(conn, parsed.from));
     };
 
     return bootHandler;
@@ -624,12 +618,20 @@ export abstract class ServerTransport<
   protected handleConnection(conn: ConnType) {
     let session: Session<ConnType> | undefined = undefined;
     const client = () => session?.connectedTo ?? 'unknown';
-    conn.addDataListener(
-      this.receiveWithBootSequence(conn, (establishedSession) => {
+
+    const bootHandler = this.receiveWithBootSequence(
+      conn,
+      (establishedSession) => {
         session = establishedSession;
-      }),
+
+        // when we are done booting,
+        // remove boot listener and use the normal message listener
+        conn.removeDataListener(bootHandler);
+        conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
+      },
     );
 
+    conn.addDataListener(bootHandler);
     conn.addCloseListener(() => {
       if (!session) return;
       log?.info(
@@ -637,7 +639,7 @@ export abstract class ServerTransport<
           conn.debugId
         }) to ${client()} disconnected`,
       );
-      this.onDisconnect(conn, session?.connectedTo);
+      this.onDisconnect(conn, session.connectedTo);
     });
 
     conn.addErrorListener((err) => {
@@ -652,7 +654,7 @@ export abstract class ServerTransport<
 
   receiveWithBootSequence(
     conn: ConnType,
-    sessionCb?: (sess: Session<ConnType>) => void,
+    sessionCb: (sess: Session<ConnType>) => void,
   ) {
     const bootHandler = (data: Uint8Array) => {
       const parsed = this.parseMsg(data);
@@ -684,10 +686,8 @@ export abstract class ServerTransport<
       } satisfies Static<typeof ControlMessageHandshakeResponseSchema>);
       conn.send(this.codec.toBuffer(responseMsg));
 
-      const session = this.onConnect(conn, parsed.from);
-      sessionCb?.(session);
-      conn.removeDataListener(bootHandler);
-      conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
+      // we have the session
+      sessionCb(this.onConnect(conn, parsed.from));
     };
 
     return bootHandler;
