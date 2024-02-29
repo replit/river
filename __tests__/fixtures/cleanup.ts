@@ -13,7 +13,7 @@ const waitUntilOptions = {
 };
 
 export async function waitForTransportToFinish(t: Transport<Connection>) {
-  await t.close();
+  t.close();
   await waitFor(() =>
     expect(
       t.connections,
@@ -79,7 +79,7 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
             ([client, sess]) =>
               [client, sess.inspectSendBuffer()] as [
                 string,
-                readonly OpaqueTransportMessage[],
+                ReadonlyArray<OpaqueTransportMessage>,
               ],
           )
           .filter((entry) => entry[1].length > 0),

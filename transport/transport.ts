@@ -9,7 +9,6 @@ import {
   bootRequestMessage,
   bootResponseMessage,
   PartialTransportMessage,
-  TransportMessage,
   ControlFlags,
   ControlMessagePayloadSchema,
   isAck,
@@ -21,6 +20,7 @@ import { Connection, SESSION_DISCONNECT_GRACE_MS, Session } from './session';
 import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
+import { coerceErrorString } from '../util/stringify';
 
 /**
  * Represents the possible states of a transport.
@@ -400,7 +400,7 @@ export abstract class Transport<ConnType extends Connection> {
    * implementation if you need to do any additional cleanup and call super.close() at the end.
    * Closes the transport. Any messages sent while the transport is closed will be silently discarded.
    */
-  async close() {
+  close() {
     for (const session of this.sessions.values()) {
       session.halfCloseConnection();
     }
@@ -414,7 +414,7 @@ export abstract class Transport<ConnType extends Connection> {
    * implementation if you need to do any additional cleanup and call super.destroy() at the end.
    * Destroys the transport. Any messages sent while the transport is destroyed will throw an error.
    */
-  async destroy() {
+  destroy() {
     for (const session of this.sessions.values()) {
       session.closeStaleConnection(session.connection);
     }
@@ -431,8 +431,8 @@ export abstract class ClientTransport<
    * The map of reconnect promises for each client ID.
    */
   inflightConnectionPromises: Map<TransportClientId, Promise<ConnType>>;
-  tryReconnecting: boolean = true;
-  serverInstanceIds: Map<TransportClientId, string> = new Map();
+  tryReconnecting = true;
+  serverInstanceIds = new Map<TransportClientId, string>();
 
   constructor(
     clientId: TransportClientId,
@@ -453,12 +453,14 @@ export abstract class ClientTransport<
     conn.addDataListener(bootHandler);
     conn.addCloseListener(() => {
       this.onDisconnect(conn, to);
-      this.connect(to);
+      void this.connect(to);
     });
 
     conn.addErrorListener((err) => {
       log?.warn(
-        `${this.clientId} -- error in connection (id: ${conn.debugId}) to ${to}: ${err.message}`,
+        `${this.clientId} -- error in connection (id: ${
+          conn.debugId
+        }) to ${to}: ${coerceErrorString(err)}`,
       );
     });
   }
@@ -495,14 +497,6 @@ export abstract class ClientTransport<
 
     try {
       const conn = await reconnectPromise;
-      if (this.state !== 'open') {
-        // we only delete on open here as this allows us to cache successful
-        // connection requests so that subsequent connect calls can reuse it until
-        // it we know for sure that it is unhealthy
-        this.inflightConnectionPromises.delete(to);
-        conn.close();
-        return;
-      }
 
       // send boot sequence
       this.state = 'open';
@@ -510,7 +504,7 @@ export abstract class ClientTransport<
       log?.debug(`${this.clientId} -- sending boot handshake to ${to}`);
       conn.send(this.codec.toBuffer(requestMsg));
     } catch (error: unknown) {
-      const errStr = error instanceof Error ? error.message : `${error}`;
+      const errStr = coerceErrorString(error);
 
       // retry on failure
       this.inflightConnectionPromises.delete(to);
@@ -525,7 +519,7 @@ export abstract class ClientTransport<
         log?.warn(
           `${this.clientId} -- connection to ${to} failed (${errStr}), trying again in ${backoffMs}ms`,
         );
-        setTimeout(() => this.connect(to, attempt + 1), backoffMs);
+        setTimeout(() => void this.connect(to, attempt + 1), backoffMs);
       }
     }
   }
@@ -636,7 +630,7 @@ export abstract class ServerTransport<
           conn.debugId
         }) to ${client()} disconnected`,
       );
-      this.onDisconnect(conn, session?.to);
+      this.onDisconnect(conn, session.to);
     });
 
     conn.addErrorListener((err) => {
@@ -644,7 +638,7 @@ export abstract class ServerTransport<
       log?.warn(
         `${this.clientId} -- connection (id: ${
           conn.debugId
-        }) to ${client()} got an error: ${err}`,
+        }) to ${client()} got an error: ${coerceErrorString(err)}`,
       );
     });
   }

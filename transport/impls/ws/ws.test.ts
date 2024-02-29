@@ -16,7 +16,7 @@ import { PartialTransportMessage } from '../../message';
 describe('sending and receiving across websockets works', async () => {
   const server = http.createServer();
   const port = await onWsServerReady(server);
-  const wss = await createWebSocketServer(server);
+  const wss = createWebSocketServer(server);
 
   afterAll(() => {
     wss.close();
@@ -25,7 +25,7 @@ describe('sending and receiving across websockets works', async () => {
 
   test('basic send/receive', async () => {
     const clientTransport = new WebSocketClientTransport(
-      () => createLocalWebSocketClient(port),
+      () => Promise.resolve(createLocalWebSocketClient(port)),
       'client',
       'SERVER',
     );
@@ -54,7 +54,7 @@ describe('sending and receiving across websockets works', async () => {
 
     const initClient = async (id: string) => {
       const client = new WebSocketClientTransport(
-        () => createLocalWebSocketClient(port),
+        () => Promise.resolve(createLocalWebSocketClient(port)),
         id,
         'SERVER',
       );
@@ -95,7 +95,7 @@ describe('sending and receiving across websockets works', async () => {
 describe('reconnect', async () => {
   const server = http.createServer();
   const port = await onWsServerReady(server);
-  const wss = await createWebSocketServer(server);
+  const wss = createWebSocketServer(server);
 
   afterAll(() => {
     wss.close();
@@ -104,7 +104,7 @@ describe('reconnect', async () => {
 
   test('ws connection is recreated after unclean disconnect', async () => {
     const clientTransport = new WebSocketClientTransport(
-      () => createLocalWebSocketClient(port),
+      () => Promise.resolve(createLocalWebSocketClient(port)),
       'client',
       'SERVER',
     );

@@ -121,7 +121,7 @@ describe.each(testMatrix())(
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 0 });
 
-      const [subscription2, _close2] =
+      const [subscription2, close2] =
         await client2.subscribable.value.subscribe({});
       result = await iterNext(subscription2);
       assert(result.ok);
@@ -176,7 +176,8 @@ describe.each(testMatrix())(
 
       // cleanup client1 (client2 is already disconnected)
       close1();
-      await client1Transport.close();
+      close2();
+      client1Transport.close();
       return testFinishesCleanly({
         clientTransports: [client1Transport, client2Transport],
         serverTransport,

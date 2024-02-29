@@ -17,7 +17,7 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
     super(clientId, providedOptions);
     this.path = socketPath;
     this.serverId = serverId;
-    this.connect(serverId);
+    void this.connect(serverId);
   }
 
   async createNewOutgoingConnection(to: TransportClientId) {

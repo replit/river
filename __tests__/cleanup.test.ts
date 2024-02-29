@@ -43,7 +43,7 @@ describe.each(testMatrix())(
       // should be back to 0 connections after client closes
       vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.tryReconnecting = false;
-      await clientTransport.close();
+      clientTransport.close();
 
       await waitForTransportToFinish(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
@@ -76,7 +76,7 @@ describe.each(testMatrix())(
       // should be back to 0 connections after client closes
       vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.tryReconnecting = false;
-      await serverTransport.close();
+      serverTransport.close();
 
       await waitForTransportToFinish(serverTransport);
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
@@ -95,9 +95,9 @@ describe.each(testMatrix())(
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
 
-      let serverListeners =
+      const serverListeners =
         serverTransport.eventDispatcher.numberOfListeners('message');
-      let clientListeners =
+      const clientListeners =
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
@@ -131,9 +131,9 @@ describe.each(testMatrix())(
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
 
-      let serverListeners =
+      const serverListeners =
         serverTransport.eventDispatcher.numberOfListeners('message');
-      let clientListeners =
+      const clientListeners =
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
@@ -188,9 +188,9 @@ describe.each(testMatrix())(
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
 
-      let serverListeners =
+      const serverListeners =
         serverTransport.eventDispatcher.numberOfListeners('message');
-      let clientListeners =
+      const clientListeners =
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
@@ -235,9 +235,9 @@ describe.each(testMatrix())(
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
 
-      let serverListeners =
+      const serverListeners =
         serverTransport.eventDispatcher.numberOfListeners('message');
-      let clientListeners =
+      const clientListeners =
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure

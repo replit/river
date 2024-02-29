@@ -206,12 +206,10 @@ export class Session<ConnType extends Connection> {
 
   sendHeartbeat() {
     if (this.heartbeatMisses >= HEARTBEATS_TILL_DEAD && this.connection) {
-      if (this.connection) {
-        log?.info(
-          `${this.from} -- closing connection (id: ${this.connection.debugId}) to ${this.to} due to inactivity`,
-        );
-        this.halfCloseConnection();
-      }
+      log?.info(
+        `${this.from} -- closing connection (id: ${this.connection.debugId}) to ${this.to} due to inactivity`,
+      );
+      this.halfCloseConnection();
       return;
     }
 
@@ -302,7 +300,7 @@ export class Session<ConnType extends Connection> {
     return this.ack;
   }
 
-  constructMsg<Payload extends object>(
+  constructMsg<Payload extends Record<string, unknown>>(
     partialMsg: PartialTransportMessage<Payload>,
   ): TransportMessage<Payload> {
     const msg = {
@@ -328,7 +326,7 @@ export class Session<ConnType extends Connection> {
     this.connection?.close();
   }
 
-  inspectSendBuffer(): readonly OpaqueTransportMessage[] {
+  inspectSendBuffer(): ReadonlyArray<OpaqueTransportMessage> {
     return this.sendBuffer;
   }
 }

@@ -37,7 +37,7 @@ export class UdsConnection extends Connection {
     return this.sock.write(MessageFramer.write(payload));
   }
 
-  async close() {
+  close() {
     this.sock.destroy();
     this.framer.destroy();
   }

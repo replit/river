@@ -22,6 +22,10 @@ function base64ToUint8Array(base64: string) {
   return uint8Array;
 }
 
+interface Base64EncodedValue {
+  $t: string;
+}
+
 /**
  * Naive JSON codec implementation using JSON.stringify and JSON.parse.
  * @type {Codec}
@@ -29,10 +33,12 @@ function base64ToUint8Array(base64: string) {
 export const NaiveJsonCodec: Codec = {
   toBuffer: (obj: object) => {
     return encoder.encode(
-      JSON.stringify(obj, function replacer(key) {
-        let val = this[key];
+      JSON.stringify(obj, function replacer<
+        T extends object,
+      >(this: T, key: keyof T) {
+        const val = this[key];
         if (val instanceof Uint8Array) {
-          return { $t: uint8ArrayToBase64(val) };
+          return { $t: uint8ArrayToBase64(val) } satisfies Base64EncodedValue;
         } else {
           return val;
         }
@@ -41,13 +47,19 @@ export const NaiveJsonCodec: Codec = {
   },
   fromBuffer: (buff: Uint8Array) => {
     try {
-      return JSON.parse(decoder.decode(buff), function reviver(_key, val) {
-        if (val?.$t) {
-          return base64ToUint8Array(val.$t);
-        } else {
-          return val;
-        }
-      });
+      const parsed = JSON.parse(
+        decoder.decode(buff),
+        function reviver(_key, val: unknown) {
+          if ((val as Base64EncodedValue | undefined)?.$t) {
+            return base64ToUint8Array((val as Base64EncodedValue).$t);
+          } else {
+            return val;
+          }
+        },
+      ) as unknown;
+
+      if (typeof parsed === 'object') return parsed;
+      return null;
     } catch {
       return null;
     }

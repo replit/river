@@ -1,4 +1,4 @@
-import { describe, test, expect, afterAll, vi } from 'vitest';
+import { describe, test, expect, afterAll, vi, onTestFinished } from 'vitest';
 import {
   createDummyTransportMessage,
   payloadToTransportMessage,
@@ -53,32 +53,48 @@ describe.each(testMatrix())(
       const msg1 = createDummyTransportMessage();
       const msg2 = createDummyTransportMessage();
 
-      const clientConnStart = vi.fn();
-      const clientConnStop = vi.fn();
+      const clientConnStart = vi.fn<[], unknown>();
+      const clientConnStop = vi.fn<[], unknown>();
       const clientConnHandler = (evt: EventMap['connectionStatus']) => {
-        if (evt.status === 'connect') return clientConnStart();
-        if (evt.status === 'disconnect') return clientConnStop();
+        switch (evt.status) {
+          case 'connect':
+            return clientConnStart();
+          case 'disconnect':
+            return clientConnStop();
+        }
       };
 
-      const clientSessStart = vi.fn();
-      const clientSessStop = vi.fn();
+      const clientSessStart = vi.fn<[], unknown>();
+      const clientSessStop = vi.fn<[], unknown>();
       const clientSessHandler = (evt: EventMap['sessionStatus']) => {
-        if (evt.status === 'connect') return clientSessStart();
-        if (evt.status === 'disconnect') return clientSessStop();
+        switch (evt.status) {
+          case 'connect':
+            return clientSessStart();
+          case 'disconnect':
+            return clientSessStop();
+        }
       };
 
-      const serverConnStart = vi.fn();
-      const serverConnStop = vi.fn();
+      const serverConnStart = vi.fn<[], unknown>();
+      const serverConnStop = vi.fn<[], unknown>();
       const serverConnHandler = (evt: EventMap['connectionStatus']) => {
-        if (evt.status === 'connect') return serverConnStart();
-        if (evt.status === 'disconnect') return serverConnStop();
+        switch (evt.status) {
+          case 'connect':
+            return serverConnStart();
+          case 'disconnect':
+            return serverConnStop();
+        }
       };
 
-      const serverSessStart = vi.fn();
-      const serverSessStop = vi.fn();
+      const serverSessStart = vi.fn<[], unknown>();
+      const serverSessStop = vi.fn<[], unknown>();
       const serverSessHandler = (evt: EventMap['sessionStatus']) => {
-        if (evt.status === 'connect') return serverSessStart();
-        if (evt.status === 'disconnect') return serverSessStop();
+        switch (evt.status) {
+          case 'connect':
+            return serverSessStart();
+          case 'disconnect':
+            return serverSessStop();
+        }
       };
 
       clientTransport.addEventListener('connectionStatus', clientConnHandler);
@@ -198,7 +214,7 @@ describe.each(testMatrix())(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
 
-      await clientTransport.destroy();
+      clientTransport.destroy();
       expect(() =>
         clientTransport.send(serverTransport.clientId, msg2),
       ).toThrow(new Error('transport is destroyed, cant send'));
@@ -212,8 +228,8 @@ describe.each(testMatrix())(
         ).toStrictEqual(new Map()),
       );
 
-      await clientTransport.close();
-      await serverTransport.close();
+      clientTransport.close();
+      serverTransport.close();
     });
 
     test('multiple connections works', async () => {
@@ -266,28 +282,38 @@ describe.each(testMatrix())(
 
 describe.each(testMatrix())(
   'transport connection edge cases ($transport.name transport, $codec.name codec)',
-  async ({ transport, codec }) => {
+  ({ transport, codec }) => {
     test('messages should not be resent when reconnecting to a new server', async () => {
       const opts = { codec: codec.codec };
       const { getClientTransport, getServerTransport, restartServer, cleanup } =
         await transport.setup(opts);
+      onTestFinished(cleanup);
 
       const clientTransport = getClientTransport('client');
       let serverTransport = getServerTransport();
 
-      const clientConnStart = vi.fn();
-      const clientConnStop = vi.fn();
+      const clientConnStart = vi.fn<[], unknown>();
+      const clientConnStop = vi.fn<[], unknown>();
       const clientConnHandler = (evt: EventMap['connectionStatus']) => {
-        if (evt.status === 'connect') return clientConnStart();
-        if (evt.status === 'disconnect') return clientConnStop();
+        switch (evt.status) {
+          case 'connect':
+            return clientConnStart();
+          case 'disconnect':
+            return clientConnStop();
+        }
       };
 
-      const clientSessStart = vi.fn();
-      const clientSessStop = vi.fn();
+      const clientSessStart = vi.fn<[], unknown>();
+      const clientSessStop = vi.fn<[], unknown>();
       const clientSessHandler = (evt: EventMap['sessionStatus']) => {
-        if (evt.status === 'connect') return clientSessStart();
-        if (evt.status === 'disconnect') return clientSessStop();
+        switch (evt.status) {
+          case 'connect':
+            return clientSessStart();
+          case 'disconnect':
+            return clientSessStop();
+        }
       };
+
       clientTransport.addEventListener('connectionStatus', clientConnHandler);
       clientTransport.addEventListener('sessionStatus', clientSessHandler);
 
@@ -328,7 +354,7 @@ describe.each(testMatrix())(
 
       // eagerly reconnect client
       clientTransport.tryReconnecting = true;
-      clientTransport.connect('SERVER');
+      await clientTransport.connect('SERVER');
 
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(2));
@@ -358,7 +384,7 @@ describe.each(testMatrix())(
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
-      }).finally(cleanup);
+      });
     });
 
     test('recovers from phantom disconnects', async () => {
@@ -369,37 +395,54 @@ describe.each(testMatrix())(
         simulatePhantomDisconnect,
         cleanup,
       } = await transport.setup(opts);
+      onTestFinished(cleanup);
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const msg1 = createDummyTransportMessage();
 
-      const clientConnStart = vi.fn();
-      const clientConnStop = vi.fn();
+      const clientConnStart = vi.fn<[], unknown>();
+      const clientConnStop = vi.fn<[], unknown>();
       const clientConnHandler = (evt: EventMap['connectionStatus']) => {
-        if (evt.status === 'connect') return clientConnStart();
-        if (evt.status === 'disconnect') return clientConnStop();
+        switch (evt.status) {
+          case 'connect':
+            return clientConnStart();
+          case 'disconnect':
+            return clientConnStop();
+        }
       };
 
-      const clientSessStart = vi.fn();
-      const clientSessStop = vi.fn();
+      const clientSessStart = vi.fn<[], unknown>();
+      const clientSessStop = vi.fn<[], unknown>();
       const clientSessHandler = (evt: EventMap['sessionStatus']) => {
-        if (evt.status === 'connect') return clientSessStart();
-        if (evt.status === 'disconnect') return clientSessStop();
+        switch (evt.status) {
+          case 'connect':
+            return clientSessStart();
+          case 'disconnect':
+            return clientSessStop();
+        }
       };
 
-      const serverConnStart = vi.fn();
-      const serverConnStop = vi.fn();
+      const serverConnStart = vi.fn<[], unknown>();
+      const serverConnStop = vi.fn<[], unknown>();
       const serverConnHandler = (evt: EventMap['connectionStatus']) => {
-        if (evt.status === 'connect') return serverConnStart();
-        if (evt.status === 'disconnect') return serverConnStop();
+        switch (evt.status) {
+          case 'connect':
+            return serverConnStart();
+          case 'disconnect':
+            return serverConnStop();
+        }
       };
 
-      const serverSessStart = vi.fn();
-      const serverSessStop = vi.fn();
+      const serverSessStart = vi.fn<[], unknown>();
+      const serverSessStop = vi.fn<[], unknown>();
       const serverSessHandler = (evt: EventMap['sessionStatus']) => {
-        if (evt.status === 'connect') return serverSessStart();
-        if (evt.status === 'disconnect') return serverSessStop();
+        switch (evt.status) {
+          case 'connect':
+            return serverSessStart();
+          case 'disconnect':
+            return serverSessStop();
+        }
       };
 
       clientTransport.addEventListener('connectionStatus', clientConnHandler);
@@ -452,7 +495,7 @@ describe.each(testMatrix())(
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
-      }).finally(cleanup);
+      });
     });
   },
 );

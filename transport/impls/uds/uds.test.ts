@@ -15,7 +15,7 @@ describe('sending and receiving across unix sockets works', async () => {
   const server = net.createServer();
   await onUdsServeReady(server, socketPath);
 
-  afterAll(async () => {
+  afterAll(() => {
     server.close();
   });
 

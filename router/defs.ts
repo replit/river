@@ -24,6 +24,6 @@ export function buildServiceDefs<T extends Array<AnyService>>(
       { name: T[number]['name'] }
     >;
     return acc;
-    /* eslint-disable @typescript-eslint/prefer-reduce-type-parameter */
+    /* eslint-disable-next-line @typescript-eslint/prefer-reduce-type-parameter */
   }, {} as ServiceDefs<T>);
 }

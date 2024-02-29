@@ -16,6 +16,7 @@ import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import net from 'node:net';
 import { PartialTransportMessage } from '../transport/message';
+import { coerceErrorString } from './stringify';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -23,7 +24,7 @@ import { PartialTransportMessage } from '../transport/message';
  * @param server - The HTTP server instance to use for the WebSocket server.
  * @returns A Promise that resolves to the created WebSocket server instance.
  */
-export async function createWebSocketServer(server: http.Server) {
+export function createWebSocketServer(server: http.Server) {
   return new WebSocketServer({ server });
 }
 
@@ -62,7 +63,7 @@ export function onUdsServeReady(
  * @param port - The port number to connect to.
  * @returns A Promise that resolves to a WebSocket instance.
  */
-export async function createLocalWebSocketClient(port: number) {
+export function createLocalWebSocketClient(port: number) {
   const sock = new WebSocket(`ws://localhost:${port}`);
   sock.binaryType = 'arraybuffer';
   return sock;
@@ -74,12 +75,12 @@ export async function createLocalWebSocketClient(port: number) {
  * @returns A promise that resolves to the next value from the iterator.
  */
 export async function iterNext<T>(iter: AsyncIterableIterator<T>) {
-  return await iter.next().then((res) => res.value);
+  return await iter.next().then((res) => res.value as T);
 }
 
-export function payloadToTransportMessage<Payload extends object>(
-  payload: Payload,
-): PartialTransportMessage<Payload> {
+export function payloadToTransportMessage<
+  Payload extends Record<string, unknown>,
+>(payload: Payload): PartialTransportMessage<Payload> {
   return {
     streamId: 'stream',
     controlFlags: 0,
@@ -111,7 +112,7 @@ export async function waitForMessage(
     }
 
     function onMessage(msg: OpaqueTransportMessage) {
-      if (!filter || filter?.(msg)) {
+      if (!filter || filter(msg)) {
         cleanup();
         resolve(msg.payload);
       } else if (rejectMismatch) {
@@ -124,8 +125,7 @@ export async function waitForMessage(
 }
 
 function catchProcError(err: unknown) {
-  const errorMsg =
-    err instanceof Error ? err.message : `[coerced to error] ${err}`;
+  const errorMsg = coerceErrorString(err);
   return {
     ok: false,
     payload: {
@@ -136,7 +136,7 @@ function catchProcError(err: unknown) {
 }
 
 export function asClientRpc<
-  State extends object | unknown,
+  State extends object,
   I extends PayloadType,
   O extends PayloadType,
   E extends RiverError,
@@ -158,7 +158,7 @@ export function asClientRpc<
 }
 
 export function asClientStream<
-  State extends object | unknown,
+  State extends object,
   I extends PayloadType,
   O extends PayloadType,
   E extends RiverError,
@@ -174,14 +174,14 @@ export function asClientStream<
     objectMode: true,
   });
 
-  (async () => {
+  void (async () => {
     if (init) {
       const _proc = proc as Procedure<State, 'stream', I, O, E, PayloadType>;
       await _proc
         .handler({ ...extendedContext, state }, init, input, output)
         .catch((err) => output.push(catchProcError(err)));
     } else {
-      const _proc = proc as Procedure<State, 'stream', I, O, E, null>;
+      const _proc = proc as Procedure<State, 'stream', I, O, E>;
       await _proc
         .handler({ ...extendedContext, state }, input, output)
         .catch((err) => output.push(catchProcError(err)));
@@ -192,7 +192,7 @@ export function asClientStream<
 }
 
 export function asClientSubscription<
-  State extends object | unknown,
+  State extends object,
   I extends PayloadType,
   O extends PayloadType,
   E extends RiverError,
@@ -205,8 +205,8 @@ export function asClientSubscription<
     objectMode: true,
   });
 
-  return async (msg: Static<I>) => {
-    (async () => {
+  return (msg: Static<I>) => {
+    void (async () => {
       return await proc
         .handler({ ...extendedContext, state }, msg, output)
         .catch((err) => output.push(catchProcError(err)));
@@ -215,8 +215,8 @@ export function asClientSubscription<
   };
 }
 
-export async function asClientUpload<
-  State extends object | unknown,
+export function asClientUpload<
+  State extends object,
   I extends PayloadType,
   O extends PayloadType,
   E extends RiverError,
@@ -235,7 +235,7 @@ export async function asClientUpload<
       .catch(catchProcError);
     return [input, result] as const;
   } else {
-    const _proc = proc as Procedure<State, 'upload', I, O, E, null>;
+    const _proc = proc as Procedure<State, 'upload', I, O, E>;
     const result = _proc
       .handler({ ...extendedContext, state }, input)
       .catch(catchProcError);

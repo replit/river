@@ -27,7 +27,7 @@ export const transports: Array<{
     getServerTransport: () => ServerTransport<Connection>;
     simulatePhantomDisconnect: () => void;
     restartServer: () => Promise<void>;
-    cleanup: () => Promise<void>;
+    cleanup: () => Promise<void> | void;
   }>;
 }> = [
   {
@@ -35,12 +35,11 @@ export const transports: Array<{
     setup: async (opts) => {
       let server = http.createServer();
       const port = await onWsServerReady(server);
-      let wss = await createWebSocketServer(server);
+      let wss = createWebSocketServer(server);
 
-      const transports: (
-        | WebSocketClientTransport
-        | WebSocketServerTransport
-      )[] = [];
+      const transports: Array<
+        WebSocketClientTransport | WebSocketServerTransport
+      > = [];
       return {
         simulatePhantomDisconnect() {
           for (const transport of transports) {
@@ -51,7 +50,7 @@ export const transports: Array<{
         },
         getClientTransport(id) {
           const clientTransport = new WebSocketClientTransport(
-            () => createLocalWebSocketClient(port),
+            () => Promise.resolve(createLocalWebSocketClient(port)),
             id,
             'SERVER',
             opts,
@@ -83,9 +82,9 @@ export const transports: Array<{
           await new Promise<void>((resolve) => {
             server.listen(port, resolve);
           });
-          wss = await createWebSocketServer(server);
+          wss = createWebSocketServer(server);
         },
-        cleanup: async () => {
+        cleanup: () => {
           wss.close();
           server.close();
         },
@@ -99,10 +98,9 @@ export const transports: Array<{
       let server = net.createServer();
       await onUdsServeReady(server, socketPath);
 
-      const transports: (
-        | UnixDomainSocketClientTransport
-        | UnixDomainSocketServerTransport
-      )[] = [];
+      const transports: Array<
+        UnixDomainSocketClientTransport | UnixDomainSocketServerTransport
+      > = [];
       return {
         simulatePhantomDisconnect() {
           for (const transport of transports) {
@@ -144,7 +142,7 @@ export const transports: Array<{
           server = net.createServer();
           await onUdsServeReady(server, socketPath);
         },
-        cleanup: async () => {
+        cleanup: () => {
           server.close();
         },
       };

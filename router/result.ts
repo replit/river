@@ -11,15 +11,18 @@ import {
 type TLiteralString = TLiteral<string>;
 export type RiverErrorSchema =
   | TObject<{
-      code: TLiteralString | TUnion<TLiteralString[]>;
+      code: TLiteralString | TUnion<Array<TLiteralString>>;
       message: TLiteralString | TString;
     }>
   | TObject<{
-      code: TLiteralString | TUnion<TLiteralString[]>;
+      code: TLiteralString | TUnion<Array<TLiteralString>>;
       message: TLiteralString | TString;
       extras: TSchema;
     }>;
-export type RiverError = TUnion<RiverErrorSchema[]> | RiverErrorSchema | TNever;
+export type RiverError =
+  | TUnion<Array<RiverErrorSchema>>
+  | RiverErrorSchema
+  | TNever;
 
 export const UNCAUGHT_ERROR = 'UNCAUGHT_ERROR';
 export const UNEXPECTED_DISCONNECT = 'UNEXPECTED_DISCONNECT';

@@ -167,17 +167,17 @@ describe.each(testMatrix())(
       const [input, output, close] = await client.fallible.echo.stream();
       input.push({ msg: 'abc', throwResult: false, throwError: false });
       const result1 = await iterNext(output);
-      assert(result1 && result1.ok);
+      assert(result1.ok);
       expect(result1.payload).toStrictEqual({ response: 'abc' });
 
       input.push({ msg: 'def', throwResult: true, throwError: false });
       const result2 = await iterNext(output);
-      assert(result2 && !result2.ok);
+      assert(!result2.ok);
       expect(result2.payload.code).toStrictEqual(STREAM_ERROR);
 
       input.push({ msg: 'ghi', throwResult: false, throwError: true });
       const result3 = await iterNext(output);
-      assert(result3 && !result3.ok);
+      assert(!result3.ok);
       expect(result3.payload).toStrictEqual({
         code: UNCAUGHT_ERROR,
         message: 'some message',
@@ -280,7 +280,7 @@ describe.each(testMatrix())(
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
 
-      const expected: number[] = [];
+      const expected: Array<number> = [];
       for (let i = 0; i < 50; i++) {
         expected.push(i);
 

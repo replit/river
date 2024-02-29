@@ -55,7 +55,7 @@ describe('bandwidth', async () => {
       async () => {
         input.push({ msg: 'abc', ignore: false });
         const result = await output.next();
-        assert(result.value && result.value.ok);
+        assert(result.value.ok);
       },
       { time: BENCH_DURATION },
     );
