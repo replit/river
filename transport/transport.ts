@@ -87,6 +87,14 @@ export const defaultTransportOptions: TransportOptions = {
  */
 export abstract class Transport<ConnType extends Connection> {
   /**
+   * Unique per instance of the transport.
+   * This allows us to distinguish reconnects to different
+   * transports.
+   */
+  instanceId: string = nanoid();
+  connectedInstanceIds = new Map<TransportClientId, string>();
+
+  /**
    * A flag indicating whether the transport has been destroyed.
    * A destroyed transport will not attempt to reconnect and cannot be used again.
    */
@@ -177,15 +185,34 @@ export abstract class Transport<ConnType extends Connection> {
   protected onConnect(
     conn: ConnType,
     connectedTo: TransportClientId,
+    instanceId: string,
   ): Session<ConnType> {
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'connect',
       conn,
     });
 
-    const session = this.sessions.get(connectedTo);
+    let session = this.sessions.get(connectedTo);
+    // check if the peer we are connected to is actually difference by comparing instanceId
+    const lastInstanceId = this.connectedInstanceIds.get(connectedTo);
+    if (
+      session &&
+      lastInstanceId !== instanceId &&
+      lastInstanceId !== undefined
+    ) {
+      // mismatch, kill the old session and begin a new one
+      log?.debug(
+        `${this.clientId} -- handshake from ${connectedTo} has different server instance (got: ${instanceId}, last connected to: ${lastInstanceId}), starting a new session`,
+      );
+      session.resetBufferedMessages();
+      session.closeStaleConnection();
+      this.deleteSession(session);
+      session = undefined;
+    }
+    this.connectedInstanceIds.set(connectedTo, instanceId);
+
+    // if we don't have an existing session, create a new one and return it
     if (session === undefined) {
-      // new session, create and return
       const newSession = this.createSession(connectedTo, conn);
       log?.info(
         `${this.clientId} -- new connection (id: ${conn.debugId}) for new session (id: ${newSession.debugId}) to ${connectedTo}`,
@@ -265,12 +292,14 @@ export abstract class Transport<ConnType extends Connection> {
 
     if (parsedMsg === null) {
       const decodedBuffer = new TextDecoder().decode(msg);
-      log?.warn(`${this.clientId} -- received malformed msg: ${decodedBuffer}`);
+      log?.error(
+        `${this.clientId} -- received malformed msg, killing conn: ${decodedBuffer}`,
+      );
       return null;
     }
 
     if (!Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
-      log?.warn(
+      log?.error(
         `${this.clientId} -- received invalid msg: ${JSON.stringify(
           parsedMsg,
         )}`,
@@ -293,11 +322,7 @@ export abstract class Transport<ConnType extends Connection> {
    * You generally shouldn't need to override this in downstream transport implementations.
    * @param msg The received message.
    */
-  handleMsg(msg: OpaqueTransportMessage | null) {
-    if (!msg) {
-      return;
-    }
-
+  handleMsg(msg: OpaqueTransportMessage) {
     // got a msg so we know the other end is alive, reset the grace period
     const session = this.sessionByClientId(msg.from);
     session.cancelGrace();
@@ -432,7 +457,6 @@ export abstract class ClientTransport<
    */
   inflightConnectionPromises: Map<TransportClientId, Promise<ConnType>>;
   tryReconnecting = true;
-  serverInstanceIds = new Map<TransportClientId, string>();
 
   constructor(
     clientId: TransportClientId,
@@ -447,7 +471,15 @@ export abstract class ClientTransport<
       // when we are done booting,
       // remove boot listener and use the normal message listener
       conn.removeDataListener(bootHandler);
-      conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
+      conn.addDataListener((data) => {
+        const parsed = this.parseMsg(data);
+        if (!parsed) {
+          conn.close();
+          return;
+        }
+
+        this.handleMsg(parsed);
+      });
     });
 
     conn.addDataListener(bootHandler);
@@ -500,7 +532,7 @@ export abstract class ClientTransport<
 
       // send boot sequence
       this.state = 'open';
-      const requestMsg = bootRequestMessage(this.clientId, to);
+      const requestMsg = bootRequestMessage(this.clientId, to, this.instanceId);
       log?.debug(`${this.clientId} -- sending boot handshake to ${to}`);
       conn.send(this.codec.toBuffer(requestMsg));
     } catch (error: unknown) {
@@ -530,7 +562,10 @@ export abstract class ClientTransport<
   ) {
     const bootHandler = (data: Uint8Array) => {
       const parsed = this.parseMsg(data);
-      if (!parsed) return;
+      if (!parsed) {
+        conn.close();
+        return;
+      }
 
       if (!Value.Check(ControlMessageHandshakeResponseSchema, parsed.payload)) {
         log?.warn(
@@ -551,29 +586,13 @@ export abstract class ClientTransport<
       }
 
       // handshake ok, check if server instance matches
-      const oldSession = this.sessions.get(parsed.from);
       const serverInstanceId = parsed.payload.status.instanceId;
-      const lastServerInstanceId = this.serverInstanceIds.get(parsed.from);
-      if (
-        oldSession &&
-        lastServerInstanceId !== serverInstanceId &&
-        lastServerInstanceId !== undefined
-      ) {
-        // mismatch, kill the old session and begin a new one
-        log?.debug(
-          `${this.clientId} -- handshake from ${parsed.from} has different server instance (got: ${serverInstanceId}, last connected to: ${lastServerInstanceId}), starting a new session`,
-        );
-        oldSession.resetBufferedMessages();
-        oldSession.closeStaleConnection();
-        this.deleteSession(oldSession);
-      }
 
       // all good, let's connect
       log?.debug(
         `${this.clientId} -- handshake from ${parsed.from} ok (server instance: ${serverInstanceId})`,
       );
-      this.serverInstanceIds.set(parsed.from, serverInstanceId);
-      sessionCb(this.onConnect(conn, parsed.from));
+      sessionCb(this.onConnect(conn, parsed.from, serverInstanceId));
     };
 
     return bootHandler;
@@ -588,15 +607,6 @@ export abstract class ClientTransport<
 export abstract class ServerTransport<
   ConnType extends Connection,
 > extends Transport<ConnType> {
-  /**
-   * Unique per instance of server transport.
-   * This allows us to distinguish reconnects to different
-   * server transports at the same reachable address and signal
-   * the appropriate session disconnect back to the client at the
-   * boot stage.
-   */
-  instanceId: string = nanoid();
-
   constructor(
     clientId: TransportClientId,
     providedOptions?: Partial<TransportOptions>,
@@ -618,7 +628,15 @@ export abstract class ServerTransport<
         // when we are done booting,
         // remove boot listener and use the normal message listener
         conn.removeDataListener(bootHandler);
-        conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
+        conn.addDataListener((data) => {
+          const parsed = this.parseMsg(data);
+          if (!parsed) {
+            conn.close();
+            return;
+          }
+
+          this.handleMsg(parsed);
+        });
       },
     );
 
@@ -649,7 +667,10 @@ export abstract class ServerTransport<
   ) {
     const bootHandler = (data: Uint8Array) => {
       const parsed = this.parseMsg(data);
-      if (!parsed) return;
+      if (!parsed) {
+        conn.close();
+        return;
+      }
 
       // double check protocol version here
       if (!Value.Check(ControlMessageHandshakeRequestSchema, parsed.payload)) {
@@ -668,8 +689,9 @@ export abstract class ServerTransport<
         return;
       }
 
+      const instanceId = parsed.payload.instanceId;
       log?.debug(
-        `${this.clientId} -- handshake from ${parsed.from} ok, responding with handshake success`,
+        `${this.clientId} -- handshake from ${parsed.from} ok (instance id: ${instanceId}), responding with handshake success`,
       );
       const responseMsg = bootResponseMessage(
         this.clientId,
@@ -680,7 +702,7 @@ export abstract class ServerTransport<
       conn.send(this.codec.toBuffer(responseMsg));
 
       // we have the session
-      sessionCb(this.onConnect(conn, parsed.from));
+      sessionCb(this.onConnect(conn, parsed.from, instanceId));
     };
 
     return bootHandler;

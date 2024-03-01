@@ -68,9 +68,9 @@ export abstract class Connection {
   abstract close(): void;
 }
 
-export const HEARTBEAT_INTERVAL_MS = 250; // 250ms
-export const HEARTBEATS_TILL_DEAD = 4; // can miss max of 4 heartbeats before we consider the connection dead
-export const SESSION_DISCONNECT_GRACE_MS = 3_000; // 3s
+export const HEARTBEAT_INTERVAL_MS = 1000; // 1s
+export const HEARTBEATS_TILL_DEAD = 2; // can miss max of 2 heartbeats before we consider the connection dead
+export const SESSION_DISCONNECT_GRACE_MS = 5_000; // 5s
 
 /**
  * A session is a higher-level abstraction that operates over the span of potentially multiple transport-level connections
@@ -205,11 +205,13 @@ export class Session<ConnType extends Connection> {
   }
 
   sendHeartbeat() {
-    if (this.heartbeatMisses >= HEARTBEATS_TILL_DEAD && this.connection) {
-      log?.info(
-        `${this.from} -- closing connection (id: ${this.connection.debugId}) to ${this.to} due to inactivity`,
-      );
-      this.halfCloseConnection();
+    if (this.heartbeatMisses >= HEARTBEATS_TILL_DEAD) {
+      if (this.connection) {
+        log?.info(
+          `${this.from} -- closing connection (id: ${this.connection.debugId}) to ${this.to} due to inactivity`,
+        );
+        this.halfCloseConnection();
+      }
       return;
     }
 
@@ -253,7 +255,6 @@ export class Session<ConnType extends Connection> {
   }
 
   updateBookkeeping(ack: number, seq: number) {
-    this.heartbeatMisses = 0;
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq > ack);
     this.ack = seq + 1;
   }
@@ -289,6 +290,7 @@ export class Session<ConnType extends Connection> {
   }
 
   cancelGrace() {
+    this.heartbeatMisses = 0;
     clearTimeout(this.disconnectionGrace);
   }
 
