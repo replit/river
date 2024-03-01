@@ -273,6 +273,7 @@ export abstract class Transport<ConnType extends Connection> {
     if (this.state !== 'open') {
       // construct a fake session and disconnect it immediately
       conn.close();
+      this.sessions.delete(connectedTo);
       return;
     }
 
