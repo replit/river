@@ -1,4 +1,4 @@
-# river - Streaming Remote Procedure Calls
+# river - Long-lived Streaming Remote Procedure Calls
 
 It's like tRPC/gRPC but with
 
@@ -7,6 +7,7 @@ It's like tRPC/gRPC but with
 - service multiplexing
 - result types and error handling
 - snappy DX (no code-generation)
+- transparent reconnect support for long-lived sessions
 - over any transport (WebSockets, stdio, Unix Domain Socket out of the box)
 
 ## Installation
@@ -32,6 +33,8 @@ npm i ws isomorphic-ws
   - `subscription` whose handler has a signature of `Input -> Pushable<Result<Output, Error>>`.
   - `stream` whose handler has a signature of `AsyncIterableIterator<Input> -> Pushable<Result<Output, Error>>`.
 - Transport: manages the lifecycle (creation/deletion) of connections and multiplexing read/writes from clients. Both the client and the server must be passed in a subclass of `Transport` to work.
+  - Connection: the actual raw underlying transport connection
+  - Session: a higher-level abstraction that operates over the span of potentially multiple transport-level connections
 - Codec: encodes messages between clients/servers before the transport sends it across the wire.
 
 ### A basic router
@@ -110,6 +113,8 @@ if (result.ok) {
 }
 ```
 
+### Logging
+
 To add logging,
 
 ```ts
@@ -119,7 +124,20 @@ bindLogger(console.log);
 setLevel('info');
 ```
 
-To listen for connection status changes,
+### Connection Status
+
+River define two types of reconnects:
+
+1. Transparent reconnects: we lost the connection temporarily and reconnected without losing any messages. To the application level, nothing happened.
+2. Hard reconnect: we've lost all server state and the client should setup the world again.
+
+We can listen for transparent reconnects via the `connectionStatus` events but realistically
+no applications should need to listen for this unless it is for debug purposes. Hard reconnects
+are signalled via `sessionStatus` events.
+
+If your application is stateful on either the server or the client, the service consumer _should_
+wrap all the client-side setup with `transport.addEventListener('sessionStatus', (evt) => ...)` to
+do appropriate setup and teardown.
 
 ```ts
 transport.addEventListener('connectionStatus', (evt) => {
@@ -129,13 +147,15 @@ transport.addEventListener('connectionStatus', (evt) => {
     // do something else
   }
 });
-```
 
-> [!note] WebSocket connection behaviour
-> WebSocket is an idle protocol. This means that when the underlying connection drops, the WebSocket
-> may still think it is still connected (e.g. turning off the network via devtools).
-> You can use `window.addEventListener('online', ...);` and `window.addEventListener('offline', ...);` to
-> know if you need to recreate the transport.
+transport.addEventListener('sessionStatus', (evt) => {
+  if (evt.status === 'connect') {
+    // do something
+  } else if (evt.status === 'disconnect') {
+    // do something else
+  }
+});
+```
 
 ### Further examples
 
