@@ -265,12 +265,14 @@ export abstract class Transport<ConnType extends Connection> {
 
     if (parsedMsg === null) {
       const decodedBuffer = new TextDecoder().decode(msg);
-      log?.warn(`${this.clientId} -- received malformed msg: ${decodedBuffer}`);
+      log?.error(
+        `${this.clientId} -- received malformed msg, killing conn: ${decodedBuffer}`,
+      );
       return null;
     }
 
     if (!Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
-      log?.warn(
+      log?.error(
         `${this.clientId} -- received invalid msg: ${JSON.stringify(
           parsedMsg,
         )}`,
@@ -293,11 +295,7 @@ export abstract class Transport<ConnType extends Connection> {
    * You generally shouldn't need to override this in downstream transport implementations.
    * @param msg The received message.
    */
-  handleMsg(msg: OpaqueTransportMessage | null) {
-    if (!msg) {
-      return;
-    }
-
+  handleMsg(msg: OpaqueTransportMessage) {
     // got a msg so we know the other end is alive, reset the grace period
     const session = this.sessionByClientId(msg.from);
     session.cancelGrace();
@@ -447,7 +445,15 @@ export abstract class ClientTransport<
       // when we are done booting,
       // remove boot listener and use the normal message listener
       conn.removeDataListener(bootHandler);
-      conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
+      conn.addDataListener((data) => {
+        const parsed = this.parseMsg(data);
+        if (!parsed) {
+          conn.close();
+          return;
+        }
+
+        this.handleMsg(parsed);
+      });
     });
 
     conn.addDataListener(bootHandler);
@@ -530,7 +536,10 @@ export abstract class ClientTransport<
   ) {
     const bootHandler = (data: Uint8Array) => {
       const parsed = this.parseMsg(data);
-      if (!parsed) return;
+      if (!parsed) {
+        conn.close();
+        return;
+      }
 
       if (!Value.Check(ControlMessageHandshakeResponseSchema, parsed.payload)) {
         log?.warn(
@@ -618,7 +627,15 @@ export abstract class ServerTransport<
         // when we are done booting,
         // remove boot listener and use the normal message listener
         conn.removeDataListener(bootHandler);
-        conn.addDataListener((data) => this.handleMsg(this.parseMsg(data)));
+        conn.addDataListener((data) => {
+          const parsed = this.parseMsg(data);
+          if (!parsed) {
+            conn.close();
+            return;
+          }
+
+          this.handleMsg(parsed);
+        });
       },
     );
 
@@ -649,7 +666,10 @@ export abstract class ServerTransport<
   ) {
     const bootHandler = (data: Uint8Array) => {
       const parsed = this.parseMsg(data);
-      if (!parsed) return;
+      if (!parsed) {
+        conn.close();
+        return;
+      }
 
       // double check protocol version here
       if (!Value.Check(ControlMessageHandshakeRequestSchema, parsed.payload)) {
