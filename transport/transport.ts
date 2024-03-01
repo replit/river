@@ -201,11 +201,11 @@ export abstract class Transport<ConnType extends Connection> {
       lastInstanceId !== undefined
     ) {
       // mismatch, kill the old session and begin a new one
-      log?.debug(
+      log?.warn(
         `${this.clientId} -- handshake from ${connectedTo} has different server instance (got: ${instanceId}, last connected to: ${lastInstanceId}), starting a new session`,
       );
       session.resetBufferedMessages();
-      session.closeStaleConnection();
+      session.closeStaleConnection(conn);
       this.deleteSession(session);
       session = undefined;
     }
@@ -251,13 +251,13 @@ export abstract class Transport<ConnType extends Connection> {
 
   protected deleteSession(session: Session<ConnType>) {
     this.sessions.delete(session.to);
+    log?.info(
+      `${this.clientId} -- session ${session.debugId} disconnect from ${session.to}`,
+    );
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'disconnect',
       session,
     });
-    log?.info(
-      `${this.clientId} -- session ${session.debugId} disconnect from ${session.to}`,
-    );
   }
 
   /**

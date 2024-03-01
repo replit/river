@@ -210,7 +210,7 @@ export class Session<ConnType extends Connection> {
         log?.info(
           `${this.from} -- closing connection (id: ${this.connection.debugId}) to ${this.to} due to inactivity`,
         );
-        this.halfCloseConnection();
+        this.closeStaleConnection(this.connection);
       }
       return;
     }
@@ -326,6 +326,7 @@ export class Session<ConnType extends Connection> {
    */
   halfCloseConnection() {
     this.connection?.close();
+    clearInterval(this.heartbeat);
   }
 
   inspectSendBuffer(): ReadonlyArray<OpaqueTransportMessage> {
