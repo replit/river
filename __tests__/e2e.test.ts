@@ -399,7 +399,7 @@ describe.each(testMatrix())(
           clientTransports: [clientTransport],
           serverTransport,
           server,
-        });
+        }).finally(() => unbindLogger());
       });
 
       // test
@@ -428,8 +428,6 @@ describe.each(testMatrix())(
         const [_input, _output, close] = openStreams[i];
         close();
       }
-
-      unbindLogger();
     });
   },
 );
