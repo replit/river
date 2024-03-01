@@ -76,11 +76,10 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
           };
 
           const onError = (evt: WebSocket.ErrorEvent) => {
-            const err = evt.error as { code: string } | undefined;
             ws.removeEventListener('error', onError);
             ws.removeEventListener('close', onClose);
             resolve({
-              err: err?.code ?? coerceErrorString(err),
+              err: coerceErrorString(evt),
             });
           };
 
