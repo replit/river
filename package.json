@@ -67,15 +67,24 @@
   },
   "devDependencies": {
     "@types/ws": "^8.5.5",
-    "@vitest/ui": "^1.2.1",
+    "@typescript-eslint/eslint-plugin": "^7.1.0",
+    "@typescript-eslint/parser": "^7.1.0",
+    "@vitest/ui": "^1.3.1",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
     "prettier": "^3.0.0",
     "tsup": "^7.2.0",
     "typescript": "^5.2.2",
-    "vitest": "^1.2.1"
+    "vitest": "^1.3.1"
   },
   "scripts": {
-    "check": "tsc --noEmit && npx prettier . --check",
-    "format": "npx prettier . --write",
+    "check": "tsc --noEmit && npm run format && npm run lint",
+    "format": "npx prettier . --check",
+    "format:fix": "npx prettier . --write",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "fix": "npm run format:fix && npm run lint:fix",
     "build": "rm -rf dist && tsup && du -sh dist",
     "prepack": "npm run build",
     "release": "npm publish --access public",

@@ -44,7 +44,7 @@ export interface Service<
   state: State;
   procedures: Procs;
 }
-export type AnyService = Service<string, object, any>;
+export type AnyService = Service<string, object, ProcListing>;
 
 /**
  * Serializes a service object into its corresponding JSON Schema Draft 7 type.
@@ -98,7 +98,7 @@ export type ProcHandler<
 export type ProcHasInit<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName] extends { init: any } ? true : false;
+> = S['procedures'][ProcName] extends { init: TObject } ? true : false;
 
 /**
  * Helper to get the type definition for the procedure init type of a service.
@@ -108,7 +108,9 @@ export type ProcHasInit<
 export type ProcInit<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName]['init'];
+> = S['procedures'][ProcName] extends { init: TObject }
+  ? S['procedures'][ProcName]['init']
+  : never;
 
 /**
  * Helper to get the type definition for the procedure input of a service.
@@ -150,7 +152,7 @@ export type ProcType<
   ProcName extends keyof S['procedures'],
 > = S['procedures'][ProcName]['type'];
 
-export type PayloadType = TObject | TUnion<TObject[]>;
+export type PayloadType = TObject | TUnion<Array<TObject>>;
 
 /**
  * Defines a Procedure type that can be either an RPC or a stream procedure.
@@ -161,7 +163,7 @@ export type PayloadType = TObject | TUnion<TObject[]>;
  * @template Init - The TypeBox schema of the input initialization object.
  */
 export type Procedure<
-  State extends object | unknown,
+  State,
   Ty extends ValidProcType,
   I extends PayloadType,
   O extends PayloadType,
@@ -341,8 +343,8 @@ export class ServiceBuilder<T extends Service<string, object, ProcListing>> {
     name: Name,
   ): ServiceBuilder<{
     name: Name;
-    state: {};
-    procedures: {};
+    state: object;
+    procedures: ProcListing;
   }> {
     return new ServiceBuilder({
       name,

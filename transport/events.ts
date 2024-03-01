@@ -15,7 +15,9 @@ export interface EventMap {
 }
 
 export type EventTypes = keyof EventMap;
-export type EventHandler<K extends EventTypes> = (event: EventMap[K]) => void;
+export type EventHandler<K extends EventTypes> = (
+  event: EventMap[K],
+) => unknown;
 
 export class EventDispatcher<T extends EventTypes> {
   private eventListeners: { [K in T]?: Set<EventHandler<K>> } = {};

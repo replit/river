@@ -39,7 +39,7 @@ export class StreamConnection extends Connection {
     return this.output.write(MessageFramer.write(payload));
   }
 
-  async close() {
+  close() {
     this.output.end();
     this.input.unpipe(this.framer);
     this.framer.destroy();

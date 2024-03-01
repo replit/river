@@ -61,7 +61,7 @@ export const TestServiceConstructor = () =>
 export const OrderingServiceConstructor = () =>
   ServiceBuilder.create('test')
     .initialState({
-      msgs: [] as number[],
+      msgs: [] as Array<number>,
     })
     .defineProcedure('add', {
       type: 'rpc',

@@ -100,9 +100,7 @@ export const OpaqueTransportMessageSchema = TransportMessageSchema(
  *   `payload` should be discarded (usually contains a control message).
  * @template Payload The type of the payload.
  */
-export type TransportMessage<
-  Payload extends Record<string, unknown> | unknown = Record<string, unknown>,
-> = {
+export interface TransportMessage<Payload = Record<string, unknown>> {
   id: string;
   from: string;
   to: string;
@@ -113,10 +111,10 @@ export type TransportMessage<
   streamId: string;
   controlFlags: number;
   payload: Payload;
-};
+}
 
 export type PartialTransportMessage<
-  Payload extends Record<string, unknown> | unknown = Record<string, unknown>,
+  Payload extends Record<string, unknown> = Record<string, unknown>,
 > = Omit<TransportMessage<Payload>, 'id' | 'from' | 'to' | 'seq' | 'ack'>;
 
 export function bootRequestMessage(
@@ -183,6 +181,7 @@ export type TransportClientId = string;
  * @returns True if the control flag contains the AckBit, false otherwise.
  */
 export function isAck(controlFlag: number): boolean {
+  /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
   return (controlFlag & ControlFlags.AckBit) === ControlFlags.AckBit;
 }
 
@@ -193,6 +192,7 @@ export function isAck(controlFlag: number): boolean {
  */
 export function isStreamOpen(controlFlag: number): boolean {
   return (
+    /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
     (controlFlag & ControlFlags.StreamOpenBit) === ControlFlags.StreamOpenBit
   );
 }
@@ -204,6 +204,7 @@ export function isStreamOpen(controlFlag: number): boolean {
  */
 export function isStreamClose(controlFlag: number): boolean {
   return (
+    /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
     (controlFlag & ControlFlags.StreamClosedBit) ===
     ControlFlags.StreamClosedBit
   );

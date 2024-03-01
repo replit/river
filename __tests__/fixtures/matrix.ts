@@ -9,7 +9,7 @@ import {
 import { TransportOptions } from '../../transport/transport';
 import { ValidTransports, transports } from './transports';
 
-type TestMatrixEntry = {
+interface TestMatrixEntry {
   transport: {
     name: string;
     setup: (opts?: Partial<TransportOptions>) => Promise<{
@@ -19,14 +19,14 @@ type TestMatrixEntry = {
       ) => ClientTransport<Connection>;
       getServerTransport: () => ServerTransport<Connection>;
       restartServer: () => Promise<void>;
-      cleanup: () => Promise<void>;
+      cleanup: () => Promise<void> | void;
     }>;
   };
   codec: {
     name: string;
     codec: Codec;
   };
-};
+}
 
 /**
  * Defines a selector type that pairs a valid transport with a valid codec.

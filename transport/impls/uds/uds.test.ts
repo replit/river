@@ -1,4 +1,4 @@
-import { describe, test, expect, afterAll } from 'vitest';
+import { describe, test, expect, afterAll, onTestFinished } from 'vitest';
 import { UnixDomainSocketClientTransport } from './client';
 import { UnixDomainSocketServerTransport } from './server';
 import {
@@ -15,7 +15,7 @@ describe('sending and receiving across unix sockets works', async () => {
   const server = net.createServer();
   await onUdsServeReady(server, socketPath);
 
-  afterAll(async () => {
+  afterAll(() => {
     server.close();
   });
 
@@ -36,6 +36,12 @@ describe('sending and receiving across unix sockets works', async () => {
         test: [1, 2, 3, 4],
       },
     ];
+    onTestFinished(async () => {
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
 
     for (const msg of messages) {
       const transportMessage = payloadToTransportMessage(msg);
@@ -47,10 +53,5 @@ describe('sending and receiving across unix sockets works', async () => {
         waitForMessage(serverTransport, (incoming) => incoming.id === msgId),
       ).resolves.toStrictEqual(transportMessage.payload);
     }
-
-    await testFinishesCleanly({
-      clientTransports: [clientTransport],
-      serverTransport,
-    });
   });
 });

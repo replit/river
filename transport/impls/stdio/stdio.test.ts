@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, onTestFinished } from 'vitest';
 import stream from 'node:stream';
 import { StdioClientTransport } from './client';
 import {
@@ -23,6 +23,12 @@ describe('sending and receiving across node streams works', () => {
       clientToServer,
       serverTransport.clientId,
     );
+    onTestFinished(async () => {
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
 
     const messages = [
       {
@@ -41,10 +47,5 @@ describe('sending and receiving across node streams works', () => {
       clientTransport.send(serverTransport.clientId, transportMessage);
       await expect(msgPromise).resolves.toStrictEqual(transportMessage.payload);
     }
-
-    await testFinishesCleanly({
-      clientTransports: [clientTransport],
-      serverTransport,
-    });
   });
 });

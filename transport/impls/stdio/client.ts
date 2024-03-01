@@ -30,13 +30,13 @@ export class StdioClientTransport extends ClientTransport<StreamConnection> {
     this.input = input;
     this.output = output;
     this.serverId = serverId;
-    this.connect(serverId);
+    void this.connect(serverId);
   }
 
   async createNewOutgoingConnection(to: TransportClientId) {
     log?.info(`${this.clientId} -- establishing a new stream to ${to}`);
     const conn = new StreamConnection(this.input, this.output);
     this.handleConnection(conn, to);
-    return conn;
+    return Promise.resolve(conn);
   }
 }

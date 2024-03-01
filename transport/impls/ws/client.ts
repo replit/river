@@ -36,7 +36,7 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
     this.serverId = serverId;
 
     // eagerly connect as soon as we initialize
-    this.connect(this.serverId);
+    void this.connect(this.serverId);
   }
 
   reopen() {
@@ -45,39 +45,42 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
     }
 
     this.state = 'open';
-    this.connect(this.serverId);
+    void this.connect(this.serverId);
   }
 
   async createNewOutgoingConnection(to: string) {
     // get a promise to an actual websocket that's ready
-    const wsRes = await new Promise<WebSocketResult>(async (resolve) => {
+    const wsRes = await new Promise<WebSocketResult>((resolve) => {
       log?.info(`${this.clientId} -- establishing a new websocket to ${to}`);
-      try {
-        const ws = await this.wsGetter(to);
-        if (ws.readyState === ws.OPEN) {
-          return resolve({ ws });
-        }
+      this.wsGetter(to)
+        .then((ws) => {
+          if (ws.readyState === ws.OPEN) {
+            resolve({ ws });
+            return;
+          }
 
-        if (ws.readyState === ws.CLOSING || ws.readyState === ws.CLOSED) {
-          return resolve({ err: 'ws is closing or closed' });
-        }
+          if (ws.readyState === ws.CLOSING || ws.readyState === ws.CLOSED) {
+            resolve({ err: 'ws is closing or closed' });
+            return;
+          }
 
-        const onOpen = () => {
-          ws.removeEventListener('open', onOpen);
-          resolve({ ws });
-        };
+          const onOpen = () => {
+            ws.removeEventListener('open', onOpen);
+            resolve({ ws });
+          };
 
-        const onClose = (evt: WebSocket.CloseEvent) => {
-          ws.removeEventListener('close', onClose);
-          resolve({ err: evt.reason });
-        };
+          const onClose = (evt: WebSocket.CloseEvent) => {
+            ws.removeEventListener('close', onClose);
+            resolve({ err: evt.reason });
+          };
 
-        ws.addEventListener('open', onOpen);
-        ws.addEventListener('close', onClose);
-      } catch (e) {
-        const reason = e instanceof Error ? e.message : 'unknown reason';
-        return resolve({ err: `couldn't get a new websocket: ${reason}` });
-      }
+          ws.addEventListener('open', onOpen);
+          ws.addEventListener('close', onClose);
+        })
+        .catch((e) => {
+          const reason = e instanceof Error ? e.message : 'unknown reason';
+          resolve({ err: `couldn't get a new websocket: ${reason}` });
+        });
     });
 
     if ('ws' in wsRes) {
@@ -90,13 +93,5 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
     } else {
       throw new Error(wsRes.err);
     }
-  }
-
-  async close() {
-    super.close();
-  }
-
-  async destroy() {
-    super.destroy();
   }
 }

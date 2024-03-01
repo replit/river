@@ -29,7 +29,8 @@ export class Uint32LengthPrefixFraming extends Transform {
       );
 
       this.emit('error', err);
-      return cb(err);
+      cb(err);
+      return;
     }
 
     this.receivedBuffer = Buffer.concat([this.receivedBuffer, chunk]);

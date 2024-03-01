@@ -29,20 +29,25 @@ const errors = Type.Union([
   }),
 ]);
 
-const fnBody: Procedure<{}, 'rpc', typeof input, typeof output, typeof errors> =
-  {
-    type: 'rpc',
-    input,
-    output,
-    errors,
-    async handler(_state, msg) {
-      if ('c' in msg) {
-        return Ok({ b: msg.c });
-      } else {
-        return Ok({ b: msg.a });
-      }
-    },
-  };
+const fnBody: Procedure<
+  object,
+  'rpc',
+  typeof input,
+  typeof output,
+  typeof errors
+> = {
+  type: 'rpc',
+  input,
+  output,
+  errors,
+  async handler(_state, msg) {
+    if ('c' in msg) {
+      return Ok({ b: msg.c });
+    } else {
+      return Ok({ b: msg.a });
+    }
+  },
+};
 
 // typescript is limited to max 50 constraints
 // see: https://github.com/microsoft/TypeScript/issues/33541
@@ -108,10 +113,6 @@ export class MockTransport extends Transport<Connection> {
     throw new Error('Method not implemented.');
   }
 
-  constructor(clientId: string) {
-    super(clientId);
-  }
-
   send(
     _to: TransportClientId,
     _msg: PartialTransportMessage,
@@ -119,13 +120,17 @@ export class MockTransport extends Transport<Connection> {
     return nanoid();
   }
 
-  protected handleConnection(_conn: Connection, _to: string): void {}
+  protected handleConnection(_conn: Connection, _to: string): void {
+    return;
+  }
 
-  async createNewOutgoingConnection(): Promise<Connection> {
+  createNewOutgoingConnection(): Promise<Connection> {
     throw new Error('unimplemented');
   }
 
-  async close() {}
+  close() {
+    return;
+  }
 }
 
 describe("ensure typescript doesn't give up trying to infer the types for large services", () => {
@@ -133,7 +138,7 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
     expect(serializeService(StupidlyLargeService('test'))).toBeTruthy();
   });
 
-  test('server client should support many services with many procedures', async () => {
+  test('server client should support many services with many procedures', () => {
     const serviceDefs = buildServiceDefs([
       StupidlyLargeService('a'),
       StupidlyLargeService('b'),

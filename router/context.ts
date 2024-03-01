@@ -18,10 +18,10 @@
  * }
  * ```
  */
+/* eslint-disable-next-line @typescript-eslint/no-empty-interface */
 export interface ServiceContext {}
 
 /**
  * The {@link ServiceContext} with state. This is what is passed to procedures.
  */
-export type ServiceContextWithState<State extends object | unknown> =
-  ServiceContext & { state: State };
+export type ServiceContextWithState<State> = ServiceContext & { state: State };

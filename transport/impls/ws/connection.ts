@@ -14,7 +14,7 @@ export class WebSocketConnection extends Connection {
     this.ws.onmessage = (msg) => cb(msg.data as Uint8Array);
   }
 
-  removeDataListener(_cb: (msg: Uint8Array) => void): void {
+  removeDataListener(): void {
     this.ws.onmessage = null;
   }
 
@@ -35,7 +35,7 @@ export class WebSocketConnection extends Connection {
     }
   }
 
-  async close() {
+  close() {
     this.ws.close();
   }
 }

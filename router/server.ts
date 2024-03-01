@@ -23,6 +23,7 @@ import {
 import { EventMap } from '../transport/events';
 import { ServiceDefs } from './defs';
 import { Connection } from '../transport';
+import { coerceErrorString } from '../util/stringify';
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -168,7 +169,7 @@ class RiverServer<Services extends ServiceDefs> {
       return;
     }
 
-    const procedure = service.procedures[message.procedureName] as AnyProcedure;
+    const procedure = service.procedures[message.procedureName];
     const incoming: ProcStream['incoming'] = pushable({ objectMode: true });
     const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
     const outputHandler: Promise<unknown> =
@@ -194,8 +195,7 @@ class RiverServer<Services extends ServiceDefs> {
       })();
 
     const errorHandler = (err: unknown) => {
-      const errorMsg =
-        err instanceof Error ? err.message : `[coerced to error] ${err}`;
+      const errorMsg = coerceErrorString(err);
       log?.error(
         `${this.transport.clientId} -- procedure ${message.serviceName}.${message.procedureName}:${message.streamId} threw an error: ${errorMsg}`,
       );
@@ -210,99 +210,110 @@ class RiverServer<Services extends ServiceDefs> {
     // pump incoming message stream -> handler -> outgoing message stream
     let inputHandler: Promise<unknown>;
     const procHasInitMessage = 'init' in procedure;
-    if (procedure.type === 'stream') {
-      if (procHasInitMessage) {
+    switch (procedure.type) {
+      case 'rpc':
         inputHandler = (async () => {
-          const initMessage = await incoming.next();
-          if (initMessage.done) {
+          const inputMessage = await incoming.next();
+          if (inputMessage.done) {
             return;
           }
 
-          return procedure
-            .handler(serviceContext, initMessage.value, incoming, outgoing)
+          try {
+            const outputMessage = await procedure.handler(
+              serviceContext,
+              inputMessage.value,
+            );
+            outgoing.push(outputMessage);
+          } catch (err) {
+            errorHandler(err);
+          }
+        })();
+        break;
+      case 'stream':
+        if (procHasInitMessage) {
+          inputHandler = (async () => {
+            const initMessage = await incoming.next();
+            if (initMessage.done) {
+              return;
+            }
+
+            return procedure
+              .handler(serviceContext, initMessage.value, incoming, outgoing)
+              .catch(errorHandler);
+          })();
+        } else {
+          inputHandler = procedure
+            .handler(serviceContext, incoming, outgoing)
             .catch(errorHandler);
-        })();
-      } else {
-        inputHandler = procedure
-          .handler(serviceContext, incoming, outgoing)
-          .catch(errorHandler);
-      }
-    } else if (procedure.type === 'rpc') {
-      inputHandler = (async () => {
-        const inputMessage = await incoming.next();
-        if (inputMessage.done) {
-          return;
         }
-
-        try {
-          const outputMessage = await procedure.handler(
-            serviceContext,
-            inputMessage.value,
-          );
-          outgoing.push(outputMessage);
-        } catch (err) {
-          errorHandler(err);
-        }
-      })();
-    } else if (procedure.type === 'subscription') {
-      inputHandler = (async () => {
-        const inputMessage = await incoming.next();
-        if (inputMessage.done) {
-          return;
-        }
-
-        try {
-          await procedure.handler(serviceContext, inputMessage.value, outgoing);
-        } catch (err) {
-          errorHandler(err);
-        }
-      })();
-    } else if (procedure.type === 'upload') {
-      if (procHasInitMessage) {
+        break;
+      case 'subscription':
         inputHandler = (async () => {
-          const initMessage = await incoming.next();
-          if (initMessage.done) {
+          const inputMessage = await incoming.next();
+          if (inputMessage.done) {
             return;
           }
-          try {
-            const outputMessage = await procedure.handler(
-              serviceContext,
-              initMessage.value,
-              incoming,
-            );
 
-            if (!this.disconnectedSessions.has(message.from)) {
-              outgoing.push(outputMessage);
-            }
+          try {
+            await procedure.handler(
+              serviceContext,
+              inputMessage.value,
+              outgoing,
+            );
           } catch (err) {
             errorHandler(err);
           }
         })();
-      } else {
-        inputHandler = (async () => {
-          try {
-            const outputMessage = await procedure.handler(
-              serviceContext,
-              incoming,
-            );
-
-            if (!this.disconnectedSessions.has(message.from)) {
-              outgoing.push(outputMessage);
+        break;
+      case 'upload':
+        if (procHasInitMessage) {
+          inputHandler = (async () => {
+            const initMessage = await incoming.next();
+            if (initMessage.done) {
+              return;
             }
-          } catch (err) {
-            errorHandler(err);
-          }
-        })();
-      }
-    } else {
-      // procedure is inferred to be never here as this is not a valid procedure type
-      // we cast just to log
-      log?.warn(
-        `${this.transport.clientId} -- got request for invalid procedure type ${
-          (procedure as AnyProcedure).type
-        } at ${message.serviceName}.${message.procedureName}`,
-      );
-      return;
+            try {
+              const outputMessage = await procedure.handler(
+                serviceContext,
+                initMessage.value,
+                incoming,
+              );
+
+              if (!this.disconnectedSessions.has(message.from)) {
+                outgoing.push(outputMessage);
+              }
+            } catch (err) {
+              errorHandler(err);
+            }
+          })();
+        } else {
+          inputHandler = (async () => {
+            try {
+              const outputMessage = await procedure.handler(
+                serviceContext,
+                incoming,
+              );
+
+              if (!this.disconnectedSessions.has(message.from)) {
+                outgoing.push(outputMessage);
+              }
+            } catch (err) {
+              errorHandler(err);
+            }
+          })();
+        }
+        break;
+      default:
+        // procedure is inferred to be never here as this is not a valid procedure type
+        // we cast just to log
+        log?.warn(
+          `${
+            this.transport.clientId
+          } -- got request for invalid procedure type ${
+            (procedure as AnyProcedure).type
+          } at ${message.serviceName}.${message.procedureName}`,
+        );
+        return;
     }
 
     const procStream: ProcStream = {
@@ -335,11 +346,12 @@ class RiverServer<Services extends ServiceDefs> {
     const procHasInitMessage = 'init' in procedure;
 
     if (
-      (isInit &&
-        procHasInitMessage &&
-        Value.Check(procedure.init, message.payload)) ||
-      Value.Check(procedure.input, message.payload)
+      isInit &&
+      procHasInitMessage &&
+      Value.Check(procedure.init, message.payload)
     ) {
+      procStream.incoming.push(message.payload as PayloadType);
+    } else if (Value.Check(procedure.input, message.payload)) {
       procStream.incoming.push(message.payload as PayloadType);
     } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
       log?.error(

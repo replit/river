@@ -26,7 +26,7 @@ import { ServiceDefs } from './defs';
 import { Connection } from '../transport';
 
 // helper to make next, yield, and return all the same type
-export type AsyncIter<T> = AsyncGenerator<T, T, unknown>;
+export type AsyncIter<T> = AsyncGenerator<T, T>;
 
 /**
  * A helper type to transform an actual service type into a type
@@ -132,16 +132,17 @@ export type ServerClient<Srv extends Server<ServiceDefs>> = {
 };
 
 interface ProxyCallbackOptions {
-  path: string[];
-  args: unknown[];
+  path: Array<string>;
+  args: Array<unknown>;
 }
 
 type ProxyCallback = (opts: ProxyCallbackOptions) => unknown;
+/* eslint-disable-next-line @typescript-eslint/no-empty-function */
 const noop = () => {};
 
 function _createRecursiveProxy(
   callback: ProxyCallback,
-  path: string[],
+  path: Array<string>,
 ): unknown {
   const proxy: unknown = new Proxy(noop, {
     // property access, recurse and add field to path
@@ -318,7 +319,7 @@ function handleStream(
 
   // input -> transport
   // this gets cleaned up on inputStream.end() which is called by closeHandler
-  (async () => {
+  const pipeInputToTransport = async () => {
     for await (const rawIn of inputStream) {
       const m: PartialTransportMessage = {
         streamId,
@@ -339,7 +340,9 @@ function handleStream(
     // after ending input stream, send a close message to the server
     if (!healthyClose) return;
     transport.sendCloseStream(serverId, streamId);
-  })();
+  };
+
+  void pipeInputToTransport();
 
   // transport -> output
   function onMessage(msg: OpaqueTransportMessage) {
@@ -473,7 +476,7 @@ function handleUpload(
 
   // input -> transport
   // this gets cleaned up on inputStream.end(), which the caller should call.
-  (async () => {
+  const pipeInputToTransport = async () => {
     for await (const rawIn of inputStream) {
       const m: PartialTransportMessage = {
         streamId,
@@ -494,7 +497,9 @@ function handleUpload(
     // after ending input stream, send a close message to the server
     if (!healthyClose) return;
     transport.sendCloseStream(serverId, streamId);
-  })();
+  };
+
+  void pipeInputToTransport();
 
   const responsePromise = new Promise((resolve) => {
     // on disconnect, set a timer to return an error
