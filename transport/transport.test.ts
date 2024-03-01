@@ -25,6 +25,13 @@ describe.each(testMatrix())(
     test('connection is recreated after clean client disconnect', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
+
       const msg1 = createDummyTransportMessage();
       const msg2 = createDummyTransportMessage();
 
@@ -40,16 +47,18 @@ describe.each(testMatrix())(
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
       ).resolves.toStrictEqual(msg2.payload);
-
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-      });
     });
 
     test('both client and server transport get connect/disconnect notifs', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
+
       const msg1 = createDummyTransportMessage();
       const msg2 = createDummyTransportMessage();
 
@@ -197,10 +206,6 @@ describe.each(testMatrix())(
         serverConnHandler,
       );
       serverTransport.removeEventListener('sessionStatus', serverSessHandler);
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-      });
     });
 
     test('transport connection is not recreated after destroy', async () => {
@@ -256,6 +261,12 @@ describe.each(testMatrix())(
 
       const client1Transport = await initClient(clientId1);
       const client2Transport = await initClient(clientId2);
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [client1Transport, client2Transport],
+          serverTransport,
+        });
+      });
 
       // sending messages from server to client shouldn't leak between clients
       const msg1 = makeDummyMessage('hello\nclient1');
@@ -271,11 +282,6 @@ describe.each(testMatrix())(
       await expect(promises).resolves.toStrictEqual(
         expect.arrayContaining([msg1.payload, msg2.payload]),
       );
-
-      await testFinishesCleanly({
-        clientTransports: [client1Transport, client2Transport],
-        serverTransport,
-      });
     });
   },
 );
@@ -291,6 +297,12 @@ describe.each(testMatrix())(
 
       const clientTransport = getClientTransport('client');
       let serverTransport = getServerTransport();
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
 
       const clientConnStart = vi.fn<[], unknown>();
       const clientConnStop = vi.fn<[], unknown>();
@@ -381,10 +393,6 @@ describe.each(testMatrix())(
         clientConnHandler,
       );
       clientTransport.removeEventListener('sessionStatus', clientSessHandler);
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-      });
     });
 
     test('recovers from phantom disconnects', async () => {
@@ -399,6 +407,13 @@ describe.each(testMatrix())(
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
+
       const msg1 = createDummyTransportMessage();
 
       const clientConnStart = vi.fn<[], unknown>();
@@ -492,10 +507,6 @@ describe.each(testMatrix())(
         serverConnHandler,
       );
       serverTransport.removeEventListener('sessionStatus', serverSessHandler);
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-      });
     });
   },
 );

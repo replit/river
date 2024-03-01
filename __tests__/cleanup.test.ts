@@ -1,4 +1,12 @@
-import { afterAll, assert, describe, expect, test, vi } from 'vitest';
+import {
+  afterAll,
+  assert,
+  describe,
+  expect,
+  test,
+  vi,
+  onTestFinished,
+} from 'vitest';
 import { iterNext } from '../util/testHelpers';
 import {
   SubscribableServiceConstructor,
@@ -24,11 +32,19 @@ describe.each(testMatrix())(
     afterAll(cleanup);
 
     test('closing a transport from the client cleans up connection on the server', async () => {
+      // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
 
       expect(clientTransport.connections.size).toEqual(0);
       expect(serverTransport.connections.size).toEqual(0);
@@ -48,20 +64,22 @@ describe.each(testMatrix())(
       await waitForTransportToFinish(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
-
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-        server,
-      });
     });
 
     test('closing a transport from the server cleans up connection on the client', async () => {
+      // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
 
       expect(clientTransport.connections.size).toEqual(0);
       expect(serverTransport.connections.size).toEqual(0);
@@ -81,19 +99,22 @@ describe.each(testMatrix())(
       await waitForTransportToFinish(serverTransport);
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-        server,
-      });
     });
 
     test('rpc', async () => {
+      // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
 
       const serverListeners =
         serverTransport.eventDispatcher.numberOfListeners('message');
@@ -117,19 +138,22 @@ describe.each(testMatrix())(
       expect(clientTransport.connections.size).toEqual(1);
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-        server,
-      });
     });
 
     test('stream', async () => {
+      // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
 
       const serverListeners =
         serverTransport.eventDispatcher.numberOfListeners('message');
@@ -174,19 +198,22 @@ describe.each(testMatrix())(
       expect(clientTransport.connections.size).toEqual(1);
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-        server,
-      });
     });
 
     test('subscription', async () => {
+      // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([SubscribableServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
 
       const serverListeners =
         serverTransport.eventDispatcher.numberOfListeners('message');
@@ -221,19 +248,22 @@ describe.each(testMatrix())(
       expect(clientTransport.connections.size).toEqual(1);
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-        server,
-      });
     });
 
     test('upload', async () => {
+      // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([UploadableServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
 
       const serverListeners =
         serverTransport.eventDispatcher.numberOfListeners('message');
@@ -265,11 +295,6 @@ describe.each(testMatrix())(
       expect(clientTransport.connections.size).toEqual(1);
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-        server,
-      });
     });
   },
 );

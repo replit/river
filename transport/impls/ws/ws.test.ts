@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { describe, test, expect, afterAll } from 'vitest';
+import { describe, test, expect, afterAll, onTestFinished } from 'vitest';
 import {
   createWebSocketServer,
   onWsServerReady,
@@ -30,16 +30,18 @@ describe('sending and receiving across websockets works', async () => {
       'SERVER',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
+    onTestFinished(async () => {
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
     const msg = createDummyTransportMessage();
     const msgId = clientTransport.send(serverTransport.clientId, msg);
     await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msgId),
     ).resolves.toStrictEqual(msg.payload);
-
-    await testFinishesCleanly({
-      clientTransports: [clientTransport],
-      serverTransport,
-    });
   });
 
   test('sending respects to/from fields', async () => {
@@ -70,6 +72,12 @@ describe('sending and receiving across websockets works', async () => {
 
     const client1 = await initClient(clientId1);
     const client2 = await initClient(clientId2);
+    onTestFinished(async () => {
+      await testFinishesCleanly({
+        clientTransports: [client1, client2],
+        serverTransport,
+      });
+    });
 
     // sending messages from server to client shouldn't leak between clients
     const msg1 = makeDummyMessage('hello client1');
@@ -84,11 +92,6 @@ describe('sending and receiving across websockets works', async () => {
     await expect(promises).resolves.toStrictEqual(
       expect.arrayContaining([msg1.payload, msg2.payload]),
     );
-
-    await testFinishesCleanly({
-      clientTransports: [client1, client2],
-      serverTransport,
-    });
   });
 });
 
@@ -109,6 +112,13 @@ describe('reconnect', async () => {
       'SERVER',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
+    onTestFinished(async () => {
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 
@@ -127,10 +137,5 @@ describe('reconnect', async () => {
     await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
     ).resolves.toStrictEqual(msg2.payload);
-
-    await testFinishesCleanly({
-      clientTransports: [clientTransport],
-      serverTransport,
-    });
   });
 });

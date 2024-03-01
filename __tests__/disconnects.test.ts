@@ -1,4 +1,12 @@
-import { afterAll, assert, describe, expect, test, vi } from 'vitest';
+import {
+  afterAll,
+  assert,
+  describe,
+  expect,
+  onTestFinished,
+  test,
+  vi,
+} from 'vitest';
 import { iterNext } from '../util/testHelpers';
 import {
   SubscribableServiceConstructor,
@@ -29,6 +37,13 @@ describe.each(testMatrix())(
       const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
 
       // start procedure
       await client.test.add.rpc({ n: 3 });
@@ -54,11 +69,6 @@ describe.each(testMatrix())(
 
       await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
-      return testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-        server,
-      });
     });
 
     test('stream', async () => {
@@ -67,6 +77,13 @@ describe.each(testMatrix())(
       const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
 
       // start procedure
       const [input, output] = await client.test.echo.stream();
@@ -96,11 +113,6 @@ describe.each(testMatrix())(
 
       await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
-      return testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-        server,
-      });
     });
 
     test('subscription', async () => {
@@ -112,6 +124,13 @@ describe.each(testMatrix())(
       const server = createServer(serverTransport, serviceDefs);
       const client1 = createClient<typeof server>(client1Transport);
       const client2 = createClient<typeof server>(client2Transport);
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [client1Transport, client2Transport],
+          serverTransport,
+          server,
+        });
+      });
 
       // start procedure
       // client1 and client2 both subscribe
@@ -177,12 +196,6 @@ describe.each(testMatrix())(
       // cleanup client1 (client2 is already disconnected)
       close1();
       close2();
-      client1Transport.close();
-      return testFinishesCleanly({
-        clientTransports: [client1Transport, client2Transport],
-        serverTransport,
-        server,
-      });
     });
 
     test('upload', async () => {
@@ -191,6 +204,13 @@ describe.each(testMatrix())(
       const serviceDefs = buildServiceDefs([UploadableServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
 
       // start procedure
       const [addStream, addResult] =
@@ -219,11 +239,6 @@ describe.each(testMatrix())(
 
       await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
-      return testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-        server,
-      });
     });
   },
 );
