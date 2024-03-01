@@ -274,6 +274,13 @@ export abstract class Transport<ConnType extends Connection> {
       // construct a fake session and disconnect it immediately
       conn.close();
       this.sessions.delete(connectedTo);
+
+      this.eventDispatcher.dispatchEvent('sessionStatus', {
+        status: 'disconnect',
+        session: {
+          to: connectedTo,
+        },
+      });
       return;
     }
 
