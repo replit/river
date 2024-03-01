@@ -74,8 +74,15 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
             resolve({ err: evt.reason });
           };
 
+          const onError = (evt: WebSocket.ErrorEvent) => {
+            ws.removeEventListener('error', onError);
+            ws.removeEventListener('close', onClose);
+            resolve({ err: evt.message });
+          };
+
           ws.addEventListener('open', onOpen);
           ws.addEventListener('close', onClose);
+          ws.addEventListener('error', onError);
         })
         .catch((e) => {
           const reason = e instanceof Error ? e.message : 'unknown reason';
