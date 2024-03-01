@@ -283,9 +283,22 @@ export class Session<ConnType extends Connection> {
 
   beginGrace(cb: () => void) {
     this.disconnectionGrace = setTimeout(() => {
-      this.close();
+      // this.close();
+      this.resetBufferedMessages();
+      clearInterval(this.heartbeat);
       cb();
     }, SESSION_DISCONNECT_GRACE_MS);
+  }
+
+  /**
+   * Closes the out-going connection but doesn't remove the listeners
+   * for incoming messages. The connection will eventually call onClose
+   * when it is ready to be cleaned up and only then will {@link connection} be set back
+   * to undefined
+   */
+  halfCloseConnection() {
+    this.connection?.close();
+    clearInterval(this.heartbeat);
   }
 
   // called on reconnect of the underlying session
