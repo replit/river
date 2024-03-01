@@ -58,10 +58,11 @@ describe('message helpers', () => {
   });
 
   test('bootRequestMessage', () => {
-    const m = bootRequestMessage('a', 'b');
+    const m = bootRequestMessage('a', 'b', 'abc');
 
     expect(m.from).toBe('a');
     expect(m.to).toBe('b');
+    expect(m.payload.instanceId).toBe('abc');
   });
 
   test('bootResponseMessage', () => {

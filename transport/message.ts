@@ -55,6 +55,7 @@ export const PROTOCOL_VERSION = 'v1';
 export const ControlMessageHandshakeRequestSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_REQ'),
   protocolVersion: Type.Literal(PROTOCOL_VERSION),
+  instanceId: Type.String(),
 });
 
 export const ControlMessageHandshakeResponseSchema = Type.Object({
@@ -120,6 +121,7 @@ export type PartialTransportMessage<
 export function bootRequestMessage(
   from: TransportClientId,
   to: TransportClientId,
+  instanceId: string,
 ): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {
   return {
     id: nanoid(),
@@ -132,6 +134,7 @@ export function bootRequestMessage(
     payload: {
       type: 'HANDSHAKE_REQ',
       protocolVersion: PROTOCOL_VERSION,
+      instanceId,
     } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
   };
 }
