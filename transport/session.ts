@@ -281,9 +281,7 @@ export class Session<ConnType extends Connection> {
     this.connection = newConn;
   }
 
-  graceCb?: () => unknown;
   beginGrace(cb: () => void) {
-    this.graceCb = cb;
     this.disconnectionGrace = setTimeout(() => {
       this.close();
       cb();

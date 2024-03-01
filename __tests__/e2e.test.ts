@@ -23,6 +23,7 @@ import { UNCAUGHT_ERROR } from '../router/result';
 import { testFinishesCleanly } from './fixtures/cleanup';
 import { buildServiceDefs } from '../router/defs';
 import { testMatrix } from './fixtures/matrix';
+import { bindLogger, setLevel, unbindLogger } from '../logging';
 
 describe.each(testMatrix())(
   'client <-> server integration test ($transport.name transport, $codec.name codec)',
@@ -385,6 +386,8 @@ describe.each(testMatrix())(
     });
 
     test('concurrent streams', async () => {
+      bindLogger(console.log);
+      setLevel('debug');
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -425,6 +428,8 @@ describe.each(testMatrix())(
         const [_input, _output, close] = openStreams[i];
         close();
       }
+
+      unbindLogger();
     });
   },
 );
