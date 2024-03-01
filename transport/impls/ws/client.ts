@@ -3,6 +3,7 @@ import { ClientTransport, TransportOptions } from '../../transport';
 import { TransportClientId } from '../../message';
 import { log } from '../../../logging';
 import { WebSocketConnection } from './connection';
+import { coerceErrorString } from '../../../util/stringify';
 
 type WebSocketResult = { ws: WebSocket } | { err: string };
 
@@ -75,10 +76,12 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
           };
 
           const onError = (evt: WebSocket.ErrorEvent) => {
-            const err = evt.error as { message: string; code: string };
+            const err = evt.error as { code: string } | undefined;
             ws.removeEventListener('error', onError);
             ws.removeEventListener('close', onClose);
-            resolve({ err: err.message || err.code || 'unknown error' });
+            resolve({
+              err: err?.code ?? coerceErrorString(err),
+            });
           };
 
           ws.addEventListener('open', onOpen);
