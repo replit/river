@@ -270,7 +270,12 @@ export abstract class Transport<ConnType extends Connection> {
       conn,
     });
 
-    if (this.state !== 'open') return;
+    if (this.state !== 'open') {
+      // construct a fake session and disconnect it immediately
+      conn.close();
+      return;
+    }
+
     const session = this.sessionByClientId(connectedTo);
     log?.info(
       `${this.clientId} -- connection (id: ${conn.debugId}) disconnect from ${connectedTo}, ${SESSION_DISCONNECT_GRACE_MS}ms until session (id: ${session.debugId}) disconnect`,
