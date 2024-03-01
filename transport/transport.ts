@@ -264,7 +264,7 @@ export abstract class Transport<ConnType extends Connection> {
    * @param conn The connection object.
    * @param connectedTo The peer we are connected to.
    */
-  onDisconnect(conn: ConnType, connectedTo: TransportClientId) {
+  protected onDisconnect(conn: ConnType, connectedTo: TransportClientId) {
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'disconnect',
       conn,
@@ -320,7 +320,7 @@ export abstract class Transport<ConnType extends Connection> {
    * You generally shouldn't need to override this in downstream transport implementations.
    * @param msg The received message.
    */
-  handleMsg(msg: OpaqueTransportMessage) {
+  protected handleMsg(msg: OpaqueTransportMessage) {
     if (this.state !== 'open') return;
 
     // got a msg so we know the other end is alive, reset the grace period
@@ -558,7 +558,7 @@ export abstract class ClientTransport<
     }
   }
 
-  receiveWithBootSequence(
+  private receiveWithBootSequence(
     conn: ConnType,
     sessionCb: (sess: Session<ConnType>) => void,
   ) {
@@ -600,7 +600,7 @@ export abstract class ClientTransport<
     return bootHandler;
   }
 
-  onDisconnect(conn: ConnType, connectedTo: string): void {
+  protected onDisconnect(conn: ConnType, connectedTo: string): void {
     this.inflightConnectionPromises.delete(connectedTo);
     super.onDisconnect(conn, connectedTo);
   }
@@ -663,7 +663,7 @@ export abstract class ServerTransport<
     });
   }
 
-  receiveWithBootSequence(
+  protected receiveWithBootSequence(
     conn: ConnType,
     sessionCb: (sess: Session<ConnType>) => void,
   ) {
