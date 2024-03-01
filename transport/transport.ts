@@ -192,27 +192,26 @@ export abstract class Transport<ConnType extends Connection> {
       conn,
     });
 
-    let session = this.sessions.get(connectedTo);
+    let oldSession = this.sessions.get(connectedTo);
     // check if the peer we are connected to is actually difference by comparing instanceId
     const lastInstanceId = this.connectedInstanceIds.get(connectedTo);
     if (
-      session &&
-      lastInstanceId !== instanceId &&
-      lastInstanceId !== undefined
+      oldSession &&
+      lastInstanceId !== undefined &&
+      lastInstanceId !== instanceId
     ) {
       // mismatch, kill the old session and begin a new one
       log?.warn(
-        `${this.clientId} -- handshake from ${connectedTo} has different server instance (got: ${instanceId}, last connected to: ${lastInstanceId}), starting a new session`,
+        `${this.clientId} -- handshake from ${connectedTo} is a different instance (got: ${instanceId}, last connected to: ${lastInstanceId}), starting a new session`,
       );
-      session.resetBufferedMessages();
-      session.closeStaleConnection(conn);
-      this.deleteSession(session);
-      session = undefined;
+      oldSession.close();
+      this.deleteSession(oldSession);
+      oldSession = undefined;
     }
     this.connectedInstanceIds.set(connectedTo, instanceId);
 
     // if we don't have an existing session, create a new one and return it
-    if (session === undefined) {
+    if (oldSession === undefined) {
       const newSession = this.createSession(connectedTo, conn);
       log?.info(
         `${this.clientId} -- new connection (id: ${conn.debugId}) for new session (id: ${newSession.debugId}) to ${connectedTo}`,
@@ -221,14 +220,14 @@ export abstract class Transport<ConnType extends Connection> {
     }
 
     log?.info(
-      `${this.clientId} -- new connection (id: ${conn.debugId}) for existing session (id: ${session.debugId}) to ${connectedTo}`,
+      `${this.clientId} -- new connection (id: ${conn.debugId}) for existing session (id: ${oldSession.debugId}) to ${connectedTo}`,
     );
 
-    // otherwise, this is a duplicate session from the same user, let's consider
-    // the old one as dead and call this one canonical
-    session.replaceWithNewConnection(conn);
-    session.sendBufferedMessages();
-    return session;
+    // otherwise, this is a new connection from the same user, let's consider
+    // the old one as dead and call this connection canonical
+    oldSession.replaceWithNewConnection(conn);
+    oldSession.sendBufferedMessages();
+    return oldSession;
   }
 
   private createSession(
@@ -263,16 +262,15 @@ export abstract class Transport<ConnType extends Connection> {
   /**
    * The downstream implementation needs to call this when a connection is closed.
    * @param conn The connection object.
+   * @param connectedTo The peer we are connected to.
    */
-  onDisconnect(conn: ConnType, connectedTo: TransportClientId | undefined) {
+  onDisconnect(conn: ConnType, connectedTo: TransportClientId) {
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'disconnect',
       conn,
     });
 
-    // if connectedTo is not set, we've disconnect before the first message is received
-    // therefore there is no associated session
-    if (!connectedTo) return;
+    if (this.state !== 'open') return;
     const session = this.sessionByClientId(connectedTo);
     log?.info(
       `${this.clientId} -- connection (id: ${conn.debugId}) disconnect from ${connectedTo}, ${SESSION_DISCONNECT_GRACE_MS}ms until session (id: ${session.debugId}) disconnect`,
@@ -323,6 +321,8 @@ export abstract class Transport<ConnType extends Connection> {
    * @param msg The received message.
    */
   handleMsg(msg: OpaqueTransportMessage) {
+    if (this.state !== 'open') return;
+
     // got a msg so we know the other end is alive, reset the grace period
     const session = this.sessionByClientId(msg.from);
     session.cancelGrace();
@@ -426,11 +426,12 @@ export abstract class Transport<ConnType extends Connection> {
    * Closes the transport. Any messages sent while the transport is closed will be silently discarded.
    */
   close() {
+    this.state = 'closed';
     for (const session of this.sessions.values()) {
-      session.halfCloseConnection();
+      session.close();
+      this.deleteSession(session);
     }
 
-    this.state = 'closed';
     log?.info(`${this.clientId} -- manually closed transport`);
   }
 
@@ -440,11 +441,12 @@ export abstract class Transport<ConnType extends Connection> {
    * Destroys the transport. Any messages sent while the transport is destroyed will throw an error.
    */
   destroy() {
+    this.state = 'destroyed';
     for (const session of this.sessions.values()) {
-      session.closeStaleConnection(session.connection);
+      session.close();
+      this.deleteSession(session);
     }
 
-    this.state = 'destroyed';
     log?.info(`${this.clientId} -- manually destroyed transport`);
   }
 }
@@ -598,8 +600,8 @@ export abstract class ClientTransport<
     return bootHandler;
   }
 
-  onDisconnect(conn: ConnType, connectedTo: string | undefined): void {
-    if (connectedTo) this.inflightConnectionPromises.delete(connectedTo);
+  onDisconnect(conn: ConnType, connectedTo: string): void {
+    this.inflightConnectionPromises.delete(connectedTo);
     super.onDisconnect(conn, connectedTo);
   }
 }

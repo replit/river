@@ -340,7 +340,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverConnStop).toHaveBeenCalledTimes(0));
       await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(0));
 
-      // kill the client and make a new transport
+      // kill the client
       clientTransport.close();
       serverTransport.connections.forEach((conn) => conn.close());
 

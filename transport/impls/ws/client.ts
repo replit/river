@@ -75,9 +75,10 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
           };
 
           const onError = (evt: WebSocket.ErrorEvent) => {
+            const err = evt.error as { message: string; code: string };
             ws.removeEventListener('error', onError);
             ws.removeEventListener('close', onClose);
-            resolve({ err: evt.message });
+            resolve({ err: err.message || err.code || 'unknown error' });
           };
 
           ws.addEventListener('open', onOpen);

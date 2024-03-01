@@ -112,7 +112,7 @@ class RiverServer<Services extends ServiceDefs> {
 
     const disconnectedClientId = evt.session.to;
     log?.info(
-      `${this.transport.clientId} -- got unexpected disconnect from ${disconnectedClientId}, cleaning up streams`,
+      `${this.transport.clientId} -- got session disconnect from ${disconnectedClientId}, cleaning up streams`,
     );
 
     const streamsFromThisClient = this.clientStreams.get(disconnectedClientId);

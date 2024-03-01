@@ -281,17 +281,28 @@ export class Session<ConnType extends Connection> {
     this.connection = newConn;
   }
 
+  graceCb?: () => unknown;
   beginGrace(cb: () => void) {
+    this.graceCb = cb;
     this.disconnectionGrace = setTimeout(() => {
-      this.resetBufferedMessages();
-      clearInterval(this.heartbeat);
+      this.close();
       cb();
     }, SESSION_DISCONNECT_GRACE_MS);
   }
 
+  // called on reconnect of the underlying session
   cancelGrace() {
     this.heartbeatMisses = 0;
     clearTimeout(this.disconnectionGrace);
+  }
+
+  // closed when we want to discard the whole session
+  // (i.e. shutdown or session disconnect)
+  close() {
+    this.closeStaleConnection(this.connection);
+    this.cancelGrace();
+    clearInterval(this.heartbeat);
+    this.resetBufferedMessages();
   }
 
   get connected() {
@@ -316,17 +327,6 @@ export class Session<ConnType extends Connection> {
 
     this.seq++;
     return msg;
-  }
-
-  /**
-   * Closes the out-going connection but doesn't remove the listeners
-   * for incoming messages. The connection will eventually call onClose
-   * when it is ready to be cleaned up and only then will {@link connection} be set back
-   * to undefined
-   */
-  halfCloseConnection() {
-    this.connection?.close();
-    clearInterval(this.heartbeat);
   }
 
   inspectSendBuffer(): ReadonlyArray<OpaqueTransportMessage> {
