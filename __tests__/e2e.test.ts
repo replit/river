@@ -386,8 +386,6 @@ describe.each(testMatrix())(
     });
 
     test('concurrent streams', async () => {
-      bindLogger(console.log);
-      setLevel('debug');
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -395,6 +393,8 @@ describe.each(testMatrix())(
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
       onTestFinished(async () => {
+        bindLogger(console.log);
+        setLevel('debug');
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
