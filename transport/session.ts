@@ -302,10 +302,10 @@ export class Session<ConnType extends Connection> {
     } else {
       this.closeStaleConnection(this.connection);
       this.cancelGrace();
+      this.resetBufferedMessages();
     }
 
     clearInterval(this.heartbeat);
-    this.resetBufferedMessages();
   }
 
   get connected() {
