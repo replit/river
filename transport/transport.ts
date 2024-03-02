@@ -428,13 +428,13 @@ export abstract class Transport<ConnType extends Connection> {
    * Closes the transport. Any messages sent while the transport is closed will be silently discarded.
    */
   close() {
+    this.state = 'closed';
     for (const session of this.sessions.values()) {
       // session.close();
       // this.deleteSession(session);
       session.halfCloseConnection();
     }
 
-    this.state = 'closed';
     log?.info(`${this.clientId} -- manually closed transport`);
   }
 
@@ -444,13 +444,13 @@ export abstract class Transport<ConnType extends Connection> {
    * Destroys the transport. Any messages sent while the transport is destroyed will throw an error.
    */
   destroy() {
+    this.state = 'destroyed';
     for (const session of this.sessions.values()) {
       // session.close();
       // this.deleteSession(session);
       session.closeStaleConnection(session.connection);
     }
 
-    this.state = 'destroyed';
     log?.info(`${this.clientId} -- manually destroyed transport`);
   }
 }
