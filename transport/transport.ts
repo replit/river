@@ -443,7 +443,6 @@ export abstract class Transport<ConnType extends Connection> {
     for (const session of this.sessions.values()) {
       session.close();
       this.deleteSession(session);
-      // session.closeStaleConnection(session.connection);
     }
 
     log?.info(`${this.clientId} -- manually destroyed transport`);

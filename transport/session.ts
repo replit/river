@@ -301,9 +301,9 @@ export class Session<ConnType extends Connection> {
       this.connection?.close();
     } else {
       this.closeStaleConnection(this.connection);
+      this.cancelGrace();
     }
 
-    this.cancelGrace();
     clearInterval(this.heartbeat);
     this.resetBufferedMessages();
   }
