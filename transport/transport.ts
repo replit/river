@@ -270,12 +270,8 @@ export abstract class Transport<ConnType extends Connection> {
       conn,
     });
 
-    // if (this.state !== 'open') return;
-    const session = this.sessionByClientId(connectedTo);
-    log?.info(
-      `${this.clientId} -- connection (id: ${conn.debugId}) disconnect from ${connectedTo}, ${SESSION_DISCONNECT_GRACE_MS}ms until session (id: ${session.debugId}) disconnect`,
-    );
-
+    const session = this.sessions.get(connectedTo);
+    if (!session) return;
     session.closeStaleConnection(conn);
     session.beginGrace(() => this.deleteSession(session));
   }
@@ -321,7 +317,7 @@ export abstract class Transport<ConnType extends Connection> {
    * @param msg The received message.
    */
   protected handleMsg(msg: OpaqueTransportMessage) {
-    // if (this.state !== 'open') return;
+    if (this.state !== 'open') return;
 
     // got a msg so we know the other end is alive, reset the grace period
     const session = this.sessionByClientId(msg.from);
