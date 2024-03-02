@@ -295,8 +295,8 @@ export class Session<ConnType extends Connection> {
    * to undefined
    */
   halfCloseConnection() {
-    // this.connection?.close();
-    this.closeStaleConnection(this.connection);
+    this.connection?.close();
+    // this.closeStaleConnection(this.connection);
     clearInterval(this.heartbeat);
   }
 
