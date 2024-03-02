@@ -296,15 +296,10 @@ export class Session<ConnType extends Connection> {
 
   // closed when we want to discard the whole session
   // (i.e. shutdown or session disconnect)
-  close(soft?: boolean) {
-    if (soft) {
-      this.connection?.close();
-    } else {
-      this.closeStaleConnection(this.connection);
-      this.cancelGrace();
-      this.resetBufferedMessages();
-    }
-
+  close() {
+    this.closeStaleConnection(this.connection);
+    this.cancelGrace();
+    this.resetBufferedMessages();
     clearInterval(this.heartbeat);
   }
 
