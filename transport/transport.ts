@@ -204,7 +204,9 @@ export abstract class Transport<ConnType extends Connection> {
       log?.warn(
         `${this.clientId} -- handshake from ${connectedTo} is a different instance (got: ${instanceId}, last connected to: ${lastInstanceId}), starting a new session`,
       );
-      oldSession.close();
+      // oldSession.close();
+      oldSession.resetBufferedMessages();
+      oldSession.closeStaleConnection(conn);
       this.deleteSession(oldSession);
       oldSession = undefined;
     }
