@@ -1,5 +1,5 @@
-import { OpaqueTransportMessage, TransportClientId } from './message';
-import { Connection } from './session';
+import { OpaqueTransportMessage } from './message';
+import { Connection, Session } from './session';
 
 type ConnectionStatus = 'connect' | 'disconnect';
 export interface EventMap {
@@ -10,10 +10,7 @@ export interface EventMap {
   };
   sessionStatus: {
     status: ConnectionStatus;
-    session: {
-      to: TransportClientId;
-      connection?: Connection;
-    };
+    session: Session<Connection>;
   };
 }
 
