@@ -431,7 +431,7 @@ export abstract class Transport<ConnType extends Connection> {
     for (const session of this.sessions.values()) {
       // session.close();
       // this.deleteSession(session);
-      session.closeStaleConnection(session.connection);
+      session.halfCloseConnection();
     }
 
     this.state = 'closed';
