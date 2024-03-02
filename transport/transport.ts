@@ -16,7 +16,7 @@ import {
 } from './message';
 import { log } from '../logging';
 import { EventDispatcher, EventHandler, EventTypes } from './events';
-import { Connection, SESSION_DISCONNECT_GRACE_MS, Session } from './session';
+import { Connection, Session } from './session';
 import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
@@ -271,8 +271,10 @@ export abstract class Transport<ConnType extends Connection> {
     });
 
     const session = this.sessions.get(connectedTo);
+    // disconnection without a session
     if (!session) return;
-    session.closeStaleConnection(conn);
+
+    session.connection = undefined;
     session.beginGrace(() => this.deleteSession(session));
   }
 

@@ -393,13 +393,11 @@ describe.each(testMatrix())(
       const server = createServer(serverTransport, serviceDefs);
       const client = createClient<typeof server>(clientTransport);
       onTestFinished(async () => {
-        bindLogger(console.log);
-        setLevel('debug');
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
           server,
-        }).finally(() => unbindLogger());
+        });
       });
 
       // test
