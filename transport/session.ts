@@ -288,18 +288,6 @@ export class Session<ConnType extends Connection> {
     }, SESSION_DISCONNECT_GRACE_MS);
   }
 
-  /**
-   * Closes the out-going connection but doesn't remove the listeners
-   * for incoming messages. The connection will eventually call onClose
-   * when it is ready to be cleaned up and only then will {@link connection} be set back
-   * to undefined
-   */
-  halfCloseConnection() {
-    this.connection?.close();
-    // this.closeStaleConnection(this.connection);
-    clearInterval(this.heartbeat);
-  }
-
   // called on reconnect of the underlying session
   cancelGrace() {
     this.heartbeatMisses = 0;
@@ -308,8 +296,13 @@ export class Session<ConnType extends Connection> {
 
   // closed when we want to discard the whole session
   // (i.e. shutdown or session disconnect)
-  close() {
-    this.closeStaleConnection(this.connection);
+  close(soft?: boolean) {
+    if (soft) {
+      this.connection?.close();
+    } else {
+      this.closeStaleConnection(this.connection);
+    }
+
     this.cancelGrace();
     clearInterval(this.heartbeat);
     this.resetBufferedMessages();

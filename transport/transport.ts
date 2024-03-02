@@ -426,9 +426,8 @@ export abstract class Transport<ConnType extends Connection> {
   close() {
     this.state = 'closed';
     for (const session of this.sessions.values()) {
-      // session.close();
-      // this.deleteSession(session);
-      session.halfCloseConnection();
+      session.close(true);
+      this.deleteSession(session);
     }
 
     log?.info(`${this.clientId} -- manually closed transport`);
@@ -442,9 +441,9 @@ export abstract class Transport<ConnType extends Connection> {
   destroy() {
     this.state = 'destroyed';
     for (const session of this.sessions.values()) {
-      // session.close();
-      // this.deleteSession(session);
-      session.closeStaleConnection(session.connection);
+      session.close();
+      this.deleteSession(session);
+      // session.closeStaleConnection(session.connection);
     }
 
     log?.info(`${this.clientId} -- manually destroyed transport`);
