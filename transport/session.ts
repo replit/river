@@ -281,9 +281,7 @@ export class Session<ConnType extends Connection> {
     this.connection = newConn;
   }
 
-  graceCb?: () => unknown;
   beginGrace(cb: () => void) {
-    this.graceCb = cb;
     this.disconnectionGrace = setTimeout(() => {
       this.close();
       cb();
@@ -301,8 +299,8 @@ export class Session<ConnType extends Connection> {
   close() {
     this.closeStaleConnection(this.connection);
     this.cancelGrace();
-    clearInterval(this.heartbeat);
     this.resetBufferedMessages();
+    clearInterval(this.heartbeat);
   }
 
   get connected() {

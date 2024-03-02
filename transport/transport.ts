@@ -16,7 +16,7 @@ import {
 } from './message';
 import { log } from '../logging';
 import { EventDispatcher, EventHandler, EventTypes } from './events';
-import { Connection, SESSION_DISCONNECT_GRACE_MS, Session } from './session';
+import { Connection, Session } from './session';
 import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
@@ -153,17 +153,6 @@ export abstract class Transport<ConnType extends Connection> {
     this.state = 'open';
   }
 
-  private sessionByClientId(clientId: TransportClientId): Session<ConnType> {
-    const session = this.sessions.get(clientId);
-    if (!session) {
-      const err = `${this.clientId} -- (invariant violation) no existing session for ${clientId}`;
-      log?.error(err);
-      throw new Error(err);
-    }
-
-    return session;
-  }
-
   /**
    * This is called immediately after a new connection is established and we
    * may or may not know the identity of the connected client.
@@ -270,13 +259,11 @@ export abstract class Transport<ConnType extends Connection> {
       conn,
     });
 
-    if (this.state !== 'open') return;
-    const session = this.sessionByClientId(connectedTo);
-    log?.info(
-      `${this.clientId} -- connection (id: ${conn.debugId}) disconnect from ${connectedTo}, ${SESSION_DISCONNECT_GRACE_MS}ms until session (id: ${session.debugId}) disconnect`,
-    );
+    const session = this.sessions.get(connectedTo);
+    // disconnection without a session
+    if (!session) return;
 
-    session.closeStaleConnection(conn);
+    session.connection = undefined;
     session.beginGrace(() => this.deleteSession(session));
   }
 
@@ -322,9 +309,14 @@ export abstract class Transport<ConnType extends Connection> {
    */
   protected handleMsg(msg: OpaqueTransportMessage) {
     if (this.state !== 'open') return;
+    const session = this.sessions.get(msg.from);
+    if (!session) {
+      const err = `${this.clientId} -- (invariant violation) no existing session for ${msg.from}`;
+      log?.error(err);
+      return;
+    }
 
     // got a msg so we know the other end is alive, reset the grace period
-    const session = this.sessionByClientId(msg.from);
     session.cancelGrace();
 
     log?.debug(`${this.clientId} -- received msg: ${JSON.stringify(msg)}`);
