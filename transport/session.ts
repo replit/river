@@ -283,9 +283,9 @@ export class Session<ConnType extends Connection> {
 
   beginGrace(cb: () => void) {
     this.disconnectionGrace = setTimeout(() => {
-      // this.close();
-      this.resetBufferedMessages();
-      clearInterval(this.heartbeat);
+      this.close();
+      // this.resetBufferedMessages();
+      // clearInterval(this.heartbeat);
       cb();
     }, SESSION_DISCONNECT_GRACE_MS);
   }
