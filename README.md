@@ -47,6 +47,7 @@ import { Type } from '@sinclair/typebox';
 
 export const ExampleServiceConstructor = () =>
   ServiceBuilder.create('example')
+    // initializer for shared state
     .initialState({
       count: 0,
     })
@@ -55,7 +56,9 @@ export const ExampleServiceConstructor = () =>
       input: Type.Object({ n: Type.Number() }),
       output: Type.Object({ result: Type.Number() }),
       errors: Type.Never(),
+      // note that a handler is unique per user RPC
       async handler(ctx, { n }) {
+        // access and mutate shared state
         ctx.state.count += n;
         return Ok({ result: ctx.state.count });
       },
