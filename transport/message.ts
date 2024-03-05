@@ -27,8 +27,8 @@ export const TransportMessageSchema = <T extends TSchema>(t: T) =>
     to: Type.String(),
     seq: Type.Integer(),
     ack: Type.Integer(),
-    serviceName: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-    procedureName: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    serviceName: Type.Optional(Type.String()),
+    procedureName: Type.Optional(Type.String()),
     streamId: Type.String(),
     controlFlags: Type.Integer(),
     payload: t,
@@ -99,6 +99,8 @@ export const OpaqueTransportMessageSchema = TransportMessageSchema(
  * * If `controlFlags & StreamOpenBit == StreamOpenBit`, `serviceName` and `procedureName` must be set.
  * * If `controlFlags & StreamClosedBit == StreamClosedBit` and the kind is `stream` or `subscription`,
  *   `payload` should be discarded (usually contains a control message).
+ * * If `controlFlags & AckBit == AckBit`, the message is an explicit acknowledgement message and doesn't
+ *   contain any payload that is relevant to the application so should not be delivered.
  * @template Payload The type of the payload.
  */
 export interface TransportMessage<Payload = Record<string, unknown>> {
@@ -118,7 +120,7 @@ export type PartialTransportMessage<
   Payload extends Record<string, unknown> = Record<string, unknown>,
 > = Omit<TransportMessage<Payload>, 'id' | 'from' | 'to' | 'seq' | 'ack'>;
 
-export function bootRequestMessage(
+export function handshakeRequestMessage(
   from: TransportClientId,
   to: TransportClientId,
   instanceId: string,
@@ -139,7 +141,7 @@ export function bootRequestMessage(
   };
 }
 
-export function bootResponseMessage(
+export function handshakeResponseMessage(
   from: TransportClientId,
   instanceId: string,
   to: TransportClientId,

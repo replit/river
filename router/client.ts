@@ -1,4 +1,4 @@
-import { Transport } from '../transport/transport';
+import { ClientTransport, Transport } from '../transport/transport';
 import {
   AnyService,
   ProcErrors,
@@ -176,10 +176,10 @@ function _createRecursiveProxy(
  * @returns The client for the server.
  */
 export const createClient = <Srv extends Server<ServiceDefs>>(
-  transport: Transport<Connection>,
-  serverId: TransportClientId = 'SERVER',
+  transport: ClientTransport<Connection>,
 ) =>
   _createRecursiveProxy(async (opts) => {
+    const serverId = transport.connectedTo;
     const [serviceName, procName, procType] = [...opts.path];
     if (!(serviceName && procName && procType)) {
       throw new Error(

@@ -6,8 +6,8 @@ import {
   TransportClientId,
   ControlMessageHandshakeRequestSchema,
   ControlMessageHandshakeResponseSchema,
-  bootRequestMessage,
-  bootResponseMessage,
+  handshakeRequestMessage,
+  handshakeResponseMessage,
   PartialTransportMessage,
   ControlFlags,
   ControlMessagePayloadSchema,
@@ -181,8 +181,8 @@ export abstract class Transport<ConnType extends Connection> {
       conn,
     });
 
+    // check if the peer we are connected to is actually different by comparing instanceId
     let oldSession = this.sessions.get(connectedTo);
-    // check if the peer we are connected to is actually difference by comparing instanceId
     const lastInstanceId = this.connectedInstanceIds.get(connectedTo);
     if (
       oldSession &&
@@ -191,7 +191,7 @@ export abstract class Transport<ConnType extends Connection> {
     ) {
       // mismatch, kill the old session and begin a new one
       log?.warn(
-        `${this.clientId} -- handshake from ${connectedTo} is a different instance (got: ${instanceId}, last connected to: ${lastInstanceId}), starting a new session`,
+        `${this.clientId} -- connection from ${connectedTo} is a different instance (got: ${instanceId}, last connected to: ${lastInstanceId}), starting a new session`,
       );
       oldSession.close();
       this.deleteSession(oldSession);
@@ -292,14 +292,7 @@ export abstract class Transport<ConnType extends Connection> {
       return null;
     }
 
-    // JSON can't express the difference between `undefined` and `null`, so we need to patch that.
-    return {
-      ...parsedMsg,
-      serviceName:
-        parsedMsg.serviceName === null ? undefined : parsedMsg.serviceName,
-      procedureName:
-        parsedMsg.procedureName === null ? undefined : parsedMsg.procedureName,
-    };
+    return parsedMsg;
   }
 
   /**
@@ -321,16 +314,29 @@ export abstract class Transport<ConnType extends Connection> {
 
     log?.debug(`${this.clientId} -- received msg: ${JSON.stringify(msg)}`);
     if (msg.seq !== session.nextExpectedSeq) {
-      log?.warn(
-        `${this.clientId} -- received out-of-order msg (got: ${
-          msg.seq
-        }, wanted: ${session.nextExpectedSeq}), discarding: ${JSON.stringify(
-          msg,
-        )}`,
-      );
+      if (msg.seq < session.nextExpectedSeq) {
+        log?.debug(
+          `${this.clientId} -- received duplicate msg (got: ${
+            msg.seq
+          }, wanted: ${session.nextExpectedSeq}), discarding: ${JSON.stringify(
+            msg,
+          )}`,
+        );
+      } else {
+        log?.error(
+          `${this.clientId} -- received out-of-order msg (got: ${
+            msg.seq
+          }, wanted: ${
+            session.nextExpectedSeq
+          }), marking connection as dead: ${JSON.stringify(msg)}`,
+        );
+        session.closeStaleConnection(session.connection);
+      }
+
       return;
     }
 
+    // don't dispatch explicit acks
     if (!isAck(msg.controlFlags)) {
       this.eventDispatcher.dispatchEvent('message', msg);
     }
@@ -352,7 +358,7 @@ export abstract class Transport<ConnType extends Connection> {
 
   /**
    * Removes a listener from this transport.
-   * @param the type of event to unlisten on
+   * @param the type of event to un-listen on
    * @param handler The message handler to remove.
    */
   removeEventListener<K extends EventTypes, T extends EventHandler<K>>(
@@ -451,20 +457,31 @@ export abstract class ClientTransport<
    */
   inflightConnectionPromises: Map<TransportClientId, Promise<ConnType>>;
   tryReconnecting = true;
+  connectedTo: TransportClientId;
 
   constructor(
     clientId: TransportClientId,
+    connectedTo: TransportClientId,
     providedOptions?: Partial<TransportOptions>,
   ) {
     super(clientId, providedOptions);
+    this.connectedTo = connectedTo;
     this.inflightConnectionPromises = new Map();
   }
 
   protected handleConnection(conn: ConnType, to: TransportClientId): void {
-    const bootHandler = this.receiveWithBootSequence(conn, () => {
-      // when we are done booting,
-      // remove boot listener and use the normal message listener
-      conn.removeDataListener(bootHandler);
+    const handshakeHandler = (data: Uint8Array) => {
+      const handshake = this.receiveHandshakeResponseMessage(data);
+      if (!handshake) {
+        conn.close();
+        return;
+      }
+
+      // handshake is good, let's connect
+      this.onConnect(conn, handshake.from, handshake.instanceId);
+
+      // remove handshake listener and use the normal message listener
+      conn.removeDataListener(handshakeHandler);
       conn.addDataListener((data) => {
         const parsed = this.parseMsg(data);
         if (!parsed) {
@@ -474,14 +491,13 @@ export abstract class ClientTransport<
 
         this.handleMsg(parsed);
       });
-    });
+    };
 
-    conn.addDataListener(bootHandler);
+    conn.addDataListener(handshakeHandler);
     conn.addCloseListener(() => {
       this.onDisconnect(conn, to);
       void this.connect(to);
     });
-
     conn.addErrorListener((err) => {
       log?.warn(
         `${this.clientId} -- error in connection (id: ${
@@ -489,6 +505,34 @@ export abstract class ClientTransport<
         }) to ${to}: ${coerceErrorString(err)}`,
       );
     });
+  }
+
+  receiveHandshakeResponseMessage(data: Uint8Array) {
+    const parsed = this.parseMsg(data);
+    if (!parsed) return false;
+    if (!Value.Check(ControlMessageHandshakeResponseSchema, parsed.payload)) {
+      log?.warn(
+        `${this.clientId} -- received invalid handshake resp: ${JSON.stringify(
+          parsed,
+        )}`,
+      );
+      return false;
+    }
+
+    if (!parsed.payload.status.ok) {
+      log?.warn(
+        `${this.clientId} -- received failed handshake resp: ${JSON.stringify(
+          parsed,
+        )}`,
+      );
+      return false;
+    }
+
+    const instanceId = parsed.payload.status.instanceId;
+    log?.debug(
+      `${this.clientId} -- handshake from ${parsed.from} ok (instance: ${instanceId})`,
+    );
+    return { instanceId, from: parsed.from };
   }
 
   /**
@@ -523,12 +567,7 @@ export abstract class ClientTransport<
 
     try {
       const conn = await reconnectPromise;
-
-      // send boot sequence
-      this.state = 'open';
-      const requestMsg = bootRequestMessage(this.clientId, to, this.instanceId);
-      log?.debug(`${this.clientId} -- sending boot handshake to ${to}`);
-      conn.send(this.codec.toBuffer(requestMsg));
+      this.sendHandshake(to, conn);
     } catch (error: unknown) {
       const errStr = coerceErrorString(error);
 
@@ -550,46 +589,14 @@ export abstract class ClientTransport<
     }
   }
 
-  private receiveWithBootSequence(
-    conn: ConnType,
-    sessionCb: (sess: Session<ConnType>) => void,
-  ) {
-    const bootHandler = (data: Uint8Array) => {
-      const parsed = this.parseMsg(data);
-      if (!parsed) {
-        conn.close();
-        return;
-      }
-
-      if (!Value.Check(ControlMessageHandshakeResponseSchema, parsed.payload)) {
-        log?.warn(
-          `${
-            this.clientId
-          } -- received invalid handshake resp: ${JSON.stringify(parsed)}`,
-        );
-        return;
-      }
-
-      if (!parsed.payload.status.ok) {
-        log?.warn(
-          `${this.clientId} -- received failed handshake resp: ${JSON.stringify(
-            parsed,
-          )}`,
-        );
-        return;
-      }
-
-      // handshake ok, check if server instance matches
-      const serverInstanceId = parsed.payload.status.instanceId;
-
-      // all good, let's connect
-      log?.debug(
-        `${this.clientId} -- handshake from ${parsed.from} ok (server instance: ${serverInstanceId})`,
-      );
-      sessionCb(this.onConnect(conn, parsed.from, serverInstanceId));
-    };
-
-    return bootHandler;
+  protected sendHandshake(to: TransportClientId, conn: ConnType) {
+    const requestMsg = handshakeRequestMessage(
+      this.clientId,
+      to,
+      this.instanceId,
+    );
+    log?.debug(`${this.clientId} -- sending handshake request to ${to}`);
+    conn.send(this.codec.toBuffer(requestMsg));
   }
 
   protected onDisconnect(conn: ConnType, connectedTo: string): void {
@@ -614,27 +621,29 @@ export abstract class ServerTransport<
   protected handleConnection(conn: ConnType) {
     let session: Session<ConnType> | undefined = undefined;
     const client = () => session?.to ?? 'unknown';
-    const bootHandler = this.receiveWithBootSequence(
-      conn,
-      (establishedSession) => {
-        session = establishedSession;
+    const handshakeHandler = (data: Uint8Array) => {
+      const handshake = this.receiveHandshakeRequestMessage(data, conn);
+      if (!handshake) {
+        conn.close();
+        return;
+      }
 
-        // when we are done booting,
-        // remove boot listener and use the normal message listener
-        conn.removeDataListener(bootHandler);
-        conn.addDataListener((data) => {
-          const parsed = this.parseMsg(data);
-          if (!parsed) {
-            conn.close();
-            return;
-          }
+      session = this.onConnect(conn, handshake.from, handshake.instanceId);
+      // when we are done handshake sequence,
+      // remove handshake listener and use the normal message listener
+      conn.removeDataListener(handshakeHandler);
+      conn.addDataListener((data) => {
+        const parsed = this.parseMsg(data);
+        if (!parsed) {
+          conn.close();
+          return;
+        }
 
-          this.handleMsg(parsed);
-        });
-      },
-    );
+        this.handleMsg(parsed);
+      });
+    };
 
-    conn.addDataListener(bootHandler);
+    conn.addDataListener(handshakeHandler);
     conn.addCloseListener(() => {
       if (!session) return;
       log?.info(
@@ -655,50 +664,53 @@ export abstract class ServerTransport<
     });
   }
 
-  protected receiveWithBootSequence(
-    conn: ConnType,
-    sessionCb: (sess: Session<ConnType>) => void,
-  ) {
-    const bootHandler = (data: Uint8Array) => {
-      const parsed = this.parseMsg(data);
-      if (!parsed) {
-        conn.close();
-        return;
-      }
+  receiveHandshakeRequestMessage(data: Uint8Array, conn: ConnType) {
+    const parsed = this.parseMsg(data);
+    if (!parsed) return false;
 
-      // double check protocol version here
-      if (!Value.Check(ControlMessageHandshakeRequestSchema, parsed.payload)) {
-        const responseMsg = bootResponseMessage(
-          this.clientId,
-          this.instanceId,
-          parsed.from,
-          false,
-        );
-        conn.send(this.codec.toBuffer(responseMsg));
-        log?.warn(
-          `${this.clientId} -- received invalid handshake msg: ${JSON.stringify(
-            parsed,
-          )}`,
-        );
-        return;
-      }
-
-      const instanceId = parsed.payload.instanceId;
-      log?.debug(
-        `${this.clientId} -- handshake from ${parsed.from} ok (instance id: ${instanceId}), responding with handshake success`,
-      );
-      const responseMsg = bootResponseMessage(
+    if (!Value.Check(ControlMessageHandshakeRequestSchema, parsed.payload)) {
+      const responseMsg = handshakeResponseMessage(
         this.clientId,
         this.instanceId,
         parsed.from,
-        true,
+        false,
       );
       conn.send(this.codec.toBuffer(responseMsg));
+      log?.warn(
+        `${this.clientId} -- received invalid handshake msg: ${JSON.stringify(
+          parsed,
+        )}`,
+      );
+      return false;
+    }
 
-      // we have the session
-      sessionCb(this.onConnect(conn, parsed.from, instanceId));
-    };
+    // double check protocol version here
+    const gotVersion = parsed.payload.protocolVersion as string;
+    if (gotVersion !== PROTOCOL_VERSION) {
+      const responseMsg = handshakeResponseMessage(
+        this.clientId,
+        this.instanceId,
+        parsed.from,
+        false,
+      );
+      conn.send(this.codec.toBuffer(responseMsg));
+      log?.warn(
+        `${this.clientId} -- received handshake msg with incompatible protocol version (got: ${gotVersion}, expected: ${PROTOCOL_VERSION})`,
+      );
+      return false;
+    }
 
-    return bootHandler;
+    const instanceId = parsed.payload.instanceId;
+    log?.debug(
+      `${this.clientId} -- handshake from ${parsed.from} ok (instance id: ${instanceId}), responding with handshake success`,
+    );
+    const responseMsg = handshakeResponseMessage(
+      this.clientId,
+      this.instanceId,
+      parsed.from,
+      true,
+    );
+    conn.send(this.codec.toBuffer(responseMsg));
+    return { instanceId, from: parsed.from };
   }
 }

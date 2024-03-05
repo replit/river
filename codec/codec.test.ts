@@ -12,6 +12,11 @@ describe.each(codecs)('codec -- $name', ({ codec }) => {
     expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
   });
 
+  test('encodes null properly', () => {
+    const msg = { null: null };
+    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
+  });
+
   test('deeply nested test', () => {
     const msg = {
       array: [{ object: true }],

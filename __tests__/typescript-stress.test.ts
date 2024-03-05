@@ -1,17 +1,12 @@
 import { describe, expect, test } from 'vitest';
 import { Procedure, ServiceBuilder, serializeService } from '../router/builder';
 import { Type } from '@sinclair/typebox';
-import {
-  PartialTransportMessage,
-  TransportClientId,
-} from '../transport/message';
 import { createServer } from '../router/server';
-import { Transport, Connection, Session } from '../transport';
+import { Connection, ClientTransport, ServerTransport } from '../transport';
 import { createClient } from '../router/client';
 import { Ok } from '../router/result';
 import { buildServiceDefs } from '../router/defs';
 import { TestServiceConstructor } from './fixtures/services';
-import { nanoid } from 'nanoid';
 
 const input = Type.Union([
   Type.Object({ a: Type.Number() }),
@@ -105,33 +100,13 @@ export const StupidlyLargeService = <Name extends string>(name: Name) =>
     .finalize();
 
 // mock transport
-export class MockTransport extends Transport<Connection> {
-  receiveWithBootSequence(
-    _conn: Connection,
-    _sessionCb: (sess: Session<Connection>) => void,
-  ): (data: Uint8Array) => void {
+export class MockClientTransport extends ClientTransport<Connection> {
+  protected createNewOutgoingConnection(_to: string): Promise<Connection> {
     throw new Error('Method not implemented.');
   }
-
-  send(
-    _to: TransportClientId,
-    _msg: PartialTransportMessage,
-  ): string | undefined {
-    return nanoid();
-  }
-
-  protected handleConnection(_conn: Connection, _to: string): void {
-    return;
-  }
-
-  createNewOutgoingConnection(): Promise<Connection> {
-    throw new Error('unimplemented');
-  }
-
-  close() {
-    return;
-  }
 }
+
+export class MockServerTransport extends ServerTransport<Connection> {}
 
 describe("ensure typescript doesn't give up trying to infer the types for large services", () => {
   test('service with many procedures hits typescript limit', () => {
@@ -147,8 +122,10 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
       TestServiceConstructor(),
     ]);
 
-    const server = createServer(new MockTransport('SERVER'), serviceDefs);
-    const client = createClient<typeof server>(new MockTransport('client'));
+    const server = createServer(new MockServerTransport('SERVER'), serviceDefs);
+    const client = createClient<typeof server>(
+      new MockClientTransport('client', 'SERVER'),
+    );
     expect(client.d.f48.rpc({ a: 0 })).toBeTruthy();
     expect(client.a.f2.rpc({ c: 'abc' })).toBeTruthy();
     expect(client.test.add.rpc({ n: 1 })).toBeTruthy();
