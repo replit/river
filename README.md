@@ -8,7 +8,7 @@ It's like tRPC/gRPC but with
 - result types and error handling
 - snappy DX (no code-generation)
 - transparent reconnect support for long-lived sessions
-- over any transport (WebSockets, stdio, Unix Domain Socket out of the box)
+- over any transport (WebSockets and Unix Domain Socket out of the box)
 
 ## Installation
 

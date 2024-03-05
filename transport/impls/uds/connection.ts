@@ -1,5 +1,6 @@
 import { Connection } from '../../session';
 import { type Socket } from 'node:net';
+import stream from 'node:stream';
 import {
   MessageFramer,
   Uint32LengthPrefixFraming,
@@ -7,7 +8,7 @@ import {
 
 export class UdsConnection extends Connection {
   sock: Socket;
-  input: NodeJS.ReadableStream;
+  input: stream.Readable;
   framer: Uint32LengthPrefixFraming;
 
   constructor(sock: Socket) {
