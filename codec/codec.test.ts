@@ -1,16 +1,5 @@
-import { Codec } from '.';
-import { BinaryCodec } from './binary';
-import { NaiveJsonCodec } from './json';
 import { describe, test, expect } from 'vitest';
-
-export type ValidCodecs = 'naive' | 'binary';
-export const codecs: Array<{
-  name: ValidCodecs;
-  codec: Codec;
-}> = [
-  { name: 'naive', codec: NaiveJsonCodec },
-  { name: 'binary', codec: BinaryCodec },
-];
+import { codecs } from '../__tests__/fixtures/codec';
 
 describe.each(codecs)('codec -- $name', ({ codec }) => {
   test('empty object', () => {

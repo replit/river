@@ -1,5 +1,4 @@
 import { Codec } from '../../codec';
-import { ValidCodecs, codecs } from '../../codec/codec.test';
 import {
   ClientTransport,
   Connection,
@@ -7,6 +6,7 @@ import {
   TransportClientId,
 } from '../../transport';
 import { TransportOptions } from '../../transport/transport';
+import { ValidCodecs, codecs } from './codec';
 import { ValidTransports, transports } from './transports';
 
 interface TestMatrixEntry {
