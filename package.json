@@ -1,7 +1,7 @@
 {
   "name": "@replit/river",
   "description": "It's like tRPC but... with JSON Schema Support, duplex streaming and support for service multiplexing. Transport agnostic!",
-  "version": "0.12.6",
+  "version": "0.13.0",
   "type": "module",
   "exports": {
     ".": {
@@ -35,14 +35,6 @@
     "./transport/uds/server": {
       "import": "./dist/transport/impls/uds/server.js",
       "require": "./dist/transport/impls/uds/server.cjs"
-    },
-    "./transport/stdio/client": {
-      "import": "./dist/transport/impls/stdio/client.js",
-      "require": "./dist/transport/impls/stdio/client.cjs"
-    },
-    "./transport/stdio/server": {
-      "import": "./dist/transport/impls/stdio/server.js",
-      "require": "./dist/transport/impls/stdio/server.cjs"
     },
     "./test-util": {
       "import": "./dist/util/testHelpers.js",

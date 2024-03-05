@@ -1,5 +1,5 @@
 import { Static } from '@sinclair/typebox';
-import { Transport } from '../transport/transport';
+import { ServerTransport, Transport } from '../transport/transport';
 import { AnyProcedure, AnyService, PayloadType } from './builder';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
@@ -142,7 +142,14 @@ class RiverServer<Services extends ServiceDefs> {
       return;
     }
 
-    if (!message.serviceName || !(message.serviceName in this.services)) {
+    if (!message.procedureName || !message.serviceName) {
+      log?.warn(
+        `${this.transport.clientId} -- missing procedure or service name in stream open message`,
+      );
+      return;
+    }
+
+    if (!(message.serviceName in this.services)) {
       log?.warn(
         `${this.transport.clientId} -- couldn't find service ${message.serviceName}`,
       );
@@ -151,10 +158,7 @@ class RiverServer<Services extends ServiceDefs> {
 
     const service = this.services[message.serviceName];
     const serviceContext = this.getContext(service);
-    if (
-      !message.procedureName ||
-      !(message.procedureName in service.procedures)
-    ) {
+    if (!(message.procedureName in service.procedures)) {
       log?.warn(
         `${this.transport.clientId} -- couldn't find a matching procedure for ${message.serviceName}.${message.procedureName}`,
       );
@@ -411,7 +415,7 @@ class RiverServer<Services extends ServiceDefs> {
  * @returns A promise that resolves to a server instance with the registered services.
  */
 export function createServer<Services extends ServiceDefs>(
-  transport: Transport<Connection>,
+  transport: ServerTransport<Connection>,
   services: Services,
   extendedContext?: Omit<ServiceContext, 'state'>,
 ): Server<Services> {

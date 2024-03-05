@@ -1,8 +1,8 @@
 import { TransportMessage } from '.';
 import {
   ControlFlags,
-  bootRequestMessage,
-  bootResponseMessage,
+  handshakeRequestMessage,
+  handshakeResponseMessage,
   isAck,
   isStreamClose,
   isStreamOpen,
@@ -57,17 +57,17 @@ describe('message helpers', () => {
     expect(isStreamClose(m.controlFlags)).toBe(true);
   });
 
-  test('bootRequestMessage', () => {
-    const m = bootRequestMessage('a', 'b', 'abc');
+  test('handshakeRequestMessage', () => {
+    const m = handshakeRequestMessage('a', 'b', 'abc');
 
     expect(m.from).toBe('a');
     expect(m.to).toBe('b');
     expect(m.payload.instanceId).toBe('abc');
   });
 
-  test('bootResponseMessage', () => {
-    const mSuccess = bootResponseMessage('a', '001', 'b', true);
-    const mFail = bootResponseMessage('a', '001', 'b', false);
+  test('handshakeResponseMessage', () => {
+    const mSuccess = handshakeResponseMessage('a', '001', 'b', true);
+    const mFail = handshakeResponseMessage('a', '001', 'b', false);
 
     expect(mSuccess.from).toBe('a');
     expect(mSuccess.to).toBe('b');

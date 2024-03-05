@@ -371,7 +371,7 @@ describe.each(testMatrix())(
         });
       });
 
-      // stest
+      // test
       const promises = [];
       for (let i = 0; i < CONCURRENCY; i++) {
         promises.push(client.test.add.rpc({ n: i }));

@@ -21,17 +21,17 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
   /**
    * Creates a new WebSocketClientTransport instance.
    * @param wsGetter A function that returns a Promise that resolves to a WebSocket instance.
-   * @param sessionId The ID of the client using the transport. This should be unique per session.
+   * @param clientId The ID of the client using the transport. This should be unique per session.
    * @param serverId The ID of the server this transport is connecting to.
    * @param providedOptions An optional object containing configuration options for the transport.
    */
   constructor(
     wsGetter: () => Promise<WebSocket>,
-    sessionId: TransportClientId,
+    clientId: TransportClientId,
     serverId: TransportClientId,
     providedOptions?: Partial<TransportOptions>,
   ) {
-    super(sessionId, providedOptions);
+    super(clientId, serverId, providedOptions);
     this.wsGetter = wsGetter;
     this.serverId = serverId;
 

@@ -14,7 +14,7 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
     serverId: TransportClientId,
     providedOptions?: Partial<TransportOptions>,
   ) {
-    super(clientId, providedOptions);
+    super(clientId, serverId, providedOptions);
     this.path = socketPath;
     this.serverId = serverId;
     void this.connect(serverId);
