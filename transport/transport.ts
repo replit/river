@@ -276,7 +276,7 @@ export abstract class Transport<ConnType extends Connection> {
     const parsedMsg = this.codec.fromBuffer(msg);
 
     if (parsedMsg === null) {
-      const decodedBuffer = new TextDecoder().decode(msg);
+      const decodedBuffer = new TextDecoder().decode(Buffer.from(msg));
       log?.error(
         `${this.clientId} -- received malformed msg, killing conn: ${decodedBuffer}`,
       );
@@ -685,7 +685,7 @@ export abstract class ServerTransport<
     }
 
     // double check protocol version here
-    const gotVersion = parsed.payload.protocolVersion as string;
+    const gotVersion = parsed.payload.protocolVersion;
     if (gotVersion !== PROTOCOL_VERSION) {
       const responseMsg = handshakeResponseMessage(
         this.clientId,
