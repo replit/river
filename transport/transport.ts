@@ -16,7 +16,7 @@ import {
 } from './message';
 import { log } from '../logging';
 import { EventDispatcher, EventHandler, EventTypes } from './events';
-import { Connection, Session } from './session';
+import { Connection, Session, SessionOptions } from './session';
 import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
@@ -30,28 +30,46 @@ import { coerceErrorString } from '../util/stringify';
  */
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
-export interface TransportOptions {
+export type TransportOptions = {
   retryIntervalMs: number;
   retryJitterMs: number;
   retryAttemptsMax: number;
-  codec: Codec;
-}
+} & SessionOptions;
 
 /**
- * The default maximum jitter for exponential backoff.
+ * Frequency at which to send heartbeat acknowledgements
  */
-export const DEFAULT_RECONNECT_JITTER_MAX_MS = 500;
+export const HEARTBEAT_INTERVAL_MS = 1000; // 1s
+
+/**
+ * Number of elapsed hearbeats without a response message before we consider
+ * the connection dead.
+ */
+export const HEARTBEATS_TILL_DEAD = 2;
+
+/**
+ * Duration to wait between connection disconnect and actual session disconnect
+ */
+export const SESSION_DISCONNECT_GRACE_MS = 5_000;
+
+/**
+ * Largest amount of jitter to add to the reconnect interval in milliseconds
+ */
+const RECONNECT_JITTER_MAX_MS = 500;
 
 /**
  * The default retry interval for reconnecting to a transport.
  * The actual interval is an exponent backoff calculated as follows:
  * ms = retryIntervalMs * (2 ** attempt) + jitter
  */
-export const DEFAULT_RECONNECT_INTERVAL_MS = 250;
+const RECONNECT_INTERVAL_MS = 250;
 export const defaultTransportOptions: TransportOptions = {
-  retryIntervalMs: DEFAULT_RECONNECT_INTERVAL_MS,
-  retryJitterMs: DEFAULT_RECONNECT_JITTER_MAX_MS,
+  retryIntervalMs: RECONNECT_INTERVAL_MS,
+  retryJitterMs: RECONNECT_JITTER_MAX_MS,
   retryAttemptsMax: 5,
+  heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
+  heartbeatsUntilDead: HEARTBEATS_TILL_DEAD,
+  sessionDisconnectGraceMs: SESSION_DISCONNECT_GRACE_MS,
   codec: NaiveJsonCodec,
 };
 
@@ -130,10 +148,11 @@ export abstract class Transport<ConnType extends Connection> {
    * The event dispatcher for handling events of type EventTypes.
    */
   eventDispatcher: EventDispatcher<EventTypes>;
+
   /**
    * The options for this transport.
    */
-  options: TransportOptions;
+  protected options: TransportOptions;
 
   /**
    * Creates a new Transport instance.
@@ -224,10 +243,10 @@ export abstract class Transport<ConnType extends Connection> {
     conn: ConnType | undefined,
   ) {
     const session = new Session<ConnType>(
-      this.codec,
       this.clientId,
       connectedTo,
       conn,
+      this.options,
     );
     this.sessions.set(session.to, session);
     this.eventDispatcher.dispatchEvent('sessionStatus', {

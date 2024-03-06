@@ -1,11 +1,11 @@
 import { expect, vi } from 'vitest';
 import { Connection, OpaqueTransportMessage, Transport } from '../../transport';
 import { Server } from '../../router';
-import {
-  SESSION_DISCONNECT_GRACE_MS,
-  HEARTBEAT_INTERVAL_MS,
-} from '../../transport/session';
 import { log } from '../../logging';
+import {
+  HEARTBEAT_INTERVAL_MS,
+  SESSION_DISCONNECT_GRACE_MS,
+} from '../../transport/transport';
 
 const waitUntilOptions = {
   timeout: 250, // these are all local connections so anything above 250ms is sus

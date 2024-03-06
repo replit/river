@@ -68,9 +68,12 @@ export abstract class Connection {
   abstract close(): void;
 }
 
-export const HEARTBEAT_INTERVAL_MS = 1000; // 1s
-export const HEARTBEATS_TILL_DEAD = 2; // can miss max of 2 heartbeats before we consider the connection dead
-export const SESSION_DISCONNECT_GRACE_MS = 5_000; // 5s
+export interface SessionOptions {
+  heartbeatIntervalMs: number;
+  heartbeatsUntilDead: number;
+  sessionDisconnectGraceMs: number;
+  codec: Codec;
+}
 
 /**
  * A session is a higher-level abstraction that operates over the span of potentially multiple transport-level connections
@@ -107,6 +110,7 @@ export const SESSION_DISCONNECT_GRACE_MS = 5_000; // 5s
  */
 export class Session<ConnType extends Connection> {
   private codec: Codec;
+  private options: SessionOptions;
 
   /**
    * The buffer of messages that have been sent but not yet acknowledged.
@@ -152,22 +156,23 @@ export class Session<ConnType extends Connection> {
   private heartbeat?: ReturnType<typeof setInterval>;
 
   constructor(
-    codec: Codec,
     from: TransportClientId,
     connectedTo: TransportClientId,
     conn: ConnType | undefined,
+    options: SessionOptions,
   ) {
+    this.options = options;
     this.debugId = `sess-${unsafeId()}`; // for debugging, no collision safety needed
     this.from = from;
     this.to = connectedTo;
     this.connection = conn;
-    this.codec = codec;
+    this.codec = options.codec;
 
     // setup heartbeat
     this.heartbeatMisses = 0;
     this.heartbeat = setInterval(
       () => this.sendHeartbeat(),
-      HEARTBEAT_INTERVAL_MS,
+      options.heartbeatIntervalMs,
     );
   }
 
@@ -205,7 +210,7 @@ export class Session<ConnType extends Connection> {
   }
 
   sendHeartbeat() {
-    if (this.heartbeatMisses >= HEARTBEATS_TILL_DEAD) {
+    if (this.heartbeatMisses >= this.options.heartbeatsUntilDead) {
       if (this.connection) {
         log?.info(
           `${this.from} -- closing connection (id: ${this.connection.debugId}) to ${this.to} due to inactivity`,
@@ -285,7 +290,7 @@ export class Session<ConnType extends Connection> {
     this.disconnectionGrace = setTimeout(() => {
       this.close();
       cb();
-    }, SESSION_DISCONNECT_GRACE_MS);
+    }, this.options.sessionDisconnectGraceMs);
   }
 
   // called on reconnect of the underlying session

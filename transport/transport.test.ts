@@ -12,7 +12,7 @@ import {
 } from '../__tests__/fixtures/cleanup';
 import { testMatrix } from '../__tests__/fixtures/matrix';
 import { PartialTransportMessage } from './message';
-import { HEARTBEATS_TILL_DEAD, HEARTBEAT_INTERVAL_MS } from './session';
+import { HEARTBEATS_TILL_DEAD, HEARTBEAT_INTERVAL_MS } from './transport';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
