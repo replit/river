@@ -18,6 +18,9 @@
  * }
  * ```
  */
+
+import { Connection, Session, TransportClientId } from '../transport';
+
 /* eslint-disable-next-line @typescript-eslint/no-empty-interface */
 export interface ServiceContext {}
 
@@ -25,3 +28,11 @@ export interface ServiceContext {}
  * The {@link ServiceContext} with state. This is what is passed to procedures.
  */
 export type ServiceContextWithState<State> = ServiceContext & { state: State };
+
+export type ServiceContextWithTransportInfo<State> = ServiceContext & {
+  state: State;
+  to: TransportClientId;
+  from: TransportClientId;
+  streamId: string;
+  session: Session<Connection>;
+};

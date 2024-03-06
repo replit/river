@@ -16,8 +16,12 @@ import {
 } from './message';
 import { log } from '../logging';
 import { EventDispatcher, EventHandler, EventTypes } from './events';
-import { Connection, Session, SessionOptions } from './session';
-import { NaiveJsonCodec } from '../codec';
+import {
+  Connection,
+  Session,
+  SessionOptions,
+  defaultSessionOptions,
+} from './session';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import { coerceErrorString } from '../util/stringify';
@@ -37,22 +41,6 @@ export type TransportOptions = {
 } & SessionOptions;
 
 /**
- * Frequency at which to send heartbeat acknowledgements
- */
-export const HEARTBEAT_INTERVAL_MS = 1000; // 1s
-
-/**
- * Number of elapsed hearbeats without a response message before we consider
- * the connection dead.
- */
-export const HEARTBEATS_TILL_DEAD = 2;
-
-/**
- * Duration to wait between connection disconnect and actual session disconnect
- */
-export const SESSION_DISCONNECT_GRACE_MS = 5_000;
-
-/**
  * Largest amount of jitter to add to the reconnect interval in milliseconds
  */
 const RECONNECT_JITTER_MAX_MS = 500;
@@ -67,10 +55,7 @@ export const defaultTransportOptions: TransportOptions = {
   retryIntervalMs: RECONNECT_INTERVAL_MS,
   retryJitterMs: RECONNECT_JITTER_MAX_MS,
   retryAttemptsMax: 5,
-  heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
-  heartbeatsUntilDead: HEARTBEATS_TILL_DEAD,
-  sessionDisconnectGraceMs: SESSION_DISCONNECT_GRACE_MS,
-  codec: NaiveJsonCodec,
+  ...defaultSessionOptions,
 };
 
 /**

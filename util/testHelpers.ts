@@ -1,7 +1,12 @@
 import WebSocket from 'isomorphic-ws';
 import { WebSocketServer } from 'ws';
 import http from 'node:http';
-import { Connection, OpaqueTransportMessage, Transport } from '../transport';
+import {
+  Connection,
+  OpaqueTransportMessage,
+  Session,
+  Transport,
+} from '../transport';
 import { pushable } from 'it-pushable';
 import {
   PayloadType,
@@ -10,6 +15,7 @@ import {
   RiverError,
   RiverUncaughtSchema,
   ServiceContext,
+  ServiceContextWithTransportInfo,
   UNCAUGHT_ERROR,
 } from '../router';
 import { Static } from '@sinclair/typebox';
@@ -17,6 +23,7 @@ import { nanoid } from 'nanoid';
 import net from 'node:net';
 import { PartialTransportMessage } from '../transport/message';
 import { coerceErrorString } from './stringify';
+import { defaultSessionOptions } from '../transport/session';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -135,6 +142,27 @@ function catchProcError(err: unknown) {
   };
 }
 
+function dummyCtx<State>(
+  state: State,
+  extendedContext?: Omit<ServiceContext, 'state'>,
+): ServiceContextWithTransportInfo<State> {
+  const session = new Session<Connection>(
+    'client',
+    'SERVER',
+    undefined,
+    defaultSessionOptions,
+  );
+
+  return {
+    ...extendedContext,
+    state,
+    to: 'SERVER',
+    from: 'client',
+    streamId: nanoid(),
+    session,
+  };
+}
+
 export function asClientRpc<
   State extends object,
   I extends PayloadType,
@@ -152,7 +180,7 @@ export function asClientRpc<
     Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>
   > => {
     return await proc
-      .handler({ ...extendedContext, state }, msg)
+      .handler(dummyCtx(state, extendedContext), msg)
       .catch(catchProcError);
   };
 }
@@ -178,12 +206,12 @@ export function asClientStream<
     if (init) {
       const _proc = proc as Procedure<State, 'stream', I, O, E, PayloadType>;
       await _proc
-        .handler({ ...extendedContext, state }, init, input, output)
+        .handler(dummyCtx(state, extendedContext), init, input, output)
         .catch((err) => output.push(catchProcError(err)));
     } else {
       const _proc = proc as Procedure<State, 'stream', I, O, E>;
       await _proc
-        .handler({ ...extendedContext, state }, input, output)
+        .handler(dummyCtx(state, extendedContext), input, output)
         .catch((err) => output.push(catchProcError(err)));
     }
   })();
@@ -208,7 +236,7 @@ export function asClientSubscription<
   return (msg: Static<I>) => {
     void (async () => {
       return await proc
-        .handler({ ...extendedContext, state }, msg, output)
+        .handler(dummyCtx(state, extendedContext), msg, output)
         .catch((err) => output.push(catchProcError(err)));
     })();
     return output;
@@ -231,13 +259,13 @@ export function asClientUpload<
   if (init) {
     const _proc = proc as Procedure<State, 'upload', I, O, E, PayloadType>;
     const result = _proc
-      .handler({ ...extendedContext, state }, init, input)
+      .handler(dummyCtx(state, extendedContext), init, input)
       .catch(catchProcError);
     return [input, result] as const;
   } else {
     const _proc = proc as Procedure<State, 'upload', I, O, E>;
     const result = _proc
-      .handler({ ...extendedContext, state }, input)
+      .handler(dummyCtx(state, extendedContext), input)
       .catch(catchProcError);
     return [input, result] as const;
   }

@@ -10,7 +10,11 @@ import {
   isStreamOpen,
   TransportClientId,
 } from '../transport/message';
-import { ServiceContext, ServiceContextWithState } from './context';
+import {
+  ServiceContext,
+  ServiceContextWithState,
+  ServiceContextWithTransportInfo,
+} from './context';
 import { log } from '../logging';
 import { Value } from '@sinclair/typebox/value';
 import {
@@ -214,6 +218,15 @@ class RiverServer<Services extends ServiceDefs> {
     // pump incoming message stream -> handler -> outgoing message stream
     let inputHandler: Promise<unknown>;
     const procHasInitMessage = 'init' in procedure;
+    const serviceContextWithTransportInfo: ServiceContextWithTransportInfo<object> =
+      {
+        ...serviceContext,
+        to: message.to,
+        from: message.from,
+        streamId: message.streamId,
+        session,
+      };
+
     switch (procedure.type) {
       case 'rpc':
         inputHandler = (async () => {
@@ -224,7 +237,7 @@ class RiverServer<Services extends ServiceDefs> {
 
           try {
             const outputMessage = await procedure.handler(
-              serviceContext,
+              serviceContextWithTransportInfo,
               inputMessage.value,
             );
             outgoing.push(outputMessage);
@@ -242,12 +255,17 @@ class RiverServer<Services extends ServiceDefs> {
             }
 
             return procedure
-              .handler(serviceContext, initMessage.value, incoming, outgoing)
+              .handler(
+                serviceContextWithTransportInfo,
+                initMessage.value,
+                incoming,
+                outgoing,
+              )
               .catch(errorHandler);
           })();
         } else {
           inputHandler = procedure
-            .handler(serviceContext, incoming, outgoing)
+            .handler(serviceContextWithTransportInfo, incoming, outgoing)
             .catch(errorHandler);
         }
         break;
@@ -260,7 +278,7 @@ class RiverServer<Services extends ServiceDefs> {
 
           try {
             await procedure.handler(
-              serviceContext,
+              serviceContextWithTransportInfo,
               inputMessage.value,
               outgoing,
             );
@@ -278,7 +296,7 @@ class RiverServer<Services extends ServiceDefs> {
             }
             try {
               const outputMessage = await procedure.handler(
-                serviceContext,
+                serviceContextWithTransportInfo,
                 initMessage.value,
                 incoming,
               );
@@ -294,7 +312,7 @@ class RiverServer<Services extends ServiceDefs> {
           inputHandler = (async () => {
             try {
               const outputMessage = await procedure.handler(
-                serviceContext,
+                serviceContextWithTransportInfo,
                 incoming,
               );
 

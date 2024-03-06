@@ -7,7 +7,7 @@ import {
   TransportClientId,
   TransportMessage,
 } from './message';
-import { Codec } from '../codec';
+import { Codec, NaiveJsonCodec } from '../codec';
 import { log } from '../logging';
 import { Static } from '@sinclair/typebox';
 
@@ -68,12 +68,35 @@ export abstract class Connection {
   abstract close(): void;
 }
 
+/**
+ * Frequency at which to send heartbeat acknowledgements
+ */
+export const HEARTBEAT_INTERVAL_MS = 1000; // 1s
+
+/**
+ * Number of elapsed hearbeats without a response message before we consider
+ * the connection dead.
+ */
+export const HEARTBEATS_TILL_DEAD = 2;
+
+/**
+ * Duration to wait between connection disconnect and actual session disconnect
+ */
+export const SESSION_DISCONNECT_GRACE_MS = 5_000;
+
 export interface SessionOptions {
   heartbeatIntervalMs: number;
   heartbeatsUntilDead: number;
   sessionDisconnectGraceMs: number;
   codec: Codec;
 }
+
+export const defaultSessionOptions: SessionOptions = {
+  heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
+  heartbeatsUntilDead: HEARTBEATS_TILL_DEAD,
+  sessionDisconnectGraceMs: SESSION_DISCONNECT_GRACE_MS,
+  codec: NaiveJsonCodec,
+};
 
 /**
  * A session is a higher-level abstraction that operates over the span of potentially multiple transport-level connections

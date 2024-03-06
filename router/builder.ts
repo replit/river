@@ -1,6 +1,6 @@
 import { TObject, Static, Type, TUnion } from '@sinclair/typebox';
 import type { Pushable } from 'it-pushable';
-import { ServiceContextWithState } from './context';
+import { ServiceContextWithTransportInfo } from './context';
 import { Result, RiverError, RiverUncaughtSchema } from './result';
 
 /**
@@ -176,7 +176,7 @@ export type Procedure<
         output: O;
         errors: E;
         handler: (
-          context: ServiceContextWithState<State>,
+          context: ServiceContextWithTransportInfo<State>,
           input: Static<I>,
         ) => Promise<Result<Static<O>, Static<E>>>;
         type: Ty;
@@ -190,7 +190,7 @@ export type Procedure<
         output: O;
         errors: E;
         handler: (
-          context: ServiceContextWithState<State>,
+          context: ServiceContextWithTransportInfo<State>,
           init: Static<Init>,
           input: AsyncIterableIterator<Static<I>>,
         ) => Promise<Result<Static<O>, Static<E>>>;
@@ -201,7 +201,7 @@ export type Procedure<
         output: O;
         errors: E;
         handler: (
-          context: ServiceContextWithState<State>,
+          context: ServiceContextWithTransportInfo<State>,
           input: AsyncIterableIterator<Static<I>>,
         ) => Promise<Result<Static<O>, Static<E>>>;
         type: Ty;
@@ -213,7 +213,7 @@ export type Procedure<
         output: O;
         errors: E;
         handler: (
-          context: ServiceContextWithState<State>,
+          context: ServiceContextWithTransportInfo<State>,
           input: Static<I>,
           output: Pushable<Result<Static<O>, Static<E>>>,
         ) => Promise<void>;
@@ -228,7 +228,7 @@ export type Procedure<
         output: O;
         errors: E;
         handler: (
-          context: ServiceContextWithState<State>,
+          context: ServiceContextWithTransportInfo<State>,
           init: Static<Init>,
           input: AsyncIterableIterator<Static<I>>,
           output: Pushable<Result<Static<O>, Static<E>>>,
@@ -240,7 +240,7 @@ export type Procedure<
         output: O;
         errors: E;
         handler: (
-          context: ServiceContextWithState<State>,
+          context: ServiceContextWithTransportInfo<State>,
           input: AsyncIterableIterator<Static<I>>,
           output: Pushable<Result<Static<O>, Static<E>>>,
         ) => Promise<void>;

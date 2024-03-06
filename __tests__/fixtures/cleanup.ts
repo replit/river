@@ -5,7 +5,7 @@ import { log } from '../../logging';
 import {
   HEARTBEAT_INTERVAL_MS,
   SESSION_DISCONNECT_GRACE_MS,
-} from '../../transport/transport';
+} from '../../transport/session';
 
 const waitUntilOptions = {
   timeout: 250, // these are all local connections so anything above 250ms is sus
