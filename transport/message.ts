@@ -67,7 +67,7 @@ export const ControlMessageHandshakeResponseSchema = Type.Object({
     }),
     Type.Object({
       ok: Type.Literal(false),
-      reason: Type.Union([Type.Literal('VERSION_MISMATCH')]),
+      reason: Type.String(),
     }),
   ]),
 });
@@ -146,6 +146,7 @@ export function handshakeResponseMessage(
   instanceId: string,
   to: TransportClientId,
   ok: boolean,
+  reason?: string,
 ): TransportMessage<Static<typeof ControlMessageHandshakeResponseSchema>> {
   return {
     id: nanoid(),
@@ -167,7 +168,7 @@ export function handshakeResponseMessage(
           type: 'HANDSHAKE_RESP',
           status: {
             ok: false,
-            reason: 'VERSION_MISMATCH',
+            reason: reason ?? 'Unknown reason',
           },
         }) satisfies Static<typeof ControlMessageHandshakeResponseSchema>,
   };

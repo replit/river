@@ -24,6 +24,7 @@ import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
 import { ServiceDefs } from './defs';
 import { Connection } from '../transport';
+import { log } from '../logging';
 
 // helper to make next, yield, and return all the same type
 export type AsyncIter<T> = AsyncGenerator<T, T>;
@@ -188,6 +189,13 @@ export const createClient = <Srv extends Server<ServiceDefs>>(
     }
 
     const [input] = opts.args;
+    log?.info(
+      `${
+        transport.clientId
+      } -- invoked ${procType}: ${serviceName}.${procName} with args: ${JSON.stringify(
+        input,
+      )}`,
+    );
     if (procType === 'rpc') {
       return handleRpc(
         transport,
@@ -271,19 +279,12 @@ function handleRpc(
     }
 
     function onMessage(msg: OpaqueTransportMessage) {
-      if (msg.streamId !== streamId) {
-        return;
-      }
+      if (msg.streamId !== streamId) return;
+      if (msg.to !== transport.clientId) return;
 
-      if (msg.to !== transport.clientId) {
-        return;
-      }
-
-      if (msg.streamId === streamId) {
-        // cleanup and resolve as soon as we get a message
-        cleanup();
-        resolve(msg.payload);
-      }
+      // cleanup and resolve as soon as we get a message
+      cleanup();
+      resolve(msg.payload);
     }
 
     transport.addEventListener('message', onMessage);
@@ -346,13 +347,8 @@ function handleStream(
 
   // transport -> output
   function onMessage(msg: OpaqueTransportMessage) {
-    if (msg.streamId !== streamId) {
-      return;
-    }
-
-    if (msg.to !== transport.clientId) {
-      return;
-    }
+    if (msg.streamId !== streamId) return;
+    if (msg.to !== transport.clientId) return;
 
     if (isStreamClose(msg.controlFlags)) {
       cleanup();
@@ -406,13 +402,8 @@ function handleSubscribe(
   // transport -> output
   const outputStream = pushable({ objectMode: true });
   function onMessage(msg: OpaqueTransportMessage) {
-    if (msg.streamId !== streamId) {
-      return;
-    }
-
-    if (msg.to !== transport.clientId) {
-      return;
-    }
+    if (msg.streamId !== streamId) return;
+    if (msg.to !== transport.clientId) return;
 
     if (isStreamClose(msg.controlFlags)) {
       cleanup();
@@ -522,15 +513,12 @@ function handleUpload(
     }
 
     function onMessage(msg: OpaqueTransportMessage) {
-      if (msg.to !== transport.clientId) {
-        return;
-      }
+      if (msg.streamId !== streamId) return;
+      if (msg.to !== transport.clientId) return;
 
-      if (msg.streamId === streamId) {
-        // cleanup and resolve as soon as we get a message
-        cleanup();
-        resolve(msg.payload);
-      }
+      // cleanup and resolve as soon as we get a message
+      cleanup();
+      resolve(msg.payload);
     }
 
     transport.addEventListener('message', onMessage);

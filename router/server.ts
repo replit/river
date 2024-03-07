@@ -9,6 +9,7 @@ import {
   isStreamClose,
   isStreamOpen,
   TransportClientId,
+  ControlFlags,
 } from '../transport/message';
 import {
   ServiceContext,
@@ -110,9 +111,7 @@ class RiverServer<Services extends ServiceDefs> {
 
   // cleanup streams on session close
   onSessionStatus = async (evt: EventMap['sessionStatus']) => {
-    if (evt.status !== 'disconnect') {
-      return;
-    }
+    if (evt.status !== 'disconnect') return;
 
     const disconnectedClientId = evt.session.to;
     log?.info(
@@ -120,9 +119,7 @@ class RiverServer<Services extends ServiceDefs> {
     );
 
     const streamsFromThisClient = this.clientStreams.get(disconnectedClientId);
-    if (!streamsFromThisClient) {
-      return;
-    }
+    if (!streamsFromThisClient) return;
 
     this.disconnectedSessions.add(disconnectedClientId);
     await Promise.all(
@@ -180,27 +177,39 @@ class RiverServer<Services extends ServiceDefs> {
     const procedure = service.procedures[message.procedureName];
     const incoming: ProcStream['incoming'] = pushable({ objectMode: true });
     const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
+    const needsClose =
+      procedure.type === 'subscription' || procedure.type === 'stream';
+
     const outputHandler: Promise<unknown> =
       // sending outgoing messages back to client
-      (async () => {
-        for await (const response of outgoing) {
-          this.transport.send(session.to, {
-            streamId: message.streamId,
-            controlFlags: 0,
-            payload: response,
-          });
-        }
+      needsClose
+        ? // subscription and stream case, we need to send a close bit after the response stream
+          (async () => {
+            for await (const response of outgoing) {
+              this.transport.send(session.to, {
+                streamId: message.streamId,
+                controlFlags: 0,
+                payload: response,
+              });
+            }
 
-        // we ended, send a close bit back to the client
-        // only subscriptions and streams have streams the
-        // handler can close
-        // also, if the client has disconnected, we don't need to send a close
-        const needsClose =
-          procedure.type === 'subscription' || procedure.type === 'stream';
-        if (needsClose && !this.disconnectedSessions.has(message.from)) {
-          this.transport.sendCloseStream(session.to, message.streamId);
-        }
-      })();
+            // we ended, send a close bit back to the client
+            // also, if the client has disconnected, we don't need to send a close
+            if (!this.disconnectedSessions.has(message.from)) {
+              this.transport.sendCloseStream(session.to, message.streamId);
+            }
+          })()
+        : // rpc and upload case, we just send the response back with close bit
+          (async () => {
+            const response = await outgoing.next().then((res) => res.value);
+            if (response) {
+              this.transport.send(session.to, {
+                streamId: message.streamId,
+                controlFlags: ControlFlags.StreamClosedBit,
+                payload: response,
+              });
+            }
+          })();
 
     const errorHandler = (err: unknown) => {
       const errorMsg = coerceErrorString(err);
