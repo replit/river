@@ -24,7 +24,6 @@ import net from 'node:net';
 import { PartialTransportMessage } from '../transport/message';
 import { coerceErrorString } from './stringify';
 import { defaultSessionOptions } from '../transport/session';
-import { AsyncIter } from '../router/client';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -82,8 +81,8 @@ export function createLocalWebSocketClient(port: number) {
  * @param iter The async iterable iterator.
  * @returns A promise that resolves to the next value from the iterator.
  */
-export async function iterNext<T>(iter: AsyncIter<T>) {
-  return await iter.next().then((res) => res.value);
+export async function iterNext<T>(iter: AsyncIterableIterator<T>) {
+  return await iter.next().then((res) => res.value as T);
 }
 
 export function payloadToTransportMessage<
