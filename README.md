@@ -10,6 +10,8 @@ It's like tRPC/gRPC but with
 - transparent reconnect support for long-lived sessions
 - over any transport (WebSockets and Unix Domain Socket out of the box)
 
+See [PROTOCOL.md](./PROTOCOL.md) for more information on the protocol.
+
 ## Installation
 
 To use River, you must be on least Typescript 5 with `"moduleResolution": "bundler"`.
