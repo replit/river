@@ -64,28 +64,20 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
             return;
           }
 
-          const onOpen = () => {
-            ws.removeEventListener('open', onOpen);
+          ws.onopen = () => {
             resolve({ ws });
           };
 
-          const onClose = (evt: WebSocket.CloseEvent) => {
-            ws.removeEventListener('close', onClose);
+          ws.onclose = (evt: WebSocket.CloseEvent) => {
             resolve({ err: evt.reason });
           };
 
-          const onError = (evt: WebSocket.ErrorEvent) => {
+          ws.onerror = (evt: WebSocket.ErrorEvent) => {
             const err = evt.error as { code: string } | undefined;
-            ws.removeEventListener('error', onError);
-            ws.removeEventListener('close', onClose);
             resolve({
               err: err?.code ?? 'unexpected disconnect',
             });
           };
-
-          ws.addEventListener('open', onOpen);
-          ws.addEventListener('close', onClose);
-          ws.addEventListener('error', onError);
         })
         .catch((e) => {
           const reason = e instanceof Error ? e.message : 'unknown reason';
