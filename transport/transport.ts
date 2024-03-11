@@ -574,9 +574,12 @@ export abstract class ClientTransport<
       this.sendHandshake(to, conn);
     } catch (error: unknown) {
       const errStr = coerceErrorString(error);
+      this.inflightConnectionPromises.delete(to);
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      const shouldRetry = this.state === 'open' && this.tryReconnecting;
+      if (!shouldRetry) return;
 
       // retry on failure
-      this.inflightConnectionPromises.delete(to);
       if (attempt >= this.options.retryAttemptsMax) {
         const errMsg = `connection to ${to} failed after ${attempt} attempts (${errStr}), giving up`;
         log?.error(`${this.clientId} -- ${errMsg}`);
@@ -585,6 +588,7 @@ export abstract class ClientTransport<
         // exponential backoff + jitter
         const jitter = Math.floor(Math.random() * this.options.retryJitterMs);
         const backoffMs = this.options.retryIntervalMs * 2 ** attempt + jitter;
+
         log?.warn(
           `${this.clientId} -- connection to ${to} failed (${errStr}), trying again in ${backoffMs}ms`,
         );
