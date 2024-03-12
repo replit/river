@@ -137,8 +137,8 @@ class RiverServer<Services extends ServiceDefs> {
 
   createNewProcStream(message: OpaqueTransportMessage) {
     if (!isStreamOpen(message.controlFlags)) {
-      log?.warn(
-        `${this.transport.clientId} -- couldn't find a matching procedure stream for ${message.serviceName}.${message.procedureName}:${message.streamId}`,
+      log?.error(
+        `${this.transport.clientId} -- can't create a new procedure stream from a message that doesn't have the stream open bit set`,
       );
       return;
     }
