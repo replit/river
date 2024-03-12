@@ -269,10 +269,9 @@ export class ServiceBuilder<T extends Service<string, object, ProcListing>> {
 
   /**
    * Finalizes the schema for the service.
-   * @returns {T} The finalized schema for the service.
    */
-  finalize(): T {
-    return this.schema;
+  finalize() {
+    return Object.freeze(this.schema);
   }
 
   /**
