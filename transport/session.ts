@@ -284,6 +284,9 @@ export class Session<ConnType extends Connection> {
   }
 
   beginGrace(cb: () => void) {
+    log?.info(
+      `${this.from} -- starting ${this.options.sessionDisconnectGraceMs}ms grace period until session (id: ${this.debugId}) to ${this.to} is closed`,
+    );
     this.disconnectionGrace = setTimeout(() => {
       this.close();
       cb();

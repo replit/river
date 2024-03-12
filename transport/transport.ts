@@ -257,15 +257,11 @@ export abstract class Transport<ConnType extends Connection> {
    * @param conn The connection object.
    * @param connectedTo The peer we are connected to.
    */
-  protected onDisconnect(conn: ConnType, connectedTo: TransportClientId) {
+  protected onDisconnect(conn: ConnType, session: Session<ConnType>) {
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'disconnect',
       conn,
     });
-
-    const session = this.sessions.get(connectedTo);
-    // disconnection without a session
-    if (!session) return;
 
     session.connection = undefined;
     session.beginGrace(() => this.deleteSession(session));
@@ -474,6 +470,7 @@ export abstract class ClientTransport<
   }
 
   protected handleConnection(conn: ConnType, to: TransportClientId): void {
+    let session: Session<ConnType> | undefined = undefined;
     const handshakeHandler = (data: Uint8Array) => {
       const handshake = this.receiveHandshakeResponseMessage(data);
       if (!handshake) {
@@ -482,7 +479,7 @@ export abstract class ClientTransport<
       }
 
       // handshake is good, let's connect
-      this.onConnect(conn, handshake.from, handshake.instanceId);
+      session = this.onConnect(conn, handshake.from, handshake.instanceId);
 
       // remove handshake listener and use the normal message listener
       conn.removeDataListener(handshakeHandler);
@@ -499,7 +496,10 @@ export abstract class ClientTransport<
 
     conn.addDataListener(handshakeHandler);
     conn.addCloseListener(() => {
-      this.onDisconnect(conn, to);
+      if (session) {
+        this.onDisconnect(conn, session);
+      }
+
       void this.connect(to);
     });
     conn.addErrorListener((err) => {
@@ -607,9 +607,9 @@ export abstract class ClientTransport<
     conn.send(this.codec.toBuffer(requestMsg));
   }
 
-  protected onDisconnect(conn: ConnType, connectedTo: string): void {
-    this.inflightConnectionPromises.delete(connectedTo);
-    super.onDisconnect(conn, connectedTo);
+  protected onDisconnect(conn: ConnType, session: Session<ConnType>): void {
+    this.inflightConnectionPromises.delete(session.to);
+    super.onDisconnect(conn, session);
   }
 }
 
@@ -659,7 +659,7 @@ export abstract class ServerTransport<
           conn.debugId
         }) to ${client()} disconnected`,
       );
-      this.onDisconnect(conn, session.to);
+      this.onDisconnect(conn, session);
     });
 
     conn.addErrorListener((err) => {
