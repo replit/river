@@ -359,6 +359,8 @@ describe.each(testMatrix())(
       clientTransport = getClientTransport('client');
       await waitFor(() => expect(serverConnStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(serverSessStart).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(serverConnStop).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(1));
 
       // when we reconnect, send another message
       const msg4 = createDummyTransportMessage();
