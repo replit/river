@@ -98,16 +98,16 @@ describe.each(testMatrix())(
         }
       }
 
-      console.log("111")
+      console.log('111');
       await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
-      console.log("222")
+      console.log('222');
 
       // wait for the server to receive at least the first 30
       await expect(
         Promise.all(first90Promises.slice(0, 30)),
       ).resolves.toStrictEqual(first90.slice(0, 30).map((msg) => msg.payload));
-      console.log("333")
+      console.log('333');
 
       // send the last 10
       const last10 = clientMsgs.slice(90);
@@ -122,10 +122,10 @@ describe.each(testMatrix())(
 
       clientTransport.tryReconnecting = true;
       await clientTransport.connect('SERVER');
-      console.log("444")
+      console.log('444');
       await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
-      console.log("555")
+      console.log('555');
 
       await expect(
         Promise.all([...first90Promises, ...last10Promises]),
