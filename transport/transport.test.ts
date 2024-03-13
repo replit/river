@@ -83,31 +83,32 @@ describe.each(testMatrix())(
       const first90Ids = [];
       const first90Promises = [];
 
-      for (let i = 0; i < 90; i++) {
+      for (let i = 0; i < 55; i++) {
         const msg = first90[i];
         const id = clientTransport.send(serverTransport.clientId, msg);
         first90Ids.push(id);
         first90Promises.push(
           waitForMessage(serverTransport, (recv) => recv.id === id),
         );
-
-        // disconnect client entirely after 55th
-        if (i === 55) {
-          clientTransport.tryReconnecting = false;
-          clientTransport.connections.forEach((conn) => conn.close());
-        }
       }
-
-      console.log('111');
-      await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
-      console.log('222');
-
       // wait for the server to receive at least the first 30
       await expect(
         Promise.all(first90Promises.slice(0, 30)),
       ).resolves.toStrictEqual(first90.slice(0, 30).map((msg) => msg.payload));
-      console.log('333');
+
+      clientTransport.tryReconnecting = false;
+      clientTransport.connections.forEach((conn) => conn.close());
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
+
+      for (let i = 55; i < 90; i++) {
+        const msg = first90[i];
+        const id = clientTransport.send(serverTransport.clientId, msg);
+        first90Ids.push(id);
+        first90Promises.push(
+          waitForMessage(serverTransport, (recv) => recv.id === id),
+        );
+      }
 
       // send the last 10
       const last10 = clientMsgs.slice(90);
@@ -122,10 +123,8 @@ describe.each(testMatrix())(
 
       clientTransport.tryReconnecting = true;
       await clientTransport.connect('SERVER');
-      console.log('444');
       await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
-      console.log('555');
 
       await expect(
         Promise.all([...first90Promises, ...last10Promises]),
