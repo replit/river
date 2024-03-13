@@ -189,11 +189,11 @@ export class Session<ConnType extends Connection> {
       const ok = this.connection.send(this.codec.toBuffer(fullMsg));
       if (ok) return fullMsg.id;
       log?.info(
-        `${this.from} -- failed to send ${fullMsg.id} to ${fullMsg.to}, connection (id: ${this.connection.debugId}) is probably dead`,
+        `${this.from} -- failed to send ${fullMsg.id} (seq: ${fullMsg.seq}) to ${fullMsg.to}, connection (id: ${this.connection.debugId}) is probably dead`,
       );
     } else {
       log?.info(
-        `${this.from} -- failed to send ${fullMsg.id} to ${fullMsg.to}, connection not ready yet`,
+        `${this.from} -- failed to send ${fullMsg.id} (seq: ${fullMsg.seq}) to ${fullMsg.to}, connection not ready yet`,
       );
     }
 
@@ -241,7 +241,7 @@ export class Session<ConnType extends Connection> {
       `${this.from} -- resending ${this.sendBuffer.length} buffered messages`,
     );
     for (const msg of this.sendBuffer) {
-      log?.debug(`${this.from} -- resending ${JSON.stringify(msg)}`);
+      log?.debug(`${this.from} -- resending ${msg.id} (seq: ${msg.seq})`);
       const ok = this.connection.send(this.codec.toBuffer(msg));
       if (!ok) {
         // this should never happen unless the transport has an
