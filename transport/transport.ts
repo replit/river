@@ -336,12 +336,12 @@ export abstract class Transport<ConnType extends Connection> {
       return;
     }
 
+    session.updateBookkeeping(msg.ack, msg.seq);
+
     // don't dispatch explicit acks
     if (!isAck(msg.controlFlags)) {
       this.eventDispatcher.dispatchEvent('message', msg);
     }
-
-    session.updateBookkeeping(msg.ack, msg.seq);
   }
 
   /**

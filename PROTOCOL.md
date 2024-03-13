@@ -124,7 +124,7 @@ type Result<T, E> = { ok: true; payload: T } | { ok: false; payload: E };
 
 A single 'invocation' of a handler is assigned a unique `streamId` which is used to label all inbound and outbound messages associated with that invocation (this grouping is referred to as a 'procedure stream' or 'stream').
 
-The `controlFlags` property is a [bit field](https://en.wikipedia.org/wiki/Bit_field#:~:text=A%20bit%20field%20is%20a,can%20be%20set%20or%20inspected.) used to signal special conditions, such as the start of a stream, the end of the stream, and an explicit acknowledgement message.
+The `controlFlags` property is a [bit field](https://en.wikipedia.org/wiki/Bit_field) used to signal special conditions, such as the start of a stream, the end of the stream, and an explicit acknowledgement message.
 
 - The `AckBit` (`0b00001`) MUST only be set in the case of an explicit heartbeat that _only_ contains ack/seq information and no application-level payload (i.e. only used to update transport level bookkeeping).
 - The `StreamOpenBit` (`0b00010`) MUST be set for the first message of a new stream.
@@ -235,7 +235,8 @@ Note that not every message from the client will result in a message from the se
 
 ##### Upload
 
-An `upload` procedure starts with the client sending a single message with `StreamOpenBit` set and remains open until the client manually closes the input stream by sending a final control message with the `StreamClosedBit` set. The server MUST send a final control message with the `StreamClosedBit` set when the input stream is exhausted.
+An `upload` procedure starts with the client sending a single message with `StreamOpenBit` set and remains open until the client manually closes the input stream by sending a final control message with the `StreamClosedBit` set.
+The server MUST send a final control message with the `StreamClosedBit` set when the input stream is exhausted.
 
 ```
 client: > --  - {
@@ -362,16 +363,23 @@ When the client receives a status with `ok: false`, it should consider the hands
 
 ### Transparent Reconnections
 
-River handles disconnections and reconnections in a transparent manner wherever possible. To do this, it uses a combination of a send buffer, heartbeats, acknowledgements, and sequence numbers. This metadata is tracked within the `Session` object.
+River handles disconnections and reconnections in a transparent manner wherever possible.
+To do this, it uses a combination of a send buffer, heartbeats, acknowledgements, and sequence numbers.
+This metadata is tracked within the `Session` object.
 
 Though this is very [TCP](https://jzhao.xyz/thoughts/TCP) inspired, River has the benefit of assuming the underlying transport is an ordered byte stream which simplifies the protocol significantly.
 
-The send buffer is a queue of messages that have been sent but not yet acknowledged by the other side. When a message is sent, it is added to the send buffer.
+The send buffer is a queue of messages that have been sent but not yet acknowledged by the other side.
+When a message is sent, it is added to the send buffer.
 
-All messages have an `ack` and the `ack` corresponds to the number of messages the other side has processed. When receiving message from the other side, the session associated with the connection SHOULD:
+All messages have an `ack` and the `ack` corresponds to the number of messages the other side has processed.
+When receiving message a valid message (see the 'Handling Messages for Streams' section for the definition of 'valid'), sessions should ensure that the incoming message `msg.seq` MUST match the session's `session.ack`.
+This helps to ensure exactly once delivery and ensures that duplicate and out-of-order messages don't mistakingly update the session's bookkeeping.
 
-- Remove all messages from the send buffer that have an `seq` less than or equal to the `ack` of the received message.
-- Set the `ack` for the current session to be `seq + 1` of the received message.
+After validating the message, the session associated with the connection SHOULD update its bookkeeping by:
+
+- Removing all messages from the send buffer that have an `seq` less than or equal to the `ack` of the received message.
+- Seting the `ack` for the current session to be `seq + 1` of the received message.
 
 When sending messages to the other side, the session associated with the connection SHOULD:
 
