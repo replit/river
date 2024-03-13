@@ -391,7 +391,8 @@ When receiving messages, the transport MUST ensure that the only messages it val
 
 Handling close events is detailed in the 'Creating Connections and Sessions' section above.
 
-When a connection is lost, the client and server should attempt to reconnect to the other side. The client and server should both have a grace period for the other side to reconnect before considering the session lost.
+When a connection is lost, the client and server should attempt to reconnect to the other side.
+The client and server should both have a grace period for the other side to reconnect before considering the session lost.
 
 It is important to note that this implies that there are two types of 'reconnects' in River:
 
@@ -407,9 +408,13 @@ Both clients and servers should listen for `sessionStatus` events to do some err
 
 #### Detecting Phantom Disconnects
 
-Certain transports will not emit a close event when the underlying connection is lost. This is especially true for WebSockets in specific cases (e.g. closing your laptop lid).
+Certain transports will not emit a close event when the underlying connection is lost.
+This is especially true for WebSockets in specific cases (e.g. closing your laptop lid).
 
-To detect these phantom disconnects, the session SHOULD send an explicit heartbeat message every `heartbeatInterval` milliseconds (this should be a parameter of the transport). This message is a control message with the `AckBit` set and the payload `{ type: 'ACK' }`.
+To detect these phantom disconnects, the session SHOULD send an explicit heartbeat message every `heartbeatInterval` milliseconds (this should be a parameter of the transport).
+This message is a control message with the `AckBit` set and the payload `{ type: 'ACK' }`.
+The `seq` and `ack` of the message should match that of the session itself.
+It is important to note that the heartbeat message is unlike normal messages and SHOULD NOT increment the `seq` field of the session it is sent from.
 
 This explicit ack serves three purposes:
 

@@ -500,7 +500,9 @@ export abstract class ClientTransport<
       if (session) {
         this.onDisconnect(conn, session);
       }
-
+      log?.info(
+        `${this.clientId} -- connection (id: ${conn.debugId}) to ${to} disconnected`,
+      );
       void this.connect(to);
     });
     conn.addErrorListener((err) => {

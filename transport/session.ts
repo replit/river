@@ -74,7 +74,7 @@ export abstract class Connection {
 export const HEARTBEAT_INTERVAL_MS = 1000; // 1s
 
 /**
- * Number of elapsed hearbeats without a response message before we consider
+ * Number of elapsed heartbeats without a response message before we consider
  * the connection dead.
  */
 export const HEARTBEATS_TILL_DEAD = 2;
@@ -181,8 +181,8 @@ export class Session<ConnType extends Connection> {
    * @param addToSendBuff Whether to add the message to the send buffer for retry.
    * @returns The full transport ID of the message that was attempted to be sent.
    */
-  send(msg: PartialTransportMessage, addToSendBuff = true): string {
-    const fullMsg: TransportMessage = this.constructMsg(msg, addToSendBuff);
+  send(msg: PartialTransportMessage): string {
+    const fullMsg: TransportMessage = this.constructMsg(msg);
     log?.debug(`${this.from} -- sending ${JSON.stringify(fullMsg)}`);
 
     if (this.connection) {
@@ -211,16 +211,21 @@ export class Session<ConnType extends Connection> {
       return;
     }
 
-    this.send(
-      {
-        streamId: 'heartbeat',
-        controlFlags: ControlFlags.AckBit,
-        payload: {
-          type: 'ACK',
-        } satisfies Static<typeof ControlMessageAckSchema>,
-      },
-      false,
-    );
+    // don't send heartbeat if we don't have a connection
+    if (!this.connection) return;
+    const heartbeatBuff = {
+      id: unsafeId(),
+      to: this.to,
+      from: this.from,
+      seq: this.seq,
+      ack: this.ack,
+      streamId: 'heartbeat',
+      controlFlags: ControlFlags.AckBit,
+      payload: {
+        type: 'ACK',
+      } satisfies Static<typeof ControlMessageAckSchema>,
+    };
+    this.connection.send(this.codec.toBuffer(heartbeatBuff));
     this.heartbeatMisses++;
   }
 
@@ -308,7 +313,6 @@ export class Session<ConnType extends Connection> {
 
   constructMsg<Payload extends Record<string, unknown>>(
     partialMsg: PartialTransportMessage<Payload>,
-    addToSendBuff = true,
   ): TransportMessage<Payload> {
     const msg = {
       ...partialMsg,
@@ -320,11 +324,7 @@ export class Session<ConnType extends Connection> {
     };
 
     this.seq++;
-
-    if (addToSendBuff) {
-      this.sendBuffer.push(msg);
-    }
-
+    this.sendBuffer.push(msg);
     return msg;
   }
 
