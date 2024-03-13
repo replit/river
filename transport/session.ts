@@ -178,12 +178,11 @@ export class Session<ConnType extends Connection> {
    * If the connection is not ready or the message fails to send, the message can be buffered for retry unless skipped.
    *
    * @param msg The partial message to be sent, which will be constructed into a full message.
-   * @param skipRetry Optional. If true, the message will not be buffered for retry on failure. This should only be used for
-   * ack hearbeats, which contain information that can already be found in the other buffered messages.
+   * @param addToSendBuff Whether to add the message to the send buffer for retry.
    * @returns The full transport ID of the message that was attempted to be sent.
    */
-  send(msg: PartialTransportMessage, skipRetry?: boolean): string {
-    const fullMsg: TransportMessage = this.constructMsg(msg);
+  send(msg: PartialTransportMessage, addToSendBuff = true): string {
+    const fullMsg: TransportMessage = this.constructMsg(msg, addToSendBuff);
     log?.debug(`${this.from} -- sending ${JSON.stringify(fullMsg)}`);
 
     if (this.connection) {
@@ -198,11 +197,6 @@ export class Session<ConnType extends Connection> {
       );
     }
 
-    if (skipRetry) return fullMsg.id;
-    this.addToSendBuff(fullMsg);
-    log?.info(
-      `${this.from} -- buffering msg ${fullMsg.id} until connection is healthy again`,
-    );
     return fullMsg.id;
   }
 
@@ -225,7 +219,7 @@ export class Session<ConnType extends Connection> {
           type: 'ACK',
         } satisfies Static<typeof ControlMessageAckSchema>,
       },
-      true,
+      false,
     );
     this.heartbeatMisses++;
   }
@@ -259,13 +253,6 @@ export class Session<ConnType extends Connection> {
   updateBookkeeping(ack: number, seq: number) {
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq > ack);
     this.ack = seq + 1;
-  }
-
-  addToSendBuff(msg: TransportMessage) {
-    this.sendBuffer.push(msg);
-    log?.debug(
-      `${this.from} -- send buff to ${this.to} now tracking ${this.sendBuffer.length} messages`,
-    );
   }
 
   closeStaleConnection(conn?: ConnType) {
@@ -318,6 +305,7 @@ export class Session<ConnType extends Connection> {
 
   constructMsg<Payload extends Record<string, unknown>>(
     partialMsg: PartialTransportMessage<Payload>,
+    addToSendBuff = true,
   ): TransportMessage<Payload> {
     const msg = {
       ...partialMsg,
@@ -329,6 +317,11 @@ export class Session<ConnType extends Connection> {
     };
 
     this.seq++;
+
+    if (addToSendBuff) {
+      this.sendBuffer.push(msg);
+    }
+
     return msg;
   }
 

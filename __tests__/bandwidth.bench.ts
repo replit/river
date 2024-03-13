@@ -5,6 +5,7 @@ import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { buildServiceDefs } from '../router/defs';
 import { transports } from './fixtures/transports';
+import { nanoid } from 'nanoid';
 
 let n = 0;
 const dummyPayloadSmall = () => ({
@@ -43,7 +44,7 @@ describe('bandwidth', async () => {
     bench(
       `${name} -- rpc`,
       async () => {
-        const result = await client.test.add.rpc({ n: 1 });
+        const result = await client.test.add.rpc({ n: Math.random() });
         assert(result.ok);
       },
       { time: BENCH_DURATION },
@@ -53,7 +54,7 @@ describe('bandwidth', async () => {
     bench(
       `${name} -- stream`,
       async () => {
-        input.push({ msg: 'abc', ignore: false });
+        input.push({ msg: nanoid(), ignore: false });
         const result = await output.next();
         assert(result.value.ok);
       },

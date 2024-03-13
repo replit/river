@@ -49,7 +49,6 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(msg2.payload);
     });
 
-    // bindLogger(console.log);
     test('idle transport cleans up nicely', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -59,6 +58,74 @@ describe.each(testMatrix())(
           serverTransport,
         });
       });
+    });
+
+    test('seq numbers should be persisted across transparent reconnects', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
+
+      await waitFor(() => expect(clientTransport.sessions.size).toBe(1));
+      await waitFor(() => expect(serverTransport.sessions.size).toBe(1));
+      await waitFor(() => expect(clientTransport.connections.size).toBe(1));
+      await waitFor(() => expect(serverTransport.connections.size).toBe(1));
+
+      /// create a hundred messages
+      const clientMsgs = Array.from({ length: 100 }, () =>
+        createDummyTransportMessage(),
+      );
+
+      // send the first 90 (with a disconnect at 55)
+      const first90 = clientMsgs.slice(0, 90);
+      const first90Ids = [];
+
+      for (let i = 0; i < 90; i++) {
+        const msg = first90[i];
+        first90Ids.push(clientTransport.send(serverTransport.clientId, msg));
+        if (i === 55) {
+          // disconnect session entirely
+          vi.useFakeTimers({ shouldAdvanceTime: true });
+          clientTransport.tryReconnecting = false;
+          clientTransport.connections.forEach((conn) => conn.close());
+        }
+      }
+
+      // wait for the server to receive at least the first 30
+      const first90Promises = first90Ids.map((id) =>
+        waitForMessage(serverTransport, (recv) => recv.id === id),
+      );
+
+      await expect(
+        Promise.all(first90Promises.slice(0, 30)),
+      ).resolves.toStrictEqual(first90.slice(0, 30).map((msg) => msg.payload));
+
+      await waitFor(() => expect(clientTransport.sessions.size).toBe(1));
+      await waitFor(() => expect(serverTransport.sessions.size).toBe(1));
+      await waitFor(() => expect(clientTransport.connections.size).toBe(0));
+      await waitFor(() => expect(serverTransport.connections.size).toBe(0));
+
+      // send the last 10
+      const last10 = clientMsgs.slice(90);
+      const last10Ids = last10.map((msg) =>
+        clientTransport.send(serverTransport.clientId, msg),
+      );
+
+      // wait for the server to receive everything
+      const last10Promises = last10Ids.map((id) =>
+        waitForMessage(serverTransport, (recv) => recv.id === id),
+      );
+
+      clientTransport.tryReconnecting = true;
+      await clientTransport.connect('SERVER');
+
+      await expect(
+        Promise.all([...first90Promises, ...last10Promises]),
+      ).resolves.toStrictEqual(clientMsgs.map((msg) => msg.payload));
     });
 
     test('both client and server transport get connect/disconnect notifs', async () => {

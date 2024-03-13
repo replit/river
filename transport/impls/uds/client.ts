@@ -26,6 +26,7 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
       oldConnection.close();
     }
 
+    await new Promise((resolve) => setTimeout(resolve, 100));
     log?.info(`${this.clientId} -- establishing a new uds to ${to}`);
     const sock = await new Promise<Socket>((resolve, reject) => {
       const sock = new Socket();
