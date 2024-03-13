@@ -23,9 +23,6 @@ export class UnixDomainSocketServerTransport extends ServerTransport<UdsConnecti
   connectionHandler = (sock: Socket) => {
     const conn = new UdsConnection(sock);
     this.handleConnection(conn);
-    log?.info(
-      `${this.clientId} -- new incoming uds connection (id: ${conn.debugId})`,
-    );
   };
 
   close() {

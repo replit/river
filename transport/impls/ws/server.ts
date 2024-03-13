@@ -1,4 +1,3 @@
-import { log } from '../../../logging';
 import { TransportClientId } from '../../message';
 import { ServerTransport, TransportOptions } from '../../transport';
 import { WebSocketServer } from 'ws';
@@ -20,9 +19,6 @@ export class WebSocketServerTransport extends ServerTransport<WebSocketConnectio
 
   connectionHandler = (ws: WebSocket) => {
     const conn = new WebSocketConnection(ws);
-    log?.info(
-      `${this.clientId} -- new incoming ws connection (id: ${conn.debugId})`,
-    );
     this.handleConnection(conn);
   };
 

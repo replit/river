@@ -332,6 +332,7 @@ describe.each(testMatrix())(
 
       // test
       const expected: Array<number> = [];
+      const promises: Array<Promise<unknown>> = [];
       for (let i = 0; i < 50; i++) {
         expected.push(i);
 
@@ -345,11 +346,14 @@ describe.each(testMatrix())(
           clientTransport.connections.forEach((conn) => conn.close());
         }
 
-        await client.test.add.rpc({
-          n: i,
-        });
+        promises.push(
+          client.test.add.rpc({
+            n: i,
+          }),
+        );
       }
 
+      await Promise.all(promises);
       const res = await client.test.getAll.rpc({});
       assert(res.ok);
       expect(res.payload.msgs).toStrictEqual(expected);

@@ -470,6 +470,7 @@ export abstract class ClientTransport<
   }
 
   protected handleConnection(conn: ConnType, to: TransportClientId): void {
+    if (this.state !== 'open') return;
     let session: Session<ConnType> | undefined = undefined;
     const handshakeHandler = (data: Uint8Array) => {
       const handshake = this.receiveHandshakeResponseMessage(data);
@@ -478,9 +479,9 @@ export abstract class ClientTransport<
         return;
       }
 
-      // handshake is good, let's connect
       session = this.onConnect(conn, handshake.from, handshake.instanceId);
 
+      // when we are done handshake sequence,
       // remove handshake listener and use the normal message listener
       conn.removeDataListener(handshakeHandler);
       conn.addDataListener((data) => {
@@ -627,6 +628,11 @@ export abstract class ServerTransport<
   }
 
   protected handleConnection(conn: ConnType) {
+    if (this.state !== 'open') return;
+
+    log?.info(
+      `${this.clientId} -- new incoming connection (id: ${conn.debugId})`,
+    );
     let session: Session<ConnType> | undefined = undefined;
     const client = () => session?.to ?? 'unknown';
     const handshakeHandler = (data: Uint8Array) => {
@@ -637,6 +643,7 @@ export abstract class ServerTransport<
       }
 
       session = this.onConnect(conn, handshake.from, handshake.instanceId);
+
       // when we are done handshake sequence,
       // remove handshake listener and use the normal message listener
       conn.removeDataListener(handshakeHandler);

@@ -3,6 +3,7 @@ import { Connection, OpaqueTransportMessage, Transport } from '../../transport';
 import { Server } from '../../router';
 import { log } from '../../logging';
 import {
+  HEARTBEATS_TILL_DEAD,
   HEARTBEAT_INTERVAL_MS,
   SESSION_DISCONNECT_GRACE_MS,
 } from '../../transport/session';
@@ -23,13 +24,15 @@ export async function waitForTransportToFinish(t: Transport<Connection>) {
 }
 
 export async function advanceFakeTimersByDisconnectGrace() {
-  // advance fake timer so we hit the disconnect grace to end the session
-  await vi.runOnlyPendingTimersAsync();
+  for (let i = 0; i < HEARTBEATS_TILL_DEAD; i++) {
+    // wait for heartbeat interval to elapse
+    await vi.runOnlyPendingTimersAsync();
+    await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS + 1);
+  }
 
-  // wait for heartbeat + disconnect timer to propagate
-  await vi.advanceTimersByTimeAsync(
-    HEARTBEAT_INTERVAL_MS + SESSION_DISCONNECT_GRACE_MS + 1,
-  );
+  // wait for disconnect timer to propagate
+  await vi.runOnlyPendingTimersAsync();
+  await vi.advanceTimersByTimeAsync(SESSION_DISCONNECT_GRACE_MS + 1);
 }
 
 async function ensureTransportIsClean(t: Transport<Connection>) {

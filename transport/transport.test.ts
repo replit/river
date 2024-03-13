@@ -49,6 +49,18 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(msg2.payload);
     });
 
+    // bindLogger(console.log);
+    test('idle transport cleans up nicely', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
+    });
+
     test('both client and server transport get connect/disconnect notifs', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
