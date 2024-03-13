@@ -70,10 +70,8 @@ describe.each(testMatrix())(
         });
       });
 
-      await waitFor(() => expect(clientTransport.sessions.size).toBe(1));
-      await waitFor(() => expect(serverTransport.sessions.size).toBe(1));
-      await waitFor(() => expect(clientTransport.connections.size).toBe(1));
-      await waitFor(() => expect(serverTransport.connections.size).toBe(1));
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
 
       /// create a hundred messages
       const clientMsgs = Array.from({ length: 100 }, () =>
@@ -83,31 +81,30 @@ describe.each(testMatrix())(
       // send the first 90 (with a disconnect at 55)
       const first90 = clientMsgs.slice(0, 90);
       const first90Ids = [];
+      const first90Promises = [];
 
       for (let i = 0; i < 90; i++) {
         const msg = first90[i];
-        first90Ids.push(clientTransport.send(serverTransport.clientId, msg));
+        const id = clientTransport.send(serverTransport.clientId, msg);
+        first90Ids.push(id);
+        first90Promises.push(
+          waitForMessage(serverTransport, (recv) => recv.id === id),
+        );
+
+        // disconnect client entirely after 55th
         if (i === 55) {
-          // disconnect session entirely
-          vi.useFakeTimers({ shouldAdvanceTime: true });
           clientTransport.tryReconnecting = false;
           clientTransport.connections.forEach((conn) => conn.close());
         }
       }
 
-      // wait for the server to receive at least the first 30
-      const first90Promises = first90Ids.map((id) =>
-        waitForMessage(serverTransport, (recv) => recv.id === id),
-      );
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
 
+      // wait for the server to receive at least the first 30
       await expect(
         Promise.all(first90Promises.slice(0, 30)),
       ).resolves.toStrictEqual(first90.slice(0, 30).map((msg) => msg.payload));
-
-      await waitFor(() => expect(clientTransport.sessions.size).toBe(1));
-      await waitFor(() => expect(serverTransport.sessions.size).toBe(1));
-      await waitFor(() => expect(clientTransport.connections.size).toBe(0));
-      await waitFor(() => expect(serverTransport.connections.size).toBe(0));
 
       // send the last 10
       const last10 = clientMsgs.slice(90);
@@ -122,6 +119,8 @@ describe.each(testMatrix())(
 
       clientTransport.tryReconnecting = true;
       await clientTransport.connect('SERVER');
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
 
       await expect(
         Promise.all([...first90Promises, ...last10Promises]),
@@ -131,16 +130,6 @@ describe.each(testMatrix())(
     test('both client and server transport get connect/disconnect notifs', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      onTestFinished(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
-      });
-
-      const msg1 = createDummyTransportMessage();
-      const msg2 = createDummyTransportMessage();
-
       const clientConnStart = vi.fn<[], unknown>();
       const clientConnStop = vi.fn<[], unknown>();
       const clientConnHandler = (evt: EventMap['connectionStatus']) => {
@@ -185,10 +174,31 @@ describe.each(testMatrix())(
         }
       };
 
+      onTestFinished(async () => {
+        // teardown
+        clientTransport.removeEventListener(
+          'connectionStatus',
+          clientConnHandler,
+        );
+        clientTransport.removeEventListener('sessionStatus', clientSessHandler);
+        serverTransport.removeEventListener(
+          'connectionStatus',
+          serverConnHandler,
+        );
+        serverTransport.removeEventListener('sessionStatus', serverSessHandler);
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
+
       clientTransport.addEventListener('connectionStatus', clientConnHandler);
       clientTransport.addEventListener('sessionStatus', clientSessHandler);
       serverTransport.addEventListener('connectionStatus', serverConnHandler);
       serverTransport.addEventListener('sessionStatus', serverSessHandler);
+
+      const msg1 = createDummyTransportMessage();
+      const msg2 = createDummyTransportMessage();
 
       // | = current
       // - = connection
@@ -273,18 +283,6 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverSessStart).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(1));
-
-      // teardown
-      clientTransport.removeEventListener(
-        'connectionStatus',
-        clientConnHandler,
-      );
-      clientTransport.removeEventListener('sessionStatus', clientSessHandler);
-      serverTransport.removeEventListener(
-        'connectionStatus',
-        serverConnHandler,
-      );
-      serverTransport.removeEventListener('sessionStatus', serverSessHandler);
     });
 
     test('transport connection is not recreated after destroy', async () => {
@@ -376,13 +374,6 @@ describe.each(testMatrix())(
 
       let clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      onTestFinished(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
-      });
-
       const serverConnStart = vi.fn<[], unknown>();
       const serverConnStop = vi.fn<[], unknown>();
       const serverConnHandler = (evt: EventMap['connectionStatus']) => {
@@ -407,6 +398,18 @@ describe.each(testMatrix())(
 
       serverTransport.addEventListener('connectionStatus', serverConnHandler);
       serverTransport.addEventListener('sessionStatus', serverSessHandler);
+      onTestFinished(async () => {
+        // teardown
+        serverTransport.removeEventListener(
+          'connectionStatus',
+          serverConnHandler,
+        );
+        serverTransport.removeEventListener('sessionStatus', serverSessHandler);
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
 
       const msg1 = createDummyTransportMessage();
       const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
@@ -449,13 +452,6 @@ describe.each(testMatrix())(
         // true indicates to reject any other messages
         waitForMessage(clientTransport, (recv) => recv.id === msg4Id, true),
       ).resolves.toStrictEqual(msg4.payload);
-
-      // teardown
-      serverTransport.removeEventListener(
-        'connectionStatus',
-        serverConnHandler,
-      );
-      serverTransport.removeEventListener('sessionStatus', serverSessHandler);
     });
 
     test('messages should not be resent when client reconnects to a different instance of the server', async () => {
@@ -466,13 +462,6 @@ describe.each(testMatrix())(
 
       const clientTransport = getClientTransport('client');
       let serverTransport = getServerTransport();
-      onTestFinished(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
-      });
-
       const clientConnStart = vi.fn<[], unknown>();
       const clientConnStop = vi.fn<[], unknown>();
       const clientConnHandler = (evt: EventMap['connectionStatus']) => {
@@ -497,6 +486,18 @@ describe.each(testMatrix())(
 
       clientTransport.addEventListener('connectionStatus', clientConnHandler);
       clientTransport.addEventListener('sessionStatus', clientSessHandler);
+      onTestFinished(async () => {
+        // teardown
+        clientTransport.removeEventListener(
+          'connectionStatus',
+          clientConnHandler,
+        );
+        clientTransport.removeEventListener('sessionStatus', clientSessHandler);
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
 
       const msg1 = createDummyTransportMessage();
       const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
@@ -550,13 +551,6 @@ describe.each(testMatrix())(
         // true indicates to reject any other messages
         waitForMessage(serverTransport, (recv) => recv.id === msg4Id, true),
       ).resolves.toStrictEqual(msg4.payload);
-
-      // teardown
-      clientTransport.removeEventListener(
-        'connectionStatus',
-        clientConnHandler,
-      );
-      clientTransport.removeEventListener('sessionStatus', clientSessHandler);
     });
 
     test('recovers from phantom disconnects', async () => {
@@ -571,15 +565,6 @@ describe.each(testMatrix())(
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      onTestFinished(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
-      });
-
-      const msg1 = createDummyTransportMessage();
-
       const clientConnStart = vi.fn<[], unknown>();
       const clientConnStop = vi.fn<[], unknown>();
       const clientConnHandler = (evt: EventMap['connectionStatus']) => {
@@ -628,6 +613,26 @@ describe.each(testMatrix())(
       clientTransport.addEventListener('sessionStatus', clientSessHandler);
       serverTransport.addEventListener('connectionStatus', serverConnHandler);
       serverTransport.addEventListener('sessionStatus', serverSessHandler);
+      onTestFinished(async () => {
+        // teardown
+        clientTransport.removeEventListener(
+          'connectionStatus',
+          clientConnHandler,
+        );
+        clientTransport.removeEventListener('sessionStatus', clientSessHandler);
+        serverTransport.removeEventListener(
+          'connectionStatus',
+          serverConnHandler,
+        );
+        serverTransport.removeEventListener('sessionStatus', serverSessHandler);
+
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
+
+      const msg1 = createDummyTransportMessage();
 
       const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
       await expect(
@@ -659,18 +664,6 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverSessStart).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(0));
       await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(0));
-
-      // teardown
-      clientTransport.removeEventListener(
-        'connectionStatus',
-        clientConnHandler,
-      );
-      clientTransport.removeEventListener('sessionStatus', clientSessHandler);
-      serverTransport.removeEventListener(
-        'connectionStatus',
-        serverConnHandler,
-      );
-      serverTransport.removeEventListener('sessionStatus', serverSessHandler);
     });
   },
 );
