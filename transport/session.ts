@@ -237,6 +237,9 @@ export class Session<ConnType extends Connection> {
       throw new Error(msg);
     }
 
+    log?.info(
+      `${this.from} -- resending ${this.sendBuffer.length} buffered messages`,
+    );
     for (const msg of this.sendBuffer) {
       log?.debug(`${this.from} -- resending ${JSON.stringify(msg)}`);
       const ok = this.connection.send(this.codec.toBuffer(msg));

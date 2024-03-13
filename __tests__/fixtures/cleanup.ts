@@ -40,6 +40,7 @@ async function ensureTransportIsClean(t: Transport<Connection>) {
     t.state,
     `transport ${t.clientId} should be closed after the test`,
   ).to.not.equal('open');
+
   await ensureTransportBuffersAreEventuallyEmpty(t);
   await waitFor(() =>
     expect(
@@ -47,24 +48,21 @@ async function ensureTransportIsClean(t: Transport<Connection>) {
       `transport ${t.clientId} should not have open sessions after the test`,
     ).toStrictEqual(new Map()),
   );
-  await waitFor(() =>
-    expect(
-      t.eventDispatcher.numberOfListeners('message'),
-      `transport ${t.clientId} should not have open message handlers after the test`,
-    ).equal(0),
-  );
-  await waitFor(() =>
-    expect(
-      t.eventDispatcher.numberOfListeners('sessionStatus'),
-      `transport ${t.clientId} should not have open session status handlers after the test`,
-    ).equal(0),
-  );
-  await waitFor(() =>
-    expect(
-      t.eventDispatcher.numberOfListeners('connectionStatus'),
-      `transport ${t.clientId} should not have open connection status handlers after the test`,
-    ).equal(0),
-  );
+
+  expect(
+    t.eventDispatcher.numberOfListeners('message'),
+    `transport ${t.clientId} should not have open message handlers after the test`,
+  ).equal(0);
+
+  expect(
+    t.eventDispatcher.numberOfListeners('sessionStatus'),
+    `transport ${t.clientId} should not have open session status handlers after the test`,
+  ).equal(0);
+
+  expect(
+    t.eventDispatcher.numberOfListeners('connectionStatus'),
+    `transport ${t.clientId} should not have open connection status handlers after the test`,
+  ).equal(0);
 }
 
 export function waitFor<T>(cb: () => T | Promise<T>) {

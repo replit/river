@@ -15,6 +15,7 @@ import {
 } from './fixtures/services';
 import { createClient, createServer } from '../router';
 import {
+  advanceFakeTimersByDisconnectGrace,
   ensureTransportBuffersAreEventuallyEmpty,
   testFinishesCleanly,
   waitFor,
@@ -62,6 +63,8 @@ describe.each(testMatrix())(
       clientTransport.close();
 
       await waitForTransportToFinish(clientTransport);
+      await waitForTransportToFinish(serverTransport);
+      await advanceFakeTimersByDisconnectGrace();
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
@@ -96,7 +99,9 @@ describe.each(testMatrix())(
       clientTransport.tryReconnecting = false;
       serverTransport.close();
 
+      await waitForTransportToFinish(clientTransport);
       await waitForTransportToFinish(serverTransport);
+      await advanceFakeTimersByDisconnectGrace();
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
@@ -136,6 +141,11 @@ describe.each(testMatrix())(
       // check number of connections
       expect(serverTransport.connections.size).toEqual(1);
       expect(clientTransport.connections.size).toEqual(1);
+
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      await waitForTransportToFinish(clientTransport);
+      await waitForTransportToFinish(serverTransport);
+      await advanceFakeTimersByDisconnectGrace();
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
@@ -196,6 +206,11 @@ describe.each(testMatrix())(
       // check number of connections
       expect(serverTransport.connections.size).toEqual(1);
       expect(clientTransport.connections.size).toEqual(1);
+
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      await waitForTransportToFinish(clientTransport);
+      await waitForTransportToFinish(serverTransport);
+      await advanceFakeTimersByDisconnectGrace();
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
@@ -246,6 +261,11 @@ describe.each(testMatrix())(
       // check number of connections
       expect(serverTransport.connections.size).toEqual(1);
       expect(clientTransport.connections.size).toEqual(1);
+
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      await waitForTransportToFinish(clientTransport);
+      await waitForTransportToFinish(serverTransport);
+      await advanceFakeTimersByDisconnectGrace();
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
@@ -293,6 +313,11 @@ describe.each(testMatrix())(
       // check number of connections
       expect(serverTransport.connections.size).toEqual(1);
       expect(clientTransport.connections.size).toEqual(1);
+
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      await waitForTransportToFinish(clientTransport);
+      await waitForTransportToFinish(serverTransport);
+      await advanceFakeTimersByDisconnectGrace();
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
