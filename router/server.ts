@@ -140,6 +140,7 @@ class RiverServer<Services extends ServiceDefs> {
       log?.error(
         `${this.transport.clientId} -- can't create a new procedure stream from a message that doesn't have the stream open bit set`,
       );
+      log?.debug(` -> ${JSON.stringify(message)}`);
       return;
     }
 
@@ -147,6 +148,7 @@ class RiverServer<Services extends ServiceDefs> {
       log?.warn(
         `${this.transport.clientId} -- missing procedure or service name in stream open message`,
       );
+      log?.debug(` -> ${JSON.stringify(message)}`);
       return;
     }
 
@@ -214,7 +216,7 @@ class RiverServer<Services extends ServiceDefs> {
     const errorHandler = (err: unknown) => {
       const errorMsg = coerceErrorString(err);
       log?.error(
-        `${this.transport.clientId} -- procedure ${message.serviceName}.${message.procedureName}:${message.streamId} threw an error: ${errorMsg}`,
+        `${this.transport.clientId} -- procedure ${message.serviceName}.${message.procedureName}:${message.streamId} threw an uncaught error: ${errorMsg}`,
       );
       outgoing.push(
         Err({
