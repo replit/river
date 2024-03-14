@@ -370,9 +370,9 @@ This metadata is tracked within the `Session` object.
 Though this is very [TCP](https://jzhao.xyz/thoughts/TCP) inspired, River has the benefit of assuming the underlying transport is an ordered byte stream which simplifies the protocol significantly.
 
 The send buffer is a queue of messages that have been sent but not yet acknowledged by the other side.
-When a message is sent (including control messages like explicit acks^1), it is added to the send buffer.
+When a message is sent (including control messages like explicit acks[^1]), it is added to the send buffer.
 
-^1: There is a protocol optimization here that treats explicit acks purely as status updates for bookkeeping.
+[^1]: There is a protocol optimization here that treats explicit acks purely as status updates for bookkeeping.
 In this optimization, explicit heartbeats 1) should not be buffered, 2) should not increment `seq` when sent, 3) send `seq - 1` as its `seq` field.
 Semantically, this is identical to 'retransmitting' the previous message but without the payload.
 
