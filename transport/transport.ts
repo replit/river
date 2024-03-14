@@ -568,13 +568,16 @@ export abstract class ClientTransport<
 
     let reconnectPromise = this.inflightConnectionPromises.get(to);
     if (!reconnectPromise) {
-      reconnectPromise = this.createNewOutgoingConnection(to);
+      reconnectPromise = this.createNewOutgoingConnection(to).then((conn) => {
+        // only send handshake once per attempt
+        this.sendHandshake(to, conn);
+        return conn;
+      });
       this.inflightConnectionPromises.set(to, reconnectPromise);
     }
 
     try {
-      const conn = await reconnectPromise;
-      this.sendHandshake(to, conn);
+      await reconnectPromise;
     } catch (error: unknown) {
       const errStr = coerceErrorString(error);
       this.inflightConnectionPromises.delete(to);
