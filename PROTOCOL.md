@@ -372,9 +372,10 @@ Though this is very [TCP](https://jzhao.xyz/thoughts/TCP) inspired, River has th
 The send buffer is a queue of messages that have been sent but not yet acknowledged by the other side.
 When a message is sent (including control messages like explicit acks[^1]), it is added to the send buffer.
 
-[^1]: There is a protocol optimization here that treats explicit acks purely as status updates for bookkeeping.
-In this optimization, explicit heartbeats 1) should not be buffered, 2) should not increment `seq` when sent, 3) send `seq - 1` as its `seq` field.
-Semantically, this is identical to 'retransmitting' the previous message but without the payload.
+[^1]:
+    There is a protocol optimization here that treats explicit acks purely as status updates for bookkeeping.
+    In this optimization, explicit heartbeats 1) should not be buffered, 2) should not increment `seq` when sent, 3) send `seq - 1` as its `seq` field.
+    Semantically, this is identical to 'retransmitting' the previous message but without the payload.
 
 All messages have an `ack` and the `ack` corresponds to the number of messages the other side has processed.
 When receiving message a valid message (see the 'Handling Messages for Streams' section for the definition of 'valid'), sessions should ensure that the incoming message `msg.seq` MUST match the session's `session.ack`.
