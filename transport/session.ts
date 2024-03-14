@@ -127,12 +127,12 @@ export class Session<ConnType extends Connection> {
   debugId: string;
 
   /**
-   * Number of messages we've sent along this session (excluding handshake)
+   * Number of messages we've sent along this session (excluding handshake and acks)
    */
   private seq: SequenceNumber = 0;
 
   /**
-   * Number of unique messages we've received this session (excluding handshake)
+   * Number of unique messages we've received this session (excluding handshake and acks)
    */
   private ack: SequenceNumber = 0;
 
@@ -212,20 +212,13 @@ export class Session<ConnType extends Connection> {
     }
 
     // don't send heartbeat if we don't have a connection
-    if (!this.connection) return;
-    const heartbeatBuff = {
-      id: unsafeId(),
-      to: this.to,
-      from: this.from,
-      seq: this.seq,
-      ack: this.ack,
+    this.send({
       streamId: 'heartbeat',
       controlFlags: ControlFlags.AckBit,
       payload: {
         type: 'ACK',
       } satisfies Static<typeof ControlMessageAckSchema>,
-    };
-    this.connection.send(this.codec.toBuffer(heartbeatBuff));
+    });
     this.heartbeatMisses++;
   }
 

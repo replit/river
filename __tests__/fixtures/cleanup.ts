@@ -18,7 +18,7 @@ export async function waitForTransportToFinish(t: Transport<Connection>) {
   await waitFor(() =>
     expect(
       t.connections,
-      `transport ${t.clientId} should not have open connections after the test`,
+      `[post-test cleanup] transport ${t.clientId} should not have open connections after the test`,
     ).toStrictEqual(new Map()),
   );
 }
@@ -38,30 +38,30 @@ export async function advanceFakeTimersByDisconnectGrace() {
 async function ensureTransportIsClean(t: Transport<Connection>) {
   expect(
     t.state,
-    `transport ${t.clientId} should be closed after the test`,
+    `[post-test cleanup] transport ${t.clientId} should be closed after the test`,
   ).to.not.equal('open');
 
   await ensureTransportBuffersAreEventuallyEmpty(t);
   await waitFor(() =>
     expect(
       t.sessions,
-      `transport ${t.clientId} should not have open sessions after the test`,
+      `[post-test cleanup] transport ${t.clientId} should not have open sessions after the test`,
     ).toStrictEqual(new Map()),
   );
 
   expect(
     t.eventDispatcher.numberOfListeners('message'),
-    `transport ${t.clientId} should not have open message handlers after the test`,
+    `[post-test cleanup] transport ${t.clientId} should not have open message handlers after the test`,
   ).equal(0);
 
   expect(
     t.eventDispatcher.numberOfListeners('sessionStatus'),
-    `transport ${t.clientId} should not have open session status handlers after the test`,
+    `[post-test cleanup] transport ${t.clientId} should not have open session status handlers after the test`,
   ).equal(0);
 
   expect(
     t.eventDispatcher.numberOfListeners('connectionStatus'),
-    `transport ${t.clientId} should not have open connection status handlers after the test`,
+    `[post-test cleanup] transport ${t.clientId} should not have open connection status handlers after the test`,
   ).equal(0);
 }
 
@@ -85,7 +85,7 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
           )
           .filter((entry) => entry[1].length > 0),
       ),
-      `transport ${t.clientId} should not have any messages waiting to send after the test`,
+      `[post-test cleanup] transport ${t.clientId} should not have any messages waiting to send after the test`,
     ).toStrictEqual(new Map()),
   );
 }
@@ -94,7 +94,7 @@ export async function ensureServerIsClean(s: Server<unknown>) {
   return waitFor(() =>
     expect(
       s.streams,
-      `server should not have any open streams after the test`,
+      `[post-test cleanup] server should not have any open streams after the test`,
     ).toStrictEqual(new Map()),
   );
 }

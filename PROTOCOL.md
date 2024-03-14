@@ -370,7 +370,11 @@ This metadata is tracked within the `Session` object.
 Though this is very [TCP](https://jzhao.xyz/thoughts/TCP) inspired, River has the benefit of assuming the underlying transport is an ordered byte stream which simplifies the protocol significantly.
 
 The send buffer is a queue of messages that have been sent but not yet acknowledged by the other side.
-When a message is sent, it is added to the send buffer.
+When a message is sent (including control messages like explicit acks^1), it is added to the send buffer.
+
+^1: There is a protocol optimization here that treats explicit acks purely as status updates for bookkeeping.
+In this optimization, explicit heartbeats 1) should not be buffered, 2) should not increment `seq` when sent, 3) send `seq - 1` as its `seq` field.
+Semantically, this is identical to 'retransmitting' the previous message but without the payload.
 
 All messages have an `ack` and the `ack` corresponds to the number of messages the other side has processed.
 When receiving message a valid message (see the 'Handling Messages for Streams' section for the definition of 'valid'), sessions should ensure that the incoming message `msg.seq` MUST match the session's `session.ack`.
@@ -413,8 +417,7 @@ This is especially true for WebSockets in specific cases (e.g. closing your lapt
 
 To detect these phantom disconnects, the session SHOULD send an explicit heartbeat message every `heartbeatInterval` milliseconds (this should be a parameter of the transport).
 This message is a control message with the `AckBit` set and the payload `{ type: 'ACK' }`.
-The `seq` and `ack` of the message should match that of the session itself.
-It is important to note that the heartbeat message is unlike normal messages and SHOULD NOT increment the `seq` field of the session it is sent from.
+The `seq` and `ack` of the message should match that of the session itself and otherwise be transmitted like a normal message.
 
 This explicit ack serves three purposes:
 

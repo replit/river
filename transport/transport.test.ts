@@ -60,6 +60,33 @@ describe.each(testMatrix())(
       });
     });
 
+    test('heartbeats should not interupt normal operation', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
+
+      vi.useFakeTimers();
+      await clientTransport.connect(serverTransport.clientId);
+      for (let i = 0; i < 5; i++) {
+        const msg = createDummyTransportMessage();
+        const msg1Id = clientTransport.send(serverTransport.clientId, msg);
+        await expect(
+          waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
+        ).resolves.toStrictEqual(msg.payload);
+
+        // wait for heartbeat interval to elapse
+        await vi.runOnlyPendingTimersAsync();
+        await vi.advanceTimersByTimeAsync(
+          HEARTBEAT_INTERVAL_MS * (1 + Math.random()),
+        );
+      }
+    });
+
     test('seq numbers should be persisted across transparent reconnects', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
