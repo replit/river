@@ -1,4 +1,5 @@
-# River 
+# River
+
 ## Long-lived Streaming Remote Procedure Calls
 
 It's like tRPC/gRPC but with
