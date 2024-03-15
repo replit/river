@@ -16,7 +16,6 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
    * A function that returns a Promise that resolves to a WebSocket instance.
    */
   wsGetter: (to: TransportClientId) => Promise<WebSocket>;
-  serverId: TransportClientId;
 
   /**
    * Creates a new WebSocketClientTransport instance.
@@ -28,24 +27,10 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
   constructor(
     wsGetter: () => Promise<WebSocket>,
     clientId: TransportClientId,
-    serverId: TransportClientId,
     providedOptions?: Partial<TransportOptions>,
   ) {
-    super(clientId, serverId, providedOptions);
+    super(clientId, providedOptions);
     this.wsGetter = wsGetter;
-    this.serverId = serverId;
-
-    // eagerly connect as soon as we initialize
-    void this.connect(this.serverId);
-  }
-
-  reopen() {
-    if (this.state === 'destroyed') {
-      throw new Error('cant reopen a destroyed connection');
-    }
-
-    this.state = 'open';
-    void this.connect(this.serverId);
   }
 
   async createNewOutgoingConnection(to: string) {

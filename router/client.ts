@@ -178,9 +178,14 @@ function _createRecursiveProxy(
  */
 export const createClient = <Srv extends Server<ServiceDefs>>(
   transport: ClientTransport<Connection>,
-) =>
-  _createRecursiveProxy(async (opts) => {
-    const serverId = transport.connectedTo;
+  serverId: TransportClientId,
+  eagerlyConnect = true,
+) => {
+  if (eagerlyConnect) {
+    void transport.connect(serverId);
+  }
+
+  return _createRecursiveProxy(async (opts) => {
     const [serviceName, procName, procType] = [...opts.path];
     if (!(serviceName && procName && procType)) {
       throw new Error(
@@ -232,6 +237,7 @@ export const createClient = <Srv extends Server<ServiceDefs>>(
       throw new Error(`invalid river call, unknown procedure type ${procType}`);
     }
   }, []) as ServerClient<Srv>;
+};
 
 function createSessionDisconnectHandler(
   from: TransportClientId,

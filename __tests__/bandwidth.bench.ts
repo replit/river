@@ -28,7 +28,10 @@ describe('bandwidth', async () => {
     const serverTransport = getServerTransport();
     const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
     const server = createServer(serverTransport, serviceDefs);
-    const client = createClient<typeof server>(clientTransport);
+    const client = createClient<typeof server>(
+      clientTransport,
+      serverTransport.clientId,
+    );
 
     bench(
       `${name} -- raw transport send and recv`,

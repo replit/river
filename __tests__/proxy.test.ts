@@ -69,10 +69,12 @@ test('ws <-> uds proxy works', async () => {
   const clientTransport = new WebSocketClientTransport(
     () => Promise.resolve(createLocalWebSocketClient(port)),
     'ws',
-    'uds',
     { codec: BinaryCodec },
   );
-  const client = createClient<typeof server>(clientTransport);
+  const client = createClient<typeof server>(
+    clientTransport,
+    serverTransport.clientId,
+  );
   onTestFinished(async () => {
     await testFinishesCleanly({
       clientTransports: [clientTransport],

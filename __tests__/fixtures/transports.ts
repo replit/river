@@ -52,9 +52,9 @@ export const transports: Array<{
           const clientTransport = new WebSocketClientTransport(
             () => Promise.resolve(createLocalWebSocketClient(port)),
             id,
-            'SERVER',
             opts,
           );
+          void clientTransport.connect('SERVER');
           transports.push(clientTransport);
           return clientTransport;
         },
@@ -113,9 +113,9 @@ export const transports: Array<{
           const clientTransport = new UnixDomainSocketClientTransport(
             socketPath,
             id,
-            'SERVER',
             opts,
           );
+          void clientTransport.connect('SERVER');
           transports.push(clientTransport);
           return clientTransport;
         },

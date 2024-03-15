@@ -1,4 +1,5 @@
-# river - Long-lived Streaming Remote Procedure Calls
+# River 
+## Long-lived Streaming Remote Procedure Calls
 
 It's like tRPC/gRPC but with
 
@@ -22,6 +23,9 @@ npm i @replit/river @sinclair/typebox
 # if you plan on using WebSocket for transport, also install
 npm i ws isomorphic-ws
 ```
+
+If you are planning on using River with React, also check out [`@replit/river-react`](https://npmjs.com/package/@replit/river-react)
+which provides some handy hooks and contexts for playing nicely with the React lifecycle.
 
 ## Writing Services
 
@@ -103,10 +107,13 @@ const websocketUrl = `ws://localhost:3000`;
 const transport = new WebSocketClientTransport(
   async () => new WebSocket(websocketUrl),
   'my-client-id',
-  'SERVER',
 );
 
-const client = createClient<ServiceSurface>(transport, 'SERVER');
+const client = createClient<ServiceSurface>(
+  transport,
+  'SERVER', // transport id of the server in the previous step
+  true, // whether to eagerly connect to the server on creation (optional argument)
+);
 
 // we get full type safety on `client`
 // client.<service name>.<procedure name>.<procedure type>()

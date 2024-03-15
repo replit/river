@@ -101,7 +101,9 @@ export const StupidlyLargeService = <Name extends string>(name: Name) =>
 
 // mock transport
 export class MockClientTransport extends ClientTransport<Connection> {
-  protected createNewOutgoingConnection(_to: string): Promise<Connection> {
+  protected async createNewOutgoingConnection(
+    _to: string,
+  ): Promise<Connection> {
     throw new Error('Method not implemented.');
   }
 }
@@ -124,7 +126,9 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
 
     const server = createServer(new MockServerTransport('SERVER'), serviceDefs);
     const client = createClient<typeof server>(
-      new MockClientTransport('client', 'SERVER'),
+      new MockClientTransport('client'),
+      'SERVER',
+      false,
     );
     expect(client.d.f48.rpc({ a: 0 })).toBeTruthy();
     expect(client.a.f2.rpc({ c: 'abc' })).toBeTruthy();

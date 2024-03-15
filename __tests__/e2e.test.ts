@@ -38,7 +38,10 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
-      const client = createClient<typeof server>(clientTransport);
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
@@ -59,7 +62,10 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([FallibleServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
-      const client = createClient<typeof server>(clientTransport);
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
@@ -89,7 +95,10 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([BinaryFileServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
-      const client = createClient<typeof server>(clientTransport);
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
@@ -113,7 +122,10 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
-      const client = createClient<typeof server>(clientTransport);
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
@@ -154,7 +166,10 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
-      const client = createClient<typeof server>(clientTransport);
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
@@ -189,7 +204,10 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([FallibleServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
-      const client = createClient<typeof server>(clientTransport);
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
@@ -227,7 +245,10 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([SubscribableServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
-      const client = createClient<typeof server>(clientTransport);
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
@@ -267,7 +288,10 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([UploadableServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
-      const client = createClient<typeof server>(clientTransport);
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
@@ -293,7 +317,10 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([UploadableServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
-      const client = createClient<typeof server>(clientTransport);
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
@@ -321,7 +348,10 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([OrderingServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
-      const client = createClient<typeof server>(clientTransport);
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
@@ -366,7 +396,10 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([OrderingServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
-      const client = createClient<typeof server>(clientTransport);
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
@@ -394,7 +427,10 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
       const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
       const server = createServer(serverTransport, serviceDefs);
-      const client = createClient<typeof server>(clientTransport);
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],

@@ -457,15 +457,12 @@ export abstract class ClientTransport<
    */
   inflightConnectionPromises: Map<TransportClientId, Promise<ConnType>>;
   tryReconnecting = true;
-  connectedTo: TransportClientId;
 
   constructor(
     clientId: TransportClientId,
-    connectedTo: TransportClientId,
     providedOptions?: Partial<TransportOptions>,
   ) {
     super(clientId, providedOptions);
-    this.connectedTo = connectedTo;
     this.inflightConnectionPromises = new Map();
   }
 

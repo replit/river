@@ -27,9 +27,9 @@ describe('sending and receiving across websockets works', async () => {
     const clientTransport = new WebSocketClientTransport(
       () => Promise.resolve(createLocalWebSocketClient(port)),
       'client',
-      'SERVER',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
+    await clientTransport.connect(serverTransport.clientId);
     onTestFinished(async () => {
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -58,10 +58,10 @@ describe('sending and receiving across websockets works', async () => {
       const client = new WebSocketClientTransport(
         () => Promise.resolve(createLocalWebSocketClient(port)),
         id,
-        'SERVER',
       );
 
       // client to server
+      await client.connect(serverTransport.clientId);
       const initMsg = makeDummyMessage('hello server');
       const initMsgId = client.send(serverId, initMsg);
       await expect(
@@ -109,9 +109,9 @@ describe('reconnect', async () => {
     const clientTransport = new WebSocketClientTransport(
       () => Promise.resolve(createLocalWebSocketClient(port)),
       'client',
-      'SERVER',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
+    await clientTransport.connect(serverTransport.clientId);
     onTestFinished(async () => {
       await testFinishesCleanly({
         clientTransports: [clientTransport],

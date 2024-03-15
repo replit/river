@@ -6,18 +6,14 @@ import { ClientTransport, TransportOptions } from '../../transport';
 
 export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnection> {
   path: string;
-  serverId: TransportClientId;
 
   constructor(
     socketPath: string,
     clientId: string,
-    serverId: TransportClientId,
     providedOptions?: Partial<TransportOptions>,
   ) {
-    super(clientId, serverId, providedOptions);
+    super(clientId, providedOptions);
     this.path = socketPath;
-    this.serverId = serverId;
-    void this.connect(serverId);
   }
 
   async createNewOutgoingConnection(to: TransportClientId) {

@@ -19,13 +19,15 @@ describe('sending and receiving across unix sockets works', async () => {
     server.close();
   });
 
-  const getTransports = () => [
-    new UnixDomainSocketClientTransport(socketPath, 'client', 'SERVER'),
-    new UnixDomainSocketServerTransport(server, 'SERVER'),
-  ];
+  const getTransports = () =>
+    [
+      new UnixDomainSocketClientTransport(socketPath, 'client'),
+      new UnixDomainSocketServerTransport(server, 'SERVER'),
+    ] as const;
 
   test('basic send/receive', async () => {
     const [clientTransport, serverTransport] = getTransports();
+    await clientTransport.connect(serverTransport.clientId);
     const messages = [
       {
         msg: 'cool\nand\ngood',
