@@ -25,9 +25,6 @@ npm i @replit/river @sinclair/typebox
 npm i ws isomorphic-ws
 ```
 
-If you are planning on using River with React, also check out [`@replit/river-react`](https://npmjs.com/package/@replit/river-react)
-which provides some handy hooks and contexts for playing nicely with the React lifecycle.
-
 ## Writing Services
 
 ### Concepts
