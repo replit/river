@@ -36,7 +36,7 @@ module.exports = {
     ],
     '@typescript-eslint/require-await': 'off',
     '@typescript-eslint/array-type': ['error', { default: 'generic' }],
-    '@typescript-eslint/no-invalid-void-type': 'off'
+    '@typescript-eslint/no-invalid-void-type': 'off',
   },
   ignorePatterns: ['dist/**/*'],
 };
