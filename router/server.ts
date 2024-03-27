@@ -181,6 +181,7 @@ class RiverServer<Services extends ServiceDefs> {
     const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
     const needsClose =
       procedure.type === 'subscription' || procedure.type === 'stream';
+    const disposables: Array<() => void> = [];
 
     const outputHandler: Promise<unknown> =
       // sending outgoing messages back to client
@@ -200,6 +201,9 @@ class RiverServer<Services extends ServiceDefs> {
             if (!this.disconnectedSessions.has(message.from)) {
               this.transport.sendCloseStream(session.to, message.streamId);
             }
+
+            // call disposables returned from handlers
+            disposables.forEach((d) => d());
           })()
         : // rpc and upload case, we just send the response back with close bit
           (async () => {
@@ -210,6 +214,9 @@ class RiverServer<Services extends ServiceDefs> {
                 controlFlags: ControlFlags.StreamClosedBit,
                 payload: response,
               });
+
+              // call disposables returned from handlers
+              disposables.forEach((d) => d());
             }
           })();
 
@@ -288,11 +295,14 @@ class RiverServer<Services extends ServiceDefs> {
           }
 
           try {
-            await procedure.handler(
+            const dispose = await procedure.handler(
               serviceContextWithTransportInfo,
               inputMessage.value,
               outgoing,
             );
+            if (dispose) {
+              disposables.push(dispose);
+            }
           } catch (err) {
             errorHandler(err);
           }

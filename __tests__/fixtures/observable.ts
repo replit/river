@@ -39,4 +39,11 @@ export class Observable<T> {
     listener(this.get());
     return () => this.listeners.delete(listener);
   }
+
+  /**
+   * Returns the number of listeners currently observing the observable
+   */
+  get listenerCount(): number {
+    return this.listeners.size;
+  }
 }

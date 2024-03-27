@@ -283,6 +283,9 @@ describe.each(testMatrix())(
       await advanceFakeTimersByDisconnectGrace();
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
+
+      // no observers should remain subscribed to the observable
+      expect(server.services.subscribable.state.count.listenerCount).toEqual(0);
     });
 
     test('upload', async () => {
