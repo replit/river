@@ -216,7 +216,7 @@ export type Procedure<
           context: ServiceContextWithTransportInfo<State>,
           input: Static<I>,
           output: Pushable<Result<Static<O>, Static<E>>>,
-        ) => Promise<void>;
+        ) => Promise<(() => void) | void>;
         type: Ty;
       }
     : never

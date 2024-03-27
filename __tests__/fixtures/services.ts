@@ -178,7 +178,7 @@ export const SubscribableServiceConstructor = () =>
       output: Type.Object({ result: Type.Number() }),
       errors: Type.Never(),
       async handler(ctx, _msg, returnStream) {
-        ctx.state.count.observe((count) => {
+        return ctx.state.count.observe((count) => {
           returnStream.push(Ok({ result: count }));
         });
       },
