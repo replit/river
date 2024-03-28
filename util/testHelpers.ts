@@ -123,6 +123,7 @@ export async function waitForMessage(
         cleanup();
         resolve(msg.payload);
       } else if (rejectMismatch) {
+        cleanup();
         reject(new Error('message didnt match the filter'));
       }
     }
