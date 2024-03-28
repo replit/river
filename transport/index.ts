@@ -16,5 +16,6 @@ export {
   EventMap,
   EventTypes,
   EventHandler,
-  ProtocolErrorType,
+  ProtocolError,
+  type ProtocolErrorType,
 } from './events';

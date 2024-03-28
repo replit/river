@@ -13,7 +13,7 @@ import { nanoid } from 'nanoid';
 import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
-import { ProtocolErrorType } from '../transport/events';
+import { ProtocolError } from '../transport/events';
 
 describe('should handle incompatabilities', async () => {
   const server = http.createServer();
@@ -52,7 +52,7 @@ describe('should handle incompatabilities', async () => {
     expect(errMock).toHaveBeenCalledTimes(1);
     expect(errMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: ProtocolErrorType.UseAfterDestroy,
+        type: ProtocolError.UseAfterDestroy,
       }),
     );
   });
@@ -85,7 +85,7 @@ describe('should handle incompatabilities', async () => {
     expect(errMock).toHaveBeenCalledTimes(1);
     expect(errMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: ProtocolErrorType.RetriesExceeded,
+        type: ProtocolError.RetriesExceeded,
       }),
     );
   });
@@ -119,7 +119,7 @@ describe('should handle incompatabilities', async () => {
     expect(errMock).toHaveBeenCalledTimes(1);
     expect(errMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: ProtocolErrorType.HandshakeFailed,
+        type: ProtocolError.HandshakeFailed,
       }),
     );
   });
@@ -169,7 +169,7 @@ describe('should handle incompatabilities', async () => {
     expect(errMock).toHaveBeenCalledTimes(1);
     expect(errMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: ProtocolErrorType.HandshakeFailed,
+        type: ProtocolError.HandshakeFailed,
       }),
     );
   });
