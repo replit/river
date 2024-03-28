@@ -12,7 +12,11 @@ import {
 } from '../__tests__/fixtures/cleanup';
 import { testMatrix } from '../__tests__/fixtures/matrix';
 import { PartialTransportMessage } from './message';
-import { HEARTBEATS_TILL_DEAD, HEARTBEAT_INTERVAL_MS } from './session';
+import {
+  HEARTBEATS_TILL_DEAD,
+  HEARTBEAT_INTERVAL_MS,
+  SessionOptions,
+} from './session';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
@@ -693,5 +697,45 @@ describe.each(testMatrix())(
       await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(0));
       await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(0));
     });
+  },
+);
+
+describe.each(testMatrix())(
+  'transport authorization tests ($transport.name transport, $codec.name codec)',
+  async ({ transport, codec }) => {
+    const authorize: Exclude<SessionOptions['authorize'], null> = (
+      authorization: unknown,
+    ) => {
+      if (authorization === 'accept') return true;
+      if (authorization === 'deny') return false;
+      throw new Error('invalid authorization');
+    };
+
+    const opts = { codec: codec.codec, authorize };
+    const { getClientTransport, getServerTransport, cleanup } =
+      await transport.setup(opts);
+    afterAll(cleanup);
+
+    test('client should be able to connect with valid authorization', async () => {
+      const serverTransport = getServerTransport();
+      const clientTransport = getClientTransport('client', 'accept');
+
+      // if we're authorized sending a message should work fine
+      const msg = createDummyTransportMessage();
+      const msgId = clientTransport.send(serverTransport.clientId, msg);
+      await expect(
+        waitForMessage(serverTransport, (recv) => recv.id === msgId),
+      ).resolves.toStrictEqual(msg.payload);
+    });
+
+    test('client should not connect with invalid authorization', async () => {
+      getServerTransport();
+      const clientTransport = getClientTransport('client', 'accept');
+      clientTransport.tryReconnecting = false;
+      // TODO: is this the right way to check for this?
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
+    });
+
+    // TODO: test for authorize callback throwing
   },
 );

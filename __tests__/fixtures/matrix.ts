@@ -16,6 +16,7 @@ interface TestMatrixEntry {
       simulatePhantomDisconnect: () => void;
       getClientTransport: (
         id: TransportClientId,
+        authorization?: unknown,
       ) => ClientTransport<Connection>;
       getServerTransport: () => ServerTransport<Connection>;
       restartServer: () => Promise<void>;

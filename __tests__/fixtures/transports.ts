@@ -23,7 +23,10 @@ export type ValidTransports = 'ws' | 'unix sockets' | 'node streams';
 export const transports: Array<{
   name: ValidTransports;
   setup: (opts?: Partial<TransportOptions>) => Promise<{
-    getClientTransport: (id: TransportClientId) => ClientTransport<Connection>;
+    getClientTransport: (
+      id: TransportClientId,
+      authorization?: unknown,
+    ) => ClientTransport<Connection>;
     getServerTransport: () => ServerTransport<Connection>;
     simulatePhantomDisconnect: () => void;
     restartServer: () => Promise<void>;
@@ -48,13 +51,13 @@ export const transports: Array<{
             }
           }
         },
-        getClientTransport(id) {
+        getClientTransport(id, authorization) {
           const clientTransport = new WebSocketClientTransport(
             () => Promise.resolve(createLocalWebSocketClient(port)),
             id,
             opts,
           );
-          void clientTransport.connect('SERVER');
+          void clientTransport.connect('SERVER', authorization);
           transports.push(clientTransport);
           return clientTransport;
         },
@@ -109,13 +112,13 @@ export const transports: Array<{
             }
           }
         },
-        getClientTransport(id) {
+        getClientTransport(id, authorization) {
           const clientTransport = new UnixDomainSocketClientTransport(
             socketPath,
             id,
             opts,
           );
-          void clientTransport.connect('SERVER');
+          void clientTransport.connect('SERVER', authorization);
           transports.push(clientTransport);
           return clientTransport;
         },

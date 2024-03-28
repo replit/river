@@ -56,6 +56,7 @@ export const ControlMessageHandshakeRequestSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_REQ'),
   protocolVersion: Type.String(),
   instanceId: Type.String(),
+  authorization: Type.Optional(Type.Unknown()),
 });
 
 export const ControlMessageHandshakeResponseSchema = Type.Object({
@@ -124,6 +125,7 @@ export function handshakeRequestMessage(
   from: TransportClientId,
   to: TransportClientId,
   instanceId: string,
+  authorization?: unknown,
 ): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {
   return {
     id: nanoid(),
@@ -137,6 +139,7 @@ export function handshakeRequestMessage(
       type: 'HANDSHAKE_REQ',
       protocolVersion: PROTOCOL_VERSION,
       instanceId,
+      authorization,
     } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
   };
 }

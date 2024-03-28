@@ -16,7 +16,10 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
     this.path = socketPath;
   }
 
-  async createNewOutgoingConnection(to: TransportClientId) {
+  async createNewOutgoingConnection(
+    to: TransportClientId,
+    authorization?: unknown,
+  ) {
     const oldConnection = this.connections.get(to);
     if (oldConnection) {
       oldConnection.close();
@@ -31,7 +34,7 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
     });
 
     const conn = new UdsConnection(sock);
-    this.handleConnection(conn, to);
+    this.handleConnection(conn, to, authorization);
     return conn;
   }
 }

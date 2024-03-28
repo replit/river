@@ -58,11 +58,12 @@ describe('message helpers', () => {
   });
 
   test('handshakeRequestMessage', () => {
-    const m = handshakeRequestMessage('a', 'b', 'abc');
+    const m = handshakeRequestMessage('a', 'b', 'abc', 'auth');
 
     expect(m.from).toBe('a');
     expect(m.to).toBe('b');
     expect(m.payload.instanceId).toBe('abc');
+    expect(m.payload.authorization).toBe('auth');
   });
 
   test('handshakeResponseMessage', () => {

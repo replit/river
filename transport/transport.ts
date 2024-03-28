@@ -66,7 +66,7 @@ export const defaultTransportOptions: TransportOptions = {
 
 /**
  * Transports manage the lifecycle (creation/deletion) of sessions and connections. Its responsibilities include:
- * 
+ *
  *  1) Constructing a new {@link Session} and {@link Connection} on {@link TransportMessage}s from new clients.
  *     After constructing the {@link Connection}, {@link onConnect} is called which adds it to the connection map.
  *  2) Delegating message listening of the connection to the newly created {@link Connection}.
@@ -477,7 +477,11 @@ export abstract class ClientTransport<
     this.inflightConnectionPromises = new Map();
   }
 
-  protected handleConnection(conn: ConnType, to: TransportClientId): void {
+  protected handleConnection(
+    conn: ConnType,
+    to: TransportClientId,
+    authorization?: unknown,
+  ): void {
     if (this.state !== 'open') return;
     let session: Session<ConnType> | undefined = undefined;
     const handshakeHandler = (data: Uint8Array) => {
@@ -511,7 +515,7 @@ export abstract class ClientTransport<
       log?.info(
         `${this.clientId} -- connection (id: ${conn.debugId}) to ${to} disconnected`,
       );
-      void this.connect(to);
+      void this.connect(to, authorization);
     });
     conn.addErrorListener((err) => {
       log?.warn(
@@ -575,13 +579,14 @@ export abstract class ClientTransport<
    */
   protected abstract createNewOutgoingConnection(
     to: TransportClientId,
+    authorization?: unknown,
   ): Promise<ConnType>;
 
   /**
    * Manually attempts to connect to a client.
    * @param to The client ID of the node to connect to.
    */
-  async connect(to: TransportClientId, attempt = 0) {
+  async connect(to: TransportClientId, authorization?: unknown, attempt = 0) {
     if (this.state !== 'open' || !this.tryReconnecting) {
       log?.info(
         `${this.clientId} -- transport state is no longer open, not attempting connection`,
@@ -591,9 +596,12 @@ export abstract class ClientTransport<
 
     let reconnectPromise = this.inflightConnectionPromises.get(to);
     if (!reconnectPromise) {
-      reconnectPromise = this.createNewOutgoingConnection(to).then((conn) => {
+      reconnectPromise = this.createNewOutgoingConnection(
+        to,
+        authorization,
+      ).then((conn) => {
         // only send handshake once per attempt
-        this.sendHandshake(to, conn);
+        this.sendHandshake(to, conn, authorization);
         return conn;
       });
       this.inflightConnectionPromises.set(to, reconnectPromise);
@@ -622,16 +630,24 @@ export abstract class ClientTransport<
         log?.warn(
           `${this.clientId} -- connection to ${to} failed (${errStr}), trying again in ${backoffMs}ms`,
         );
-        setTimeout(() => void this.connect(to, attempt + 1), backoffMs);
+        setTimeout(
+          () => void this.connect(to, authorization, attempt + 1),
+          backoffMs,
+        );
       }
     }
   }
 
-  protected sendHandshake(to: TransportClientId, conn: ConnType) {
+  protected sendHandshake(
+    to: TransportClientId,
+    conn: ConnType,
+    authorization?: unknown,
+  ) {
     const requestMsg = handshakeRequestMessage(
       this.clientId,
       to,
       this.instanceId,
+      authorization,
     );
     log?.debug(`${this.clientId} -- sending handshake request to ${to}`);
     conn.send(this.codec.toBuffer(requestMsg));
@@ -756,6 +772,40 @@ export abstract class ServerTransport<
         `incorrect version (got: ${gotVersion} wanted ${PROTOCOL_VERSION})`,
       );
       return false;
+    }
+
+    if (this.options.authorize !== null) {
+      let authorized = false;
+
+      try {
+        authorized = this.options.authorize(parsed.payload.authorization);
+      } catch (error: unknown) {
+        log?.error(
+          `${this.clientId} -- error in authorize callback: ${coerceErrorString(
+            error,
+          )}`,
+        );
+        this.protocolError(
+          ProtocolError.HandshakeFailed,
+          'failed to determine authorization',
+        );
+        return false;
+      }
+
+      if (!authorized) {
+        const responseMsg = handshakeResponseMessage(
+          this.clientId,
+          this.instanceId,
+          parsed.from,
+          false,
+        );
+        conn.send(this.codec.toBuffer(responseMsg));
+        log?.warn(
+          `${this.clientId} -- received unauthorized handshake msg from ${parsed.from}`,
+        );
+        this.protocolError(ProtocolError.HandshakeFailed, 'unauthorized');
+        return false;
+      }
     }
 
     const instanceId = parsed.payload.instanceId;

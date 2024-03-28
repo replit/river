@@ -89,6 +89,7 @@ export interface SessionOptions {
   heartbeatsUntilDead: number;
   sessionDisconnectGraceMs: number;
   codec: Codec;
+  authorize: ((authorization: unknown) => boolean) | null;
 }
 
 export const defaultSessionOptions: SessionOptions = {
@@ -96,6 +97,7 @@ export const defaultSessionOptions: SessionOptions = {
   heartbeatsUntilDead: HEARTBEATS_TILL_DEAD,
   sessionDisconnectGraceMs: SESSION_DISCONNECT_GRACE_MS,
   codec: NaiveJsonCodec,
+  authorize: null,
 };
 
 /**
