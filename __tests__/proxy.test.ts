@@ -56,6 +56,10 @@ test('ws <-> uds proxy works', async () => {
 
       ws.send(data);
     });
+
+    ws.onclose = () => {
+      uds.destroy();
+    };
   });
 
   // setup transports

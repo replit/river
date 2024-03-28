@@ -2,6 +2,12 @@ import { OpaqueTransportMessage } from './message';
 import { Connection, Session } from './session';
 
 type ConnectionStatus = 'connect' | 'disconnect';
+export const enum ProtocolErrorType {
+  RetriesExceeded = 'conn_retry_exceeded',
+  HandshakeFailed = 'handshake_failed',
+  UseAfterDestroy = 'use_after_destroy',
+}
+
 export interface EventMap {
   message: OpaqueTransportMessage;
   connectionStatus: {
@@ -11,6 +17,10 @@ export interface EventMap {
   sessionStatus: {
     status: ConnectionStatus;
     session: Session<Connection>;
+  };
+  protocolError: {
+    type: ProtocolErrorType;
+    message: string;
   };
 }
 

@@ -12,4 +12,9 @@ export type {
   isStreamOpen,
   isStreamClose,
 } from './message';
-export { EventMap, EventTypes, EventHandler } from './events';
+export {
+  EventMap,
+  EventTypes,
+  EventHandler,
+  ProtocolErrorType,
+} from './events';

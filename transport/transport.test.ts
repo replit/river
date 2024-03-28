@@ -52,6 +52,7 @@ describe.each(testMatrix())(
     test('idle transport cleans up nicely', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
+      await waitFor(() => expect(serverTransport.connections.size).toBe(1));
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
@@ -320,7 +321,6 @@ describe.each(testMatrix())(
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const msg1 = createDummyTransportMessage();
-      const msg2 = createDummyTransportMessage();
 
       const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
       await expect(
@@ -328,9 +328,6 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(msg1.payload);
 
       clientTransport.destroy();
-      expect(() =>
-        clientTransport.send(serverTransport.clientId, msg2),
-      ).toThrow(new Error('transport is destroyed, cant send'));
 
       // this is not expected to be clean because we destroyed the transport
       expect(clientTransport.state).toEqual('destroyed');

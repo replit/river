@@ -15,7 +15,12 @@ import {
   PROTOCOL_VERSION,
 } from './message';
 import { log } from '../logging';
-import { EventDispatcher, EventHandler, EventTypes } from './events';
+import {
+  EventDispatcher,
+  EventHandler,
+  EventTypes,
+  ProtocolErrorType,
+} from './events';
 import {
   Connection,
   Session,
@@ -381,7 +386,8 @@ export abstract class Transport<ConnType extends Connection> {
     if (this.state === 'destroyed') {
       const err = 'transport is destroyed, cant send';
       log?.error(`${this.clientId} -- ` + err + `: ${JSON.stringify(msg)}`);
-      throw new Error(err);
+      this.protocolError(ProtocolErrorType.UseAfterDestroy, err);
+      return undefined;
     } else if (this.state === 'closed') {
       log?.info(
         `${
@@ -416,6 +422,10 @@ export abstract class Transport<ConnType extends Connection> {
         type: 'CLOSE' as const,
       } satisfies Static<typeof ControlMessagePayloadSchema>,
     });
+  }
+
+  protected protocolError(type: ProtocolErrorType, message: string) {
+    this.eventDispatcher.dispatchEvent('protocolError', { type, message });
   }
 
   /**
@@ -513,12 +523,23 @@ export abstract class ClientTransport<
 
   receiveHandshakeResponseMessage(data: Uint8Array) {
     const parsed = this.parseMsg(data);
-    if (!parsed) return false;
+    if (!parsed) {
+      this.protocolError(
+        ProtocolErrorType.HandshakeFailed,
+        'received non-transport message',
+      );
+      return false;
+    }
+
     if (!Value.Check(ControlMessageHandshakeResponseSchema, parsed.payload)) {
       log?.warn(
         `${this.clientId} -- received invalid handshake resp: ${JSON.stringify(
           parsed,
         )}`,
+      );
+      this.protocolError(
+        ProtocolErrorType.HandshakeFailed,
+        'invalid handshake resp',
       );
       return false;
     }
@@ -528,6 +549,10 @@ export abstract class ClientTransport<
         `${this.clientId} -- received failed handshake resp: ${JSON.stringify(
           parsed,
         )}`,
+      );
+      this.protocolError(
+        ProtocolErrorType.HandshakeFailed,
+        parsed.payload.status.reason,
       );
       return false;
     }
@@ -586,7 +611,8 @@ export abstract class ClientTransport<
       if (attempt >= this.options.retryAttemptsMax) {
         const errMsg = `connection to ${to} failed after ${attempt} attempts (${errStr}), giving up`;
         log?.error(`${this.clientId} -- ${errMsg}`);
-        throw new Error(errMsg);
+        this.protocolError(ProtocolErrorType.RetriesExceeded, errMsg);
+        return;
       } else {
         // exponential backoff + jitter
         const jitter = Math.floor(Math.random() * this.options.retryJitterMs);
@@ -683,7 +709,13 @@ export abstract class ServerTransport<
 
   receiveHandshakeRequestMessage(data: Uint8Array, conn: ConnType) {
     const parsed = this.parseMsg(data);
-    if (!parsed) return false;
+    if (!parsed) {
+      this.protocolError(
+        ProtocolErrorType.HandshakeFailed,
+        'received non-transport message',
+      );
+      return false;
+    }
 
     if (!Value.Check(ControlMessageHandshakeRequestSchema, parsed.payload)) {
       const responseMsg = handshakeResponseMessage(
@@ -697,6 +729,10 @@ export abstract class ServerTransport<
         `${this.clientId} -- received invalid handshake msg: ${JSON.stringify(
           parsed,
         )}`,
+      );
+      this.protocolError(
+        ProtocolErrorType.HandshakeFailed,
+        'invalid handshake request',
       );
       return false;
     }
@@ -713,6 +749,10 @@ export abstract class ServerTransport<
       conn.send(this.codec.toBuffer(responseMsg));
       log?.warn(
         `${this.clientId} -- received handshake msg with incompatible protocol version (got: ${gotVersion}, expected: ${PROTOCOL_VERSION})`,
+      );
+      this.protocolError(
+        ProtocolErrorType.HandshakeFailed,
+        `incorrect version (got: ${gotVersion} wanted ${PROTOCOL_VERSION})`,
       );
       return false;
     }
