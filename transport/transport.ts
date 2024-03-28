@@ -19,6 +19,7 @@ import {
   EventDispatcher,
   EventHandler,
   EventTypes,
+  ProtocolError,
   ProtocolErrorType,
 } from './events';
 import {
@@ -386,7 +387,7 @@ export abstract class Transport<ConnType extends Connection> {
     if (this.state === 'destroyed') {
       const err = 'transport is destroyed, cant send';
       log?.error(`${this.clientId} -- ` + err + `: ${JSON.stringify(msg)}`);
-      this.protocolError(ProtocolErrorType.UseAfterDestroy, err);
+      this.protocolError(ProtocolError.UseAfterDestroy, err);
       return undefined;
     } else if (this.state === 'closed') {
       log?.info(
@@ -525,7 +526,7 @@ export abstract class ClientTransport<
     const parsed = this.parseMsg(data);
     if (!parsed) {
       this.protocolError(
-        ProtocolErrorType.HandshakeFailed,
+        ProtocolError.HandshakeFailed,
         'received non-transport message',
       );
       return false;
@@ -538,7 +539,7 @@ export abstract class ClientTransport<
         )}`,
       );
       this.protocolError(
-        ProtocolErrorType.HandshakeFailed,
+        ProtocolError.HandshakeFailed,
         'invalid handshake resp',
       );
       return false;
@@ -551,7 +552,7 @@ export abstract class ClientTransport<
         )}`,
       );
       this.protocolError(
-        ProtocolErrorType.HandshakeFailed,
+        ProtocolError.HandshakeFailed,
         parsed.payload.status.reason,
       );
       return false;
@@ -611,7 +612,7 @@ export abstract class ClientTransport<
       if (attempt >= this.options.retryAttemptsMax) {
         const errMsg = `connection to ${to} failed after ${attempt} attempts (${errStr}), giving up`;
         log?.error(`${this.clientId} -- ${errMsg}`);
-        this.protocolError(ProtocolErrorType.RetriesExceeded, errMsg);
+        this.protocolError(ProtocolError.RetriesExceeded, errMsg);
         return;
       } else {
         // exponential backoff + jitter
@@ -711,7 +712,7 @@ export abstract class ServerTransport<
     const parsed = this.parseMsg(data);
     if (!parsed) {
       this.protocolError(
-        ProtocolErrorType.HandshakeFailed,
+        ProtocolError.HandshakeFailed,
         'received non-transport message',
       );
       return false;
@@ -731,7 +732,7 @@ export abstract class ServerTransport<
         )}`,
       );
       this.protocolError(
-        ProtocolErrorType.HandshakeFailed,
+        ProtocolError.HandshakeFailed,
         'invalid handshake request',
       );
       return false;
@@ -751,7 +752,7 @@ export abstract class ServerTransport<
         `${this.clientId} -- received handshake msg with incompatible protocol version (got: ${gotVersion}, expected: ${PROTOCOL_VERSION})`,
       );
       this.protocolError(
-        ProtocolErrorType.HandshakeFailed,
+        ProtocolError.HandshakeFailed,
         `incorrect version (got: ${gotVersion} wanted ${PROTOCOL_VERSION})`,
       );
       return false;
