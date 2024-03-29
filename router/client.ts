@@ -50,78 +50,80 @@ type ServiceClient<Router extends AnyService> = {
         >;
       }
     : ProcType<Router, ProcName> extends 'upload'
-    ? ProcHasInit<Router, ProcName> extends true
-      ? {
-          upload: (init: Static<ProcInit<Router, ProcName>>) => Promise<
-            [
-              Pushable<Static<ProcInput<Router, ProcName>>>, // input
-              Promise<
-                Result<
-                  Static<ProcOutput<Router, ProcName>>,
-                  Static<ProcErrors<Router, ProcName>>
-                >
-              >, // output
-            ]
-          >;
-        }
-      : {
-          upload: () => Promise<
-            [
-              Pushable<Static<ProcInput<Router, ProcName>>>, // input
-              Promise<
-                Result<
-                  Static<ProcOutput<Router, ProcName>>,
-                  Static<ProcErrors<Router, ProcName>>
-                >
-              >, // output
-            ]
-          >;
-        }
-    : ProcType<Router, ProcName> extends 'stream'
-    ? ProcHasInit<Router, ProcName> extends true
-      ? {
-          stream: (init: Static<ProcInit<Router, ProcName>>) => Promise<
-            [
-              Pushable<Static<ProcInput<Router, ProcName>>>, // input
-              AsyncIter<
-                Result<
-                  Static<ProcOutput<Router, ProcName>>,
-                  Static<ProcErrors<Router, ProcName>>
-                >
-              >, // output
-              () => void, // close handle
-            ]
-          >;
-        }
-      : {
-          stream: () => Promise<
-            [
-              Pushable<Static<ProcInput<Router, ProcName>>>, // input
-              AsyncIter<
-                Result<
-                  Static<ProcOutput<Router, ProcName>>,
-                  Static<ProcErrors<Router, ProcName>>
-                >
-              >, // output
-              () => void, // close handle
-            ]
-          >;
-        }
-    : ProcType<Router, ProcName> extends 'subscription'
-    ? {
-        subscribe: (input: Static<ProcInput<Router, ProcName>>) => Promise<
-          [
-            AsyncIter<
-              Result<
-                Static<ProcOutput<Router, ProcName>>,
-                Static<ProcErrors<Router, ProcName>>
-              >
-            >, // output
-            () => void, // close handle
-          ]
-        >;
-      }
-    : never;
+      ? ProcHasInit<Router, ProcName> extends true
+        ? {
+            upload: (init: Static<ProcInit<Router, ProcName>>) => Promise<
+              [
+                Pushable<Static<ProcInput<Router, ProcName>>>, // input
+                Promise<
+                  Result<
+                    Static<ProcOutput<Router, ProcName>>,
+                    Static<ProcErrors<Router, ProcName>>
+                  >
+                >, // output
+              ]
+            >;
+          }
+        : {
+            upload: () => Promise<
+              [
+                Pushable<Static<ProcInput<Router, ProcName>>>, // input
+                Promise<
+                  Result<
+                    Static<ProcOutput<Router, ProcName>>,
+                    Static<ProcErrors<Router, ProcName>>
+                  >
+                >, // output
+              ]
+            >;
+          }
+      : ProcType<Router, ProcName> extends 'stream'
+        ? ProcHasInit<Router, ProcName> extends true
+          ? {
+              stream: (init: Static<ProcInit<Router, ProcName>>) => Promise<
+                [
+                  Pushable<Static<ProcInput<Router, ProcName>>>, // input
+                  AsyncIter<
+                    Result<
+                      Static<ProcOutput<Router, ProcName>>,
+                      Static<ProcErrors<Router, ProcName>>
+                    >
+                  >, // output
+                  () => void, // close handle
+                ]
+              >;
+            }
+          : {
+              stream: () => Promise<
+                [
+                  Pushable<Static<ProcInput<Router, ProcName>>>, // input
+                  AsyncIter<
+                    Result<
+                      Static<ProcOutput<Router, ProcName>>,
+                      Static<ProcErrors<Router, ProcName>>
+                    >
+                  >, // output
+                  () => void, // close handle
+                ]
+              >;
+            }
+        : ProcType<Router, ProcName> extends 'subscription'
+          ? {
+              subscribe: (
+                input: Static<ProcInput<Router, ProcName>>,
+              ) => Promise<
+                [
+                  AsyncIter<
+                    Result<
+                      Static<ProcOutput<Router, ProcName>>,
+                      Static<ProcErrors<Router, ProcName>>
+                    >
+                  >, // output
+                  () => void, // close handle
+                ]
+              >;
+            }
+          : never;
 };
 
 /**

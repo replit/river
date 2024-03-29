@@ -3,52 +3,11 @@
 River is a framework designed to create long-lived streaming Remote Procedure Calls (RPCs) with features tailored to modern web applications. By combining JSON Schema support, full-duplex streaming, service multiplexing, and transparent reconnect support.
 River offers developers a solution for building scalable and resilient RPC services.
 
-### Prerequisites
-
-Before proceeding, ensure you have TypeScript 5 installed and configured appropriately:
-
-1. **Install TypeScript 5**:
-   - To install TypeScript globally, you can use npm (Node Package Manager). Open your terminal or command prompt and run the following command:
-     ```bash
-     npm install -g typescript@5
-     ```
-     This will install TypeScript version 5 globally on your system.
-
-2. **Ensure `"moduleResolution": "bundler"` in tsconfig.json**:
-   - Navigate to your TypeScript project directory in your terminal.
-   - Open the `tsconfig.json` file of your project in a text editor.
-   - Ensure that the `"moduleResolution"` property is set to `"bundler"` in the `compilerOptions` section:
-     ```json
-     {
-       "compilerOptions": {
-         "moduleResolution": "bundler",
-         // Other compiler options...
-       }
-     }
-     ```
-     If the `"moduleResolution"` property does not exist, add the following to your config file. `"moduleResolution": "bundler"`. If it exists but is set to a different value, modify it to `"bundler"`.
-
-3. Install River and Dependencies:
-
-  To use River, install the required packages using npm:
-  ```bash
-    npm i @replit/river @sinclair/typebox
-  ```
-4. If you plan on using WebSocket for transport, also install
-  ```bash
-  npm i ws isomorphic-ws
-  ```
-These commands will install River, `@sinclair/typebox`, and optionally WebSocket dependencies (`ws` and `isomorphic-ws`) for transport if needed.
-
 ## Long-lived streaming remote procedure calls
 
 River provides a framework for long-lived streaming Remote Procedure Calls (RPCs) in modern web applications, featuring advanced error handling and customizable retry policies to ensure seamless communication between clients and servers.
 
-- **tRPC (Typed RPC)**: A TypeScript-first RPC framework emphasizing strong typing and code generation, offering automatic serialization, validation, and error handling for high-performance APIs in TypeScript projects.
-
-- **gRPC (Google Remote Procedure Call)**: An open-source RPC framework utilizing HTTP/2 and Protocol Buffers for bi-directional streaming, load balancing, and authentication, commonly used in microservices architectures and distributed systems.
-
-River provides a framework similar to tRPC and gRPC but with additional features:
+River provides a framework similar to tRPC (Typed RPC) and gRPC(Google Remote Procedure Call) but with additional features:
 
 - JSON Schema Support + run-time schema validation
 - full-duplex streaming
@@ -59,6 +18,49 @@ River provides a framework similar to tRPC and gRPC but with additional features
 - over any transport (WebSockets and Unix Domain Socket out of the box)
 
 For more information on the Protocol, refer to the [PROTOCOL.md](./PROTOCOL.md) document.
+
+### Prerequisites
+
+Before proceeding, ensure you have TypeScript 5 installed and configured appropriately:
+
+1. **Install TypeScript 5**:
+
+   - To install TypeScript globally, you can use npm (Node Package Manager). Open your terminal or command prompt and run the following command:
+     ```bash
+     npm install -g typescript@5
+     ```
+     This will install TypeScript version 5 globally on your system.
+
+2. **Ensure `"moduleResolution": "bundler"` in tsconfig.json**:
+
+   - Navigate to your TypeScript project directory in your terminal.
+   - Open the `tsconfig.json` file of your project in a text editor.
+   - Ensure that the `"moduleResolution"` property is set to `"bundler"` in the `compilerOptions` section:
+     ```json
+     {
+       "compilerOptions": {
+         "moduleResolution": "bundler"
+         // Other compiler options...
+       }
+     }
+     ```
+     If the `"moduleResolution"` property does not exist, add the following to your config file. `"moduleResolution": "bundler"`. If it exists but is set to a different value, modify it to `"bundler"`.
+
+3. Install River and Dependencies:
+
+To use River, install the required packages using npm:
+
+```bash
+  npm i @replit/river @sinclair/typebox
+```
+
+4. If you plan on using WebSocket for transport, also install
+
+```bash
+npm i ws isomorphic-ws
+```
+
+These commands will install River, `@sinclair/typebox`, and optionally WebSocket dependencies (`ws` and `isomorphic-ws`) for transport if needed.
 
 ## Writing services
 
@@ -74,7 +76,7 @@ For more information on the Protocol, refer to the [PROTOCOL.md](./PROTOCOL.md) 
 - Transport: manages the lifecycle (creation/deletion) of connections and multiplexing read/writes from clients. Both the client and the server must be passed in a subclass of `Transport` to work.
   - Connection: the actual raw underlying transport connection
   - Session: a higher-level abstraction that operates over the span of potentially multiple transport-level connections
-- Codec: encodes messages between clients/servers before transmitting them across the wire.
+- Codec: encodes messages between clients/servers before the transport sends it across the wire.
 
 ### A basic router
 

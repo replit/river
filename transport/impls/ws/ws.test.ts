@@ -128,8 +128,8 @@ describe('reconnect', async () => {
     ).resolves.toStrictEqual(msg1.payload);
 
     // unclean disconnect
-    clientTransport.sessions.forEach(
-      (session) => session.connection?.ws.terminate(),
+    clientTransport.sessions.forEach((session) =>
+      session.connection?.ws.terminate(),
     );
 
     // by this point the client should have reconnected

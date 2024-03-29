@@ -1,4 +1,4 @@
-# River Protocol `v1`
+# River protocol `v1`
 
 ## Abstract
 
@@ -42,17 +42,15 @@ The design of the protocol emphasizes three things in descending priority:
 1. resilience in the face of various network conditions;
 1. raw performance.
 
-River allows multiple River clients to connect to and make remote procedure calls to a remote server as if it were a local procedure.
-This requires specifications surrounding:
+**Connecting clients to servers:** River facilitates multiple clients connecting to a remote server and invoking procedures as if they were local.
 
-- How clients connect to servers?
-- How do they negotiate a connection and start a session?
-- How messages in a session are serialized and deserialized?
-  - Dealing with message retransmission and deduplication.
+**Negotiating connections and starting sessions:** River defines protocols for clients to establish connections with servers and initiate sessions for communication.
+
+**Serializing and deserializing messages within sessions:** River specifies methods for encoding and decoding messages exchanged within sessions, including handling message retransmission and deduplication.
 
 Note that this protocol specification does NOT detail the language-level specifics of how the client returns results to the caller and how the server executes the procedure invocations but rather the wire-level protocol that the client and server must adhere to.
 
-## Clients, Servers, and RPCs
+## Clients, servers, and RPCs
 
 - A 'client' can initiate remote procedure calls to the server
 - A 'server' can execute remote procedure calls and return the result to the requesting client
@@ -60,9 +58,9 @@ Note that this protocol specification does NOT detail the language-level specifi
 'Remote procedure calls' (RPC) in River take one of four types:
 
 1. `rpc`: the client sends 1 message, the server responds with 1 message.
-1. `stream`: client sends n messages, server responds with m messages.
-1. `upload`: client sends n messages, server responds with 1 message.
-1. `subscription`: client sends 1 message, server responds with m messages.
+1. `stream`: the client sends n messages, the server responds with m messages.
+1. `upload`: the client sends n messages, the server responds with 1 message.
+1. `subscription`: the client sends 1 message, the server responds with m messages.
 
 A server (also called a router) is made up of multiple 'services'. Each 'service' has multiple 'procedures'.
 A procedure declares its type (`rpc | stream | upload | subscription`), an input message type (`Input`), an output message type (`Output`), an error type (`Error`), and the associated handler.
@@ -79,7 +77,7 @@ The type signatures (in TypeScript) for the handlers of each of the procedure ty
 Note that any procedure that has a client-to-server procedure stream (i.e. `stream` and `upload`) can optionally define a single initialization message to be sent to the server before the client starts sending the actual `Input` messages.
 
 The types of `Input`, `Init`, `Output`, and `Error` MUST be representable as JSON schema.
-The official TypeScript implementation is done via [TypeBox](https://github.com/sinclairzx81/typebox).
+In the official TypeScript implementation, this is done via [TypeBox](https://github.com/sinclairzx81/typebox).
 The server is responsible for doing run-time type validation on incoming messages to ensure they match the handler's type signature before passing it to the handler.
 
 However, the messages from the client to the server must also contain additional information so that the server knows where to route the message payload.
@@ -152,12 +150,12 @@ All messages MUST have no control flags set (i.e., the `controlFlags` field is `
 Streams tie together a series of messages into a single logical 'stream' of communication associated with a single remote procedure invocation.
 For example, in the case of a `stream` RPC, the client will send a series of messages with the same `streamId`, and the server must respond with a series of messages with the same `streamId`.
 
-### Starting Streams
+### Starting streams
 
 Streams MUST only be started by the client through the invocation of a procedure.
 Once a procedure is invoked, it opens a new stream and sends the first message of the stream (in accordance with the 'Sending Messages' heading below) and listen to messages on that same `streamId`.
 
-### Handling Messages for Streams
+### Handling messages for streams
 
 #### Both client and server
 
@@ -173,7 +171,7 @@ When a message is validated at this level, the implementor must update the bookk
 
 Then, depending on whether this is a client or server, the message must undergo further validation before being handled.
 
-#### On the Client
+#### On the client
 
 For an incoming message to be considered valid on the client, the transport message MUST fulfill the following criteria:
 
@@ -184,7 +182,7 @@ Otherwise, this is a normal message. Unwrap the payload and return it to the cal
 
 In the special case that the incoming message is an explicit stream close control message, the client MUST end the user-facing output stream and cleanup the stream (see the section below on 'Lifetime of Streams' for more information on when these explicit close messages are sent). The message MUST NOT be passed to the user-facing output stream.
 
-#### On the Server
+#### On the server
 
 For an incoming message to be considered valid on the server, the transport message MUST fulfill the following criteria:
 
@@ -199,7 +197,7 @@ Otherwise, the message is a normal message. Unwrap the payload and pass it to th
 
 In the special case that the message payload matches the `ControlMessagePayloadSchema` and has the `StreamClosedBit` set, the server should close the input stream for the handler. The message MUST NOT be passed to the handler.
 
-#### Lifetime of Streams
+#### Lifetime of streams
 
 The following section will provide diagrams detailing the lifetime of streams for each of the four types of RPCs.
 
@@ -270,7 +268,7 @@ For example, the WebSocket protocol has built-in message framing, so the codec o
 On the other hand, the UDS protocol does not have built-in message framing, so the codec must handle message framing and deframing as well.
 The TypeScript implementation uses `uint32`-big-endian-length-prefixed message framing.
 
-## Transports, Sessions, and Connections
+## Transports, sessions, and connections
 
 A `Transport` is responsible for managing the lifecycle (creation/deletion) of sessions and connections.
 In the TypeScript implementation, the `Transport` class is further subclassed into `ServerTransport` and `ClientTransport` to handle some of the specific behavior of the server and client, respectively.
@@ -291,7 +289,7 @@ The distinction between `Transport` and `Session` is important because it allows
 This means even if the actual wire connection drops, the client and server can buffer messages on both sides until the connection is re-established.
 At the application level, it appears as if the connection never dropped.
 
-### Creating Connections and Sessions
+### Creating connections and sessions
 
 A `Connection` object MUST be created immediately upon establishing a raw wire connection.
 Subsequently, a `Session` object is created for each `Connection` object once the protocol handshake over the `Connection` is completed.
@@ -413,7 +411,7 @@ Both clients and servers should listen for `sessionStatus` events to do some err
 - All procedure calls must listen for `sessionStatus` events to handle hard disconnect. In the case of a hard disconnect, any ongoing procedure calls should return the special hard disconnect message `{ ok: false, payload: { code: 'UNEXPECTED_DISCONNECT' } }` to any waiting callers. This is a normal River result and should be handled by the application level.
 - Servers should listen for `sessionStatus` events to cleanup any streams associated with the session and do any necessary teardown.
 
-#### Detecting Phantom disconnects
+#### Detecting phantom disconnects
 
 Certain transports will not emit a close event when the underlying connection is lost.
 This is especially true for WebSockets in specific cases (e.g. closing your laptop lid).

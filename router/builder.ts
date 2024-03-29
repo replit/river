@@ -183,70 +183,70 @@ export type Procedure<
       }
     : never
   : Ty extends 'upload'
-  ? Init extends PayloadType
-    ? {
-        init: Init;
-        input: I;
-        output: O;
-        errors: E;
-        handler: (
-          context: ServiceContextWithTransportInfo<State>,
-          init: Static<Init>,
-          input: AsyncIterableIterator<Static<I>>,
-        ) => Promise<Result<Static<O>, Static<E>>>;
-        type: Ty;
-      }
-    : {
-        input: I;
-        output: O;
-        errors: E;
-        handler: (
-          context: ServiceContextWithTransportInfo<State>,
-          input: AsyncIterableIterator<Static<I>>,
-        ) => Promise<Result<Static<O>, Static<E>>>;
-        type: Ty;
-      }
-  : Ty extends 'subscription'
-  ? Init extends null
-    ? {
-        input: I;
-        output: O;
-        errors: E;
-        handler: (
-          context: ServiceContextWithTransportInfo<State>,
-          input: Static<I>,
-          output: Pushable<Result<Static<O>, Static<E>>>,
-        ) => Promise<(() => void) | void>;
-        type: Ty;
-      }
-    : never
-  : Ty extends 'stream'
-  ? Init extends PayloadType
-    ? {
-        init: Init;
-        input: I;
-        output: O;
-        errors: E;
-        handler: (
-          context: ServiceContextWithTransportInfo<State>,
-          init: Static<Init>,
-          input: AsyncIterableIterator<Static<I>>,
-          output: Pushable<Result<Static<O>, Static<E>>>,
-        ) => Promise<void>;
-        type: Ty;
-      }
-    : {
-        input: I;
-        output: O;
-        errors: E;
-        handler: (
-          context: ServiceContextWithTransportInfo<State>,
-          input: AsyncIterableIterator<Static<I>>,
-          output: Pushable<Result<Static<O>, Static<E>>>,
-        ) => Promise<void>;
-        type: Ty;
-      }
-  : never;
+    ? Init extends PayloadType
+      ? {
+          init: Init;
+          input: I;
+          output: O;
+          errors: E;
+          handler: (
+            context: ServiceContextWithTransportInfo<State>,
+            init: Static<Init>,
+            input: AsyncIterableIterator<Static<I>>,
+          ) => Promise<Result<Static<O>, Static<E>>>;
+          type: Ty;
+        }
+      : {
+          input: I;
+          output: O;
+          errors: E;
+          handler: (
+            context: ServiceContextWithTransportInfo<State>,
+            input: AsyncIterableIterator<Static<I>>,
+          ) => Promise<Result<Static<O>, Static<E>>>;
+          type: Ty;
+        }
+    : Ty extends 'subscription'
+      ? Init extends null
+        ? {
+            input: I;
+            output: O;
+            errors: E;
+            handler: (
+              context: ServiceContextWithTransportInfo<State>,
+              input: Static<I>,
+              output: Pushable<Result<Static<O>, Static<E>>>,
+            ) => Promise<(() => void) | void>;
+            type: Ty;
+          }
+        : never
+      : Ty extends 'stream'
+        ? Init extends PayloadType
+          ? {
+              init: Init;
+              input: I;
+              output: O;
+              errors: E;
+              handler: (
+                context: ServiceContextWithTransportInfo<State>,
+                init: Static<Init>,
+                input: AsyncIterableIterator<Static<I>>,
+                output: Pushable<Result<Static<O>, Static<E>>>,
+              ) => Promise<void>;
+              type: Ty;
+            }
+          : {
+              input: I;
+              output: O;
+              errors: E;
+              handler: (
+                context: ServiceContextWithTransportInfo<State>,
+                input: AsyncIterableIterator<Static<I>>,
+                output: Pushable<Result<Static<O>, Static<E>>>,
+              ) => Promise<void>;
+              type: Ty;
+            }
+        : never;
 export type AnyProcedure = Procedure<
   object,
   ValidProcType,
