@@ -701,6 +701,11 @@ export abstract class ClientTransport<
     log?.debug(`${this.clientId} -- sending handshake request to ${to}`);
     conn.send(this.codec.toBuffer(requestMsg));
   }
+
+  protected close() {
+    this.retryBudget.close();
+    super.close();
+  }
 }
 
 export abstract class ServerTransport<
