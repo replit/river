@@ -1,4 +1,12 @@
-import { afterAll, describe, expect, onTestFinished, test, vi } from 'vitest';
+import {
+  afterAll,
+  assert,
+  describe,
+  expect,
+  onTestFinished,
+  test,
+  vi,
+} from 'vitest';
 import http from 'node:http';
 import { testFinishesCleanly, waitFor } from './fixtures/cleanup';
 import {
@@ -14,6 +22,9 @@ import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
+import { defaultTransportOptions } from '../transport/transport';
+import { bindLogger } from '../logging';
+import WebSocket from 'ws';
 
 describe('should handle incompatabilities', async () => {
   const server = http.createServer();
@@ -34,7 +45,7 @@ describe('should handle incompatabilities', async () => {
     await clientTransport.connect(serverTransport.clientId);
     await waitFor(() => expect(serverTransport.connections.size).toBe(1));
 
-    const errMock = vi.fn<[], unknown>();
+    const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
     onTestFinished(async () => {
       clientTransport.removeEventListener('protocolError', errMock);
@@ -58,12 +69,13 @@ describe('should handle incompatabilities', async () => {
   });
 
   test('conn failure, retry limit reached', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     const clientTransport = new WebSocketClientTransport(
       () => Promise.reject(new Error('fake connection failure')),
       'client',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
-    const errMock = vi.fn<[], unknown>();
+    const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
     onTestFinished(async () => {
       clientTransport.removeEventListener('protocolError', errMock);
@@ -77,17 +89,55 @@ describe('should handle incompatabilities', async () => {
     // try connecting and make sure we get the fake connection failure
     expect(errMock).toHaveBeenCalledTimes(0);
 
-    // connect and keep running all timers until completion
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    await clientTransport.connect(serverTransport.clientId);
-    await vi.runAllTimersAsync();
+    for (let i = 0; i < defaultTransportOptions.retryAttemptsMax; i++) {
+      // dont wait, just fire a bunch of connects in a row
+      void clientTransport.connect(serverTransport.clientId);
+    }
 
-    expect(errMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(errMock).toHaveBeenCalledTimes(1));
     expect(errMock).toHaveBeenCalledWith(
       expect.objectContaining({
         type: ProtocolError.RetriesExceeded,
       }),
     );
+  });
+
+  test('repeated connections that close instantly causes retry limit to still be reached', async () => {
+    const onConnMock = vi.fn();
+    const immediatelyCloseWebSocket = (ws: WebSocket) => {
+      onConnMock();
+      ws.close();
+    };
+
+    wss.on('connection', immediatelyCloseWebSocket);
+    const clientTransport = new WebSocketClientTransport(() => {
+      const ws = createLocalWebSocketClient(port);
+      return Promise.resolve(ws);
+    }, 'client');
+    clientTransport.tryReconnecting = false;
+
+    const errMock = vi.fn();
+    clientTransport.addEventListener('protocolError', errMock);
+    onTestFinished(() => {
+      wss.off('connection', immediatelyCloseWebSocket);
+      clientTransport.removeEventListener('protocolError', errMock);
+    });
+
+    for (let i = 0; i < defaultTransportOptions.retryAttemptsMax; i++) {
+      expect(onConnMock).toHaveBeenCalledTimes(i);
+      await clientTransport.connect('SERVER');
+
+      // wait for server to close
+      await waitFor(() => expect(onConnMock).toHaveBeenCalledTimes(i + 1));
+      await waitFor(() =>
+        expect(clientTransport.inflightConnectionPromises.get('SERVER')).toBe(
+          undefined,
+        ),
+      );
+    }
+
+    await clientTransport.connect('SERVER');
+    expect(errMock).toHaveBeenCalledTimes(1);
   });
 
   test('incorrect client handshake', async () => {
