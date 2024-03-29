@@ -1,12 +1,4 @@
-import {
-  afterAll,
-  assert,
-  describe,
-  expect,
-  onTestFinished,
-  test,
-  vi,
-} from 'vitest';
+import { afterAll, describe, expect, onTestFinished, test, vi } from 'vitest';
 import http from 'node:http';
 import { testFinishesCleanly, waitFor } from './fixtures/cleanup';
 import {
@@ -23,7 +15,6 @@ import { Static } from '@sinclair/typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
 import { defaultTransportOptions } from '../transport/transport';
-import { bindLogger } from '../logging';
 import WebSocket from 'ws';
 
 describe('should handle incompatabilities', async () => {
