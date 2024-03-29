@@ -174,7 +174,7 @@ setLevel('info');
 River defines two types of reconnects:
 
 1. **Transparent reconnects:** These occur when the connection is temporarily lost and reestablished without losing any messages. From the application's perspective, this process is seamless and does not disrupt ongoing operations.
-2. **Hard reconnect:** This occurs when all server state is lost, requiring the client to reinitialize its environment. These reconnect signaled through `session status` events.
+2. **Hard reconnect:** This occurs when all server state is lost, requiring the client to reinitialize anything stateful (e.g. subscriptions).
 
 You can listen for transparent reconnects via the `connectionStatus` events, but realistically, no applications should need to listen for this unless it is for debugging purposes. Hard reconnects are signaled via `sessionStatus` events.
 
