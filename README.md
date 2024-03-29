@@ -60,7 +60,7 @@ River provides a framework similar to tRPC and gRPC but with additional features
 
 For more information on the Protocol, refer to the [PROTOCOL.md](./PROTOCOL.md) document.
 
-## Writing Services
+## Writing services
 
 ### Concepts
 
@@ -169,7 +169,7 @@ bindLogger(console.log);
 setLevel('info');
 ```
 
-### Connection Status
+### Connection status
 
 River defines two types of reconnects:
 
