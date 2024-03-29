@@ -702,7 +702,7 @@ export abstract class ClientTransport<
     conn.send(this.codec.toBuffer(requestMsg));
   }
 
-  protected close() {
+  close() {
     this.retryBudget.close();
     super.close();
   }
