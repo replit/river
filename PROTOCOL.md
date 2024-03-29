@@ -211,7 +211,7 @@ The legend is as follows:
 - `x` represents a message with both the `StreamOpenBit` and `StreamClosedBit` set.
 - `-` represents a message with no control flags set.
 
-As the ACK control message is unrelated to the stream lifecycle, it will not be included in the diagrams.
+As the `ACK` control message is unrelated to the stream lifecycle, it will not be included in the diagrams.
 
 ##### RPC
 
