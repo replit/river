@@ -124,7 +124,7 @@ interface TransportMessage<Payload> {
 type Result<T, E> = { ok: true; payload: T } | { ok: false; payload: E };
 ```
 
-A single 'invocation' of a handler is assigned a unique `streamId` , which is used to label all inbound and outbound messages associated with that invocation (this grouping is referred to as a 'procedure stream' or 'stream').
+A single 'invocation' of a handler is assigned a unique `streamId`, which is used to label all inbound and outbound messages associated with that invocation (this grouping is referred to as a 'procedure stream' or 'stream').
 
 The `controlFlags` property is a [bit field](https://en.wikipedia.org/wiki/Bit_field) used to signal special conditions, such as the start of a stream, the end of the stream, and an explicit acknowledgement message.
 
