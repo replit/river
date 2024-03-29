@@ -108,7 +108,7 @@ export const ExampleServiceConstructor = () =>
 export const serviceDefs = buildServiceDefs([ExampleServiceConstructor()]);
 ```
 
-Then, we create the server.
+Then, we create the server:
 
 ```ts
 import http from 'http';
