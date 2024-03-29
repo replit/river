@@ -45,9 +45,9 @@ The design of the protocol emphasizes three things in descending priority:
 River allows multiple River clients to connect to and make remote procedure calls to a remote server as if it were a local procedure.
 This requires specifications surrounding:
 
-- How clients connect to servers.
+- How clients connect to servers?
 - How do they negotiate a connection and start a session?
-- How messages in a session are serialized and deserialized.
+- How messages in a session are serialized and deserialized?
   - Dealing with message retransmission and deduplication.
 
 Note that this protocol specification does NOT detail the language-level specifics of how the client returns results to the caller and how the server executes the procedure invocations but rather the wire-level protocol that the client and server must adhere to.
