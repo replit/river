@@ -62,7 +62,7 @@ export const defaultTransportOptions: TransportOptions = {
   retryIntervalMs: RECONNECT_INTERVAL_MS,
   retryJitterMs: RECONNECT_JITTER_MAX_MS,
   retryAttemptsMax: 5,
-  retryBudgetRestoreRateMs: 500,
+  retryBudgetRestoreRateMs: 2000,
   ...defaultSessionOptions,
 };
 
@@ -470,6 +470,7 @@ class LeakyBucketLimit {
     this.budgetConsumed = new Map();
     this.intervalHandle = setInterval(() => {
       // decrease budget consumed
+      console.log('decrease budget');
       for (const [user, budgetConsumed] of this.budgetConsumed.entries()) {
         const newBudget = budgetConsumed - 1;
         if (newBudget === 0) {
@@ -622,13 +623,17 @@ export abstract class ClientTransport<
    * Manually attempts to connect to a client.
    * @param to The client ID of the node to connect to.
    */
-  async connect(to: TransportClientId, attempt = 0): Promise<void> {
-    if (this.state !== 'open') {
+  async connect(to: TransportClientId): Promise<void> {
+    const canProceedWithConnection = () => this.state === 'open';
+
+    if (!canProceedWithConnection()) {
       log?.info(
-        `${this.clientId} -- transport state is no longer open, not attempting connection to ${to}`,
+        `${this.clientId} -- transport state is no longer open, cancelling attempt to connect to ${to}`,
       );
       return;
     }
+
+    log?.info(`${this.clientId} -- attempting connection to ${to}`);
 
     let reconnectPromise = this.inflightConnectionPromises.get(to);
     if (!reconnectPromise) {
@@ -644,10 +649,13 @@ export abstract class ClientTransport<
       }
 
       let sleep = Promise.resolve();
-      if (attempt > 0) {
+      console.log(budgetConsumed);
+      if (budgetConsumed > 1) {
+        console.log('yuhh');
         // exponential backoff + jitter
         const jitter = Math.floor(Math.random() * this.options.retryJitterMs);
-        const backoffMs = this.options.retryIntervalMs * 2 ** attempt + jitter;
+        const backoffMs =
+          this.options.retryIntervalMs * 2 ** budgetConsumed + jitter;
         log?.info(
           `${this.clientId} -- waiting ${backoffMs}ms to reconnect to ${to}`,
         );
@@ -675,20 +683,21 @@ export abstract class ClientTransport<
       if (!shouldRetry) return;
 
       // retry on failure
-      if (attempt >= this.options.retryAttemptsMax) {
-        const errMsg = `connection to ${to} failed after ${attempt} repeated attempts (${errStr}), giving up`;
-        log?.error(`${this.clientId} -- ${errMsg}`);
-        this.protocolError(ProtocolError.RetriesExceeded, errMsg);
-        return;
-      } else {
-        // try again
-        log?.warn(
-          `${this.clientId} -- connection to ${to} failed, attempt ${
-            attempt + 1
-          }/${this.options.retryAttemptsMax} (${errStr}), trying again`,
-        );
-        return this.connect(to, attempt + 1);
-      }
+      // if (attempt >= this.options.retryAttemptsMax) {
+      //   const errMsg = `connection to ${to} failed after ${attempt} repeated attempts (${errStr}), giving up`;
+      //   log?.error(`${this.clientId} -- ${errMsg}`);
+      //   this.protocolError(ProtocolError.RetriesExceeded, errMsg);
+      //   return;
+      // } else {
+      //   // try again
+      //   log?.warn(
+      //     `${this.clientId} -- connection to ${to} failed, attempt ${
+      //       attempt + 1
+      //     }/${this.options.retryAttemptsMax} (${errStr}), trying again`,
+      //   );
+      // }
+
+      return this.connect(to);
     }
   }
 

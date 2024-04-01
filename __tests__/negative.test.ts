@@ -59,8 +59,7 @@ describe('should handle incompatabilities', async () => {
     );
   });
 
-  test('conn failure, retry limit reached', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
+  test('retrying single connection attempt should hit retry limit reached', async () => {
     const clientTransport = new WebSocketClientTransport(
       () => Promise.reject(new Error('fake connection failure')),
       'client',
@@ -79,11 +78,10 @@ describe('should handle incompatabilities', async () => {
 
     // try connecting and make sure we get the fake connection failure
     expect(errMock).toHaveBeenCalledTimes(0);
-
-    for (let i = 0; i < defaultTransportOptions.retryAttemptsMax; i++) {
-      // dont wait, just fire a bunch of connects in a row
-      void clientTransport.connect(serverTransport.clientId);
-    }
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const connectionPromise = clientTransport.connect(serverTransport.clientId);
+    await vi.runAllTimersAsync();
+    await connectionPromise;
 
     await waitFor(() => expect(errMock).toHaveBeenCalledTimes(1));
     expect(errMock).toHaveBeenCalledWith(
