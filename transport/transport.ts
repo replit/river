@@ -470,7 +470,6 @@ class LeakyBucketLimit {
     this.budgetConsumed = new Map();
     this.intervalHandle = setInterval(() => {
       // decrease budget consumed
-      console.log('decrease budget');
       for (const [user, budgetConsumed] of this.budgetConsumed.entries()) {
         const newBudget = budgetConsumed - 1;
         if (newBudget === 0) {
@@ -649,9 +648,8 @@ export abstract class ClientTransport<
       }
 
       let sleep = Promise.resolve();
-      console.log(budgetConsumed);
+      // first reconnect attempt should be free
       if (budgetConsumed > 1) {
-        console.log('yuhh');
         // exponential backoff + jitter
         const jitter = Math.floor(Math.random() * this.options.retryJitterMs);
         const backoffMs =
@@ -663,41 +661,43 @@ export abstract class ClientTransport<
       }
 
       this.retryBudget.consumeBudget(to);
-      reconnectPromise = sleep.then(() =>
-        this.createNewOutgoingConnection(to).then((conn) => {
+      reconnectPromise = sleep
+        .then(() => {
+          if (!canProceedWithConnection()) {
+            throw new Error('transport state is no longer open');
+          }
+        })
+        .then(() => this.createNewOutgoingConnection(to))
+        .then((conn) => {
+          if (!canProceedWithConnection()) {
+            log?.info(
+              `${this.clientId} -- transport state is no longer open, closing pre-handshake connection (id: ${conn.debugId}) to ${to}`,
+            );
+            conn.close();
+            throw new Error('transport state is no longer open');
+          }
+
           // only send handshake once per attempt
           this.sendHandshake(to, conn);
           return conn;
-        }),
-      );
+        });
       this.inflightConnectionPromises.set(to, reconnectPromise);
     }
 
     try {
       await reconnectPromise;
     } catch (error: unknown) {
-      const errStr = coerceErrorString(error);
       this.inflightConnectionPromises.delete(to);
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      const shouldRetry = this.state === 'open' && this.tryReconnecting;
-      if (!shouldRetry) return;
+      const errStr = coerceErrorString(error);
 
-      // retry on failure
-      // if (attempt >= this.options.retryAttemptsMax) {
-      //   const errMsg = `connection to ${to} failed after ${attempt} repeated attempts (${errStr}), giving up`;
-      //   log?.error(`${this.clientId} -- ${errMsg}`);
-      //   this.protocolError(ProtocolError.RetriesExceeded, errMsg);
-      //   return;
-      // } else {
-      //   // try again
-      //   log?.warn(
-      //     `${this.clientId} -- connection to ${to} failed, attempt ${
-      //       attempt + 1
-      //     }/${this.options.retryAttemptsMax} (${errStr}), trying again`,
-      //   );
-      // }
-
-      return this.connect(to);
+      if (!this.tryReconnecting || !canProceedWithConnection()) {
+        log?.warn(`${this.clientId} -- connection to ${to} failed (${errStr})`);
+      } else {
+        log?.warn(
+          `${this.clientId} -- connection to ${to} failed (${errStr}), retrying`,
+        );
+        return this.connect(to);
+      }
     }
   }
 

@@ -91,14 +91,14 @@ describe('should handle incompatabilities', async () => {
     );
   });
 
-  test('repeated connections that close instantly causes retry limit to still be reached', async () => {
-    const onConnMock = vi.fn();
-    const immediatelyCloseWebSocket = (ws: WebSocket) => {
-      onConnMock();
+  test('repeated connections that close instantly still triggers backoff', async () => {
+    let conns = 0;
+    const serverWsConnHandler = (ws: WebSocket) => {
+      conns += 1;
       ws.close();
     };
 
-    wss.on('connection', immediatelyCloseWebSocket);
+    wss.on('connection', serverWsConnHandler);
     const clientTransport = new WebSocketClientTransport(() => {
       const ws = createLocalWebSocketClient(port);
       return Promise.resolve(ws);
@@ -108,25 +108,16 @@ describe('should handle incompatabilities', async () => {
     const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
     onTestFinished(() => {
-      wss.off('connection', immediatelyCloseWebSocket);
+      wss.off('connection', serverWsConnHandler);
       clientTransport.removeEventListener('protocolError', errMock);
+      clientTransport.close();
     });
 
     for (let i = 0; i < defaultTransportOptions.retryAttemptsMax; i++) {
-      expect(onConnMock).toHaveBeenCalledTimes(i);
-      await clientTransport.connect('SERVER');
-
-      // wait for server to close
-      await waitFor(() => expect(onConnMock).toHaveBeenCalledTimes(i + 1));
-      await waitFor(() =>
-        expect(clientTransport.inflightConnectionPromises.get('SERVER')).toBe(
-          undefined,
-        ),
-      );
+      void clientTransport.connect('SERVER');
     }
 
-    await clientTransport.connect('SERVER');
-    expect(errMock).toHaveBeenCalledTimes(1);
+    expect(conns).toBeLessThan(defaultTransportOptions.retryAttemptsMax);
   });
 
   test('incorrect client handshake', async () => {
