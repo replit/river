@@ -7,7 +7,7 @@ export interface LeakBucketLimitOptions {
   jitterMs: number;
 }
 
-export class ReconnectionLeakyBucketRateLimit {
+export class LeakyBucketRateLimit {
   budgetConsumed: Map<TransportClientId, number>;
   intervalHandle: ReturnType<typeof setInterval>;
   readonly options: LeakBucketLimitOptions;

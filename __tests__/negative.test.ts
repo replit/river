@@ -113,11 +113,17 @@ describe('should handle incompatabilities', async () => {
       clientTransport.close();
     });
 
-    for (let i = 0; i < defaultTransportOptions.retryAttemptsMax; i++) {
+    for (
+      let i = 0;
+      i < defaultTransportOptions.maxReconnectionBurstAttempts;
+      i++
+    ) {
       void clientTransport.connect('SERVER');
     }
 
-    expect(conns).toBeLessThan(defaultTransportOptions.retryAttemptsMax);
+    expect(conns).toBeLessThan(
+      defaultTransportOptions.maxReconnectionBurstAttempts,
+    );
   });
 
   test('incorrect client handshake', async () => {
