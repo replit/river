@@ -2,7 +2,7 @@ import {
   LeakyBucketRateLimit,
   LeakBucketLimitOptions,
 } from '../transport/rateLimit';
-import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 
 describe('LeakyBucketRateLimit', () => {
   const options: LeakBucketLimitOptions = {
