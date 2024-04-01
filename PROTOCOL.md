@@ -42,11 +42,12 @@ The design of the protocol emphasizes three things in descending priority:
 1. resilience in the face of various network conditions;
 1. raw performance.
 
-**Connecting clients to servers:** River facilitates multiple clients connecting to a remote server and invoking procedures as if they were local.
+The protocol specification defines semantics around:
 
-**Negotiating connections and starting sessions:** River defines protocols for clients to establish connections with servers and initiate sessions for communication.
-
-**Serializing and deserializing messages within sessions:** River specifies methods for encoding and decoding messages exchanged within sessions, including handling message retransmission and deduplication.
+- How clients connect to servers.
+- How they negotiate a connection an start a session.
+- How messages in a session are serialized and deserialized.
+  - Dealing with message retransmission and deduplication.
 
 Note that this protocol specification does NOT detail the language-level specifics of how the client returns results to the caller and how the server executes the procedure invocations but rather the wire-level protocol that the client and server must adhere to.
 

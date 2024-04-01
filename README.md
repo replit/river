@@ -1,13 +1,12 @@
 # River
 
-River is a framework designed to create long-lived streaming Remote Procedure Calls (RPCs) with features tailored to modern web applications. By combining JSON Schema support, full-duplex streaming, service multiplexing, and transparent reconnect support.
-River offers developers a solution for building scalable and resilient RPC services.
+River allows multiple clients to connect to and make remote procedure calls to a remote server as if they were local procedures.
 
 ## Long-lived streaming remote procedure calls
 
 River provides a framework for long-lived streaming Remote Procedure Calls (RPCs) in modern web applications, featuring advanced error handling and customizable retry policies to ensure seamless communication between clients and servers.
 
-River provides a framework similar to tRPC (Typed RPC) and gRPC(Google Remote Procedure Call) but with additional features:
+River provides a framework similar to [tRPC](https://trpc.io/) and [gRPC](https://grpc.io/) but with additional features:
 
 - JSON Schema Support + run-time schema validation
 - full-duplex streaming
@@ -17,36 +16,26 @@ River provides a framework similar to tRPC (Typed RPC) and gRPC(Google Remote Pr
 - transparent reconnect support for long-lived sessions
 - over any transport (WebSockets and Unix Domain Socket out of the box)
 
-For more information on the Protocol, refer to the [PROTOCOL.md](./PROTOCOL.md) document.
+See [PROTOCOL.md](./PROTOCOL.md) for more information on the protocol.
 
 ### Prerequisites
 
 Before proceeding, ensure you have TypeScript 5 installed and configured appropriately:
 
-1. **Install TypeScript 5**:
+1. **Ensure `"moduleResolution": "bundler"` in tsconfig.json**:
 
-   - To install TypeScript globally, you can use npm (Node Package Manager). Open your terminal or command prompt and run the following command:
-     ```bash
-     npm install -g typescript@5
-     ```
-     This will install TypeScript version 5 globally on your system.
-
-2. **Ensure `"moduleResolution": "bundler"` in tsconfig.json**:
-
-   - Navigate to your TypeScript project directory in your terminal.
-   - Open the `tsconfig.json` file of your project in a text editor.
-   - Ensure that the `"moduleResolution"` property is set to `"bundler"` in the `compilerOptions` section:
-     ```json
-     {
-       "compilerOptions": {
-         "moduleResolution": "bundler"
-         // Other compiler options...
-       }
+   ```json
+   {
+     "compilerOptions": {
+       "moduleResolution": "bundler"
+       // Other compiler options...
      }
-     ```
-     If the `"moduleResolution"` property does not exist, add the following to your config file. `"moduleResolution": "bundler"`. If it exists but is set to a different value, modify it to `"bundler"`.
+   }
+   ```
 
-3. Install River and Dependencies:
+   If it exists but is set to a different value, modify it to `"bundler"`.
+
+2. Install River and Dependencies:
 
 To use River, install the required packages using npm:
 
@@ -54,13 +43,11 @@ To use River, install the required packages using npm:
   npm i @replit/river @sinclair/typebox
 ```
 
-4. If you plan on using WebSocket for transport, also install
+3. If you plan on using WebSocket for the underlying transport, also install
 
 ```bash
 npm i ws isomorphic-ws
 ```
-
-These commands will install River, `@sinclair/typebox`, and optionally WebSocket dependencies (`ws` and `isomorphic-ws`) for transport if needed.
 
 ## Writing services
 
