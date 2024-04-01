@@ -593,10 +593,10 @@ export abstract class ClientTransport<
       return;
     }
 
-    log?.info(`${this.clientId} -- attempting connection to ${to}`);
-
     let reconnectPromise = this.inflightConnectionPromises.get(to);
     if (!reconnectPromise) {
+      log?.info(`${this.clientId} -- attempting connection to ${to}`);
+
       // check budget
       const budgetConsumed = this.retryBudget.getBudgetConsumed(to);
       if (budgetConsumed >= this.options.maxReconnectionBurstAttempts) {
@@ -635,6 +635,10 @@ export abstract class ClientTransport<
           return conn;
         });
       this.inflightConnectionPromises.set(to, reconnectPromise);
+    } else {
+      log?.info(
+        `${this.clientId} -- attempting connection to ${to} (reusing previous attempt)`,
+      );
     }
 
     try {
