@@ -1,36 +1,73 @@
 # River
 
-## Long-lived Streaming Remote Procedure Calls
+River is a framework designed to create long-lived streaming Remote Procedure Calls (RPCs) with features tailored to modern web applications. By combining JSON Schema support, full-duplex streaming, service multiplexing, and transparent reconnect support.
+River offers developers a solution for building scalable and resilient RPC services.
 
-It's like tRPC/gRPC but with
+## Long-lived streaming remote procedure calls
+
+River provides a framework for long-lived streaming Remote Procedure Calls (RPCs) in modern web applications, featuring advanced error handling and customizable retry policies to ensure seamless communication between clients and servers.
+
+River provides a framework similar to tRPC (Typed RPC) and gRPC(Google Remote Procedure Call) but with additional features:
 
 - JSON Schema Support + run-time schema validation
 - full-duplex streaming
 - service multiplexing
 - result types and error handling
-- snappy DX (no code-generation)
+- snappy DX (no code generation)
 - transparent reconnect support for long-lived sessions
 - over any transport (WebSockets and Unix Domain Socket out of the box)
 
-See [PROTOCOL.md](./PROTOCOL.md) for more information on the protocol.
+For more information on the Protocol, refer to the [PROTOCOL.md](./PROTOCOL.md) document.
 
-## Installation
+### Prerequisites
 
-To use River, you must be on least Typescript 5 with `"moduleResolution": "bundler"`.
+Before proceeding, ensure you have TypeScript 5 installed and configured appropriately:
+
+1. **Install TypeScript 5**:
+
+   - To install TypeScript globally, you can use npm (Node Package Manager). Open your terminal or command prompt and run the following command:
+     ```bash
+     npm install -g typescript@5
+     ```
+     This will install TypeScript version 5 globally on your system.
+
+2. **Ensure `"moduleResolution": "bundler"` in tsconfig.json**:
+
+   - Navigate to your TypeScript project directory in your terminal.
+   - Open the `tsconfig.json` file of your project in a text editor.
+   - Ensure that the `"moduleResolution"` property is set to `"bundler"` in the `compilerOptions` section:
+     ```json
+     {
+       "compilerOptions": {
+         "moduleResolution": "bundler"
+         // Other compiler options...
+       }
+     }
+     ```
+     If the `"moduleResolution"` property does not exist, add the following to your config file. `"moduleResolution": "bundler"`. If it exists but is set to a different value, modify it to `"bundler"`.
+
+3. Install River and Dependencies:
+
+To use River, install the required packages using npm:
 
 ```bash
-npm i @replit/river @sinclair/typebox
+  npm i @replit/river @sinclair/typebox
+```
 
-# if you plan on using WebSocket for transport, also install
+4. If you plan on using WebSocket for transport, also install
+
+```bash
 npm i ws isomorphic-ws
 ```
 
-## Writing Services
+These commands will install River, `@sinclair/typebox`, and optionally WebSocket dependencies (`ws` and `isomorphic-ws`) for transport if needed.
+
+## Writing services
 
 ### Concepts
 
 - Router: a collection of services, namespaced by service name.
-- Service: a collection of procedures with shared state.
+- Service: a collection of procedures with a shared state.
 - Procedure: a single procedure. A procedure declares its type, an input message type, an output message type, optionally an error type, and the associated handler. Valid types are:
   - `rpc` whose handler has a signature of `Input -> Result<Output, Error>`.
   - `upload` whose handler has a signature of `AsyncIterableIterator<Input> -> Result<Output, Error>`.
@@ -73,7 +110,7 @@ export const ExampleServiceConstructor = () =>
 export const serviceDefs = buildServiceDefs([ExampleServiceConstructor()]);
 ```
 
-Then, we create the server
+Then, we create the server:
 
 ```ts
 import http from 'http';
@@ -134,20 +171,16 @@ bindLogger(console.log);
 setLevel('info');
 ```
 
-### Connection Status
+### Connection status
 
-River define two types of reconnects:
+River defines two types of reconnects:
 
-1. Transparent reconnects: we lost the connection temporarily and reconnected without losing any messages. To the application level, nothing happened.
-2. Hard reconnect: we've lost all server state and the client should setup the world again.
+1. **Transparent reconnects:** These occur when the connection is temporarily lost and reestablished without losing any messages. From the application's perspective, this process is seamless and does not disrupt ongoing operations.
+2. **Hard reconnect:** This occurs when all server state is lost, requiring the client to reinitialize anything stateful (e.g. subscriptions).
 
-We can listen for transparent reconnects via the `connectionStatus` events but realistically
-no applications should need to listen for this unless it is for debug purposes. Hard reconnects
-are signalled via `sessionStatus` events.
+You can listen for transparent reconnects via the `connectionStatus` events, but realistically, no applications should need to listen for this unless it is for debugging purposes. Hard reconnects are signaled via `sessionStatus` events.
 
-If your application is stateful on either the server or the client, the service consumer _should_
-wrap all the client-side setup with `transport.addEventListener('sessionStatus', (evt) => ...)` to
-do appropriate setup and teardown.
+If your application is stateful on either the server or the client, the service consumer _should_ wrap all the client-side setup with `transport.addEventListener('sessionStatus', (evt) => ...)` to do appropriate setup and teardown.
 
 ```ts
 transport.addEventListener('connectionStatus', (evt) => {
@@ -169,8 +202,7 @@ transport.addEventListener('sessionStatus', (evt) => {
 
 ### Further examples
 
-We've also provided an end-to-end testing environment using Next.js, and a simple backend connected
-with the WebSocket transport that you can [play with on Replit](https://replit.com/@jzhao-replit/riverbed).
+We've also provided an end-to-end testing environment using `Next.js`, and a simple backend connected with the WebSocket transport that you can [play with on Replit](https://replit.com/@jzhao-replit/riverbed).
 
 You can find more service examples in the [E2E test fixtures](https://github.com/replit/river/blob/main/__tests__/fixtures/services.ts)
 
