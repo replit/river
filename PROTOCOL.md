@@ -206,7 +206,7 @@ The legend is as follows:
 
 - `>` represents a message with the `StreamOpenBit` set.
 - `<` represents a message with the `StreamClosedBit` set.
-  - `{` represents a message with the `StreamOpenBit` set and the payload `{ type: 'CLOSE' }`.
+  - `{` represents a message with the `StreamClosedBit` set and the payload `{ type: 'CLOSE' }`.
 - `x` represents a message with both the `StreamOpenBit` and `StreamClosedBit` set.
 - `-` represents a message with no control flags set.
 
