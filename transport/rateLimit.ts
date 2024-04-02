@@ -8,25 +8,17 @@ export interface LeakBucketLimitOptions {
 }
 
 export class LeakyBucketRateLimit {
-  budgetConsumed: Map<TransportClientId, number>;
-  intervalHandle: ReturnType<typeof setInterval>;
-  readonly options: LeakBucketLimitOptions;
+  private budgetConsumed: Map<TransportClientId, number>;
+  private intervalHandles: Map<
+    TransportClientId,
+    ReturnType<typeof setInterval>
+  >;
+  private readonly options: LeakBucketLimitOptions;
 
   constructor(options: LeakBucketLimitOptions) {
     this.options = options;
     this.budgetConsumed = new Map();
-
-    // start leaking
-    this.intervalHandle = setInterval(() => {
-      for (const [user, budgetConsumed] of this.budgetConsumed.entries()) {
-        const newBudget = budgetConsumed - 1;
-        if (newBudget === 0) {
-          this.budgetConsumed.delete(user);
-        } else {
-          this.budgetConsumed.set(user, newBudget);
-        }
-      }
-    }, this.options.leakIntervalMs);
+    this.intervalHandles = new Map();
   }
 
   get drainageTimeMs() {
@@ -43,6 +35,8 @@ export class LeakyBucketRateLimit {
   }
 
   consumeBudget(user: TransportClientId) {
+    // If we're consuming again, let's ensure that we're not leaking
+    this.stopLeak(user);
     this.budgetConsumed.set(user, this.getBudgetConsumed(user) + 1);
   }
 
@@ -50,7 +44,44 @@ export class LeakyBucketRateLimit {
     return this.budgetConsumed.get(user) ?? 0;
   }
 
+  startRestoringBudget(user: TransportClientId) {
+    if (this.intervalHandles.has(user)) {
+      return;
+    }
+
+    const intervalHandle = setInterval(() => {
+      const currentBudget = this.budgetConsumed.get(user);
+      if (!currentBudget) {
+        // Mostly appeasing typescript
+        this.stopLeak(user);
+
+        return;
+      }
+
+      const newBudget = currentBudget - 1;
+
+      if (newBudget === 0) {
+        this.budgetConsumed.delete(user);
+      } else {
+        this.budgetConsumed.set(user, newBudget);
+      }
+    }, this.options.leakIntervalMs);
+
+    this.intervalHandles.set(user, intervalHandle);
+  }
+
+  private stopLeak(user: TransportClientId) {
+    if (!this.intervalHandles.has(user)) {
+      return;
+    }
+
+    clearInterval(this.intervalHandles.get(user));
+    this.intervalHandles.delete(user);
+  }
+
   close() {
-    clearInterval(this.intervalHandle);
+    for (const user of this.intervalHandles.keys()) {
+      this.stopLeak(user);
+    }
   }
 }

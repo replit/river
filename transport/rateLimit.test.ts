@@ -40,7 +40,7 @@ describe('LeakyBucketRateLimit', () => {
     expect(rateLimit.getBudgetConsumed(user)).toBe(1);
   });
 
-  test('leaking should reduce budget consumed', () => {
+  test('keeps growing until startRestoringBudget', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const rateLimit = new LeakyBucketRateLimit(options);
     const user = 'user1';
@@ -48,7 +48,32 @@ describe('LeakyBucketRateLimit', () => {
     rateLimit.consumeBudget(user);
     expect(rateLimit.getBudgetConsumed(user)).toBe(2);
 
+    // Advanding time before startRestoringBudget should be noop
+    vi.advanceTimersByTime(options.leakIntervalMs);
+    expect(rateLimit.getBudgetConsumed(user)).toBe(2);
+
+    rateLimit.startRestoringBudget(user);
     vi.advanceTimersByTime(options.leakIntervalMs);
     expect(rateLimit.getBudgetConsumed(user)).toBe(1);
+    vi.advanceTimersByTime(options.leakIntervalMs);
+    expect(rateLimit.getBudgetConsumed(user)).toBe(0);
+  });
+
+  test('stops restoring budget when we consume budget again', () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const rateLimit = new LeakyBucketRateLimit(options);
+    const user = 'user1';
+    rateLimit.consumeBudget(user);
+    rateLimit.consumeBudget(user);
+    expect(rateLimit.getBudgetConsumed(user)).toBe(2);
+
+    rateLimit.startRestoringBudget(user);
+    vi.advanceTimersByTime(options.leakIntervalMs);
+    expect(rateLimit.getBudgetConsumed(user)).toBe(1);
+
+    rateLimit.consumeBudget(user);
+    expect(rateLimit.getBudgetConsumed(user)).toBe(2);
+    vi.advanceTimersByTime(options.leakIntervalMs);
+    expect(rateLimit.getBudgetConsumed(user)).toBe(2);
   });
 });

@@ -630,6 +630,11 @@ export abstract class ClientTransport<
             throw new Error('transport state is no longer open');
           }
 
+          // After a successful connection, we start restoring the budget
+          // so that the next time we try to connect, we don't hit the client
+          // with backoff forever.
+          this.retryBudget.startRestoringBudget(to);
+
           // only send handshake once per attempt
           this.sendHandshake(to, conn);
           return conn;
