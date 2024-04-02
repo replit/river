@@ -37,9 +37,9 @@ import { NaiveJsonCodec } from '../codec';
  */
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
-// eslint-ignore-next-line @typescript-eslint/no-empty-interface
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface ProvidedTransportOptions extends Partial<SessionOptions> {}
-// eslint-ignore-next-line @typescript-eslint/no-empty-interface
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
 interface TransportOptions extends Required<ProvidedTransportOptions> {}
 const defaultTransportOptions: TransportOptions = {
   heartbeatIntervalMs: 1_000,
