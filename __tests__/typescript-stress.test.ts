@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { Procedure, ServiceBuilder, serializeService } from '../router/builder';
+import { Procedure } from '../router/procedures';
+import { ServiceBuilder, serializeService } from '../router/services';
 import { Type } from '@sinclair/typebox';
 import { createServer } from '../router/server';
 import { Connection, ClientTransport, ServerTransport } from '../transport';

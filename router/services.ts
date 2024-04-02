@@ -1,33 +1,17 @@
-import { TObject, Static, Type, TUnion } from '@sinclair/typebox';
-import type { Pushable } from 'it-pushable';
-import { ServiceContextWithTransportInfo } from './context';
-import { Result, RiverError, RiverUncaughtSchema } from './result';
-
-/**
- * The valid {@link Procedure} types. The `stream` and `upload` types can optionally have a
- * different type for the very first initialization message. The suffixless types correspond to
- * gRPC's four combinations of stream / non-stream in each direction.
- */
-export type ValidProcType =
-  // Single message in both directions (1:1).
-  | 'rpc'
-  // Client-stream (potentially preceded by an initialization message), single message from server (n:1).
-  | 'upload'
-  // Single message from client, stream from server (1:n).
-  | 'subscription'
-  // Bidirectional stream (potentially preceded by an initialization message) (n:n).
-  | 'stream';
-
-/**
- * A generic procedure listing where the keys are the names of the procedures
- * and the values are the {@link Procedure} definitions. This is not meant to
- * be constructed directly, use the {@link ServiceBuilder} class instead.
- */
-export type ProcListing = Record<string, AnyProcedure>;
+import { TObject, Type, TUnion } from '@sinclair/typebox';
+import { RiverError, RiverUncaughtSchema } from './result';
+import {
+  AnyProcedure,
+  PayloadType,
+  ProcListing,
+  Procedure,
+  ValidProcType,
+} from './procedures';
 
 /**
  * Represents a service with a name, state, and procedures.
  * This is not meant to be constructed directly, use the {@link ServiceBuilder} class instead.
+ *
  * @template Name The type of the service name.
  * @template State The type of the service state.
  * @template Procs The type of the service procedures.
@@ -44,41 +28,11 @@ export interface Service<
   state: State;
   procedures: Procs;
 }
-export type AnyService = Service<string, object, ProcListing>;
 
 /**
- * Serializes a service object into its corresponding JSON Schema Draft 7 type.
- * @param {AnyService} s - The service object to serialize.
- * @returns A plain object representing the serialized service.
+ * Represents a service with a name, state, and procedures.
  */
-export function serializeService(s: AnyService): object {
-  return {
-    name: s.name,
-    state: s.state,
-    procedures: Object.fromEntries(
-      Object.entries<AnyProcedure>(s.procedures).map(([procName, procDef]) => [
-        procName,
-        {
-          input: Type.Strict(procDef.input),
-          output: Type.Strict(procDef.output),
-          // Only add the `errors` field if it is non-never.
-          ...('errors' in procDef
-            ? {
-                errors: Type.Strict(procDef.errors),
-              }
-            : {}),
-          type: procDef.type,
-          // Only add the `init` field if the type declares it.
-          ...('init' in procDef
-            ? {
-                init: Type.Strict(procDef.init),
-              }
-            : {}),
-        },
-      ]),
-    ),
-  };
-}
+export type AnyService = Service<string, object, ProcListing>;
 
 /**
  * Helper to get the type definition for a specific handler of a procedure in a service.
@@ -152,109 +106,39 @@ export type ProcType<
   ProcName extends keyof S['procedures'],
 > = S['procedures'][ProcName]['type'];
 
-export type PayloadType = TObject | TUnion<Array<TObject>>;
-
 /**
- * Defines a Procedure type that can be either an RPC or a stream procedure.
- * @template State - The TypeBox schema of the state object.
- * @template Ty - The type of the procedure.
- * @template I - The TypeBox schema of the input object.
- * @template O - The TypeBox schema of the output object.
- * @template Init - The TypeBox schema of the input initialization object.
+ * Serializes a service object into its corresponding JSON Schema Draft 7 type.
+ * @param {AnyService} s - The service object to serialize.
+ * @returns A plain object representing the serialized service.
  */
-export type Procedure<
-  State,
-  Ty extends ValidProcType,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
-  Init extends PayloadType | null = null,
-> = Ty extends 'rpc'
-  ? Init extends null
-    ? {
-        input: I;
-        output: O;
-        errors: E;
-        handler: (
-          context: ServiceContextWithTransportInfo<State>,
-          input: Static<I>,
-        ) => Promise<Result<Static<O>, Static<E>>>;
-        type: Ty;
-      }
-    : never
-  : Ty extends 'upload'
-  ? Init extends PayloadType
-    ? {
-        init: Init;
-        input: I;
-        output: O;
-        errors: E;
-        handler: (
-          context: ServiceContextWithTransportInfo<State>,
-          init: Static<Init>,
-          input: AsyncIterableIterator<Static<I>>,
-        ) => Promise<Result<Static<O>, Static<E>>>;
-        type: Ty;
-      }
-    : {
-        input: I;
-        output: O;
-        errors: E;
-        handler: (
-          context: ServiceContextWithTransportInfo<State>,
-          input: AsyncIterableIterator<Static<I>>,
-        ) => Promise<Result<Static<O>, Static<E>>>;
-        type: Ty;
-      }
-  : Ty extends 'subscription'
-  ? Init extends null
-    ? {
-        input: I;
-        output: O;
-        errors: E;
-        handler: (
-          context: ServiceContextWithTransportInfo<State>,
-          input: Static<I>,
-          output: Pushable<Result<Static<O>, Static<E>>>,
-        ) => Promise<(() => void) | void>;
-        type: Ty;
-      }
-    : never
-  : Ty extends 'stream'
-  ? Init extends PayloadType
-    ? {
-        init: Init;
-        input: I;
-        output: O;
-        errors: E;
-        handler: (
-          context: ServiceContextWithTransportInfo<State>,
-          init: Static<Init>,
-          input: AsyncIterableIterator<Static<I>>,
-          output: Pushable<Result<Static<O>, Static<E>>>,
-        ) => Promise<void>;
-        type: Ty;
-      }
-    : {
-        input: I;
-        output: O;
-        errors: E;
-        handler: (
-          context: ServiceContextWithTransportInfo<State>,
-          input: AsyncIterableIterator<Static<I>>,
-          output: Pushable<Result<Static<O>, Static<E>>>,
-        ) => Promise<void>;
-        type: Ty;
-      }
-  : never;
-export type AnyProcedure = Procedure<
-  object,
-  ValidProcType,
-  PayloadType,
-  PayloadType,
-  RiverError,
-  PayloadType | null
->;
+export function serializeService(s: AnyService): object {
+  return {
+    name: s.name,
+    state: s.state,
+    procedures: Object.fromEntries(
+      Object.entries<AnyProcedure>(s.procedures).map(([procName, procDef]) => [
+        procName,
+        {
+          input: Type.Strict(procDef.input),
+          output: Type.Strict(procDef.output),
+          // Only add the `errors` field if it is non-never.
+          ...('errors' in procDef
+            ? {
+                errors: Type.Strict(procDef.errors),
+              }
+            : {}),
+          type: procDef.type,
+          // Only add the `init` field if the type declares it.
+          ...('init' in procDef
+            ? {
+                init: Type.Strict(procDef.init),
+              }
+            : {}),
+        },
+      ]),
+    ),
+  };
+}
 
 /**
  * A builder class for creating River Services.

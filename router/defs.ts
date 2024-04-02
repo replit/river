@@ -1,4 +1,4 @@
-import { AnyService } from './builder';
+import { AnyService } from './services';
 
 /**
  * Defines a type for a collection service definitions. Should be

@@ -1,5 +1,5 @@
 import { Type } from '@sinclair/typebox';
-import { ServiceBuilder } from '../../router/builder';
+import { ServiceBuilder } from '../../router/services';
 import { Err, Ok } from '../../router/result';
 import { Observable } from './observable';
 

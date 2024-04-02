@@ -7,7 +7,7 @@ import {
   ProcInput,
   ProcOutput,
   ProcType,
-} from './builder';
+} from './services';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 import { Server } from './server';

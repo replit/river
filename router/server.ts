@@ -1,6 +1,7 @@
 import { Static } from '@sinclair/typebox';
 import { ServerTransport, Transport } from '../transport/transport';
-import { AnyProcedure, AnyService, PayloadType } from './builder';
+import { AnyProcedure, PayloadType } from './procedures';
+import { AnyService } from './services';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 import {

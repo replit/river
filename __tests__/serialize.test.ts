@@ -1,5 +1,5 @@
 import { expect, describe, test } from 'vitest';
-import { serializeService } from '../router/builder';
+import { serializeService } from '../router/services';
 import {
   BinaryFileServiceConstructor,
   FallibleServiceConstructor,
