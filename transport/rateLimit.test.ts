@@ -6,7 +6,7 @@ import { describe, test, expect, vi } from 'vitest';
 
 describe('LeakyBucketRateLimit', () => {
   const options: ConnectionRetryOptions = {
-    maxAttempts: 10,
+    attemptCapacity: 10,
     budgetRestoreIntervalMs: 1000,
     baseIntervalMs: 100,
     maxJitterMs: 50,
@@ -47,7 +47,6 @@ describe('LeakyBucketRateLimit', () => {
     expect(rateLimit.getBudgetConsumed(user)).toBe(2);
 
     rateLimit.startRestoringBudget(user);
-    vi.advanceTimersByTime(options.budgetRestoreIntervalMs);
     expect(rateLimit.getBudgetConsumed(user)).toBe(1);
     vi.advanceTimersByTime(options.budgetRestoreIntervalMs);
     expect(rateLimit.getBudgetConsumed(user)).toBe(0);
@@ -62,7 +61,6 @@ describe('LeakyBucketRateLimit', () => {
     expect(rateLimit.getBudgetConsumed(user)).toBe(2);
 
     rateLimit.startRestoringBudget(user);
-    vi.advanceTimersByTime(options.budgetRestoreIntervalMs);
     expect(rateLimit.getBudgetConsumed(user)).toBe(1);
 
     rateLimit.consumeBudget(user);
@@ -100,7 +98,10 @@ describe('LeakyBucketRateLimit', () => {
 
   test('reports remaining budget correctly', () => {
     const maxAttempts = 3;
-    const rateLimit = new LeakyBucketRateLimit({ ...options, maxAttempts });
+    const rateLimit = new LeakyBucketRateLimit({
+      ...options,
+      attemptCapacity: maxAttempts,
+    });
     const user = 'user1';
 
     expect(rateLimit.hasBudget(user)).toBe(true);

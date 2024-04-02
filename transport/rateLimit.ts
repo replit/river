@@ -11,21 +11,26 @@ export interface ConnectionRetryOptions {
    * The base interval to wait before retrying a connection.
    */
   baseIntervalMs: number;
+
   /**
    * The maximum random jitter to add to the total backoff time.
    */
   maxJitterMs: number;
+
   /**
    * The maximum amount of time to wait before retrying a connection.
-   * This does not include the jitter
+   * This is the maximum that {@link budgetRestoreIntervalMs}
+   * This does not include the jitter.
    */
   maxBackoffMs: number;
+
   /**
-   * The maximum number of times to retry a connection before giving up.
-   * This persists across connections but starts reseting after every succesful
-   * connection, the restoration period depends on {@link Connection.retryBudgetRestoreIntervalMs}
+   * The max number of times to attempt a connection before a successful handshake.
+   * This persists across connections but starts restoring budget after a successful handshake.
+   * The restoration interval depends on {@link budgetRestoreIntervalMs}
    */
-  maxAttempts: number;
+  attemptCapacity: number;
+
   /**
    * After a successful connection attempt, how long to wait before we restore a single budget.
    */
@@ -59,6 +64,10 @@ export class LeakyBucketRateLimit {
     return backoffMs + jitter;
   }
 
+  get drainageTimeMs() {
+    return this.options.budgetRestoreIntervalMs * this.options.attemptCapacity;
+  }
+
   consumeBudget(user: TransportClientId) {
     // If we're consuming again, let's ensure that we're not leaking
     this.stopLeak(user);
@@ -70,7 +79,7 @@ export class LeakyBucketRateLimit {
   }
 
   hasBudget(user: TransportClientId) {
-    return this.getBudgetConsumed(user) < this.options.maxAttempts;
+    return this.getBudgetConsumed(user) < this.options.attemptCapacity;
   }
 
   startRestoringBudget(user: TransportClientId) {
@@ -78,25 +87,28 @@ export class LeakyBucketRateLimit {
       return;
     }
 
-    const intervalHandle = setInterval(() => {
+    const restoreBudgetForUser = () => {
       const currentBudget = this.budgetConsumed.get(user);
       if (!currentBudget) {
-        // Mostly appeasing typescript
         this.stopLeak(user);
-
         return;
       }
 
       const newBudget = currentBudget - 1;
       if (newBudget === 0) {
         this.budgetConsumed.delete(user);
-
         return;
       }
 
       this.budgetConsumed.set(user, newBudget);
-    }, this.options.budgetRestoreIntervalMs);
+    };
 
+    // instantly restore single use of budget on success
+    restoreBudgetForUser();
+    const intervalHandle = setInterval(
+      restoreBudgetForUser,
+      this.options.budgetRestoreIntervalMs,
+    );
     this.intervalHandles.set(user, intervalHandle);
   }
 
