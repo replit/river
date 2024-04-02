@@ -1,10 +1,16 @@
 import { TransportClientId } from './message';
 
 /**
- * Options to control the backoff and retry behavior of the transport's connection.
+ * Options to control the backoff and retry behavior of the client transport's connection behaviour.
  *
  * River implements exponential backoff with jitter to prevent flooding the server
- * when there's an issue.
+ * when there's an issue with connection establishment.
+ *
+ * The backoff is calculated via the following:
+ *   backOff = min(jitter + {@link baseIntervalMs} * 2 ^ budget_consumed, {@link maxBackoffMs})
+ *
+ * We use a leaky bucket rate limit with a budget of {@link attemptCapacity} reconnection attempts.
+ * Budget only starts to restore after a successful handshake at a rate of one budget per {@link budgetRestoreIntervalMs}.
  */
 export interface ConnectionRetryOptions {
   /**
