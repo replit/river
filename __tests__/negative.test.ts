@@ -14,7 +14,6 @@ import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
-import { defaultTransportOptions } from '../transport/transport';
 import WebSocket from 'ws';
 
 describe('should handle incompatabilities', async () => {
@@ -98,11 +97,18 @@ describe('should handle incompatabilities', async () => {
       ws.close();
     };
 
+    const maxAttempts = 10;
     wss.on('connection', serverWsConnHandler);
-    const clientTransport = new WebSocketClientTransport(() => {
-      const ws = createLocalWebSocketClient(port);
-      return Promise.resolve(ws);
-    }, 'client');
+    const clientTransport = new WebSocketClientTransport(
+      () => {
+        const ws = createLocalWebSocketClient(port);
+        return Promise.resolve(ws);
+      },
+      'client',
+      {
+        connectionRetryOptions: { maxAttempts },
+      },
+    );
     clientTransport.tryReconnecting = false;
 
     const errMock = vi.fn();
@@ -113,17 +119,11 @@ describe('should handle incompatabilities', async () => {
       clientTransport.close();
     });
 
-    for (
-      let i = 0;
-      i < defaultTransportOptions.maxReconnectionBurstAttempts;
-      i++
-    ) {
+    for (let i = 0; i < maxAttempts; i++) {
       void clientTransport.connect('SERVER');
     }
 
-    expect(conns).toBeLessThan(
-      defaultTransportOptions.maxReconnectionBurstAttempts,
-    );
+    expect(conns).toBeLessThan(maxAttempts);
   });
 
   test('incorrect client handshake', async () => {

@@ -23,7 +23,7 @@ import { nanoid } from 'nanoid';
 import net from 'node:net';
 import { PartialTransportMessage } from '../transport/message';
 import { coerceErrorString } from './stringify';
-import { defaultSessionOptions } from '../transport/session';
+import { NaiveJsonCodec } from '../codec';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.
@@ -143,6 +143,13 @@ function catchProcError(err: unknown) {
   };
 }
 
+export const testingSessionOptions = {
+  heartbeatIntervalMs: 1_000,
+  heartbeatsUntilDead: 2,
+  sessionDisconnectGraceMs: 5_000,
+  codec: NaiveJsonCodec,
+};
+
 function dummyCtx<State>(
   state: State,
   extendedContext?: Omit<ServiceContext, 'state'>,
@@ -151,7 +158,7 @@ function dummyCtx<State>(
     'client',
     'SERVER',
     undefined,
-    defaultSessionOptions,
+    testingSessionOptions,
   );
 
   return {

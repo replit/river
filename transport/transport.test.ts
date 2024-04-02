@@ -3,6 +3,7 @@ import {
   createDummyTransportMessage,
   payloadToTransportMessage,
   waitForMessage,
+  testingSessionOptions,
 } from '../util/testHelpers';
 import { EventMap } from '../transport/events';
 import {
@@ -12,7 +13,6 @@ import {
 } from '../__tests__/fixtures/cleanup';
 import { testMatrix } from '../__tests__/fixtures/matrix';
 import { PartialTransportMessage } from './message';
-import { HEARTBEATS_TILL_DEAD, HEARTBEAT_INTERVAL_MS } from './session';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
@@ -83,7 +83,7 @@ describe.each(testMatrix())(
         // wait for heartbeat interval to elapse
         await vi.runOnlyPendingTimersAsync();
         await vi.advanceTimersByTimeAsync(
-          HEARTBEAT_INTERVAL_MS * (1 + Math.random()),
+          testingSessionOptions.heartbeatIntervalMs * (1 + Math.random()),
         );
       }
     });
@@ -703,8 +703,10 @@ describe.each(testMatrix())(
       // now, let's wait until the connection is considered dead
       simulatePhantomDisconnect();
       await vi.runOnlyPendingTimersAsync();
-      for (let i = 0; i < HEARTBEATS_TILL_DEAD; i++) {
-        await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS + 1);
+      for (let i = 0; i < testingSessionOptions.heartbeatsUntilDead; i++) {
+        await vi.advanceTimersByTimeAsync(
+          testingSessionOptions.heartbeatIntervalMs + 1,
+        );
       }
 
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));

@@ -22,16 +22,12 @@ import {
   ProtocolError,
   ProtocolErrorType,
 } from './events';
-import {
-  Connection,
-  Session,
-  SessionOptions,
-  defaultSessionOptions,
-} from './session';
+import { Connection, Session, SessionOptions } from './session';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import { coerceErrorString } from '../util/stringify';
-import { LeakyBucketRateLimit } from './rateLimit';
+import { ConnectionRetryOptions, LeakyBucketRateLimit } from './rateLimit';
+import { NaiveJsonCodec } from '../codec';
 
 /**
  * Represents the possible states of a transport.
@@ -41,19 +37,34 @@ import { LeakyBucketRateLimit } from './rateLimit';
  */
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
-export type TransportOptions = {
-  maxReconnectionBurstAttempts: number;
-  retryBudgetRestoreIntervalMs: number;
-  retryBaseIntervalMs: number;
-  retryJitterMs: number;
-} & SessionOptions;
+// eslint-ignore-next-line @typescript-eslint/no-empty-interface
+export interface ProvidedTransportOptions extends Partial<SessionOptions> {}
+// eslint-ignore-next-line @typescript-eslint/no-empty-interface
+interface TransportOptions extends Required<ProvidedTransportOptions> {}
+const defaultTransportOptions: TransportOptions = {
+  heartbeatIntervalMs: 1_000,
+  heartbeatsUntilDead: 2,
+  sessionDisconnectGraceMs: 5_000,
+  codec: NaiveJsonCodec,
+};
 
-export const defaultTransportOptions: TransportOptions = {
-  maxReconnectionBurstAttempts: 5,
-  retryBudgetRestoreIntervalMs: 2000,
-  retryBaseIntervalMs: 250,
-  retryJitterMs: 100,
-  ...defaultSessionOptions,
+export interface ProvidedClientTransportOptions
+  extends ProvidedTransportOptions {
+  connectionRetryOptions?: Partial<ConnectionRetryOptions>;
+}
+interface ClientTransportOptions
+  extends Required<ProvidedClientTransportOptions> {
+  connectionRetryOptions: ConnectionRetryOptions;
+}
+const defaultClientTransportOptions: ClientTransportOptions = {
+  connectionRetryOptions: {
+    baseIntervalMs: 250,
+    maxJitterMs: 200,
+    maxBackoffMs: 32_000,
+    maxAttempts: 15,
+    budgetRestoreIntervalMs: 200,
+  },
+  ...defaultTransportOptions,
 };
 
 /**
@@ -145,7 +156,7 @@ export abstract class Transport<ConnType extends Connection> {
    */
   constructor(
     clientId: TransportClientId,
-    providedOptions?: Partial<TransportOptions>,
+    providedOptions?: ProvidedTransportOptions,
   ) {
     this.options = { ...defaultTransportOptions, ...providedOptions };
     this.eventDispatcher = new EventDispatcher();
@@ -456,6 +467,11 @@ export abstract class ClientTransport<
   ConnType extends Connection,
 > extends Transport<ConnType> {
   /**
+   * The options for this transport.
+   */
+  protected options: ClientTransportOptions;
+
+  /**
    * The map of reconnect promises for each client ID.
    */
   inflightConnectionPromises: Map<TransportClientId, Promise<ConnType>>;
@@ -464,16 +480,17 @@ export abstract class ClientTransport<
 
   constructor(
     clientId: TransportClientId,
-    providedOptions?: Partial<TransportOptions>,
+    providedOptions?: ProvidedTransportOptions,
   ) {
     super(clientId, providedOptions);
+    this.options = {
+      ...defaultClientTransportOptions,
+      ...providedOptions,
+    };
     this.inflightConnectionPromises = new Map();
-    this.retryBudget = new LeakyBucketRateLimit({
-      maxBurst: this.options.maxReconnectionBurstAttempts,
-      leakIntervalMs: this.options.retryBudgetRestoreIntervalMs,
-      baseIntervalMs: this.options.retryBaseIntervalMs,
-      jitterMs: this.options.retryJitterMs,
-    });
+    this.retryBudget = new LeakyBucketRateLimit(
+      this.options.connectionRetryOptions,
+    );
   }
 
   protected handleConnection(conn: ConnType, to: TransportClientId): void {
@@ -598,9 +615,10 @@ export abstract class ClientTransport<
       log?.info(`${this.clientId} -- attempting connection to ${to}`);
 
       // check budget
-      const budgetConsumed = this.retryBudget.getBudgetConsumed(to);
-      if (budgetConsumed >= this.options.maxReconnectionBurstAttempts) {
-        const errMsg = `not attempting to connect to ${to}, retry budget exceeded (more than ${budgetConsumed} attempts in the last ${this.retryBudget.drainageTimeMs}ms)`;
+      if (!this.retryBudget.hasBudget(to)) {
+        const errMsg = `not attempting to connect to ${to}, retry budget exceeded (more than ${this.retryBudget.getBudgetConsumed(
+          to,
+        )} attempts in the current connection cycle)`;
         log?.warn(`${this.clientId} -- ${errMsg}`);
         this.protocolError(ProtocolError.RetriesExceeded, errMsg);
         return;
@@ -608,8 +626,8 @@ export abstract class ClientTransport<
 
       // first reconnect attempt should be free
       let sleep = Promise.resolve();
-      if (budgetConsumed > 1) {
-        const backoffMs = this.retryBudget.getBackoffMs(to);
+      const backoffMs = this.retryBudget.getBackoffMs(to);
+      if (backoffMs > 0) {
         sleep = new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
 
@@ -684,7 +702,10 @@ export abstract class ServerTransport<
 > extends Transport<ConnType> {
   constructor(
     clientId: TransportClientId,
-    providedOptions?: Partial<TransportOptions>,
+    providedOptions?: Omit<
+      Partial<ProvidedTransportOptions>,
+      'connectionRetryOptions'
+    >,
   ) {
     super(clientId, providedOptions);
     log?.info(

@@ -1,10 +1,35 @@
 import { TransportClientId } from './message';
 
-export interface LeakBucketLimitOptions {
-  maxBurst: number;
-  leakIntervalMs: number;
+/**
+ * Options to control the backoff and retry behavior of the transport's connection.
+ *
+ * River implements exponential backoff with jitter to prevent flooding the server
+ * when there's an issue.
+ */
+export interface ConnectionRetryOptions {
+  /**
+   * The base interval to wait before retrying a connection.
+   */
   baseIntervalMs: number;
-  jitterMs: number;
+  /**
+   * The maximum random jitter to add to the total backoff time.
+   */
+  maxJitterMs: number;
+  /**
+   * The maximum amount of time to wait before retrying a connection.
+   * This does not include the jitter
+   */
+  maxBackoffMs: number;
+  /**
+   * The maximum number of times to retry a connection before giving up.
+   * This persists across connections but starts reseting after every succesful
+   * connection, the restoration period depends on {@link Connection.retryBudgetRestoreIntervalMs}
+   */
+  maxAttempts: number;
+  /**
+   * After a successful connection attempt, how long to wait before we restore a single budget.
+   */
+  budgetRestoreIntervalMs: number;
 }
 
 export class LeakyBucketRateLimit {
@@ -13,25 +38,25 @@ export class LeakyBucketRateLimit {
     TransportClientId,
     ReturnType<typeof setInterval>
   >;
-  private readonly options: LeakBucketLimitOptions;
+  private readonly options: ConnectionRetryOptions;
 
-  constructor(options: LeakBucketLimitOptions) {
+  constructor(options: ConnectionRetryOptions) {
     this.options = options;
     this.budgetConsumed = new Map();
     this.intervalHandles = new Map();
-  }
-
-  get drainageTimeMs() {
-    return this.options.leakIntervalMs * this.options.maxBurst;
   }
 
   getBackoffMs(user: TransportClientId) {
     if (!this.budgetConsumed.has(user)) return 0;
 
     const exponent = Math.max(0, this.getBudgetConsumed(user) - 1);
-    const jitter = Math.floor(Math.random() * this.options.jitterMs);
-    const backoffMs = this.options.baseIntervalMs * 2 ** exponent + jitter;
-    return backoffMs;
+    const jitter = Math.floor(Math.random() * this.options.maxJitterMs);
+    const backoffMs = Math.min(
+      this.options.baseIntervalMs * 2 ** exponent,
+      this.options.maxBackoffMs,
+    );
+
+    return backoffMs + jitter;
   }
 
   consumeBudget(user: TransportClientId) {
@@ -42,6 +67,10 @@ export class LeakyBucketRateLimit {
 
   getBudgetConsumed(user: TransportClientId) {
     return this.budgetConsumed.get(user) ?? 0;
+  }
+
+  hasBudget(user: TransportClientId) {
+    return this.getBudgetConsumed(user) < this.options.maxAttempts;
   }
 
   startRestoringBudget(user: TransportClientId) {
@@ -59,13 +88,14 @@ export class LeakyBucketRateLimit {
       }
 
       const newBudget = currentBudget - 1;
-
       if (newBudget === 0) {
         this.budgetConsumed.delete(user);
-      } else {
-        this.budgetConsumed.set(user, newBudget);
+
+        return;
       }
-    }, this.options.leakIntervalMs);
+
+      this.budgetConsumed.set(user, newBudget);
+    }, this.options.budgetRestoreIntervalMs);
 
     this.intervalHandles.set(user, intervalHandle);
   }

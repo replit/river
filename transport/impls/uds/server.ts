@@ -1,6 +1,6 @@
 import { log } from '../../../logging';
 import { type Server, type Socket } from 'node:net';
-import { ServerTransport, TransportOptions } from '../../transport';
+import { ServerTransport, ProvidedTransportOptions } from '../../transport';
 import { TransportClientId } from '../../message';
 import { UdsConnection } from './connection';
 
@@ -10,7 +10,7 @@ export class UnixDomainSocketServerTransport extends ServerTransport<UdsConnecti
   constructor(
     server: Server,
     clientId: TransportClientId,
-    providedOptions?: Partial<TransportOptions>,
+    providedOptions?: Partial<ProvidedTransportOptions>,
   ) {
     super(clientId, providedOptions);
     this.server = server;
