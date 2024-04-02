@@ -14,6 +14,7 @@ import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
+import WebSocket from 'ws';
 
 describe('should handle incompatabilities', async () => {
   const server = http.createServer();
@@ -34,7 +35,7 @@ describe('should handle incompatabilities', async () => {
     await clientTransport.connect(serverTransport.clientId);
     await waitFor(() => expect(serverTransport.connections.size).toBe(1));
 
-    const errMock = vi.fn<[], unknown>();
+    const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
     onTestFinished(async () => {
       clientTransport.removeEventListener('protocolError', errMock);
@@ -57,13 +58,13 @@ describe('should handle incompatabilities', async () => {
     );
   });
 
-  test('conn failure, retry limit reached', async () => {
+  test('retrying single connection attempt should hit retry limit reached', async () => {
     const clientTransport = new WebSocketClientTransport(
       () => Promise.reject(new Error('fake connection failure')),
       'client',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
-    const errMock = vi.fn<[], unknown>();
+    const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
     onTestFinished(async () => {
       clientTransport.removeEventListener('protocolError', errMock);
@@ -76,18 +77,53 @@ describe('should handle incompatabilities', async () => {
 
     // try connecting and make sure we get the fake connection failure
     expect(errMock).toHaveBeenCalledTimes(0);
-
-    // connect and keep running all timers until completion
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    await clientTransport.connect(serverTransport.clientId);
+    const connectionPromise = clientTransport.connect(serverTransport.clientId);
     await vi.runAllTimersAsync();
+    await connectionPromise;
 
-    expect(errMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(errMock).toHaveBeenCalledTimes(1));
     expect(errMock).toHaveBeenCalledWith(
       expect.objectContaining({
         type: ProtocolError.RetriesExceeded,
       }),
     );
+  });
+
+  test('repeated connections that close instantly still triggers backoff', async () => {
+    let conns = 0;
+    const serverWsConnHandler = (ws: WebSocket) => {
+      conns += 1;
+      ws.close();
+    };
+
+    const maxAttempts = 10;
+    wss.on('connection', serverWsConnHandler);
+    const clientTransport = new WebSocketClientTransport(
+      () => {
+        const ws = createLocalWebSocketClient(port);
+        return Promise.resolve(ws);
+      },
+      'client',
+      {
+        connectionRetryOptions: { attemptBudgetCapacity: maxAttempts },
+      },
+    );
+    clientTransport.tryReconnecting = false;
+
+    const errMock = vi.fn();
+    clientTransport.addEventListener('protocolError', errMock);
+    onTestFinished(() => {
+      wss.off('connection', serverWsConnHandler);
+      clientTransport.removeEventListener('protocolError', errMock);
+      clientTransport.close();
+    });
+
+    for (let i = 0; i < maxAttempts; i++) {
+      void clientTransport.connect('SERVER');
+    }
+
+    expect(conns).toBeLessThan(maxAttempts);
   });
 
   test('incorrect client handshake', async () => {

@@ -1,5 +1,8 @@
 import WebSocket from 'isomorphic-ws';
-import { ClientTransport, TransportOptions } from '../../transport';
+import {
+  ClientTransport,
+  ProvidedClientTransportOptions,
+} from '../../transport';
 import { TransportClientId } from '../../message';
 import { log } from '../../../logging';
 import { WebSocketConnection } from './connection';
@@ -27,7 +30,7 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
   constructor(
     wsGetter: () => Promise<WebSocket>,
     clientId: TransportClientId,
-    providedOptions?: Partial<TransportOptions>,
+    providedOptions?: ProvidedClientTransportOptions,
   ) {
     super(clientId, providedOptions);
     this.wsGetter = wsGetter;

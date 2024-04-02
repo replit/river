@@ -2,7 +2,10 @@ import { TransportClientId } from '../..';
 import { Socket } from 'node:net';
 import { log } from '../../../logging';
 import { UdsConnection } from './connection';
-import { ClientTransport, TransportOptions } from '../../transport';
+import {
+  ClientTransport,
+  ProvidedClientTransportOptions,
+} from '../../transport';
 
 export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnection> {
   path: string;
@@ -10,7 +13,7 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
   constructor(
     socketPath: string,
     clientId: string,
-    providedOptions?: Partial<TransportOptions>,
+    providedOptions?: ProvidedClientTransportOptions,
   ) {
     super(clientId, providedOptions);
     this.path = socketPath;

@@ -22,15 +22,12 @@ import {
   ProtocolError,
   ProtocolErrorType,
 } from './events';
-import {
-  Connection,
-  Session,
-  SessionOptions,
-  defaultSessionOptions,
-} from './session';
+import { Connection, Session, SessionOptions } from './session';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import { coerceErrorString } from '../util/stringify';
+import { ConnectionRetryOptions, LeakyBucketRateLimit } from './rateLimit';
+import { NaiveJsonCodec } from '../codec';
 
 /**
  * Represents the possible states of a transport.
@@ -40,28 +37,32 @@ import { coerceErrorString } from '../util/stringify';
  */
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
-export type TransportOptions = {
-  retryIntervalMs: number;
-  retryJitterMs: number;
-  retryAttemptsMax: number;
-} & SessionOptions;
+export type ProvidedTransportOptions = Partial<SessionOptions>;
+type TransportOptions = Required<ProvidedTransportOptions>;
+const defaultTransportOptions: TransportOptions = {
+  heartbeatIntervalMs: 1_000,
+  heartbeatsUntilDead: 2,
+  sessionDisconnectGraceMs: 5_000,
+  codec: NaiveJsonCodec,
+};
 
-/**
- * Largest amount of jitter to add to the reconnect interval in milliseconds
- */
-const RECONNECT_JITTER_MAX_MS = 500;
-
-/**
- * The default retry interval for reconnecting to a transport.
- * The actual interval is an exponent backoff calculated as follows:
- * ms = retryIntervalMs * (2 ** attempt) + jitter
- */
-const RECONNECT_INTERVAL_MS = 250;
-export const defaultTransportOptions: TransportOptions = {
-  retryIntervalMs: RECONNECT_INTERVAL_MS,
-  retryJitterMs: RECONNECT_JITTER_MAX_MS,
-  retryAttemptsMax: 5,
-  ...defaultSessionOptions,
+export interface ProvidedClientTransportOptions
+  extends ProvidedTransportOptions {
+  connectionRetryOptions?: Partial<ConnectionRetryOptions>;
+}
+interface ClientTransportOptions
+  extends Required<ProvidedClientTransportOptions> {
+  connectionRetryOptions: ConnectionRetryOptions;
+}
+const defaultClientTransportOptions: ClientTransportOptions = {
+  connectionRetryOptions: {
+    baseIntervalMs: 250,
+    maxJitterMs: 200,
+    maxBackoffMs: 32_000,
+    attemptBudgetCapacity: 15,
+    budgetRestoreIntervalMs: 200,
+  },
+  ...defaultTransportOptions,
 };
 
 /**
@@ -153,7 +154,7 @@ export abstract class Transport<ConnType extends Connection> {
    */
   constructor(
     clientId: TransportClientId,
-    providedOptions?: Partial<TransportOptions>,
+    providedOptions?: ProvidedTransportOptions,
   ) {
     this.options = { ...defaultTransportOptions, ...providedOptions };
     this.eventDispatcher = new EventDispatcher();
@@ -464,17 +465,30 @@ export abstract class ClientTransport<
   ConnType extends Connection,
 > extends Transport<ConnType> {
   /**
+   * The options for this transport.
+   */
+  protected options: ClientTransportOptions;
+
+  /**
    * The map of reconnect promises for each client ID.
    */
   inflightConnectionPromises: Map<TransportClientId, Promise<ConnType>>;
+  retryBudget: LeakyBucketRateLimit;
   tryReconnecting = true;
 
   constructor(
     clientId: TransportClientId,
-    providedOptions?: Partial<TransportOptions>,
+    providedOptions?: ProvidedTransportOptions,
   ) {
     super(clientId, providedOptions);
+    this.options = {
+      ...defaultClientTransportOptions,
+      ...providedOptions,
+    };
     this.inflightConnectionPromises = new Map();
+    this.retryBudget = new LeakyBucketRateLimit(
+      this.options.connectionRetryOptions,
+    );
   }
 
   protected handleConnection(conn: ConnType, to: TransportClientId): void {
@@ -511,7 +525,10 @@ export abstract class ClientTransport<
       log?.info(
         `${this.clientId} -- connection (id: ${conn.debugId}) to ${to} disconnected`,
       );
-      void this.connect(to);
+      this.inflightConnectionPromises.delete(to);
+      if (this.tryReconnecting) {
+        void this.connect(to);
+      }
     });
     conn.addErrorListener((err) => {
       log?.warn(
@@ -581,48 +598,80 @@ export abstract class ClientTransport<
    * Manually attempts to connect to a client.
    * @param to The client ID of the node to connect to.
    */
-  async connect(to: TransportClientId, attempt = 0) {
-    if (this.state !== 'open' || !this.tryReconnecting) {
+  async connect(to: TransportClientId): Promise<void> {
+    const canProceedWithConnection = () => this.state === 'open';
+    if (!canProceedWithConnection()) {
       log?.info(
-        `${this.clientId} -- transport state is no longer open, not attempting connection`,
+        `${this.clientId} -- transport state is no longer open, cancelling attempt to connect to ${to}`,
       );
       return;
     }
 
     let reconnectPromise = this.inflightConnectionPromises.get(to);
     if (!reconnectPromise) {
-      reconnectPromise = this.createNewOutgoingConnection(to).then((conn) => {
-        // only send handshake once per attempt
-        this.sendHandshake(to, conn);
-        return conn;
-      });
+      log?.info(`${this.clientId} -- attempting connection to ${to}`);
+
+      // check budget
+      const budgetConsumed = this.retryBudget.getBudgetConsumed(to);
+      if (!this.retryBudget.hasBudget(to)) {
+        const errMsg = `not attempting to connect to ${to}, retry budget exceeded (more than ${budgetConsumed} attempts in the last ${this.retryBudget.totalBudgetRestoreTime}ms)`;
+        log?.warn(`${this.clientId} -- ${errMsg}`);
+        this.protocolError(ProtocolError.RetriesExceeded, errMsg);
+        return;
+      }
+
+      let sleep = Promise.resolve();
+      const backoffMs = this.retryBudget.getBackoffMs(to);
+      if (backoffMs > 0) {
+        sleep = new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
+
+      this.retryBudget.consumeBudget(to);
+      reconnectPromise = sleep
+        .then(() => {
+          if (!canProceedWithConnection()) {
+            throw new Error('transport state is no longer open');
+          }
+        })
+        .then(() => this.createNewOutgoingConnection(to))
+        .then((conn) => {
+          if (!canProceedWithConnection()) {
+            log?.info(
+              `${this.clientId} -- transport state is no longer open, closing pre-handshake connection (id: ${conn.debugId}) to ${to}`,
+            );
+            conn.close();
+            throw new Error('transport state is no longer open');
+          }
+
+          // After a successful connection, we start restoring the budget
+          // so that the next time we try to connect, we don't hit the client
+          // with backoff forever.
+          this.retryBudget.startRestoringBudget(to);
+
+          // only send handshake once per attempt
+          this.sendHandshake(to, conn);
+          return conn;
+        });
       this.inflightConnectionPromises.set(to, reconnectPromise);
+    } else {
+      log?.info(
+        `${this.clientId} -- attempting connection to ${to} (reusing previous attempt)`,
+      );
     }
 
     try {
       await reconnectPromise;
     } catch (error: unknown) {
-      const errStr = coerceErrorString(error);
       this.inflightConnectionPromises.delete(to);
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      const shouldRetry = this.state === 'open' && this.tryReconnecting;
-      if (!shouldRetry) return;
+      const errStr = coerceErrorString(error);
 
-      // retry on failure
-      if (attempt >= this.options.retryAttemptsMax) {
-        const errMsg = `connection to ${to} failed after ${attempt} attempts (${errStr}), giving up`;
-        log?.error(`${this.clientId} -- ${errMsg}`);
-        this.protocolError(ProtocolError.RetriesExceeded, errMsg);
-        return;
+      if (!this.tryReconnecting || !canProceedWithConnection()) {
+        log?.warn(`${this.clientId} -- connection to ${to} failed (${errStr})`);
       } else {
-        // exponential backoff + jitter
-        const jitter = Math.floor(Math.random() * this.options.retryJitterMs);
-        const backoffMs = this.options.retryIntervalMs * 2 ** attempt + jitter;
-
         log?.warn(
-          `${this.clientId} -- connection to ${to} failed (${errStr}), trying again in ${backoffMs}ms`,
+          `${this.clientId} -- connection to ${to} failed (${errStr}), retrying`,
         );
-        setTimeout(() => void this.connect(to, attempt + 1), backoffMs);
+        return this.connect(to);
       }
     }
   }
@@ -637,9 +686,9 @@ export abstract class ClientTransport<
     conn.send(this.codec.toBuffer(requestMsg));
   }
 
-  protected onDisconnect(conn: ConnType, session: Session<ConnType>): void {
-    this.inflightConnectionPromises.delete(session.to);
-    super.onDisconnect(conn, session);
+  close() {
+    this.retryBudget.close();
+    super.close();
   }
 }
 
@@ -648,7 +697,10 @@ export abstract class ServerTransport<
 > extends Transport<ConnType> {
   constructor(
     clientId: TransportClientId,
-    providedOptions?: Partial<TransportOptions>,
+    providedOptions?: Omit<
+      Partial<ProvidedTransportOptions>,
+      'connectionRetryOptions'
+    >,
   ) {
     super(clientId, providedOptions);
     log?.info(
