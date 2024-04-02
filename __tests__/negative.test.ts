@@ -106,7 +106,7 @@ describe('should handle incompatabilities', async () => {
       },
       'client',
       {
-        connectionRetryOptions: { attemptCapacity: maxAttempts },
+        connectionRetryOptions: { attemptBudgetCapacity: maxAttempts },
       },
     );
     clientTransport.tryReconnecting = false;

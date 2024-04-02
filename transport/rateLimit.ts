@@ -9,7 +9,7 @@ import { TransportClientId } from './message';
  * The backoff is calculated via the following:
  *   backOff = min(jitter + {@link baseIntervalMs} * 2 ^ budget_consumed, {@link maxBackoffMs})
  *
- * We use a leaky bucket rate limit with a budget of {@link attemptCapacity} reconnection attempts.
+ * We use a leaky bucket rate limit with a budget of {@link attemptBudgetCapacity} reconnection attempts.
  * Budget only starts to restore after a successful handshake at a rate of one budget per {@link budgetRestoreIntervalMs}.
  */
 export interface ConnectionRetryOptions {
@@ -25,7 +25,6 @@ export interface ConnectionRetryOptions {
 
   /**
    * The maximum amount of time to wait before retrying a connection.
-   * This is the maximum that {@link budgetRestoreIntervalMs}
    * This does not include the jitter.
    */
   maxBackoffMs: number;
@@ -35,7 +34,7 @@ export interface ConnectionRetryOptions {
    * This persists across connections but starts restoring budget after a successful handshake.
    * The restoration interval depends on {@link budgetRestoreIntervalMs}
    */
-  attemptCapacity: number;
+  attemptBudgetCapacity: number;
 
   /**
    * After a successful connection attempt, how long to wait before we restore a single budget.
@@ -70,8 +69,10 @@ export class LeakyBucketRateLimit {
     return backoffMs + jitter;
   }
 
-  get drainageTimeMs() {
-    return this.options.budgetRestoreIntervalMs * this.options.attemptCapacity;
+  get totalBudgetRestoreTime() {
+    return (
+      this.options.budgetRestoreIntervalMs * this.options.attemptBudgetCapacity
+    );
   }
 
   consumeBudget(user: TransportClientId) {
@@ -85,7 +86,7 @@ export class LeakyBucketRateLimit {
   }
 
   hasBudget(user: TransportClientId) {
-    return this.getBudgetConsumed(user) < this.options.attemptCapacity;
+    return this.getBudgetConsumed(user) < this.options.attemptBudgetCapacity;
   }
 
   startRestoringBudget(user: TransportClientId) {

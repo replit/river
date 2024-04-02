@@ -59,7 +59,7 @@ const defaultClientTransportOptions: ClientTransportOptions = {
     baseIntervalMs: 250,
     maxJitterMs: 200,
     maxBackoffMs: 32_000,
-    attemptCapacity: 15,
+    attemptBudgetCapacity: 15,
     budgetRestoreIntervalMs: 200,
   },
   ...defaultTransportOptions,
@@ -614,7 +614,7 @@ export abstract class ClientTransport<
       // check budget
       const budgetConsumed = this.retryBudget.getBudgetConsumed(to);
       if (!this.retryBudget.hasBudget(to)) {
-        const errMsg = `not attempting to connect to ${to}, retry budget exceeded (more than ${budgetConsumed} attempts in the last ${this.retryBudget.drainageTimeMs}ms)`;
+        const errMsg = `not attempting to connect to ${to}, retry budget exceeded (more than ${budgetConsumed} attempts in the last ${this.retryBudget.totalBudgetRestoreTime}ms)`;
         log?.warn(`${this.clientId} -- ${errMsg}`);
         this.protocolError(ProtocolError.RetriesExceeded, errMsg);
         return;

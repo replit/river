@@ -6,7 +6,7 @@ import { describe, test, expect, vi } from 'vitest';
 
 describe('LeakyBucketRateLimit', () => {
   const options: ConnectionRetryOptions = {
-    attemptCapacity: 10,
+    attemptBudgetCapacity: 10,
     budgetRestoreIntervalMs: 1000,
     baseIntervalMs: 100,
     maxJitterMs: 50,
@@ -100,7 +100,7 @@ describe('LeakyBucketRateLimit', () => {
     const maxAttempts = 3;
     const rateLimit = new LeakyBucketRateLimit({
       ...options,
-      attemptCapacity: maxAttempts,
+      attemptBudgetCapacity: maxAttempts,
     });
     const user = 'user1';
 
