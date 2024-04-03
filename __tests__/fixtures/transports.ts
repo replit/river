@@ -22,7 +22,7 @@ import { WebSocketServerTransport } from '../../transport/impls/ws/server';
 export type ValidTransports = 'ws' | 'unix sockets' | 'node streams';
 export const transports: Array<{
   name: ValidTransports;
-  setup: (opts?: Partial<ProvidedTransportOptions>) => Promise<{
+  setup: (opts?: ProvidedTransportOptions) => Promise<{
     getClientTransport: (id: TransportClientId) => ClientTransport<Connection>;
     getServerTransport: () => ServerTransport<Connection>;
     simulatePhantomDisconnect: () => void;

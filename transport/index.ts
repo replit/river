@@ -1,6 +1,6 @@
 export { Transport, ClientTransport, ServerTransport } from './transport';
 export type {
-  ProvidedTransportOptions as ServerTransporOptions,
+  ProvidedTransportOptions as TransportOptions,
   ProvidedClientTransportOptions as ClientTransportOptions,
   TransportStatus,
 } from './transport';

@@ -10,7 +10,7 @@ export class WebSocketServerTransport extends ServerTransport<WebSocketConnectio
   constructor(
     wss: WebSocketServer,
     clientId: TransportClientId,
-    providedOptions?: Partial<ProvidedTransportOptions>,
+    providedOptions?: ProvidedTransportOptions,
   ) {
     super(clientId, providedOptions);
     this.wss = wss;

@@ -12,7 +12,7 @@ import { ValidTransports, transports } from './transports';
 interface TestMatrixEntry {
   transport: {
     name: string;
-    setup: (opts?: Partial<ProvidedTransportOptions>) => Promise<{
+    setup: (opts?: ProvidedTransportOptions) => Promise<{
       simulatePhantomDisconnect: () => void;
       getClientTransport: (
         id: TransportClientId,
