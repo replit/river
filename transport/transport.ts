@@ -46,22 +46,24 @@ const defaultTransportOptions: TransportOptions = {
   codec: NaiveJsonCodec,
 };
 
-export interface ProvidedClientTransportOptions
-  extends ProvidedTransportOptions {
+export type ProvidedClientTransportOptions = {
   connectionRetryOptions?: Partial<ConnectionRetryOptions>;
-}
-interface ClientTransportOptions
-  extends Required<ProvidedClientTransportOptions> {
+} & ProvidedTransportOptions;
+
+type ClientTransportOptions = SessionOptions & {
   connectionRetryOptions: ConnectionRetryOptions;
-}
+};
+
+const defaultConnectionRetryOptions: ConnectionRetryOptions = {
+  baseIntervalMs: 250,
+  maxJitterMs: 200,
+  maxBackoffMs: 32_000,
+  attemptBudgetCapacity: 15,
+  budgetRestoreIntervalMs: 200,
+};
+
 const defaultClientTransportOptions: ClientTransportOptions = {
-  connectionRetryOptions: {
-    baseIntervalMs: 250,
-    maxJitterMs: 200,
-    maxBackoffMs: 32_000,
-    attemptBudgetCapacity: 15,
-    budgetRestoreIntervalMs: 200,
-  },
+  connectionRetryOptions: defaultConnectionRetryOptions,
   ...defaultTransportOptions,
 };
 
@@ -697,10 +699,7 @@ export abstract class ServerTransport<
 > extends Transport<ConnType> {
   constructor(
     clientId: TransportClientId,
-    providedOptions?: Omit<
-      Partial<ProvidedTransportOptions>,
-      'connectionRetryOptions'
-    >,
+    providedOptions?: ProvidedTransportOptions,
   ) {
     super(clientId, providedOptions);
     log?.info(
