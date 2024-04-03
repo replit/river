@@ -7,7 +7,7 @@ export type {
   ProcErrors,
   ProcType,
 } from './services';
-export { serializeService, ServiceBuilder } from './services';
+export { ServiceSchema } from './services';
 export type {
   ValidProcType,
   PayloadType,
@@ -16,10 +16,8 @@ export type {
   UploadProcedure,
   SubscriptionProcedure,
   StreamProcedure,
-  Procedure,
 } from './procedures';
-export { buildServiceDefs } from './defs';
-export type { ServiceDefs } from './defs';
+export { Procedure } from './procedures';
 export { createClient } from './client';
 export type { ServerClient } from './client';
 export { createServer } from './server';

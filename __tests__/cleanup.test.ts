@@ -9,9 +9,9 @@ import {
 } from 'vitest';
 import { iterNext } from '../util/testHelpers';
 import {
-  SubscribableServiceConstructor,
-  TestServiceConstructor,
-  UploadableServiceConstructor,
+  SubscribableServiceSchema,
+  TestServiceSchema,
+  UploadableServiceSchema,
 } from './fixtures/services';
 import { createClient, createServer } from '../router';
 import {
@@ -21,7 +21,6 @@ import {
   waitFor,
   waitForTransportToFinish,
 } from './fixtures/cleanup';
-import { buildServiceDefs } from '../router/defs';
 import { testMatrix } from './fixtures/matrix';
 
 describe.each(testMatrix())(
@@ -36,8 +35,7 @@ describe.each(testMatrix())(
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
-      const server = createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, { test: TestServiceSchema });
       const client = createClient<typeof server>(
         clientTransport,
         serverTransport.clientId,
@@ -76,8 +74,7 @@ describe.each(testMatrix())(
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
-      const server = createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, { test: TestServiceSchema });
       const client = createClient<typeof server>(
         clientTransport,
         serverTransport.clientId,
@@ -116,8 +113,7 @@ describe.each(testMatrix())(
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
-      const server = createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, { test: TestServiceSchema });
       const client = createClient<typeof server>(
         clientTransport,
         serverTransport.clientId,
@@ -163,8 +159,7 @@ describe.each(testMatrix())(
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
-      const server = createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, { test: TestServiceSchema });
       const client = createClient<typeof server>(
         clientTransport,
         serverTransport.clientId,
@@ -231,8 +226,9 @@ describe.each(testMatrix())(
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      const serviceDefs = buildServiceDefs([SubscribableServiceConstructor()]);
-      const server = createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, {
+        subscribable: SubscribableServiceSchema,
+      });
       const client = createClient<typeof server>(
         clientTransport,
         serverTransport.clientId,
@@ -292,8 +288,9 @@ describe.each(testMatrix())(
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      const serviceDefs = buildServiceDefs([UploadableServiceConstructor()]);
-      const server = createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, {
+        uploadable: UploadableServiceSchema,
+      });
       const client = createClient<typeof server>(
         clientTransport,
         serverTransport.clientId,

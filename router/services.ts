@@ -1,38 +1,51 @@
 import { TObject, Type, TUnion } from '@sinclair/typebox';
-import { RiverError, RiverUncaughtSchema } from './result';
-import {
-  AnyProcedure,
-  PayloadType,
-  ProcListing,
-  Procedure,
-  ValidProcType,
-} from './procedures';
+import { RiverUncaughtSchema } from './result';
+import { Branded, ProcListing, Unbranded, AnyProcedure } from './procedures';
 
 /**
- * Represents a service with a name, state, and procedures.
- * This is not meant to be constructed directly, use the {@link ServiceBuilder} class instead.
+ * An instantiated service, probably from a {@link ServiceSchema}.
  *
- * @template Name The type of the service name.
- * @template State The type of the service state.
- * @template Procs The type of the service procedures.
+ * You shouldn't construct these directly, use {@link ServiceSchema} instead.
  */
 export interface Service<
-  Name extends string,
   State extends object,
-  // nested record (service listing contains services which have proc listings)
-  // this means we lose type specificity on our procedures here so we maintain it by using
-  // any on the default type
-  Procs extends ProcListing,
+  Procs extends ProcListing<State>,
 > {
-  name: Name;
-  state: State;
-  procedures: Procs;
+  readonly state: State;
+  readonly procedures: Procs;
 }
 
 /**
- * Represents a service with a name, state, and procedures.
+ * Represents any {@link Service} object.
  */
-export type AnyService = Service<string, object, ProcListing>;
+export type AnyService = Service<object, ProcListing>;
+
+/**
+ * Represents any {@link ServiceSchema} object.
+ */
+export type AnyServiceSchema = ServiceSchema<
+  object,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Record<string, AnyProcedure<any>>
+>;
+
+/**
+ * A dictionary of {@link Service}s, where the key is the service name.
+ */
+export type ServiceMap = Record<string, AnyService>;
+
+/**
+ * A dictionary of {@link ServiceSchema}s, where the key is the service name.
+ */
+export type ServiceSchemaMap = Record<string, AnyServiceSchema>;
+
+/**
+ * Takes a {@link ServiceSchemaMap} and returns a dictionary of instantiated
+ * services, i.e. a {@link ServiceMap}.
+ */
+export type InstantiatedServiceSchemaMap<T extends ServiceSchemaMap> = {
+  [K in keyof T]: ReturnType<T[K]['instantiate']>;
+};
 
 /**
  * Helper to get the type definition for a specific handler of a procedure in a service.
@@ -107,132 +120,195 @@ export type ProcType<
 > = S['procedures'][ProcName]['type'];
 
 /**
- * Serializes a service object into its corresponding JSON Schema Draft 7 type.
- * @param {AnyService} s - The service object to serialize.
- * @returns A plain object representing the serialized service.
+ * A list of procedures where every procedure is "branded", as-in the procedure
+ * was created via the {@link Procedure} constructors.
  */
-export function serializeService(s: AnyService): object {
-  return {
-    name: s.name,
-    state: s.state,
-    procedures: Object.fromEntries(
-      Object.entries<AnyProcedure>(s.procedures).map(([procName, procDef]) => [
-        procName,
-        {
-          input: Type.Strict(procDef.input),
-          output: Type.Strict(procDef.output),
-          // Only add the `errors` field if it is non-never.
-          ...('errors' in procDef
-            ? {
-                errors: Type.Strict(procDef.errors),
-              }
-            : {}),
-          type: procDef.type,
-          // Only add the `init` field if the type declares it.
-          ...('init' in procDef
-            ? {
-                init: Type.Strict(procDef.init),
-              }
-            : {}),
-        },
-      ]),
-    ),
-  };
-}
+type BrandedProcListing<State extends object> = Record<
+  string,
+  Branded<AnyProcedure<State>>
+>;
 
 /**
- * A builder class for creating River Services.
- * You must call the finalize method to get the finalized schema for use in a service router.
- * @template T The type of the service.
+ * The schema for a {@link Service}. This is used to define a service, specifically
+ * its initial state and procedures.
+ *
+ * Use the `define` static method to create a schema, and then use the `instantiate`
+ * method to create a {@link Service}. Usually, instantiation is done for you, so
+ * you shouldn't worry about it.
+ *
+ * When defining procedures, use the {@link Procedure} constructors to create them.
+ *
+ * @example
+ * A service with no state:
+ * ```
+ * const service = ServiceSchema.define({
+ *   add: Procedure.rpc({
+ *     input: Type.Object({ a: Type.Number(), b: Type.Number() }),
+ *     output: Type.Object({ result: Type.Number() }),
+ *     async handler(ctx, input) {
+ *       return Ok({ result: input.a + input.b });
+ *     }
+ *   }),
+ * });
+ *```
+ * @example
+ * A service with state:
+ * ```
+ * const service = ServiceSchema.define(
+ *   () => ({ count: 0 }),
+ *   {
+ *     increment: Procedure.rpc({
+ *       input: Type.Object({ amount: Type.Number() }),
+ *       output: Type.Object({ current: Type.Number() }),
+ *       async handler(ctx, input) {
+ *         ctx.state.count += input.amount;
+ *         return Ok({ current: ctx.state.count });
+ *       }
+ *     }),
+ *   },
+ * );
+ * ```
+ *
  */
-export class ServiceBuilder<T extends Service<string, object, ProcListing>> {
-  private readonly schema: T;
-  private constructor(schema: T) {
-    this.schema = schema;
+export class ServiceSchema<
+  State extends object,
+  Procs extends ProcListing<State>,
+> {
+  /**
+   * Factory function for creating a fresh state.
+   */
+  protected readonly initState: () => State;
+
+  /**
+   * The procedures for this service.
+   */
+  readonly procedures: Procs;
+
+  /**
+   * @param initState - A factory function for creating a fresh state.
+   * @param procedures - The procedures for this service.
+   */
+  protected constructor(initState: () => State, procedures: Procs) {
+    this.initState = initState;
+    this.procedures = procedures;
   }
 
   /**
-   * Finalizes the schema for the service.
+   * Creates a new {@link ServiceSchema} with the given state initializer and procedures.
+   *
+   * All procedures must be created with the {@link Procedure} constructors.
+   *
+   * NOTE: There is an overload that lets you just provide the procedures alone if your
+   * service has no state.
+   *
+   * @param initState - A factory function for creating a fresh state.
+   * @param procedures - The procedures for this service.
+   *
+   * @example
+   * ```
+   * const service = ServiceSchema.define(
+   *   () => ({ count: 0 }),
+   *   {
+   *     increment: Procedure.rpc({
+   *       input: Type.Object({ amount: Type.Number() }),
+   *       output: Type.Object({ current: Type.Number() }),
+   *       async handler(ctx, input) {
+   *         ctx.state.count += input.amount;
+   *         return Ok({ current: ctx.state.count });
+   *       }
+   *     }),
+   *   },
+   * );
+   * ```
    */
-  finalize() {
-    return Object.freeze(this.schema);
+  static define<State extends object, Procs extends BrandedProcListing<State>>(
+    initState: () => State,
+    procedures: Procs,
+  ): ServiceSchema<State, { [K in keyof Procs]: Unbranded<Procs[K]> }>;
+  /**
+   * Creates a new {@link ServiceSchema} with the given procedures.
+   *
+   * All procedures must be created with the {@link Procedure} constructors.
+   *
+   * NOTE: There is an overload that lets you provide the state initializer as well,
+   * if your service has state.
+   *
+   * @param procedures - The procedures for this service.
+   *
+   * @example
+   * ```
+   * const service = ServiceSchema.define({
+   *   add: Procedure.rpc({
+   *     input: Type.Object({ a: Type.Number(), b: Type.Number() }),
+   *     output: Type.Object({ result: Type.Number() }),
+   *     async handler(ctx, input) {
+   *       return Ok({ result: input.a + input.b });
+   *     }
+   *   }),
+   * });
+   */
+  static define<Procs extends BrandedProcListing<Record<string, never>>>(
+    procedures: Procs,
+  ): ServiceSchema<
+    Record<string, never>,
+    { [K in keyof Procs]: Unbranded<Procs[K]> }
+  >;
+  // actual implementation
+  static define(
+    stateOrProcedures: (() => object) | BrandedProcListing<object>,
+    procedures?: BrandedProcListing<object>,
+  ): ServiceSchema<object, ProcListing> {
+    if (typeof stateOrProcedures === 'function') {
+      if (!procedures) {
+        throw new Error('Expected procedures to be defined');
+      }
+
+      return new ServiceSchema(() => stateOrProcedures(), procedures);
+    }
+
+    return new ServiceSchema(() => ({}), stateOrProcedures);
   }
 
   /**
-   * Sets the initial state for the service.
-   * @template InitState The type of the initial state.
-   * @param {InitState} state The initial state for the service.
-   * @returns {ServiceBuilder<{ name: T['name']; state: InitState; procedures: T['procedures']; }>} A new ServiceBuilder instance with the updated schema.
+   * Serializes this schema's procedures into a plain object that is JSON compatible.
    */
-  initialState<InitState extends T['state']>(
-    state: InitState,
-  ): ServiceBuilder<{
-    name: T['name'];
-    state: InitState;
-    procedures: T['procedures'];
-  }> {
-    return new ServiceBuilder({
-      ...this.schema,
-      state,
-    });
-  }
-
-  /**
-   * Defines a new procedure for the service.
-   * @param {ProcName} procName The name of the procedure.
-   * @param {Procedure<T['state'], Ty, I, O, E, Init>} procDef The definition of the procedure.
-   * @returns {ServiceBuilder<{ name: T['name']; state: T['state']; procedures: T['procedures'] & { [k in ProcName]: Procedure<T['state'], Ty, I, O, E, Init>; }; }>} A new ServiceBuilder instance with the updated schema.
-   */
-  defineProcedure<
-    ProcName extends string,
-    Ty extends ValidProcType,
-    I extends PayloadType,
-    O extends PayloadType,
-    E extends RiverError,
-    Init extends PayloadType | null = null,
-  >(
-    procName: ProcName,
-    procDef: Procedure<T['state'], Ty, I, O, E, Init>,
-  ): ServiceBuilder<{
-    name: T['name'];
-    state: T['state'];
-    procedures: T['procedures'] & {
-      [k in ProcName]: Procedure<T['state'], Ty, I, O, E, Init>;
+  serialize(): object {
+    return {
+      procedures: Object.fromEntries(
+        Object.entries(this.procedures).map(([procName, procDef]) => [
+          procName,
+          {
+            input: Type.Strict(procDef.input),
+            output: Type.Strict(procDef.output),
+            // Only add the `errors` field if it is non-never.
+            ...('errors' in procDef
+              ? {
+                  errors: Type.Strict(procDef.errors),
+                }
+              : {}),
+            type: procDef.type,
+            // Only add the `init` field if the type declares it.
+            ...('init' in procDef
+              ? {
+                  init: Type.Strict(procDef.init),
+                }
+              : {}),
+          },
+        ]),
+      ),
     };
-  }> {
-    type ProcListing = {
-      [k in ProcName]: Procedure<T['state'], Ty, I, O, E, Init>;
-    };
-    const newProcedure = { [procName]: procDef } as ProcListing;
-    const procedures = {
-      ...this.schema.procedures,
-      ...newProcedure,
-    } as {
-      [Key in keyof (T['procedures'] & ProcListing)]: (T['procedures'] &
-        ProcListing)[Key];
-    };
-    return new ServiceBuilder({
-      ...this.schema,
-      procedures,
-    });
   }
 
   /**
-   * Creates a new instance of ServiceBuilder.
-   * @param {Name} name The name of the service.
-   * @returns {ServiceBuilder<{ name: Name; state: {}; procedures: {}; }>} A new instance of ServiceBuilder.
+   * Instantiates this schema into a {@link Service} object.
+   *
+   * You probably don't need this, usually the River server will handle this
+   * for you.
    */
-  static create<Name extends string>(
-    name: Name,
-  ): ServiceBuilder<{
-    name: Name;
-    state: object;
-    procedures: ProcListing;
-  }> {
-    return new ServiceBuilder({
-      name,
-      state: {},
-      procedures: {},
+  instantiate(): Service<State, Procs> {
+    return Object.freeze({
+      state: this.initState(),
+      procedures: this.procedures,
     });
   }
 }

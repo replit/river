@@ -13,8 +13,8 @@ import { BinaryCodec } from '../codec';
 import { Value } from '@sinclair/typebox/value';
 import { OpaqueTransportMessageSchema } from '../transport';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
-import { buildServiceDefs, createClient, createServer } from '../router';
-import { TestServiceConstructor } from './fixtures/services';
+import { createClient, createServer } from '../router';
+import { TestServiceSchema } from './fixtures/services';
 import { testFinishesCleanly } from './fixtures/cleanup';
 import { UnixDomainSocketServerTransport } from '../transport/impls/uds/server';
 import { MessageFramer } from '../transport/transforms/messageFraming';
@@ -68,8 +68,7 @@ test('ws <-> uds proxy works', async () => {
     'uds',
     { codec: BinaryCodec },
   );
-  const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
-  const server = createServer(serverTransport, serviceDefs);
+  const server = createServer(serverTransport, { test: TestServiceSchema });
   const clientTransport = new WebSocketClientTransport(
     () => Promise.resolve(createLocalWebSocketClient(port)),
     'ws',

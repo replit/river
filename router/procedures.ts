@@ -1,7 +1,17 @@
 import { TObject, Static, TUnion } from '@sinclair/typebox';
 import type { Pushable } from 'it-pushable';
 import { ServiceContextWithTransportInfo } from './context';
-import { Result, RiverError } from './result';
+import { Result, RiverError, RiverUncaughtSchema } from './result';
+
+/**
+ * Brands a type to prevent it from being directly constructed.
+ */
+export type Branded<T> = T & { readonly __BRAND_DO_NOT_USE: unique symbol };
+
+/**
+ * Unbrands a {@link Branded} type.
+ */
+export type Unbranded<T> = T extends Branded<infer U> ? U : never;
 
 /**
  * The valid {@link Procedure} types. The `stream` and `upload` types can optionally have a
@@ -190,12 +200,12 @@ export type Procedure<
 );
 
 /**
- * Represents any {@link Procedure} type.
+ * Represents an unknown, but valid, {@link Procedure} type.
  *
  * @template State - The context state object. You can provide this to constrain
  *                   the type of procedures.
  */
-export type AnyProcedure<State = object> = Procedure<
+export type UnknownProcedure<State = object> = Procedure<
   State,
   ValidProcType,
   PayloadType,
@@ -205,9 +215,290 @@ export type AnyProcedure<State = object> = Procedure<
 >;
 
 /**
+ * Represents _any_ {@link Procedure}, leaving almost the entirety of the
+ * procedure typed as `any`. This is useful when you need to prevent TypeScript
+ * from applying too strict of a type to a procedure.
+ *
+ * @template State - The context state object. You can provide this to constrain
+ *                   the type of procedures.
+ */
+// prettier-ignore
+export type AnyProcedure<State = object> =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Procedure<State, ValidProcType, any, any, any, any>
+
+/**
  * Represents a map of {@link Procedure}s.
  *
  * @template State - The context state object. You can provide this to constrain
  *                   the type of procedures.
  */
-export type ProcListing<State = object> = Record<string, AnyProcedure<State>>;
+export type ProcListing<State = object> = Record<
+  string,
+  UnknownProcedure<State>
+>;
+
+type UncaughtSchema = typeof RiverUncaughtSchema;
+
+// typescript is funky so with these upcoming procedure constructors, the overloads
+// which handle the `init` case _must_ come first, otherwise the `init` property
+// is not recognized as optional, for some reason
+
+/**
+ * Creates an {@link RPCProcedure}.
+ */
+// signature: default errors
+function rpc<State, I extends PayloadType, O extends PayloadType>(def: {
+  input: I;
+  output: O;
+  errors?: never;
+  handler: RPCProcedure<State, I, O, UncaughtSchema>['handler'];
+}): Branded<RPCProcedure<State, I, O, UncaughtSchema>>;
+
+// signature: explicit errors
+function rpc<
+  State,
+  I extends PayloadType,
+  O extends PayloadType,
+  E extends RiverError,
+>(def: {
+  input: I;
+  output: O;
+  errors: E;
+  handler: RPCProcedure<State, I, O, E>['handler'];
+}): Branded<RPCProcedure<State, I, O, E>>;
+
+// implementation
+function rpc({
+  input,
+  output,
+  errors = RiverUncaughtSchema,
+  handler,
+}: {
+  input: PayloadType;
+  output: PayloadType;
+  errors?: RiverError;
+  handler: RPCProcedure<
+    object,
+    PayloadType,
+    PayloadType,
+    UncaughtSchema
+  >['handler'];
+}) {
+  return { type: 'rpc', input, output, errors, handler };
+}
+
+/**
+ * Creates an {@link UploadProcedure}, optionally with an initialization message.
+ */
+// signature: init with default errors
+function upload<
+  State,
+  I extends PayloadType,
+  O extends PayloadType,
+  Init extends PayloadType,
+>(def: {
+  init: Init;
+  input: I;
+  output: O;
+  errors?: never;
+  handler: UploadProcedure<State, I, O, UncaughtSchema, Init>['handler'];
+}): Branded<UploadProcedure<State, I, O, UncaughtSchema, Init>>;
+
+// signature: init with explicit errors
+function upload<
+  State,
+  I extends PayloadType,
+  O extends PayloadType,
+  E extends RiverError,
+  Init extends PayloadType,
+>(def: {
+  init: Init;
+  input: I;
+  output: O;
+  errors: E;
+  handler: UploadProcedure<State, I, O, E, Init>['handler'];
+}): Branded<UploadProcedure<State, I, O, E, Init>>;
+
+// signature: no init with default errors
+function upload<State, I extends PayloadType, O extends PayloadType>(def: {
+  input: I;
+  output: O;
+  errors?: never;
+  handler: UploadProcedure<State, I, O, UncaughtSchema>['handler'];
+}): Branded<UploadProcedure<State, I, O, UncaughtSchema>>;
+
+// signature: no init with explicit errors
+function upload<
+  State,
+  I extends PayloadType,
+  O extends PayloadType,
+  E extends RiverError,
+>(def: {
+  input: I;
+  output: O;
+  errors: E;
+  handler: UploadProcedure<State, I, O, E>['handler'];
+}): Branded<UploadProcedure<State, I, O, E>>;
+
+// implementation
+function upload({
+  init,
+  input,
+  output,
+  errors = RiverUncaughtSchema,
+  handler,
+}: {
+  init?: PayloadType | null;
+  input: PayloadType;
+  output: PayloadType;
+  errors?: RiverError;
+  handler: UploadProcedure<
+    unknown,
+    PayloadType,
+    PayloadType,
+    UncaughtSchema,
+    PayloadType | null
+  >['handler'];
+}) {
+  return init !== undefined && init !== null
+    ? { type: 'upload', init, input, output, errors, handler }
+    : { type: 'upload', input, output, errors, handler };
+}
+
+/**
+ * Creates a {@link SubscriptionProcedure}.
+ */
+// signature: default errors
+function subscription<
+  State,
+  I extends PayloadType,
+  O extends PayloadType,
+>(def: {
+  input: I;
+  output: O;
+  errors?: never;
+  handler: SubscriptionProcedure<State, I, O, UncaughtSchema>['handler'];
+}): Branded<SubscriptionProcedure<State, I, O, UncaughtSchema>>;
+
+// signature: explicit errors
+function subscription<
+  State,
+  I extends PayloadType,
+  O extends PayloadType,
+  E extends RiverError,
+>(def: {
+  input: I;
+  output: O;
+  errors: E;
+  handler: SubscriptionProcedure<State, I, O, E>['handler'];
+}): Branded<SubscriptionProcedure<State, I, O, E>>;
+
+// implementation
+function subscription({
+  input,
+  output,
+  errors = RiverUncaughtSchema,
+  handler,
+}: {
+  input: PayloadType;
+  output: PayloadType;
+  errors?: RiverError;
+  handler: SubscriptionProcedure<
+    object,
+    PayloadType,
+    PayloadType,
+    UncaughtSchema
+  >['handler'];
+}) {
+  return { type: 'subscription', input, output, errors, handler };
+}
+
+/**
+ * Creates a {@link StreamProcedure}, optionally with an initialization message.
+ */
+// signature: init with default errors
+function stream<
+  State,
+  I extends PayloadType,
+  O extends PayloadType,
+  Init extends PayloadType,
+>(def: {
+  init: Init;
+  input: I;
+  output: O;
+  errors?: never;
+  handler: StreamProcedure<State, I, O, UncaughtSchema, Init>['handler'];
+}): Branded<StreamProcedure<State, I, O, UncaughtSchema, Init>>;
+
+// signature: init with explicit errors
+function stream<
+  State,
+  I extends PayloadType,
+  O extends PayloadType,
+  E extends RiverError,
+  Init extends PayloadType,
+>(def: {
+  init: Init;
+  input: I;
+  output: O;
+  errors: E;
+  handler: StreamProcedure<State, I, O, E, Init>['handler'];
+}): Branded<StreamProcedure<State, I, O, E, Init>>;
+
+// signature: no init with default errors
+function stream<State, I extends PayloadType, O extends PayloadType>(def: {
+  input: I;
+  output: O;
+  errors?: never;
+  handler: StreamProcedure<State, I, O, UncaughtSchema>['handler'];
+}): Branded<StreamProcedure<State, I, O, UncaughtSchema>>;
+
+// signature: no init with explicit errors
+function stream<
+  State,
+  I extends PayloadType,
+  O extends PayloadType,
+  E extends RiverError,
+>(def: {
+  input: I;
+  output: O;
+  errors: E;
+  handler: StreamProcedure<State, I, O, E>['handler'];
+}): Branded<StreamProcedure<State, I, O, E>>;
+
+// implementation
+function stream({
+  init,
+  input,
+  output,
+  errors = RiverUncaughtSchema,
+  handler,
+}: {
+  init?: PayloadType | null;
+  input: PayloadType;
+  output: PayloadType;
+  errors?: RiverError;
+  handler: StreamProcedure<
+    unknown,
+    PayloadType,
+    PayloadType,
+    UncaughtSchema,
+    PayloadType | null
+  >['handler'];
+}) {
+  return init !== undefined && init !== null
+    ? { type: 'stream', init, input, output, errors, handler }
+    : { type: 'stream', input, output, errors, handler };
+}
+
+/**
+ * Holds the {@link Procedure} creation functions. Use these to create
+ * procedures for services. You aren't allowed to create procedures directly.
+ */
+export const Procedure = {
+  rpc,
+  upload,
+  subscription,
+  stream,
+};

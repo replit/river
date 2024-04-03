@@ -7,6 +7,7 @@ import {
   HEARTBEAT_INTERVAL_MS,
   SESSION_DISCONNECT_GRACE_MS,
 } from '../../transport/session';
+import { ServiceSchemaMap } from '../../router/services';
 
 const waitUntilOptions = {
   timeout: 250, // these are all local connections so anything above 250ms is sus
@@ -90,7 +91,7 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
   );
 }
 
-export async function ensureServerIsClean(s: Server<unknown>) {
+export async function ensureServerIsClean(s: Server<ServiceSchemaMap>) {
   return waitFor(() =>
     expect(
       s.streams,
@@ -106,7 +107,7 @@ export async function testFinishesCleanly({
 }: Partial<{
   clientTransports: Array<Transport<Connection>>;
   serverTransport: Transport<Connection>;
-  server: Server<unknown>;
+  server: Server<ServiceSchemaMap>;
 }>) {
   log?.info('*** end of test cleanup ***');
   vi.useFakeTimers({ shouldAdvanceTime: true });

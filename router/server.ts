@@ -1,7 +1,11 @@
 import { Static } from '@sinclair/typebox';
 import { ServerTransport, Transport } from '../transport/transport';
-import { AnyProcedure, PayloadType } from './procedures';
-import { AnyService } from './services';
+import { UnknownProcedure, PayloadType } from './procedures';
+import {
+  AnyService,
+  InstantiatedServiceSchemaMap,
+  ServiceSchemaMap,
+} from './services';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
 import {
@@ -27,7 +31,6 @@ import {
   UNCAUGHT_ERROR,
 } from './result';
 import { EventMap } from '../transport/events';
-import { ServiceDefs } from './defs';
 import { Connection } from '../transport';
 import { coerceErrorString } from '../util/stringify';
 
@@ -35,8 +38,8 @@ import { coerceErrorString } from '../util/stringify';
  * Represents a server with a set of services. Use {@link createServer} to create it.
  * @template Services - The type of services provided by the server.
  */
-export interface Server<Services> {
-  services: Services;
+export interface Server<Services extends ServiceSchemaMap> {
+  services: InstantiatedServiceSchemaMap<Services>;
   streams: Map<string, ProcStream>;
   close(): Promise<void>;
 }
@@ -53,9 +56,9 @@ interface ProcStream {
   };
 }
 
-class RiverServer<Services extends ServiceDefs> {
+class RiverServer<Services extends ServiceSchemaMap> {
   transport: Transport<Connection>;
-  services: Services;
+  services: InstantiatedServiceSchemaMap<Services>;
   contextMap: Map<AnyService, ServiceContextWithState<object>>;
   // map of streamId to ProcStream
   streamMap: Map<string, ProcStream>;
@@ -68,17 +71,23 @@ class RiverServer<Services extends ServiceDefs> {
     services: Services,
     extendedContext?: Omit<ServiceContext, 'state'>,
   ) {
-    this.transport = transport;
-    this.services = services;
+    const instances: Record<string, AnyService> = {};
+
+    this.services = instances as InstantiatedServiceSchemaMap<Services>;
     this.contextMap = new Map();
-    this.disconnectedSessions = new Set();
-    for (const service of Object.values(services)) {
-      this.contextMap.set(service, {
+
+    for (const [name, service] of Object.entries(services)) {
+      const instance = service.instantiate();
+      instances[name] = instance;
+
+      this.contextMap.set(instance, {
         ...extendedContext,
-        state: service.state,
+        state: instance.state,
       });
     }
 
+    this.transport = transport;
+    this.disconnectedSessions = new Set();
     this.streamMap = new Map();
     this.clientStreams = new Map();
     this.transport.addEventListener('message', this.onMessage);
@@ -354,7 +363,7 @@ class RiverServer<Services extends ServiceDefs> {
           `${
             this.transport.clientId
           } -- got request for invalid procedure type ${
-            (procedure as AnyProcedure).type
+            (procedure as UnknownProcedure).type
           } at ${message.serviceName}.${message.procedureName}`,
         );
         return;
@@ -423,7 +432,7 @@ class RiverServer<Services extends ServiceDefs> {
   private getContext(service: AnyService) {
     const context = this.contextMap.get(service);
     if (!context) {
-      const err = `${this.transport.clientId} -- no context found for ${service.name}`;
+      const err = `${this.transport.clientId} -- no context found for service`;
       log?.error(err);
       throw new Error(err);
     }
@@ -454,7 +463,7 @@ class RiverServer<Services extends ServiceDefs> {
  * @param extendedContext - An optional object containing additional context to be passed to all services.
  * @returns A promise that resolves to a server instance with the registered services.
  */
-export function createServer<Services extends ServiceDefs>(
+export function createServer<Services extends ServiceSchemaMap>(
   transport: ServerTransport<Connection>,
   services: Services,
   extendedContext?: Omit<ServiceContext, 'state'>,

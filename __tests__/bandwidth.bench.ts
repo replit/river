@@ -1,9 +1,8 @@
 import { afterAll, assert, bench, describe } from 'vitest';
 import { waitForMessage } from '../util/testHelpers';
-import { TestServiceConstructor } from './fixtures/services';
+import { TestServiceSchema } from './fixtures/services';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
-import { buildServiceDefs } from '../router/defs';
 import { transports } from './fixtures/transports';
 import { nanoid } from 'nanoid';
 
@@ -26,8 +25,7 @@ describe('bandwidth', async () => {
 
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
-    const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
-    const server = createServer(serverTransport, serviceDefs);
+    const server = createServer(serverTransport, { test: TestServiceSchema });
     const client = createClient<typeof server>(
       clientTransport,
       serverTransport.clientId,

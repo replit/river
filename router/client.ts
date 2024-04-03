@@ -7,6 +7,7 @@ import {
   ProcInput,
   ProcOutput,
   ProcType,
+  ServiceSchemaMap,
 } from './services';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
@@ -22,7 +23,6 @@ import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
-import { ServiceDefs } from './defs';
 import { Connection } from '../transport';
 import { log } from '../logging';
 
@@ -128,7 +128,7 @@ type ServiceClient<Router extends AnyService> = {
  * Defines a type that represents a client for a server with a set of services.
  * @template Srv - The type of the server.
  */
-export type ServerClient<Srv extends Server<ServiceDefs>> = {
+export type ServerClient<Srv extends Server<ServiceSchemaMap>> = {
   [SvcName in keyof Srv['services']]: ServiceClient<Srv['services'][SvcName]>;
 };
 
@@ -176,7 +176,7 @@ function _createRecursiveProxy(
  * @param {Transport} transport - The transport to use for communication.
  * @returns The client for the server.
  */
-export const createClient = <Srv extends Server<ServiceDefs>>(
+export const createClient = <Srv extends Server<ServiceSchemaMap>>(
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   eagerlyConnect = true,
