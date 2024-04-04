@@ -1,6 +1,6 @@
 import { TObject, Type, TUnion } from '@sinclair/typebox';
 import { RiverUncaughtSchema } from './result';
-import { Branded, ProcListing, Unbranded, AnyProcedure } from './procedures';
+import { Branded, ProcedureMap, Unbranded, AnyProcedure } from './procedures';
 
 /**
  * An instantiated service, probably from a {@link ServiceSchema}.
@@ -9,7 +9,7 @@ import { Branded, ProcListing, Unbranded, AnyProcedure } from './procedures';
  */
 export interface Service<
   State extends object,
-  Procs extends ProcListing<State>,
+  Procs extends ProcedureMap<State>,
 > {
   readonly state: State;
   readonly procedures: Procs;
@@ -18,20 +18,12 @@ export interface Service<
 /**
  * Represents any {@link Service} object.
  */
-export type AnyService = Service<object, ProcListing>;
+export type AnyService = Service<object, ProcedureMap>;
 
 /**
  * Represents any {@link ServiceSchema} object.
  */
-export type AnyServiceSchema = ServiceSchema<
-  object,
-  Record<string, AnyProcedure>
->;
-
-/**
- * A dictionary of {@link Service}s, where the key is the service name.
- */
-export type ServiceMap = Record<string, AnyService>;
+export type AnyServiceSchema = ServiceSchema<object, ProcedureMap>;
 
 /**
  * A dictionary of {@link ServiceSchema}s, where the key is the service name.
@@ -40,10 +32,12 @@ export type ServiceSchemaMap = Record<string, AnyServiceSchema>;
 
 /**
  * Takes a {@link ServiceSchemaMap} and returns a dictionary of instantiated
- * services, i.e. a {@link ServiceMap}.
+ * services.
  */
 export type InstantiatedServiceSchemaMap<T extends ServiceSchemaMap> = {
-  [K in keyof T]: ReturnType<T[K]['instantiate']>;
+  [K in keyof T]: T[K] extends ServiceSchema<infer S, infer P>
+    ? Service<S, P>
+    : never;
 };
 
 /**
@@ -122,10 +116,7 @@ export type ProcType<
  * A list of procedures where every procedure is "branded", as-in the procedure
  * was created via the {@link Procedure} constructors.
  */
-type BrandedProcListing<State extends object> = Record<
-  string,
-  Branded<AnyProcedure<State>>
->;
+type BrandedProcedureMap<State> = Record<string, Branded<AnyProcedure<State>>>;
 
 /**
  * The schema for a {@link Service}. This is used to define a service, specifically
@@ -171,7 +162,7 @@ type BrandedProcListing<State extends object> = Record<
  */
 export class ServiceSchema<
   State extends object,
-  Procs extends ProcListing<State>,
+  Procedures extends ProcedureMap<State>,
 > {
   /**
    * Factory function for creating a fresh state.
@@ -181,13 +172,13 @@ export class ServiceSchema<
   /**
    * The procedures for this service.
    */
-  readonly procedures: Procs;
+  readonly procedures: Procedures;
 
   /**
    * @param initState - A factory function for creating a fresh state.
    * @param procedures - The procedures for this service.
    */
-  protected constructor(initState: () => State, procedures: Procs) {
+  protected constructor(initState: () => State, procedures: Procedures) {
     this.initState = initState;
     this.procedures = procedures;
   }
@@ -220,10 +211,16 @@ export class ServiceSchema<
    * );
    * ```
    */
-  static define<State extends object, Procs extends BrandedProcListing<State>>(
+  static define<
+    State extends object,
+    Procedures extends BrandedProcedureMap<State>,
+  >(
     initState: () => State,
-    procedures: Procs,
-  ): ServiceSchema<State, { [K in keyof Procs]: Unbranded<Procs[K]> }>;
+    procedures: Procedures,
+  ): ServiceSchema<
+    State,
+    { [K in keyof Procedures]: Unbranded<Procedures[K]> }
+  >;
   /**
    * Creates a new {@link ServiceSchema} with the given procedures.
    *
@@ -246,17 +243,17 @@ export class ServiceSchema<
    *   }),
    * });
    */
-  static define<Procs extends BrandedProcListing<Record<string, never>>>(
-    procedures: Procs,
+  static define<Procedures extends BrandedProcedureMap<Record<string, never>>>(
+    procedures: Procedures,
   ): ServiceSchema<
     Record<string, never>,
-    { [K in keyof Procs]: Unbranded<Procs[K]> }
+    { [K in keyof Procedures]: Unbranded<Procedures[K]> }
   >;
   // actual implementation
   static define(
-    stateOrProcedures: (() => object) | BrandedProcListing<object>,
-    procedures?: BrandedProcListing<object>,
-  ): ServiceSchema<object, ProcListing> {
+    stateOrProcedures: (() => object) | BrandedProcedureMap<object>,
+    procedures?: BrandedProcedureMap<object>,
+  ): ServiceSchema<object, ProcedureMap> {
     if (typeof stateOrProcedures === 'function') {
       if (!procedures) {
         throw new Error('Expected procedures to be defined');
@@ -304,7 +301,7 @@ export class ServiceSchema<
    * You probably don't need this, usually the River server will handle this
    * for you.
    */
-  instantiate(): Service<State, Procs> {
+  instantiate(): Service<State, Procedures> {
     return Object.freeze({
       state: this.initState(),
       procedures: this.procedures,

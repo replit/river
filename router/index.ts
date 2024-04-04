@@ -11,7 +11,7 @@ export { ServiceSchema } from './services';
 export type {
   ValidProcType,
   PayloadType,
-  ProcListing,
+  ProcedureMap,
   ProcedureResult,
   RPCProcedure,
   UploadProcedure,

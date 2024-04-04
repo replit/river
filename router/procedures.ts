@@ -228,7 +228,7 @@ export type AnyProcedure<State = object> = Procedure<
  * @template State - The context state object. You can provide this to constrain
  *                   the type of procedures.
  */
-export type ProcListing<State = object> = Record<string, AnyProcedure<State>>;
+export type ProcedureMap<State = object> = Record<string, AnyProcedure<State>>;
 
 // typescript is funky so with these upcoming procedure constructors, the overloads
 // which handle the `init` case _must_ come first, otherwise the `init` property
