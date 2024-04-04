@@ -207,6 +207,7 @@ export type Procedure<
   : Ty extends 'stream' ? StreamProcedure<State, I, O, E>
   : never
 );
+
 /**
  * Represents any {@link Procedure} type.
  *
