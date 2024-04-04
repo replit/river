@@ -33,7 +33,14 @@ export type ValidProcType =
  */
 export type PayloadType = TObject | TUnion<Array<TObject>>;
 
-type UncaughtSchema = typeof RiverUncaughtSchema;
+/**
+ * Represents results from a {@link Procedure}. Might come from inside a stream or
+ * from a single message.
+ */
+export type ProcedureResult<
+  O extends PayloadType,
+  E extends RiverError,
+> = Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>;
 
 /**
  * Procedure for a single message in both directions (1:1).
@@ -56,7 +63,7 @@ export interface RPCProcedure<
   handler(
     context: ServiceContextWithTransportInfo<State>,
     input: Static<I>,
-  ): Promise<Result<Static<O>, Static<E | UncaughtSchema>>>;
+  ): Promise<ProcedureResult<O, E>>;
 }
 
 /**
@@ -86,7 +93,7 @@ export type UploadProcedure<
         context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
         input: AsyncIterableIterator<Static<I>>,
-      ): Promise<Result<Static<O>, Static<E | UncaughtSchema>>>;
+      ): Promise<ProcedureResult<O, E>>;
     }
   : {
       type: 'upload';
@@ -96,7 +103,7 @@ export type UploadProcedure<
       handler(
         context: ServiceContextWithTransportInfo<State>,
         input: AsyncIterableIterator<Static<I>>,
-      ): Promise<Result<Static<O>, Static<E | UncaughtSchema>>>;
+      ): Promise<ProcedureResult<O, E>>;
     };
 
 /**
@@ -120,7 +127,7 @@ export interface SubscriptionProcedure<
   handler(
     context: ServiceContextWithTransportInfo<State>,
     input: Static<I>,
-    output: Pushable<Result<Static<O>, Static<E | UncaughtSchema>>>,
+    output: Pushable<ProcedureResult<O, E>>,
   ): Promise<(() => void) | void>;
 }
 
@@ -151,7 +158,7 @@ export type StreamProcedure<
         context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
         input: AsyncIterableIterator<Static<I>>,
-        output: Pushable<Result<Static<O>, Static<E | UncaughtSchema>>>,
+        output: Pushable<ProcedureResult<O, E>>,
       ): Promise<void>;
     }
   : {
@@ -162,7 +169,7 @@ export type StreamProcedure<
       handler(
         context: ServiceContextWithTransportInfo<State>,
         input: AsyncIterableIterator<Static<I>>,
-        output: Pushable<Result<Static<O>, Static<E | UncaughtSchema>>>,
+        output: Pushable<ProcedureResult<O, E>>,
       ): Promise<void>;
     };
 
@@ -265,7 +272,7 @@ function rpc({
     object,
     PayloadType,
     PayloadType,
-    UncaughtSchema
+    RiverError
   >['handler'];
 }) {
   return { type: 'rpc', input, output, errors, handler };

@@ -12,6 +12,7 @@ export type {
   ValidProcType,
   PayloadType,
   ProcListing,
+  ProcedureResult,
   RPCProcedure,
   UploadProcedure,
   SubscriptionProcedure,
