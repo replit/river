@@ -1,6 +1,6 @@
 import { Static } from '@sinclair/typebox';
 import { ServerTransport, Transport } from '../transport/transport';
-import { UnknownProcedure, PayloadType } from './procedures';
+import { AnyProcedure, PayloadType } from './procedures';
 import {
   AnyService,
   InstantiatedServiceSchemaMap,
@@ -363,7 +363,7 @@ class RiverServer<Services extends ServiceSchemaMap> {
           `${
             this.transport.clientId
           } -- got request for invalid procedure type ${
-            (procedure as UnknownProcedure).type
+            (procedure as AnyProcedure).type
           } at ${message.serviceName}.${message.procedureName}`,
         );
         return;

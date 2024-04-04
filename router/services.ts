@@ -25,8 +25,7 @@ export type AnyService = Service<object, ProcListing>;
  */
 export type AnyServiceSchema = ServiceSchema<
   object,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Record<string, AnyProcedure<any>>
+  Record<string, AnyProcedure>
 >;
 
 /**

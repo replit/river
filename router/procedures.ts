@@ -53,10 +53,10 @@ export interface RPCProcedure<
   input: I;
   output: O;
   errors: E;
-  handler: (
+  handler(
     context: ServiceContextWithTransportInfo<State>,
     input: Static<I>,
-  ) => Promise<Result<Static<O>, Static<E | UncaughtSchema>>>;
+  ): Promise<Result<Static<O>, Static<E | UncaughtSchema>>>;
 }
 
 /**
@@ -82,21 +82,21 @@ export type UploadProcedure<
       input: I;
       output: O;
       errors: E;
-      handler: (
+      handler(
         context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
         input: AsyncIterableIterator<Static<I>>,
-      ) => Promise<Result<Static<O>, Static<E | UncaughtSchema>>>;
+      ): Promise<Result<Static<O>, Static<E | UncaughtSchema>>>;
     }
   : {
       type: 'upload';
       input: I;
       output: O;
       errors: E;
-      handler: (
+      handler(
         context: ServiceContextWithTransportInfo<State>,
         input: AsyncIterableIterator<Static<I>>,
-      ) => Promise<Result<Static<O>, Static<E | UncaughtSchema>>>;
+      ): Promise<Result<Static<O>, Static<E | UncaughtSchema>>>;
     };
 
 /**
@@ -117,11 +117,11 @@ export interface SubscriptionProcedure<
   input: I;
   output: O;
   errors: E;
-  handler: (
+  handler(
     context: ServiceContextWithTransportInfo<State>,
     input: Static<I>,
     output: Pushable<Result<Static<O>, Static<E | UncaughtSchema>>>,
-  ) => Promise<(() => void) | void>;
+  ): Promise<(() => void) | void>;
 }
 
 /**
@@ -147,23 +147,23 @@ export type StreamProcedure<
       input: I;
       output: O;
       errors: E;
-      handler: (
+      handler(
         context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
         input: AsyncIterableIterator<Static<I>>,
         output: Pushable<Result<Static<O>, Static<E | UncaughtSchema>>>,
-      ) => Promise<void>;
+      ): Promise<void>;
     }
   : {
       type: 'stream';
       input: I;
       output: O;
       errors: E;
-      handler: (
+      handler(
         context: ServiceContextWithTransportInfo<State>,
         input: AsyncIterableIterator<Static<I>>,
         output: Pushable<Result<Static<O>, Static<E | UncaughtSchema>>>,
-      ) => Promise<void>;
+      ): Promise<void>;
     };
 
 /**
@@ -200,14 +200,13 @@ export type Procedure<
   : Ty extends 'stream' ? StreamProcedure<State, I, O, E>
   : never
 );
-
 /**
- * Represents an unknown, but valid, {@link Procedure} type.
+ * Represents any {@link Procedure} type.
  *
  * @template State - The context state object. You can provide this to constrain
  *                   the type of procedures.
  */
-export type UnknownProcedure<State = object> = Procedure<
+export type AnyProcedure<State = object> = Procedure<
   State,
   ValidProcType,
   PayloadType,
@@ -217,28 +216,12 @@ export type UnknownProcedure<State = object> = Procedure<
 >;
 
 /**
- * Represents _any_ {@link Procedure}, leaving almost the entirety of the
- * procedure typed as `any`. This is useful when you need to prevent TypeScript
- * from applying too strict of a type to a procedure.
- *
- * @template State - The context state object. You can provide this to constrain
- *                   the type of procedures.
- */
-// prettier-ignore
-export type AnyProcedure<State = object> =
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Procedure<State, ValidProcType, any, any, any, any>
-
-/**
  * Represents a map of {@link Procedure}s.
  *
  * @template State - The context state object. You can provide this to constrain
  *                   the type of procedures.
  */
-export type ProcListing<State = object> = Record<
-  string,
-  UnknownProcedure<State>
->;
+export type ProcListing<State = object> = Record<string, AnyProcedure<State>>;
 
 // typescript is funky so with these upcoming procedure constructors, the overloads
 // which handle the `init` case _must_ come first, otherwise the `init` property
@@ -354,7 +337,7 @@ function upload({
   output: PayloadType;
   errors?: RiverError;
   handler: UploadProcedure<
-    unknown,
+    object,
     PayloadType,
     PayloadType,
     RiverError,
@@ -408,9 +391,7 @@ function subscription({
     object,
     PayloadType,
     PayloadType,
-    // not sure why this has to be typed as UncaughtSchema rather than
-    // RiverError, but TS complains that the overloads are not compatible otherwise
-    UncaughtSchema
+    RiverError
   >['handler'];
 }) {
   return { type: 'subscription', input, output, errors, handler };
@@ -482,12 +463,10 @@ function stream({
   output: PayloadType;
   errors?: RiverError;
   handler: StreamProcedure<
-    unknown,
+    object,
     PayloadType,
     PayloadType,
-    // not sure why this has to be typed as UncaughtSchema rather than
-    // RiverError, but TS complains that the overloads are not compatible otherwise
-    UncaughtSchema,
+    RiverError,
     PayloadType | null
   >['handler'];
 }) {
