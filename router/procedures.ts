@@ -1,4 +1,4 @@
-import { TObject, Static, TUnion } from '@sinclair/typebox';
+import { TObject, Static, TUnion, TNever, Type } from '@sinclair/typebox';
 import type { Pushable } from 'it-pushable';
 import { ServiceContextWithTransportInfo } from './context';
 import { Result, RiverError, RiverUncaughtSchema } from './result';
@@ -33,6 +33,8 @@ export type ValidProcType =
  */
 export type PayloadType = TObject | TUnion<Array<TObject>>;
 
+type UncaughtSchema = typeof RiverUncaughtSchema;
+
 /**
  * Procedure for a single message in both directions (1:1).
  *
@@ -54,7 +56,7 @@ export interface RPCProcedure<
   handler: (
     context: ServiceContextWithTransportInfo<State>,
     input: Static<I>,
-  ) => Promise<Result<Static<O>, Static<E>>>;
+  ) => Promise<Result<Static<O>, Static<E | UncaughtSchema>>>;
 }
 
 /**
@@ -84,7 +86,7 @@ export type UploadProcedure<
         context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
         input: AsyncIterableIterator<Static<I>>,
-      ) => Promise<Result<Static<O>, Static<E>>>;
+      ) => Promise<Result<Static<O>, Static<E | UncaughtSchema>>>;
     }
   : {
       type: 'upload';
@@ -94,7 +96,7 @@ export type UploadProcedure<
       handler: (
         context: ServiceContextWithTransportInfo<State>,
         input: AsyncIterableIterator<Static<I>>,
-      ) => Promise<Result<Static<O>, Static<E>>>;
+      ) => Promise<Result<Static<O>, Static<E | UncaughtSchema>>>;
     };
 
 /**
@@ -118,7 +120,7 @@ export interface SubscriptionProcedure<
   handler: (
     context: ServiceContextWithTransportInfo<State>,
     input: Static<I>,
-    output: Pushable<Result<Static<O>, Static<E>>>,
+    output: Pushable<Result<Static<O>, Static<E | UncaughtSchema>>>,
   ) => Promise<(() => void) | void>;
 }
 
@@ -149,7 +151,7 @@ export type StreamProcedure<
         context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
         input: AsyncIterableIterator<Static<I>>,
-        output: Pushable<Result<Static<O>, Static<E>>>,
+        output: Pushable<Result<Static<O>, Static<E | UncaughtSchema>>>,
       ) => Promise<void>;
     }
   : {
@@ -160,7 +162,7 @@ export type StreamProcedure<
       handler: (
         context: ServiceContextWithTransportInfo<State>,
         input: AsyncIterableIterator<Static<I>>,
-        output: Pushable<Result<Static<O>, Static<E>>>,
+        output: Pushable<Result<Static<O>, Static<E | UncaughtSchema>>>,
       ) => Promise<void>;
     };
 
@@ -238,8 +240,6 @@ export type ProcListing<State = object> = Record<
   UnknownProcedure<State>
 >;
 
-type UncaughtSchema = typeof RiverUncaughtSchema;
-
 // typescript is funky so with these upcoming procedure constructors, the overloads
 // which handle the `init` case _must_ come first, otherwise the `init` property
 // is not recognized as optional, for some reason
@@ -252,8 +252,8 @@ function rpc<State, I extends PayloadType, O extends PayloadType>(def: {
   input: I;
   output: O;
   errors?: never;
-  handler: RPCProcedure<State, I, O, UncaughtSchema>['handler'];
-}): Branded<RPCProcedure<State, I, O, UncaughtSchema>>;
+  handler: RPCProcedure<State, I, O, TNever>['handler'];
+}): Branded<RPCProcedure<State, I, O, TNever>>;
 
 // signature: explicit errors
 function rpc<
@@ -272,7 +272,7 @@ function rpc<
 function rpc({
   input,
   output,
-  errors = RiverUncaughtSchema,
+  errors = Type.Never(),
   handler,
 }: {
   input: PayloadType;
@@ -302,8 +302,8 @@ function upload<
   input: I;
   output: O;
   errors?: never;
-  handler: UploadProcedure<State, I, O, UncaughtSchema, Init>['handler'];
-}): Branded<UploadProcedure<State, I, O, UncaughtSchema, Init>>;
+  handler: UploadProcedure<State, I, O, TNever, Init>['handler'];
+}): Branded<UploadProcedure<State, I, O, TNever, Init>>;
 
 // signature: init with explicit errors
 function upload<
@@ -325,8 +325,8 @@ function upload<State, I extends PayloadType, O extends PayloadType>(def: {
   input: I;
   output: O;
   errors?: never;
-  handler: UploadProcedure<State, I, O, UncaughtSchema>['handler'];
-}): Branded<UploadProcedure<State, I, O, UncaughtSchema>>;
+  handler: UploadProcedure<State, I, O, TNever>['handler'];
+}): Branded<UploadProcedure<State, I, O, TNever>>;
 
 // signature: no init with explicit errors
 function upload<
@@ -346,7 +346,7 @@ function upload({
   init,
   input,
   output,
-  errors = RiverUncaughtSchema,
+  errors = Type.Never(),
   handler,
 }: {
   init?: PayloadType | null;
@@ -357,7 +357,7 @@ function upload({
     unknown,
     PayloadType,
     PayloadType,
-    UncaughtSchema,
+    RiverError,
     PayloadType | null
   >['handler'];
 }) {
@@ -378,8 +378,8 @@ function subscription<
   input: I;
   output: O;
   errors?: never;
-  handler: SubscriptionProcedure<State, I, O, UncaughtSchema>['handler'];
-}): Branded<SubscriptionProcedure<State, I, O, UncaughtSchema>>;
+  handler: SubscriptionProcedure<State, I, O, TNever>['handler'];
+}): Branded<SubscriptionProcedure<State, I, O, TNever>>;
 
 // signature: explicit errors
 function subscription<
@@ -398,7 +398,7 @@ function subscription<
 function subscription({
   input,
   output,
-  errors = RiverUncaughtSchema,
+  errors = Type.Never(),
   handler,
 }: {
   input: PayloadType;
@@ -408,6 +408,8 @@ function subscription({
     object,
     PayloadType,
     PayloadType,
+    // not sure why this has to be typed as UncaughtSchema rather than
+    // RiverError, but TS complains that the overloads are not compatible otherwise
     UncaughtSchema
   >['handler'];
 }) {
@@ -428,8 +430,8 @@ function stream<
   input: I;
   output: O;
   errors?: never;
-  handler: StreamProcedure<State, I, O, UncaughtSchema, Init>['handler'];
-}): Branded<StreamProcedure<State, I, O, UncaughtSchema, Init>>;
+  handler: StreamProcedure<State, I, O, TNever, Init>['handler'];
+}): Branded<StreamProcedure<State, I, O, TNever, Init>>;
 
 // signature: init with explicit errors
 function stream<
@@ -451,8 +453,8 @@ function stream<State, I extends PayloadType, O extends PayloadType>(def: {
   input: I;
   output: O;
   errors?: never;
-  handler: StreamProcedure<State, I, O, UncaughtSchema>['handler'];
-}): Branded<StreamProcedure<State, I, O, UncaughtSchema>>;
+  handler: StreamProcedure<State, I, O, TNever>['handler'];
+}): Branded<StreamProcedure<State, I, O, TNever>>;
 
 // signature: no init with explicit errors
 function stream<
@@ -472,7 +474,7 @@ function stream({
   init,
   input,
   output,
-  errors = RiverUncaughtSchema,
+  errors = Type.Never(),
   handler,
 }: {
   init?: PayloadType | null;
@@ -483,6 +485,8 @@ function stream({
     unknown,
     PayloadType,
     PayloadType,
+    // not sure why this has to be typed as UncaughtSchema rather than
+    // RiverError, but TS complains that the overloads are not compatible otherwise
     UncaughtSchema,
     PayloadType | null
   >['handler'];

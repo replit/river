@@ -1,5 +1,6 @@
 import {
   TLiteral,
+  TNever,
   TObject,
   TSchema,
   TString,
@@ -20,7 +21,10 @@ export type RiverErrorSchema =
       extras: TSchema;
     }>;
 
-export type RiverError = TUnion<Array<RiverErrorSchema>> | RiverErrorSchema;
+export type RiverError =
+  | TUnion<Array<RiverErrorSchema>>
+  | RiverErrorSchema
+  | TNever;
 
 export const UNCAUGHT_ERROR = 'UNCAUGHT_ERROR';
 export const UNEXPECTED_DISCONNECT = 'UNEXPECTED_DISCONNECT';

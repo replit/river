@@ -25,17 +25,7 @@ describe('serialize service to jsonschema', () => {
             type: 'object',
           },
           errors: {
-            properties: {
-              code: {
-                anyOf: [
-                  { const: 'UNCAUGHT_ERROR', type: 'string' },
-                  { const: 'UNEXPECTED_DISCONNECT', type: 'string' },
-                ],
-              },
-              message: { type: 'string' },
-            },
-            required: ['code', 'message'],
-            type: 'object',
+            not: {},
           },
           type: 'rpc',
         },
@@ -57,33 +47,13 @@ describe('serialize service to jsonschema', () => {
             type: 'object',
           },
           errors: {
-            properties: {
-              code: {
-                anyOf: [
-                  { const: 'UNCAUGHT_ERROR', type: 'string' },
-                  { const: 'UNEXPECTED_DISCONNECT', type: 'string' },
-                ],
-              },
-              message: { type: 'string' },
-            },
-            required: ['code', 'message'],
-            type: 'object',
+            not: {},
           },
           type: 'stream',
         },
         echoWithPrefix: {
           errors: {
-            properties: {
-              code: {
-                anyOf: [
-                  { const: 'UNCAUGHT_ERROR', type: 'string' },
-                  { const: 'UNEXPECTED_DISCONNECT', type: 'string' },
-                ],
-              },
-              message: { type: 'string' },
-            },
-            required: ['code', 'message'],
-            type: 'object',
+            not: {},
           },
           init: {
             properties: {
@@ -129,17 +99,7 @@ describe('serialize service to jsonschema', () => {
       procedures: {
         getFile: {
           errors: {
-            properties: {
-              code: {
-                anyOf: [
-                  { const: 'UNCAUGHT_ERROR', type: 'string' },
-                  { const: 'UNEXPECTED_DISCONNECT', type: 'string' },
-                ],
-              },
-              message: { type: 'string' },
-            },
-            required: ['code', 'message'],
-            type: 'object',
+            not: {},
           },
           input: {
             properties: {
