@@ -1,5 +1,5 @@
 import { TransportClientId } from '../../message';
-import { ServerTransport, TransportOptions } from '../../transport';
+import { ServerTransport, ProvidedTransportOptions } from '../../transport';
 import { WebSocketServer } from 'ws';
 import { WebSocket } from 'isomorphic-ws';
 import { WebSocketConnection } from './connection';
@@ -10,7 +10,7 @@ export class WebSocketServerTransport extends ServerTransport<WebSocketConnectio
   constructor(
     wss: WebSocketServer,
     clientId: TransportClientId,
-    providedOptions?: Partial<TransportOptions>,
+    providedOptions?: ProvidedTransportOptions,
   ) {
     super(clientId, providedOptions);
     this.wss = wss;

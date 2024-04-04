@@ -206,7 +206,7 @@ The legend is as follows:
 
 - `>` represents a message with the `StreamOpenBit` set.
 - `<` represents a message with the `StreamClosedBit` set.
-  - `{` represents a message with the `StreamOpenBit` set and the payload `{ type: 'CLOSE' }`.
+  - `{` represents a message with the `StreamClosedBit` set and the payload `{ type: 'CLOSE' }`.
 - `x` represents a message with both the `StreamOpenBit` and `StreamClosedBit` set.
 - `-` represents a message with no control flags set.
 
@@ -385,7 +385,7 @@ This helps to ensure exactly once delivery and ensures that duplicate and out-of
 After validating the message, the session associated with the connection SHOULD update its bookkeeping by:
 
 - Removing all messages from the send buffer that have an `seq` less than or equal to the `ack` of the received message.
-- Seting the `ack` for the current session to be `seq + 1` of the received message.
+- Setting the `ack` for the current session to be `seq + 1` of the received message.
 
 When sending messages to the other side, the session associated with the connection SHOULD:
 

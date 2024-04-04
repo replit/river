@@ -2,12 +2,8 @@ import { expect, vi } from 'vitest';
 import { Connection, OpaqueTransportMessage, Transport } from '../../transport';
 import { Server } from '../../router';
 import { log } from '../../logging';
-import {
-  HEARTBEATS_TILL_DEAD,
-  HEARTBEAT_INTERVAL_MS,
-  SESSION_DISCONNECT_GRACE_MS,
-} from '../../transport/session';
 import { ServiceSchemaMap } from '../../router/services';
+import { testingSessionOptions } from '../../util/testHelpers';
 
 const waitUntilOptions = {
   timeout: 250, // these are all local connections so anything above 250ms is sus
@@ -25,15 +21,19 @@ export async function waitForTransportToFinish(t: Transport<Connection>) {
 }
 
 export async function advanceFakeTimersByDisconnectGrace() {
-  for (let i = 0; i < HEARTBEATS_TILL_DEAD; i++) {
+  for (let i = 0; i < testingSessionOptions.heartbeatsUntilDead; i++) {
     // wait for heartbeat interval to elapse
     await vi.runOnlyPendingTimersAsync();
-    await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS + 1);
+    await vi.advanceTimersByTimeAsync(
+      testingSessionOptions.heartbeatIntervalMs + 1,
+    );
   }
 
   // wait for disconnect timer to propagate
   await vi.runOnlyPendingTimersAsync();
-  await vi.advanceTimersByTimeAsync(SESSION_DISCONNECT_GRACE_MS + 1);
+  await vi.advanceTimersByTimeAsync(
+    testingSessionOptions.sessionDisconnectGraceMs + 1,
+  );
 }
 
 async function ensureTransportIsClean(t: Transport<Connection>) {

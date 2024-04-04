@@ -15,14 +15,14 @@ import {
 } from '../../util/testHelpers';
 import { UnixDomainSocketClientTransport } from '../../transport/impls/uds/client';
 import { UnixDomainSocketServerTransport } from '../../transport/impls/uds/server';
-import { TransportOptions } from '../../transport/transport';
+import { ProvidedTransportOptions } from '../../transport/transport';
 import { WebSocketClientTransport } from '../../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../../transport/impls/ws/server';
 
 export type ValidTransports = 'ws' | 'unix sockets' | 'node streams';
 export const transports: Array<{
   name: ValidTransports;
-  setup: (opts?: Partial<TransportOptions>) => Promise<{
+  setup: (opts?: ProvidedTransportOptions) => Promise<{
     getClientTransport: (id: TransportClientId) => ClientTransport<Connection>;
     getServerTransport: () => ServerTransport<Connection>;
     simulatePhantomDisconnect: () => void;

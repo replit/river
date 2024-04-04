@@ -1,5 +1,9 @@
 export { Transport, ClientTransport, ServerTransport } from './transport';
-export type { TransportOptions, TransportStatus } from './transport';
+export type {
+  ProvidedTransportOptions as TransportOptions,
+  ProvidedClientTransportOptions as ClientTransportOptions,
+  TransportStatus,
+} from './transport';
 export { Connection, Session } from './session';
 export {
   TransportMessageSchema,
