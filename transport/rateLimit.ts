@@ -116,6 +116,7 @@ export class LeakyBucketRateLimit {
       restoreBudgetForUser,
       this.options.budgetRestoreIntervalMs,
     );
+
     this.intervalHandles.set(user, intervalHandle);
   }
 

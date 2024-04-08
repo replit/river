@@ -581,6 +581,11 @@ export abstract class ClientTransport<
     log?.debug(
       `${this.clientId} -- handshake from ${parsed.from} ok (instance: ${instanceId})`,
     );
+
+    // After a successful connection, we start restoring the budget
+    // so that the next time we try to connect, we don't hit the client
+    // with backoff forever.
+    this.retryBudget.startRestoringBudget(parsed.from);
     return { instanceId, from: parsed.from };
   }
 
@@ -611,12 +616,10 @@ export abstract class ClientTransport<
 
     let reconnectPromise = this.inflightConnectionPromises.get(to);
     if (!reconnectPromise) {
-      log?.info(`${this.clientId} -- attempting connection to ${to}`);
-
       // check budget
       const budgetConsumed = this.retryBudget.getBudgetConsumed(to);
       if (!this.retryBudget.hasBudget(to)) {
-        const errMsg = `not attempting to connect to ${to}, retry budget exceeded (more than ${budgetConsumed} attempts in the last ${this.retryBudget.totalBudgetRestoreTime}ms)`;
+        const errMsg = `tried to connect to ${to} but retry budget exceeded (more than ${budgetConsumed} attempts in the last ${this.retryBudget.totalBudgetRestoreTime}ms)`;
         log?.warn(`${this.clientId} -- ${errMsg}`);
         this.protocolError(ProtocolError.RetriesExceeded, errMsg);
         return;
@@ -628,6 +631,9 @@ export abstract class ClientTransport<
         sleep = new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
 
+      log?.info(
+        `${this.clientId} -- attempting connection to ${to} (${backoffMs} backoff)`,
+      );
       this.retryBudget.consumeBudget(to);
       reconnectPromise = sleep
         .then(() => {
@@ -645,15 +651,11 @@ export abstract class ClientTransport<
             throw new Error('transport state is no longer open');
           }
 
-          // After a successful connection, we start restoring the budget
-          // so that the next time we try to connect, we don't hit the client
-          // with backoff forever.
-          this.retryBudget.startRestoringBudget(to);
-
           // only send handshake once per attempt
           this.sendHandshake(to, conn);
           return conn;
         });
+
       this.inflightConnectionPromises.set(to, reconnectPromise);
     } else {
       log?.info(
