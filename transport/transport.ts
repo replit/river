@@ -632,7 +632,7 @@ export abstract class ClientTransport<
       }
 
       log?.info(
-        `${this.clientId} -- attempting connection to ${to} (${backoffMs} backoff)`,
+        `${this.clientId} -- attempting connection to ${to} (${backoffMs}ms backoff)`,
       );
       this.retryBudget.consumeBudget(to);
       reconnectPromise = sleep
