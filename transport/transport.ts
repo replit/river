@@ -350,6 +350,8 @@ export abstract class Transport<ConnType extends Connection> {
     // don't dispatch explicit acks
     if (!isAck(msg.controlFlags)) {
       this.eventDispatcher.dispatchEvent('message', msg);
+    } else {
+      log?.debug(`${this.clientId} -- discarding msg ${msg.id} (ack bit set)`);
     }
   }
 
