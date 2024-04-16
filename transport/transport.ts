@@ -340,6 +340,7 @@ export abstract class Transport<ConnType extends Connection> {
           }), marking connection as dead: ${JSON.stringify(msg)}`,
         );
         session.close();
+        this.deleteSession(session);
       }
 
       return;
