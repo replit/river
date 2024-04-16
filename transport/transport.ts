@@ -58,7 +58,7 @@ const defaultConnectionRetryOptions: ConnectionRetryOptions = {
   baseIntervalMs: 250,
   maxJitterMs: 200,
   maxBackoffMs: 32_000,
-  attemptBudgetCapacity: 15,
+  attemptBudgetCapacity: 5,
   budgetRestoreIntervalMs: 200,
 };
 
@@ -339,7 +339,7 @@ export abstract class Transport<ConnType extends Connection> {
             session.nextExpectedSeq
           }), marking connection as dead: ${JSON.stringify(msg)}`,
         );
-        session.closeStaleConnection(session.connection);
+        session.close();
       }
 
       return;
