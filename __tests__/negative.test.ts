@@ -8,7 +8,12 @@ import {
   onWsServerReady,
 } from '../util/testHelpers';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
-import { ControlMessageHandshakeRequestSchema } from '../transport/message';
+import {
+  ControlFlags,
+  ControlMessageHandshakeRequestSchema,
+  OpaqueTransportMessage,
+  handshakeRequestMessage,
+} from '../transport/message';
 import { nanoid } from 'nanoid';
 import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
@@ -158,6 +163,47 @@ describe('should handle incompatabilities', async () => {
         type: ProtocolError.HandshakeFailed,
       }),
     );
+  });
+
+  test('mismatched seq number should close the whole session', async () => {
+    const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
+
+    // add listeners
+    const spy = vi.fn();
+    serverTransport.addEventListener('connectionStatus', spy);
+    onTestFinished(async () => {
+      serverTransport.removeEventListener('connectionStatus', spy);
+
+      await testFinishesCleanly({
+        clientTransports: [],
+        serverTransport,
+      });
+    });
+
+    const ws = createLocalWebSocketClient(port);
+    await new Promise((resolve) => ws.on('open', resolve));
+    const requestMsg = handshakeRequestMessage('client', 'SERVER', 'instance1');
+    ws.send(NaiveJsonCodec.toBuffer(requestMsg));
+
+    // wait for both sides to be happy
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+
+    // send one with bad sequence number
+    const msg: OpaqueTransportMessage = {
+      id: 'msgid',
+      to: 'SERVER',
+      from: 'client',
+      seq: 50,
+      ack: 0,
+      controlFlags: ControlFlags.StreamOpenBit,
+      streamId: 'streamid',
+      payload: {},
+    };
+    ws.send(NaiveJsonCodec.toBuffer(msg));
+
+    // ws should be closed after we send something bad
+    await waitFor(() => expect(ws.readyState).toBe(ws.CLOSED));
+    expect(serverTransport.connections.size).toBe(0);
   });
 
   test('mismatched protocol version', async () => {
