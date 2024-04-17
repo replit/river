@@ -22,32 +22,46 @@ See [PROTOCOL.md](./PROTOCOL.md) for more information on the protocol.
 
 Before proceeding, ensure you have TypeScript 5 installed and configured appropriately:
 
-1. **Ensure `"moduleResolution": "bundler"` in tsconfig.json**:
+1. **Ensure your `tsconfig.json` is configured correctly**:
 
-   ```json
+   You must verify that:
+
+   - `compilerOptions.moduleResolution` is set to `"bundler"`
+   - `compilerOptions.strictFunctionTypes` is set to `true`
+   - `compilerOptions.strictNullChecks` is set to `true`
+
+   or, preferably, that:
+
+   - `compilerOptions.moduleResolution` is set to `"bundler"`
+   - `compilerOptions.strict` is set to `true`
+
+   Like so:
+
+   ```jsonc
    {
      "compilerOptions": {
-       "moduleResolution": "bundler"
+       "moduleResolution": "bundler",
+       "strict": true
        // Other compiler options...
      }
    }
    ```
 
-   If it exists but is set to a different value, modify it to `"bundler"`.
+   If these options already exist in your `tsconfig.json` and don't match what is shown above, modify them. River is designed for `"strict": true`, but technically only `strictFunctionTypes` and `strictNullChecks` being set to `true` is required. Failing to set these will cause unresolvable type errors when defining services.
 
 2. Install River and Dependencies:
 
-To use River, install the required packages using npm:
+   To use River, install the required packages using npm:
 
-```bash
-  npm i @replit/river @sinclair/typebox
-```
+   ```bash
+   npm i @replit/river @sinclair/typebox
+   ```
 
 3. If you plan on using WebSocket for the underlying transport, also install
 
-```bash
-npm i ws isomorphic-ws
-```
+   ```bash
+   npm i ws isomorphic-ws
+   ```
 
 ## Writing services
 
