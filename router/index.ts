@@ -1,5 +1,6 @@
 export type {
   Service,
+  ServiceConfiguration,
   ProcHandler,
   ProcInit,
   ProcInput,

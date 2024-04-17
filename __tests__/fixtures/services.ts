@@ -11,7 +11,11 @@ export const EchoRequest = Type.Object({
 });
 export const EchoResponse = Type.Object({ response: Type.String() });
 
-export const TestServiceSchema = ServiceSchema.define(() => ({ count: 0 }), {
+const TestServiceScaffold = ServiceSchema.scaffold({
+  initializeState: () => ({ count: 0 }),
+});
+
+const testServiceProcedures = TestServiceScaffold.procedures({
   add: Procedure.rpc({
     input: Type.Object({ n: Type.Number() }),
     output: Type.Object({ result: Type.Number() }),
@@ -51,8 +55,12 @@ export const TestServiceSchema = ServiceSchema.define(() => ({ count: 0 }), {
   }),
 });
 
+export const TestServiceSchema = TestServiceScaffold.finalize({
+  ...testServiceProcedures,
+});
+
 export const OrderingServiceSchema = ServiceSchema.define(
-  () => ({ msgs: [] as Array<number> }),
+  { initializeState: () => ({ msgs: [] as Array<number> }) },
   {
     add: Procedure.rpc({
       input: Type.Object({ n: Type.Number() }),
@@ -142,7 +150,7 @@ export const FallibleServiceSchema = ServiceSchema.define({
 });
 
 export const SubscribableServiceSchema = ServiceSchema.define(
-  () => ({ count: new Observable<number>(0) }),
+  { initializeState: () => ({ count: new Observable(0) }) },
   {
     add: Procedure.rpc({
       input: Type.Object({ n: Type.Number() }),

@@ -119,46 +119,32 @@ export type ProcType<
 type BrandedProcedureMap<State> = Record<string, Branded<AnyProcedure<State>>>;
 
 /**
+ * The configuration for a service.
+ */
+export interface ServiceConfiguration<State extends object> {
+  /**
+   * A factory function for creating a fresh state.
+   */
+  initializeState: () => State;
+}
+
+/**
  * The schema for a {@link Service}. This is used to define a service, specifically
  * its initial state and procedures.
  *
- * Use the `define` static method to create a schema, and then use the `instantiate`
- * method to create a {@link Service}. Usually, instantiation is done for you, so
- * you shouldn't worry about it.
+ * There are two ways to define a service:
+ * 1. the {@link ServiceSchema.define} static method, which takes a configuration and
+ *    a list of procedures directly. Use this to ergonomically define a service schema
+ *    in one go. Good for smaller services, especially if they're stateless.
+ * 2. the {@link ServiceSchema.scaffold} static method, which creates a scaffold that
+ *    can be used to define procedures separately from the configuration. Use this to
+ *    better organize your service's definition, especially if it's a large service.
+ *    You can also use it in a builder pattern to define the service in a more
+ *    fluent way.
+ *
+ * See the static methods for more information and examples.
  *
  * When defining procedures, use the {@link Procedure} constructors to create them.
- *
- * @example
- * A service with no state:
- * ```
- * const service = ServiceSchema.define({
- *   add: Procedure.rpc({
- *     input: Type.Object({ a: Type.Number(), b: Type.Number() }),
- *     output: Type.Object({ result: Type.Number() }),
- *     async handler(ctx, input) {
- *       return Ok({ result: input.a + input.b });
- *     }
- *   }),
- * });
- *```
- * @example
- * A service with state:
- * ```
- * const service = ServiceSchema.define(
- *   () => ({ count: 0 }),
- *   {
- *     increment: Procedure.rpc({
- *       input: Type.Object({ amount: Type.Number() }),
- *       output: Type.Object({ current: Type.Number() }),
- *       async handler(ctx, input) {
- *         ctx.state.count += input.amount;
- *         return Ok({ current: ctx.state.count });
- *       }
- *     }),
- *   },
- * );
- * ```
- *
  */
 export class ServiceSchema<
   State extends object,
@@ -167,7 +153,7 @@ export class ServiceSchema<
   /**
    * Factory function for creating a fresh state.
    */
-  protected readonly initState: () => State;
+  protected readonly initializeState: () => State;
 
   /**
    * The procedures for this service.
@@ -175,29 +161,90 @@ export class ServiceSchema<
   readonly procedures: Procedures;
 
   /**
-   * @param initState - A factory function for creating a fresh state.
+   * @param config - The configuration for this service.
    * @param procedures - The procedures for this service.
    */
-  protected constructor(initState: () => State, procedures: Procedures) {
-    this.initState = initState;
+  protected constructor(
+    config: ServiceConfiguration<State>,
+    procedures: Procedures,
+  ) {
+    this.initializeState = config.initializeState;
     this.procedures = procedures;
   }
 
   /**
-   * Creates a new {@link ServiceSchema} with the given state initializer and procedures.
+   * Creates a {@link ServiceScaffold}, which can be used to define procedures
+   * that can then be merged into a {@link ServiceSchema}, via the scaffold's
+   * `finalize` method.
+   *
+   * There are two patterns that work well with this method. The first is using
+   * it to separate the definition of procedures from the definition of the
+   * service's configuration:
+   * ```ts
+   * const MyServiceScaffold = ServiceSchema.scaffold({
+   *   initializeState: () => ({ count: 0 }),
+   * });
+   *
+   * const incrementProcedures = MyServiceScaffold.procedures({
+   *   increment: Procedure.rpc({
+   *     input: Type.Object({ amount: Type.Number() }),
+   *     output: Type.Object({ current: Type.Number() }),
+   *     async handler(ctx, input) {
+   *       ctx.state.count += input.amount;
+   *       return Ok({ current: ctx.state.count });
+   *     }
+   *   }),
+   * })
+   *
+   * const MyService = MyServiceScaffold.finalize({
+   *   ...incrementProcedures,
+   *   // you can also directly define procedures here
+   * });
+   * ```
+   * This might be really handy if you have a very large service and you're
+   * wanting to split it over multiple files. You can define the scaffold
+   * in one file, and then import that scaffold in other files where you
+   * define procedures - and then finally import the scaffolds and your
+   * procedure objects in a final file where you finalize the scaffold into
+   * a service schema.
+   *
+   * The other way is to use it like in a builder pattern:
+   * ```ts
+   * const MyService = ServiceSchema
+   *   .scaffold({ initializeState: () => ({ count: 0 }) })
+   *   .finalize({
+   *     increment: Procedure.rpc({
+   *       input: Type.Object({ amount: Type.Number() }),
+   *       output: Type.Object({ current: Type.Number() }),
+   *       async handler(ctx, input) {
+   *         ctx.state.count += input.amount;
+   *         return Ok({ current: ctx.state.count });
+   *       }
+   *     }),
+   *   })
+   * ```
+   * Depending on your preferences, this may be a more appealing way to define
+   * a schema versus using the {@link ServiceSchema.define} method.
+   */
+  static scaffold<State extends object>(config: ServiceConfiguration<State>) {
+    return new ServiceScaffold(config);
+  }
+
+  /**
+   * Creates a new {@link ServiceSchema} with the given configuration and procedures.
    *
    * All procedures must be created with the {@link Procedure} constructors.
    *
    * NOTE: There is an overload that lets you just provide the procedures alone if your
    * service has no state.
    *
-   * @param initState - A factory function for creating a fresh state.
+   * @param config - The configuration for this service.
    * @param procedures - The procedures for this service.
    *
    * @example
    * ```
    * const service = ServiceSchema.define(
-   *   () => ({ count: 0 }),
+   *   { initializeState: () => ({ count: 0 }) },
    *   {
    *     increment: Procedure.rpc({
    *       input: Type.Object({ amount: Type.Number() }),
@@ -215,7 +262,7 @@ export class ServiceSchema<
     State extends object,
     Procedures extends BrandedProcedureMap<State>,
   >(
-    initState: () => State,
+    config: ServiceConfiguration<State>,
     procedures: Procedures,
   ): ServiceSchema<
     State,
@@ -226,8 +273,8 @@ export class ServiceSchema<
    *
    * All procedures must be created with the {@link Procedure} constructors.
    *
-   * NOTE: There is an overload that lets you provide the state initializer as well,
-   * if your service has state.
+   * NOTE: There is an overload that lets you provide configuration as well,
+   * if your service has extra configuration like a state.
    *
    * @param procedures - The procedures for this service.
    *
@@ -251,18 +298,30 @@ export class ServiceSchema<
   >;
   // actual implementation
   static define(
-    stateOrProcedures: (() => object) | BrandedProcedureMap<object>,
-    procedures?: BrandedProcedureMap<object>,
+    configOrProcedures:
+      | ServiceConfiguration<object>
+      | BrandedProcedureMap<object>,
+    maybeProcedures?: BrandedProcedureMap<object>,
   ): ServiceSchema<object, ProcedureMap> {
-    if (typeof stateOrProcedures === 'function') {
-      if (!procedures) {
+    let config: ServiceConfiguration<object>;
+    let procedures: BrandedProcedureMap<object>;
+
+    if (
+      'initializeState' in configOrProcedures &&
+      typeof configOrProcedures.initializeState === 'function'
+    ) {
+      if (!maybeProcedures) {
         throw new Error('Expected procedures to be defined');
       }
 
-      return new ServiceSchema(() => stateOrProcedures(), procedures);
+      config = configOrProcedures as ServiceConfiguration<object>;
+      procedures = maybeProcedures;
+    } else {
+      config = { initializeState: () => ({}) };
+      procedures = configOrProcedures as BrandedProcedureMap<object>;
     }
 
-    return new ServiceSchema(() => ({}), stateOrProcedures);
+    return new ServiceSchema(config, procedures);
   }
 
   /**
@@ -303,8 +362,76 @@ export class ServiceSchema<
    */
   instantiate(): Service<State, Procedures> {
     return Object.freeze({
-      state: this.initState(),
+      state: this.initializeState(),
       procedures: this.procedures,
     });
+  }
+}
+
+/**
+ * A scaffold for defining a service's procedures.
+ *
+ * @see {@link ServiceSchema.scaffold}
+ */
+// note that this isn't exported
+class ServiceScaffold<State extends object> {
+  /**
+   * The configuration for this service.
+   */
+  protected readonly config: ServiceConfiguration<State>;
+
+  /**
+   * @param config - The configuration for this service.
+   */
+  constructor(config: ServiceConfiguration<State>) {
+    this.config = config;
+  }
+
+  /**
+   * Define procedures for this service. Use the {@link Procedure} constructors
+   * to create them. This returns the procedures object, which can then be
+   * passed to {@link ServiceSchema.finalize} to create a {@link ServiceSchema}.
+   *
+   * @example
+   * ```
+   * const myProcedures = MyServiceScaffold.procedures({
+   *   myRPC: Procedure.rpc({
+   *     // ...
+   *   }),
+   * });
+   *
+   * const MyService = MyServiceScaffold.finalize({
+   *   ...myProcedures,
+   * });
+   * ```
+   *
+   * @param procedures - The procedures for this service.
+   */
+  procedures<T extends BrandedProcedureMap<State>>(procedures: T): T {
+    return procedures;
+  }
+
+  /**
+   * Finalizes the scaffold into a {@link ServiceSchema}. This is where you
+   * provide the service's procedures and get a {@link ServiceSchema} in return.
+   *
+   * You can directly define procedures here, or you can define them separately
+   * with the {@link ServiceScaffold.procedures} method, and then pass them here.
+   *
+   * @example
+   * ```
+   * const MyService = MyServiceScaffold.finalize({
+   *  myRPC: Procedure.rpc({
+   *   // ...
+   *  }),
+   *  // e.g. from the procedures method
+   *  ...myOtherProcedures,
+   * });
+   * ```
+   */
+  finalize<T extends BrandedProcedureMap<State>>(
+    procedures: T,
+  ): ServiceSchema<State, { [K in keyof T]: Unbranded<T[K]> }> {
+    return ServiceSchema.define(this.config, procedures);
   }
 }
