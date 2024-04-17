@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'vitest';
-import { Procedure, ServiceBuilder, serializeService } from '../router/builder';
+import { Procedure } from '../router/procedures';
+import { ServiceSchema } from '../router/services';
 import { Type } from '@sinclair/typebox';
 import { createServer } from '../router/server';
 import { Connection, ClientTransport, ServerTransport } from '../transport';
 import { createClient } from '../router/client';
 import { Ok } from '../router/result';
-import { buildServiceDefs } from '../router/defs';
-import { TestServiceConstructor } from './fixtures/services';
+import { TestServiceSchema } from './fixtures/services';
 
 const input = Type.Union([
   Type.Object({ a: Type.Number() }),
@@ -24,14 +24,12 @@ const errors = Type.Union([
   }),
 ]);
 
-const fnBody: Procedure<
-  object,
-  'rpc',
+const fnBody = Procedure.rpc<
+  Record<string, never>,
   typeof input,
   typeof output,
   typeof errors
-> = {
-  type: 'rpc',
+>({
   input,
   output,
   errors,
@@ -42,62 +40,72 @@ const fnBody: Procedure<
       return Ok({ b: msg.a });
     }
   },
-};
+});
 
 // typescript is limited to max 50 constraints
 // see: https://github.com/microsoft/TypeScript/issues/33541
-export const StupidlyLargeService = <Name extends string>(name: Name) =>
-  ServiceBuilder.create(name)
-    .defineProcedure('f1', fnBody)
-    .defineProcedure('f2', fnBody)
-    .defineProcedure('f3', fnBody)
-    .defineProcedure('f4', fnBody)
-    .defineProcedure('f5', fnBody)
-    .defineProcedure('f6', fnBody)
-    .defineProcedure('f7', fnBody)
-    .defineProcedure('f8', fnBody)
-    .defineProcedure('f9', fnBody)
-    .defineProcedure('f10', fnBody)
-    .defineProcedure('f11', fnBody)
-    .defineProcedure('f12', fnBody)
-    .defineProcedure('f13', fnBody)
-    .defineProcedure('f14', fnBody)
-    .defineProcedure('f15', fnBody)
-    .defineProcedure('f16', fnBody)
-    .defineProcedure('f17', fnBody)
-    .defineProcedure('f18', fnBody)
-    .defineProcedure('f19', fnBody)
-    .defineProcedure('f20', fnBody)
-    .defineProcedure('f21', fnBody)
-    .defineProcedure('f22', fnBody)
-    .defineProcedure('f23', fnBody)
-    .defineProcedure('f24', fnBody)
-    .defineProcedure('f25', fnBody)
-    .defineProcedure('f26', fnBody)
-    .defineProcedure('f27', fnBody)
-    .defineProcedure('f28', fnBody)
-    .defineProcedure('f29', fnBody)
-    .defineProcedure('f30', fnBody)
-    .defineProcedure('f31', fnBody)
-    .defineProcedure('f32', fnBody)
-    .defineProcedure('f33', fnBody)
-    .defineProcedure('f34', fnBody)
-    .defineProcedure('f35', fnBody)
-    .defineProcedure('f36', fnBody)
-    .defineProcedure('f37', fnBody)
-    .defineProcedure('f38', fnBody)
-    .defineProcedure('f39', fnBody)
-    .defineProcedure('f40', fnBody)
-    .defineProcedure('f41', fnBody)
-    .defineProcedure('f42', fnBody)
-    .defineProcedure('f43', fnBody)
-    .defineProcedure('f44', fnBody)
-    .defineProcedure('f45', fnBody)
-    .defineProcedure('f46', fnBody)
-    .defineProcedure('f47', fnBody)
-    .defineProcedure('f48', fnBody)
-    .defineProcedure('f49', fnBody)
-    .finalize();
+// we should be able to support more than that due to how we make services
+const StupidlyLargeServiceSchema = ServiceSchema.define({
+  f1: fnBody,
+  f2: fnBody,
+  f3: fnBody,
+  f4: fnBody,
+  f5: fnBody,
+  f6: fnBody,
+  f7: fnBody,
+  f8: fnBody,
+  f9: fnBody,
+  f10: fnBody,
+  f11: fnBody,
+  f12: fnBody,
+  f13: fnBody,
+  f14: fnBody,
+  f15: fnBody,
+  f16: fnBody,
+  f17: fnBody,
+  f18: fnBody,
+  f19: fnBody,
+  f20: fnBody,
+  f21: fnBody,
+  f22: fnBody,
+  f23: fnBody,
+  f24: fnBody,
+  f25: fnBody,
+  f26: fnBody,
+  f27: fnBody,
+  f28: fnBody,
+  f29: fnBody,
+  f30: fnBody,
+  f31: fnBody,
+  f32: fnBody,
+  f33: fnBody,
+  f34: fnBody,
+  f35: fnBody,
+  f36: fnBody,
+  f37: fnBody,
+  f38: fnBody,
+  f39: fnBody,
+  f40: fnBody,
+  f41: fnBody,
+  f42: fnBody,
+  f43: fnBody,
+  f44: fnBody,
+  f45: fnBody,
+  f46: fnBody,
+  f47: fnBody,
+  f48: fnBody,
+  f49: fnBody,
+  f50: fnBody,
+  f51: fnBody,
+  f52: fnBody,
+  f53: fnBody,
+  f54: fnBody,
+  f55: fnBody,
+  f56: fnBody,
+  f57: fnBody,
+  f58: fnBody,
+  f59: fnBody,
+});
 
 // mock transport
 export class MockClientTransport extends ClientTransport<Connection> {
@@ -112,73 +120,73 @@ export class MockServerTransport extends ServerTransport<Connection> {}
 
 describe("ensure typescript doesn't give up trying to infer the types for large services", () => {
   test('service with many procedures hits typescript limit', () => {
-    expect(serializeService(StupidlyLargeService('test'))).toBeTruthy();
+    expect(StupidlyLargeServiceSchema.serialize()).toBeTruthy();
   });
 
   test('server client should support many services with many procedures', () => {
-    const serviceDefs = buildServiceDefs([
-      StupidlyLargeService('a'),
-      StupidlyLargeService('b'),
-      StupidlyLargeService('c'),
-      StupidlyLargeService('d'),
-      StupidlyLargeService('e'),
-      StupidlyLargeService('f'),
-      StupidlyLargeService('g'),
-      StupidlyLargeService('h'),
-      StupidlyLargeService('i'),
-      StupidlyLargeService('j'),
-      StupidlyLargeService('k'),
-      StupidlyLargeService('l'),
-      StupidlyLargeService('m'),
-      StupidlyLargeService('n'),
-      StupidlyLargeService('o'),
-      StupidlyLargeService('p'),
-      StupidlyLargeService('q'),
-      StupidlyLargeService('r'),
-      StupidlyLargeService('s'),
-      StupidlyLargeService('t'),
-      StupidlyLargeService('u'),
-      StupidlyLargeService('v'),
-      StupidlyLargeService('w'),
-      StupidlyLargeService('x'),
-      StupidlyLargeService('y'),
-      StupidlyLargeService('z'),
-      StupidlyLargeService('a1'),
-      StupidlyLargeService('b1'),
-      StupidlyLargeService('c1'),
-      StupidlyLargeService('d1'),
-      StupidlyLargeService('e1'),
-      StupidlyLargeService('f1'),
-      StupidlyLargeService('g1'),
-      StupidlyLargeService('h1'),
-      StupidlyLargeService('i1'),
-      StupidlyLargeService('j1'),
-      StupidlyLargeService('k1'),
-      StupidlyLargeService('l1'),
-      StupidlyLargeService('m1'),
-      StupidlyLargeService('n1'),
-      StupidlyLargeService('o1'),
-      StupidlyLargeService('p1'),
-      StupidlyLargeService('q1'),
-      StupidlyLargeService('r1'),
-      StupidlyLargeService('s1'),
-      StupidlyLargeService('t1'),
-      StupidlyLargeService('u1'),
-      StupidlyLargeService('v1'),
-      StupidlyLargeService('w1'),
-      StupidlyLargeService('x1'),
-      StupidlyLargeService('y1'),
-      StupidlyLargeService('z1'),
-      TestServiceConstructor(),
-    ]);
+    const server = createServer(new MockServerTransport('SERVER'), {
+      a: StupidlyLargeServiceSchema,
+      b: StupidlyLargeServiceSchema,
+      c: StupidlyLargeServiceSchema,
+      d: StupidlyLargeServiceSchema,
+      e: StupidlyLargeServiceSchema,
+      f: StupidlyLargeServiceSchema,
+      g: StupidlyLargeServiceSchema,
+      h: StupidlyLargeServiceSchema,
+      i: StupidlyLargeServiceSchema,
+      j: StupidlyLargeServiceSchema,
+      k: StupidlyLargeServiceSchema,
+      l: StupidlyLargeServiceSchema,
+      m: StupidlyLargeServiceSchema,
+      n: StupidlyLargeServiceSchema,
+      o: StupidlyLargeServiceSchema,
+      p: StupidlyLargeServiceSchema,
+      q: StupidlyLargeServiceSchema,
+      r: StupidlyLargeServiceSchema,
+      s: StupidlyLargeServiceSchema,
+      t: StupidlyLargeServiceSchema,
+      u: StupidlyLargeServiceSchema,
+      v: StupidlyLargeServiceSchema,
+      w: StupidlyLargeServiceSchema,
+      x: StupidlyLargeServiceSchema,
+      y: StupidlyLargeServiceSchema,
+      z: StupidlyLargeServiceSchema,
+      a1: StupidlyLargeServiceSchema,
+      b1: StupidlyLargeServiceSchema,
+      c1: StupidlyLargeServiceSchema,
+      d1: StupidlyLargeServiceSchema,
+      e1: StupidlyLargeServiceSchema,
+      f1: StupidlyLargeServiceSchema,
+      g1: StupidlyLargeServiceSchema,
+      h1: StupidlyLargeServiceSchema,
+      i1: StupidlyLargeServiceSchema,
+      j1: StupidlyLargeServiceSchema,
+      k1: StupidlyLargeServiceSchema,
+      l1: StupidlyLargeServiceSchema,
+      m1: StupidlyLargeServiceSchema,
+      n1: StupidlyLargeServiceSchema,
+      o1: StupidlyLargeServiceSchema,
+      p1: StupidlyLargeServiceSchema,
+      q1: StupidlyLargeServiceSchema,
+      r1: StupidlyLargeServiceSchema,
+      s1: StupidlyLargeServiceSchema,
+      t1: StupidlyLargeServiceSchema,
+      u1: StupidlyLargeServiceSchema,
+      v1: StupidlyLargeServiceSchema,
+      w1: StupidlyLargeServiceSchema,
+      x1: StupidlyLargeServiceSchema,
+      y1: StupidlyLargeServiceSchema,
+      z1: StupidlyLargeServiceSchema,
+      test: TestServiceSchema,
+    });
 
-    const server = createServer(new MockServerTransport('SERVER'), serviceDefs);
     const client = createClient<typeof server>(
       new MockClientTransport('client'),
       'SERVER',
       false,
     );
-    expect(client.d.f48.rpc({ a: 0 })).toBeTruthy();
+
+    expect(client.d.f59.rpc({ a: 0 })).toBeTruthy();
     expect(client.a.f2.rpc({ c: 'abc' })).toBeTruthy();
     expect(client.test.add.rpc({ n: 1 })).toBeTruthy();
     expect(client.z1.f40.rpc({ a: 1 })).toBeTruthy();

@@ -1,17 +1,13 @@
 import { expect, describe, test } from 'vitest';
-import { serializeService } from '../router/builder';
 import {
-  BinaryFileServiceConstructor,
-  FallibleServiceConstructor,
-  TestServiceConstructor,
+  BinaryFileServiceSchema,
+  FallibleServiceSchema,
+  TestServiceSchema,
 } from './fixtures/services';
 
 describe('serialize service to jsonschema', () => {
   test('serialize basic service', () => {
-    const service = TestServiceConstructor();
-    expect(serializeService(service)).toStrictEqual({
-      name: 'test',
-      state: { count: 0 },
+    expect(TestServiceSchema.serialize()).toStrictEqual({
       procedures: {
         add: {
           input: {
@@ -28,7 +24,9 @@ describe('serialize service to jsonschema', () => {
             required: ['result'],
             type: 'object',
           },
-          errors: { not: {} },
+          errors: {
+            not: {},
+          },
           type: 'rpc',
         },
         echo: {
@@ -48,7 +46,9 @@ describe('serialize service to jsonschema', () => {
             required: ['response'],
             type: 'object',
           },
-          errors: { not: {} },
+          errors: {
+            not: {},
+          },
           type: 'stream',
         },
         echoWithPrefix: {
@@ -95,9 +95,7 @@ describe('serialize service to jsonschema', () => {
   });
 
   test('serialize service with binary', () => {
-    const service = BinaryFileServiceConstructor();
-    expect(serializeService(service)).toStrictEqual({
-      name: 'bin',
+    expect(BinaryFileServiceSchema.serialize()).toStrictEqual({
       procedures: {
         getFile: {
           errors: {
@@ -124,15 +122,11 @@ describe('serialize service to jsonschema', () => {
           type: 'rpc',
         },
       },
-      state: {},
     });
   });
 
   test('serialize service with errors', () => {
-    const service = FallibleServiceConstructor();
-    expect(serializeService(service)).toStrictEqual({
-      name: 'fallible',
-      state: {},
+    expect(FallibleServiceSchema.serialize()).toStrictEqual({
       procedures: {
         divide: {
           input: {

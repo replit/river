@@ -9,6 +9,7 @@ import {
 } from '@sinclair/typebox';
 
 type TLiteralString = TLiteral<string>;
+
 export type RiverErrorSchema =
   | TObject<{
       code: TLiteralString | TUnion<Array<TLiteralString>>;
@@ -19,6 +20,7 @@ export type RiverErrorSchema =
       message: TLiteralString | TString;
       extras: TSchema;
     }>;
+
 export type RiverError =
   | TUnion<Array<RiverErrorSchema>>
   | RiverErrorSchema
@@ -44,14 +46,14 @@ export type Result<T, E> =
       payload: E;
     };
 
-export function Ok<T, E>(payload: T): Result<T, E> {
+export function Ok<const T, const E>(payload: T): Result<T, E> {
   return {
     ok: true,
     payload,
   };
 }
 
-export function Err<T, E>(error: E): Result<T, E> {
+export function Err<const T, const E>(error: E): Result<T, E> {
   return {
     ok: false,
     payload: error,

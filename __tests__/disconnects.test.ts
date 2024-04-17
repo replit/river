@@ -9,9 +9,9 @@ import {
 } from 'vitest';
 import { iterNext } from '../util/testHelpers';
 import {
-  SubscribableServiceConstructor,
-  TestServiceConstructor,
-  UploadableServiceConstructor,
+  SubscribableServiceSchema,
+  TestServiceSchema,
+  UploadableServiceSchema,
 } from './fixtures/services';
 import { createClient, createServer } from '../router';
 import {
@@ -20,7 +20,6 @@ import {
   waitFor,
 } from './fixtures/cleanup';
 import { Err, UNEXPECTED_DISCONNECT } from '../router/result';
-import { buildServiceDefs } from '../router/defs';
 import { testMatrix } from './fixtures/matrix';
 
 describe.each(testMatrix())(
@@ -34,8 +33,7 @@ describe.each(testMatrix())(
     test('rpc', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
-      const server = createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, { test: TestServiceSchema });
       const client = createClient<typeof server>(
         clientTransport,
         serverTransport.clientId,
@@ -77,8 +75,7 @@ describe.each(testMatrix())(
     test('stream', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      const serviceDefs = buildServiceDefs([TestServiceConstructor()]);
-      const server = createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, { test: TestServiceSchema });
       const client = createClient<typeof server>(
         clientTransport,
         serverTransport.clientId,
@@ -126,8 +123,9 @@ describe.each(testMatrix())(
       const client2Transport = getClientTransport('client2');
       const serverTransport = getServerTransport();
 
-      const serviceDefs = buildServiceDefs([SubscribableServiceConstructor()]);
-      const server = createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, {
+        subscribable: SubscribableServiceSchema,
+      });
       const client1 = createClient<typeof server>(
         client1Transport,
         serverTransport.clientId,
@@ -213,8 +211,9 @@ describe.each(testMatrix())(
     test('upload', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      const serviceDefs = buildServiceDefs([UploadableServiceConstructor()]);
-      const server = createServer(serverTransport, serviceDefs);
+      const server = createServer(serverTransport, {
+        uploadable: UploadableServiceSchema,
+      });
       const client = createClient<typeof server>(
         clientTransport,
         serverTransport.clientId,

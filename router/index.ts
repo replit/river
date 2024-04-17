@@ -1,17 +1,25 @@
-export { serializeService, ServiceBuilder } from './builder';
 export type {
-  ValidProcType,
-  ProcListing,
   Service,
+  ServiceConfiguration,
   ProcHandler,
+  ProcInit,
   ProcInput,
   ProcOutput,
+  ProcErrors,
   ProcType,
-  Procedure,
+} from './services';
+export { ServiceSchema } from './services';
+export type {
+  ValidProcType,
   PayloadType,
-} from './builder';
-export { buildServiceDefs } from './defs';
-export type { ServiceDefs } from './defs';
+  ProcedureMap,
+  ProcedureResult,
+  RPCProcedure,
+  UploadProcedure,
+  SubscriptionProcedure,
+  StreamProcedure,
+} from './procedures';
+export { Procedure } from './procedures';
 export { createClient } from './client';
 export type { ServerClient } from './client';
 export { createServer } from './server';
