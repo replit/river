@@ -67,20 +67,21 @@ npm i ws isomorphic-ws
 
 ### A basic router
 
-First, we create a service using the `ServiceBuilder`
+First, we create a service using `ServiceSchema`:
 
 ```ts
-import { ServiceBuilder, Ok, buildServiceDefs } from '@replit/river';
+import { ServicaSchema, Procedure, Ok } from '@replit/river';
 import { Type } from '@sinclair/typebox';
 
-export const ExampleServiceConstructor = () =>
-  ServiceBuilder.create('example')
+export const ExampleService = ServiceSchema.define(
+  // configuration
+  {
     // initializer for shared state
-    .initialState({
-      count: 0,
-    })
-    .defineProcedure('add', {
-      type: 'rpc',
+    initializeState: () => ({ count: 0 }),
+  },
+  // procedures
+  {
+    add: Procedure.rpc({
       input: Type.Object({ n: Type.Number() }),
       output: Type.Object({ result: Type.Number() }),
       errors: Type.Never(),
@@ -90,11 +91,9 @@ export const ExampleServiceConstructor = () =>
         ctx.state.count += n;
         return Ok({ result: ctx.state.count });
       },
-    })
-    .finalize();
-
-// expore a listing of all the services that we have
-export const serviceDefs = buildServiceDefs([ExampleServiceConstructor()]);
+    }),
+  },
+);
 ```
 
 Then, we create the server:
@@ -111,7 +110,10 @@ const port = 3000;
 const wss = new WebSocketServer({ server: httpServer });
 const transport = new WebSocketServerTransport(wss, 'SERVER');
 
-export const server = createServer(transport, serviceDefs);
+export const server = createServer(transport, {
+  example: ExampleService,
+});
+
 export type ServiceSurface = typeof server;
 
 httpServer.listen(port);
