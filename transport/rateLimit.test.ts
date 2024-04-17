@@ -47,9 +47,9 @@ describe('LeakyBucketRateLimit', () => {
     expect(rateLimit.getBudgetConsumed(user)).toBe(2);
 
     rateLimit.startRestoringBudget(user);
-    expect(rateLimit.getBudgetConsumed(user)).toBe(1);
+    expect(rateLimit.getBudgetConsumed(user)).toBe(2);
     vi.advanceTimersByTime(options.budgetRestoreIntervalMs);
-    expect(rateLimit.getBudgetConsumed(user)).toBe(0);
+    expect(rateLimit.getBudgetConsumed(user)).toBe(1);
   });
 
   test('stops restoring budget when we consume budget again', () => {
@@ -61,12 +61,12 @@ describe('LeakyBucketRateLimit', () => {
     expect(rateLimit.getBudgetConsumed(user)).toBe(2);
 
     rateLimit.startRestoringBudget(user);
-    expect(rateLimit.getBudgetConsumed(user)).toBe(1);
+    expect(rateLimit.getBudgetConsumed(user)).toBe(2);
 
     rateLimit.consumeBudget(user);
-    expect(rateLimit.getBudgetConsumed(user)).toBe(2);
+    expect(rateLimit.getBudgetConsumed(user)).toBe(3);
     vi.advanceTimersByTime(options.budgetRestoreIntervalMs);
-    expect(rateLimit.getBudgetConsumed(user)).toBe(2);
+    expect(rateLimit.getBudgetConsumed(user)).toBe(3);
   });
 
   test('respects maximum backoff time', () => {

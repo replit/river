@@ -110,12 +110,11 @@ export class LeakyBucketRateLimit {
       this.budgetConsumed.set(user, newBudget);
     };
 
-    // instantly restore single use of budget on success
-    restoreBudgetForUser();
     const intervalHandle = setInterval(
       restoreBudgetForUser,
       this.options.budgetRestoreIntervalMs,
     );
+
     this.intervalHandles.set(user, intervalHandle);
   }
 
