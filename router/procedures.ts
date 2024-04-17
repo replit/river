@@ -313,6 +313,7 @@ function upload<
 
 // signature: no init with default errors
 function upload<State, I extends PayloadType, O extends PayloadType>(def: {
+  init?: never;
   input: I;
   output: O;
   errors?: never;
@@ -326,6 +327,7 @@ function upload<
   O extends PayloadType,
   E extends RiverError,
 >(def: {
+  init?: never;
   input: I;
   output: O;
   errors: E;
@@ -439,6 +441,7 @@ function stream<
 
 // signature: no init with default errors
 function stream<State, I extends PayloadType, O extends PayloadType>(def: {
+  init?: never;
   input: I;
   output: O;
   errors?: never;
@@ -452,6 +455,7 @@ function stream<
   O extends PayloadType,
   E extends RiverError,
 >(def: {
+  init?: never;
   input: I;
   output: O;
   errors: E;
