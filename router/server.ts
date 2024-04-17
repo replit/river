@@ -170,7 +170,7 @@ class RiverServer<Services extends ServiceSchemaMap> {
     }
 
     const service = this.services[message.serviceName];
-    const serviceContext = this.getContext(service);
+    const serviceContext = this.getContext(service, message.serviceName);
     if (!(message.procedureName in service.procedures)) {
       log?.warn(
         `${this.transport.clientId} -- couldn't find a matching procedure for ${message.serviceName}.${message.procedureName}`,
@@ -429,10 +429,10 @@ class RiverServer<Services extends ServiceSchemaMap> {
     }
   }
 
-  private getContext(service: AnyService) {
+  private getContext(service: AnyService, name: string) {
     const context = this.contextMap.get(service);
     if (!context) {
-      const err = `${this.transport.clientId} -- no context found for service`;
+      const err = `${this.transport.clientId} -- no context found for ${name}`;
       log?.error(err);
       throw new Error(err);
     }
