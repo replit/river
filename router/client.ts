@@ -205,7 +205,7 @@ export const createClient = <Srv extends Server<ServiceSchemaMap>>(
     }
 
     const [input] = opts.args;
-    if (options.connectOnInvoke && transport.connections.size === 0) {
+    if (options.connectOnInvoke && !transport.connections.has(serverId)) {
       void transport.connect(serverId);
     }
     log?.info(
