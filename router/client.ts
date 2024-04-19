@@ -1,4 +1,4 @@
-import { ClientTransport, Transport } from '../transport/transport';
+import { ClientTransport } from '../transport/transport';
 import {
   AnyService,
   ProcErrors,
@@ -250,14 +250,26 @@ function createSessionDisconnectHandler(
   };
 }
 
+function connectIfNotConnected(
+  transport: ClientTransport<Connection>,
+  to: TransportClientId,
+) {
+  if (transport.connections.size !== 0 || !transport.tryReconnecting) {
+    return;
+  }
+
+  void transport.connect(to);
+}
+
 function handleRpc(
-  transport: Transport<Connection>,
+  transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   input: Record<string, unknown>,
   serviceName: string,
   procedureName: string,
 ) {
   const streamId = nanoid();
+  connectIfNotConnected(transport, serverId);
   transport.send(serverId, {
     streamId,
     serviceName,
@@ -300,7 +312,7 @@ function handleRpc(
 }
 
 function handleStream(
-  transport: Transport<Connection>,
+  transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   init: Record<string, unknown> | undefined,
   serviceName: string,
@@ -312,6 +324,7 @@ function handleStream(
   let firstMessage = true;
   let healthyClose = true;
 
+  connectIfNotConnected(transport, serverId);
   if (init) {
     transport.send(serverId, {
       streamId,
@@ -388,13 +401,14 @@ function handleStream(
 }
 
 function handleSubscribe(
-  transport: Transport<Connection>,
+  transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   input: Record<string, unknown>,
   serviceName: string,
   procedureName: string,
 ) {
   const streamId = nanoid();
+  connectIfNotConnected(transport, serverId);
   transport.send(serverId, {
     streamId,
     serviceName,
@@ -448,7 +462,7 @@ function handleSubscribe(
 }
 
 function handleUpload(
-  transport: Transport<Connection>,
+  transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   init: Record<string, unknown> | undefined,
   serviceName: string,
@@ -459,6 +473,7 @@ function handleUpload(
   let firstMessage = true;
   let healthyClose = true;
 
+  connectIfNotConnected(transport, serverId);
   if (init) {
     transport.send(serverId, {
       streamId,

@@ -332,15 +332,13 @@ export abstract class Transport<ConnType extends Connection> {
           )}`,
         );
       } else {
+        const errMsg = `received out-of-order msg (got seq: ${msg.seq}, wanted seq: ${session.nextExpectedSeq})`;
         log?.error(
-          `${this.clientId} -- received out-of-order msg (got: ${
-            msg.seq
-          }, wanted: ${
-            session.nextExpectedSeq
-          }), marking connection as dead: ${JSON.stringify(msg)}`,
+          `${
+            this.clientId
+          } -- ${errMsg}, marking connection as dead: ${JSON.stringify(msg)}`,
         );
-        session.close();
-        this.deleteSession(session);
+        this.protocolError(ProtocolError.MessageOrderingViolated, errMsg);
       }
 
       return;

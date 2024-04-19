@@ -5,6 +5,7 @@ import {
   expect,
   onTestFinished,
   test,
+  vi,
 } from 'vitest';
 import { iterNext } from '../util/testHelpers';
 import { createServer } from '../router/server';
@@ -20,7 +21,7 @@ import {
   OrderingServiceSchema,
 } from './fixtures/services';
 import { UNCAUGHT_ERROR } from '../router/result';
-import { testFinishesCleanly } from './fixtures/cleanup';
+import { advanceFakeTimersByDisconnectGrace, testFinishesCleanly, waitFor } from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
 
 describe.each(testMatrix())(
@@ -468,6 +469,44 @@ describe.each(testMatrix())(
         const [_input, _output, close] = openStreams[i];
         close();
       }
+    });
+
+    test('client reconnects even after session grace', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const server = createServer(serverTransport, { test: TestServiceSchema });
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+
+      await client.test.add.rpc({ n: 3 });
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+
+      // kill the session
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      clientTransport.tryReconnecting = false;
+      clientTransport.connections.forEach((conn) => conn.close());
+      await advanceFakeTimersByDisconnectGrace();
+      clientTransport.tryReconnecting = true;
+
+      // we should have no connections
+      expect(serverTransport.connections.size).toEqual(0);
+      expect(clientTransport.connections.size).toEqual(0);
+
+      // client should reconnect when making another call
+      await client.test.add.rpc({ n: 4 });
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
     });
   },
 );
