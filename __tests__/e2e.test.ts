@@ -531,8 +531,8 @@ describe.each(testMatrix())(
       expect(clientTransport.connections.size).toEqual(0);
 
       // client should reconnect when making another call without explicitly calling connect
-      await client.test.add.rpc({ n: 4 });
-      console.log('test 1');
+      const res = await client.test.add.rpc({ n: 4 });
+      console.log('test 1', res);
       await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
       console.log('test 2');
       await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
