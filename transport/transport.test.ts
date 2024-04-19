@@ -124,7 +124,7 @@ describe.each(testMatrix())(
         Promise.all(first90Promises.slice(0, 30)),
       ).resolves.toStrictEqual(first90.slice(0, 30).map((msg) => msg.payload));
 
-      clientTransport.tryReconnecting = false;
+      clientTransport.reconnectOnConnectionDrop = false;
       clientTransport.connections.forEach((conn) => conn.close());
       await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
@@ -149,7 +149,7 @@ describe.each(testMatrix())(
         waitForMessage(serverTransport, (recv) => recv.id === id),
       );
 
-      clientTransport.tryReconnecting = true;
+      clientTransport.reconnectOnConnectionDrop = true;
       await clientTransport.connect('SERVER');
       await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
@@ -311,7 +311,7 @@ describe.each(testMatrix())(
       // session    >  c------------x  | (disconnected)
       // connection >  c--x   c-----x  | (disconnected)
       vi.useFakeTimers({ shouldAdvanceTime: true });
-      clientTransport.tryReconnecting = false;
+      clientTransport.reconnectOnConnectionDrop = false;
       clientTransport.connections.forEach((conn) => conn.close());
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(serverConnStart).toHaveBeenCalledTimes(2));
@@ -555,7 +555,7 @@ describe.each(testMatrix())(
       expect(clientSessStop).toHaveBeenCalledTimes(0);
 
       // bring client side connections down and stop trying to reconnect
-      clientTransport.tryReconnecting = false;
+      clientTransport.reconnectOnConnectionDrop = false;
       clientTransport.connections.forEach((conn) => conn.close());
 
       // buffer some messages
@@ -579,7 +579,7 @@ describe.each(testMatrix())(
       expect(serverTransport.sessions.size).toBe(0);
 
       // eagerly reconnect client
-      clientTransport.tryReconnecting = true;
+      clientTransport.reconnectOnConnectionDrop = true;
       await clientTransport.connect('SERVER');
 
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));

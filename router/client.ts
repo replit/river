@@ -163,6 +163,16 @@ function _createRecursiveProxy(
   return proxy;
 }
 
+export interface ClientOptions {
+  connectOnInvoke: boolean;
+  eagerlyConnect: boolean;
+}
+
+const defaultClientOptions: ClientOptions = {
+  connectOnInvoke: true,
+  eagerlyConnect: true,
+};
+
 /**
  * Creates a client for a given server using the provided transport.
  * Note that the client only needs the type of the server, not the actual
@@ -179,9 +189,10 @@ function _createRecursiveProxy(
 export const createClient = <Srv extends Server<ServiceSchemaMap>>(
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
-  eagerlyConnect = true,
+  providedClientOptions: Partial<ClientOptions> = {},
 ) => {
-  if (eagerlyConnect) {
+  const options = { ...defaultClientOptions, ...providedClientOptions };
+  if (options.eagerlyConnect) {
     void transport.connect(serverId);
   }
 
@@ -194,6 +205,9 @@ export const createClient = <Srv extends Server<ServiceSchemaMap>>(
     }
 
     const [input] = opts.args;
+    if (options.connectOnInvoke && transport.connections.size === 0) {
+      void transport.connect(serverId);
+    }
     log?.info(
       `${
         transport.clientId
@@ -250,17 +264,6 @@ function createSessionDisconnectHandler(
   };
 }
 
-function connectIfNotConnected(
-  transport: ClientTransport<Connection>,
-  to: TransportClientId,
-) {
-  if (transport.connections.size !== 0 || !transport.tryReconnecting) {
-    return;
-  }
-
-  void transport.connect(to);
-}
-
 function handleRpc(
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
@@ -269,7 +272,6 @@ function handleRpc(
   procedureName: string,
 ) {
   const streamId = nanoid();
-  connectIfNotConnected(transport, serverId);
   transport.send(serverId, {
     streamId,
     serviceName,
@@ -324,7 +326,6 @@ function handleStream(
   let firstMessage = true;
   let healthyClose = true;
 
-  connectIfNotConnected(transport, serverId);
   if (init) {
     transport.send(serverId, {
       streamId,
@@ -408,7 +409,6 @@ function handleSubscribe(
   procedureName: string,
 ) {
   const streamId = nanoid();
-  connectIfNotConnected(transport, serverId);
   transport.send(serverId, {
     streamId,
     serviceName,
@@ -473,7 +473,6 @@ function handleUpload(
   let firstMessage = true;
   let healthyClose = true;
 
-  connectIfNotConnected(transport, serverId);
   if (init) {
     transport.send(serverId, {
       streamId,

@@ -183,7 +183,7 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
     const client = createClient<typeof server>(
       new MockClientTransport('client'),
       'SERVER',
-      false,
+      { eagerlyConnect: false },
     );
 
     expect(client.d.f59.rpc({ a: 0 })).toBeTruthy();

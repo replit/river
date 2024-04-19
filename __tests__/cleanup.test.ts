@@ -60,7 +60,7 @@ describe.each(testMatrix())(
 
       // should be back to 0 connections after client closes
       vi.useFakeTimers({ shouldAdvanceTime: true });
-      clientTransport.tryReconnecting = false;
+      clientTransport.reconnectOnConnectionDrop = false;
       clientTransport.close();
 
       await waitForTransportToFinish(clientTransport);
@@ -99,7 +99,7 @@ describe.each(testMatrix())(
 
       // should be back to 0 connections after client closes
       vi.useFakeTimers({ shouldAdvanceTime: true });
-      clientTransport.tryReconnecting = false;
+      clientTransport.reconnectOnConnectionDrop = false;
       serverTransport.close();
 
       await waitForTransportToFinish(clientTransport);

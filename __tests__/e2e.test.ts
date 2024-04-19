@@ -21,7 +21,11 @@ import {
   OrderingServiceSchema,
 } from './fixtures/services';
 import { UNCAUGHT_ERROR } from '../router/result';
-import { advanceFakeTimersByDisconnectGrace, testFinishesCleanly, waitFor } from './fixtures/cleanup';
+import {
+  advanceFakeTimersByDisconnectGrace,
+  testFinishesCleanly,
+  waitFor,
+} from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
 
 describe.each(testMatrix())(
@@ -494,10 +498,10 @@ describe.each(testMatrix())(
 
       // kill the session
       vi.useFakeTimers({ shouldAdvanceTime: true });
-      clientTransport.tryReconnecting = false;
+      clientTransport.reconnectOnConnectionDrop = false;
       clientTransport.connections.forEach((conn) => conn.close());
       await advanceFakeTimersByDisconnectGrace();
-      clientTransport.tryReconnecting = true;
+      clientTransport.reconnectOnConnectionDrop = true;
 
       // we should have no connections
       expect(serverTransport.connections.size).toEqual(0);

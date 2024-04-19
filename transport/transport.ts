@@ -37,8 +37,8 @@ import { NaiveJsonCodec } from '../codec';
  */
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
-export type ProvidedTransportOptions = Partial<SessionOptions>;
-type TransportOptions = Required<ProvidedTransportOptions>;
+type TransportOptions = SessionOptions;
+export type ProvidedTransportOptions = Partial<TransportOptions>;
 const defaultTransportOptions: TransportOptions = {
   heartbeatIntervalMs: 1_000,
   heartbeatsUntilDead: 2,
@@ -46,13 +46,8 @@ const defaultTransportOptions: TransportOptions = {
   codec: NaiveJsonCodec,
 };
 
-export type ProvidedClientTransportOptions = {
-  connectionRetryOptions?: Partial<ConnectionRetryOptions>;
-} & ProvidedTransportOptions;
-
-type ClientTransportOptions = SessionOptions & {
-  connectionRetryOptions: ConnectionRetryOptions;
-};
+export type ProvidedClientTransportOptions = Partial<ClientTransportOptions>;
+type ClientTransportOptions = SessionOptions & ConnectionRetryOptions;
 
 const defaultConnectionRetryOptions: ConnectionRetryOptions = {
   baseIntervalMs: 250,
@@ -63,8 +58,8 @@ const defaultConnectionRetryOptions: ConnectionRetryOptions = {
 };
 
 const defaultClientTransportOptions: ClientTransportOptions = {
-  connectionRetryOptions: defaultConnectionRetryOptions,
   ...defaultTransportOptions,
+  ...defaultConnectionRetryOptions,
 };
 
 /**
@@ -477,11 +472,18 @@ export abstract class ClientTransport<
    */
   inflightConnectionPromises: Map<TransportClientId, Promise<ConnType>>;
   retryBudget: LeakyBucketRateLimit;
-  tryReconnecting = true;
+
+  /**
+   * A flag indicating whether the transport should automatically reconnect
+   * when a connection is dropped.
+   * Realistically, this should always be true for clients unless you are writing
+   * tests or a special case where you don't want to reconnect.
+   */
+  reconnectOnConnectionDrop = true;
 
   constructor(
     clientId: TransportClientId,
-    providedOptions?: ProvidedTransportOptions,
+    providedOptions?: ProvidedClientTransportOptions,
   ) {
     super(clientId, providedOptions);
     this.options = {
@@ -489,9 +491,7 @@ export abstract class ClientTransport<
       ...providedOptions,
     };
     this.inflightConnectionPromises = new Map();
-    this.retryBudget = new LeakyBucketRateLimit(
-      this.options.connectionRetryOptions,
-    );
+    this.retryBudget = new LeakyBucketRateLimit(this.options);
   }
 
   protected handleConnection(conn: ConnType, to: TransportClientId): void {
@@ -529,7 +529,7 @@ export abstract class ClientTransport<
         `${this.clientId} -- connection (id: ${conn.debugId}) to ${to} disconnected`,
       );
       this.inflightConnectionPromises.delete(to);
-      if (this.tryReconnecting) {
+      if (this.reconnectOnConnectionDrop) {
         void this.connect(to);
       }
     });
@@ -670,7 +670,7 @@ export abstract class ClientTransport<
       this.inflightConnectionPromises.delete(to);
       const errStr = coerceErrorString(error);
 
-      if (!this.tryReconnecting || !canProceedWithConnection()) {
+      if (!this.reconnectOnConnectionDrop || !canProceedWithConnection()) {
         log?.warn(`${this.clientId} -- connection to ${to} failed (${errStr})`);
       } else {
         log?.warn(

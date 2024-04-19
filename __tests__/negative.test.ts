@@ -110,11 +110,9 @@ describe('should handle incompatabilities', async () => {
         return Promise.resolve(ws);
       },
       'client',
-      {
-        connectionRetryOptions: { attemptBudgetCapacity: maxAttempts },
-      },
+      { attemptBudgetCapacity: maxAttempts },
     );
-    clientTransport.tryReconnecting = false;
+    clientTransport.reconnectOnConnectionDrop = false;
 
     const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
