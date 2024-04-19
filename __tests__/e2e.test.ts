@@ -531,12 +531,15 @@ describe.each(testMatrix())(
       expect(clientTransport.connections.size).toEqual(0);
 
       // client should reconnect when making another call without explicitly calling connect
-      void client.test.add.rpc({ n: 4 });
+      const resultPromise = client.test.add.rpc({ n: 4 });
       await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      const result = await resultPromise;
+      assert(result.ok);
+      expect(result.payload).toStrictEqual({ result: 7 });
     });
 
-    test("client doesn't reconnect if client sets connectOnInvoke to false", async () => {
+    test("client doesn't reconnect after session grace if connectOnInvoke is false", async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
