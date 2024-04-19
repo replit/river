@@ -27,7 +27,6 @@ import {
   waitFor,
 } from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
-import { bindLogger, unbindLogger } from '../logging';
 
 describe.each(testMatrix())(
   'client <-> server integration test ($transport.name transport, $codec.name codec)',
@@ -500,7 +499,6 @@ describe.each(testMatrix())(
 
     test('client reconnects even after session grace', async () => {
       // setup
-      bindLogger(console.log);
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const server = createServer(serverTransport, { test: TestServiceSchema });
@@ -515,7 +513,6 @@ describe.each(testMatrix())(
           serverTransport,
           server,
         });
-        unbindLogger();
       });
 
       await client.test.add.rpc({ n: 3 });
@@ -534,12 +531,9 @@ describe.each(testMatrix())(
       expect(clientTransport.connections.size).toEqual(0);
 
       // client should reconnect when making another call without explicitly calling connect
-      console.log('1');
       void client.test.add.rpc({ n: 4 });
-      console.log('2');
       await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
-      console.log('3');
     });
 
     test("client doesn't reconnect if client sets connectOnInvoke to false", async () => {
