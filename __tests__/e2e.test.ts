@@ -5,6 +5,7 @@ import {
   expect,
   onTestFinished,
   test,
+  vi,
 } from 'vitest';
 import { iterNext } from '../util/testHelpers';
 import { createServer } from '../router/server';
@@ -20,7 +21,11 @@ import {
   OrderingServiceSchema,
 } from './fixtures/services';
 import { UNCAUGHT_ERROR } from '../router/result';
-import { testFinishesCleanly } from './fixtures/cleanup';
+import {
+  advanceFakeTimersByDisconnectGrace,
+  testFinishesCleanly,
+  waitFor,
+} from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
 
 describe.each(testMatrix())(
@@ -468,6 +473,110 @@ describe.each(testMatrix())(
         const [_input, _output, close] = openStreams[i];
         close();
       }
+    });
+
+    test('eagerlyConnect should actually eagerly connect', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const server = createServer(serverTransport, { test: TestServiceSchema });
+      createClient<typeof server>(clientTransport, serverTransport.clientId, {
+        eagerlyConnect: true,
+      });
+
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+
+      // test
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+    });
+
+    test('client reconnects even after session grace', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const server = createServer(serverTransport, { test: TestServiceSchema });
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+        { connectOnInvoke: true },
+      );
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+
+      await client.test.add.rpc({ n: 3 });
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+
+      // kill the session
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      clientTransport.reconnectOnConnectionDrop = false;
+      clientTransport.connections.forEach((conn) => conn.close());
+      await advanceFakeTimersByDisconnectGrace();
+      clientTransport.reconnectOnConnectionDrop = true;
+
+      // we should have no connections
+      expect(serverTransport.connections.size).toEqual(0);
+      expect(clientTransport.connections.size).toEqual(0);
+
+      // client should reconnect when making another call without explicitly calling connect
+      const resultPromise = client.test.add.rpc({ n: 4 });
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      const result = await resultPromise;
+      assert(result.ok);
+      expect(result.payload).toStrictEqual({ result: 7 });
+    });
+
+    test("client doesn't reconnect after session grace if connectOnInvoke is false", async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const server = createServer(serverTransport, { test: TestServiceSchema });
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+        {
+          connectOnInvoke: false,
+        },
+      );
+
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+
+      // kill the session
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      clientTransport.reconnectOnConnectionDrop = false;
+      clientTransport.connections.forEach((conn) => conn.close());
+      await advanceFakeTimersByDisconnectGrace();
+
+      // we should have no connections
+      expect(serverTransport.connections.size).toEqual(0);
+      expect(clientTransport.connections.size).toEqual(0);
+
+      // client should not reconnect when making another call
+      void client.test.add.rpc({ n: 4 });
+      const connectMock = vi.spyOn(clientTransport, 'connect');
+      expect(connectMock).not.toHaveBeenCalled();
     });
   },
 );

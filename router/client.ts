@@ -1,4 +1,4 @@
-import { ClientTransport, Transport } from '../transport/transport';
+import { ClientTransport } from '../transport/transport';
 import {
   AnyService,
   ProcErrors,
@@ -163,6 +163,16 @@ function _createRecursiveProxy(
   return proxy;
 }
 
+export interface ClientOptions {
+  connectOnInvoke: boolean;
+  eagerlyConnect: boolean;
+}
+
+const defaultClientOptions: ClientOptions = {
+  connectOnInvoke: true,
+  eagerlyConnect: true,
+};
+
 /**
  * Creates a client for a given server using the provided transport.
  * Note that the client only needs the type of the server, not the actual
@@ -179,9 +189,10 @@ function _createRecursiveProxy(
 export const createClient = <Srv extends Server<ServiceSchemaMap>>(
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
-  eagerlyConnect = true,
+  providedClientOptions: Partial<ClientOptions> = {},
 ) => {
-  if (eagerlyConnect) {
+  const options = { ...defaultClientOptions, ...providedClientOptions };
+  if (options.eagerlyConnect) {
     void transport.connect(serverId);
   }
 
@@ -201,6 +212,11 @@ export const createClient = <Srv extends Server<ServiceSchemaMap>>(
         input,
       )}`,
     );
+
+    if (options.connectOnInvoke && !transport.connections.has(serverId)) {
+      void transport.connect(serverId);
+    }
+
     if (procType === 'rpc') {
       return handleRpc(
         transport,
@@ -251,7 +267,7 @@ function createSessionDisconnectHandler(
 }
 
 function handleRpc(
-  transport: Transport<Connection>,
+  transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   input: Record<string, unknown>,
   serviceName: string,
@@ -300,7 +316,7 @@ function handleRpc(
 }
 
 function handleStream(
-  transport: Transport<Connection>,
+  transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   init: Record<string, unknown> | undefined,
   serviceName: string,
@@ -388,7 +404,7 @@ function handleStream(
 }
 
 function handleSubscribe(
-  transport: Transport<Connection>,
+  transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   input: Record<string, unknown>,
   serviceName: string,
@@ -448,7 +464,7 @@ function handleSubscribe(
 }
 
 function handleUpload(
-  transport: Transport<Connection>,
+  transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   init: Record<string, unknown> | undefined,
   serviceName: string,

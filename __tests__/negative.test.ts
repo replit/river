@@ -110,11 +110,9 @@ describe('should handle incompatabilities', async () => {
         return Promise.resolve(ws);
       },
       'client',
-      {
-        connectionRetryOptions: { attemptBudgetCapacity: maxAttempts },
-      },
+      { attemptBudgetCapacity: maxAttempts },
     );
-    clientTransport.tryReconnecting = false;
+    clientTransport.reconnectOnConnectionDrop = false;
 
     const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
@@ -165,14 +163,17 @@ describe('should handle incompatabilities', async () => {
     );
   });
 
-  test('mismatched seq number should close the whole session', async () => {
+  test('seq number in the future should raise protocol error', async () => {
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
 
     // add listeners
     const spy = vi.fn();
+    const errMock = vi.fn();
     serverTransport.addEventListener('connectionStatus', spy);
+    serverTransport.addEventListener('protocolError', errMock);
     onTestFinished(async () => {
       serverTransport.removeEventListener('connectionStatus', spy);
+      serverTransport.removeEventListener('protocolError', errMock);
 
       await testFinishesCleanly({
         clientTransports: [],
@@ -187,6 +188,12 @@ describe('should handle incompatabilities', async () => {
 
     // wait for both sides to be happy
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    expect(errMock).toHaveBeenCalledTimes(0);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'connect',
+      }),
+    );
 
     // send one with bad sequence number
     const msg: OpaqueTransportMessage = {
@@ -201,9 +208,12 @@ describe('should handle incompatabilities', async () => {
     };
     ws.send(NaiveJsonCodec.toBuffer(msg));
 
-    // ws should be closed after we send something bad
-    await waitFor(() => expect(ws.readyState).toBe(ws.CLOSED));
-    expect(serverTransport.connections.size).toBe(0);
+    await waitFor(() => expect(errMock).toHaveBeenCalledTimes(1));
+    expect(errMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: ProtocolError.MessageOrderingViolated,
+      }),
+    );
   });
 
   test('mismatched protocol version', async () => {

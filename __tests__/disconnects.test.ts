@@ -52,7 +52,7 @@ describe.each(testMatrix())(
       expect(serverTransport.connections.size).toEqual(1);
 
       vi.useFakeTimers({ shouldAdvanceTime: true });
-      clientTransport.tryReconnecting = false;
+      clientTransport.reconnectOnConnectionDrop = false;
       clientTransport.connections.forEach((conn) => conn.close());
 
       const procPromise = client.test.add.rpc({ n: 4 });
@@ -98,7 +98,7 @@ describe.each(testMatrix())(
       expect(serverTransport.connections.size).toEqual(1);
 
       vi.useFakeTimers({ shouldAdvanceTime: true });
-      clientTransport.tryReconnecting = false;
+      clientTransport.reconnectOnConnectionDrop = false;
       clientTransport.connections.forEach((conn) => conn.close());
 
       const nextResPromise = iterNext(output);
@@ -175,7 +175,7 @@ describe.each(testMatrix())(
 
       // kill the connection for client2
       vi.useFakeTimers({ shouldAdvanceTime: true });
-      client2Transport.tryReconnecting = false;
+      client2Transport.reconnectOnConnectionDrop = false;
       client2Transport.connections.forEach((conn) => conn.close());
 
       // client1 who is still connected can still add values and receive updates
@@ -238,7 +238,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
 
       vi.useFakeTimers({ shouldAdvanceTime: true });
-      clientTransport.tryReconnecting = false;
+      clientTransport.reconnectOnConnectionDrop = false;
       clientTransport.connections.forEach((conn) => conn.close());
 
       // after we've disconnected, hit end of grace period
