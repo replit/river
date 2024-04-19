@@ -527,15 +527,16 @@ describe.each(testMatrix())(
       clientTransport.reconnectOnConnectionDrop = true;
 
       // we should have no connections
-      console.log('test 1');
       expect(serverTransport.connections.size).toEqual(0);
       expect(clientTransport.connections.size).toEqual(0);
-      console.log('test 2');
 
       // client should reconnect when making another call without explicitly calling connect
       await client.test.add.rpc({ n: 4 });
+      console.log('test 1');
       await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      console.log('test 2');
       await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+      console.log('test 3');
     });
 
     test("client doesn't reconnect if client sets connectOnInvoke to false", async () => {
