@@ -6,7 +6,7 @@ import { ServiceSchemaMap } from '../../router/services';
 import { testingSessionOptions } from '../../util/testHelpers';
 
 const waitUntilOptions = {
-  timeout: 500, // these are all local connections so anything above 250ms is sus
+  timeout: 500, // account for possibility of conn backoff
   interval: 5, // check every 5ms
 };
 
