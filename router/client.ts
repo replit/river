@@ -205,9 +205,6 @@ export const createClient = <Srv extends Server<ServiceSchemaMap>>(
     }
 
     const [input] = opts.args;
-    if (options.connectOnInvoke && !transport.connections.has(serverId)) {
-      void transport.connect(serverId);
-    }
     log?.info(
       `${
         transport.clientId
@@ -215,6 +212,11 @@ export const createClient = <Srv extends Server<ServiceSchemaMap>>(
         input,
       )}`,
     );
+
+    if (options.connectOnInvoke && !transport.connections.has(serverId)) {
+      void transport.connect(serverId);
+    }
+
     if (procType === 'rpc') {
       return handleRpc(
         transport,
