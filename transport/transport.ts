@@ -639,6 +639,7 @@ export abstract class ClientTransport<
       reconnectPromise = sleep
         .then(() => {
           if (!canProceedWithConnection()) {
+            console.log("hrrrm")
             throw new Error('transport state is no longer open');
           }
         })
