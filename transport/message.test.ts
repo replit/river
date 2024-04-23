@@ -58,16 +58,22 @@ describe('message helpers', () => {
   });
 
   test('handshakeRequestMessage', () => {
-    const m = handshakeRequestMessage('a', 'b', 'abc');
+    const m = handshakeRequestMessage('a', 'b', 'sess');
 
     expect(m.from).toBe('a');
     expect(m.to).toBe('b');
-    expect(m.payload.instanceId).toBe('abc');
+    expect(m.payload.sessionId).toBe('sess');
   });
 
   test('handshakeResponseMessage', () => {
-    const mSuccess = handshakeResponseMessage('a', '001', 'b', true);
-    const mFail = handshakeResponseMessage('a', '001', 'b', false);
+    const mSuccess = handshakeResponseMessage('a', 'b', {
+      ok: true,
+      sessionId: 'sess',
+    });
+    const mFail = handshakeResponseMessage('a', 'b', {
+      ok: false,
+      reason: 'bad',
+    });
 
     expect(mSuccess.from).toBe('a');
     expect(mSuccess.to).toBe('b');

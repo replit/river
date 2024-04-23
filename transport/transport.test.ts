@@ -7,7 +7,7 @@ import {
 } from '../util/testHelpers';
 import { EventMap } from '../transport/events';
 import {
-  advanceFakeTimersByDisconnectGrace,
+  advanceFakeTimersBySessionGrace,
   testFinishesCleanly,
   waitFor,
 } from '../__tests__/fixtures/cleanup';
@@ -318,7 +318,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(serverConnStop).toHaveBeenCalledTimes(2));
 
-      await advanceFakeTimersByDisconnectGrace();
+      await advanceFakeTimersBySessionGrace();
       await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(serverSessStart).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(1));

@@ -28,8 +28,10 @@ export async function advanceFakeTimersByDisconnectGrace() {
       testingSessionOptions.heartbeatIntervalMs + 1,
     );
   }
+}
 
-  // wait for disconnect timer to propagate
+export async function advanceFakeTimersBySessionGrace() {
+  await advanceFakeTimersByDisconnectGrace();
   await vi.runOnlyPendingTimersAsync();
   await vi.advanceTimersByTimeAsync(
     testingSessionOptions.sessionDisconnectGraceMs + 1,
@@ -114,20 +116,20 @@ export async function testFinishesCleanly({
 
   if (clientTransports) {
     await Promise.all(clientTransports.map(waitForTransportToFinish));
-    await advanceFakeTimersByDisconnectGrace();
+    await advanceFakeTimersBySessionGrace();
     await Promise.all(clientTransports.map(ensureTransportIsClean));
   }
 
   // server sits on top of server transport so we clean it up first
   if (server) {
-    await advanceFakeTimersByDisconnectGrace();
+    await advanceFakeTimersBySessionGrace();
     await ensureServerIsClean(server);
     await server.close();
   }
 
   if (serverTransport) {
     await waitForTransportToFinish(serverTransport);
-    await advanceFakeTimersByDisconnectGrace();
+    await advanceFakeTimersBySessionGrace();
     await ensureTransportIsClean(serverTransport);
   }
 

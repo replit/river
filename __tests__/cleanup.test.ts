@@ -15,7 +15,7 @@ import {
 } from './fixtures/services';
 import { createClient, createServer } from '../router';
 import {
-  advanceFakeTimersByDisconnectGrace,
+  advanceFakeTimersBySessionGrace,
   ensureTransportBuffersAreEventuallyEmpty,
   testFinishesCleanly,
   waitFor,
@@ -65,7 +65,7 @@ describe.each(testMatrix())(
 
       await waitForTransportToFinish(clientTransport);
       await waitForTransportToFinish(serverTransport);
-      await advanceFakeTimersByDisconnectGrace();
+      await advanceFakeTimersBySessionGrace();
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
@@ -104,7 +104,7 @@ describe.each(testMatrix())(
 
       await waitForTransportToFinish(clientTransport);
       await waitForTransportToFinish(serverTransport);
-      await advanceFakeTimersByDisconnectGrace();
+      await advanceFakeTimersBySessionGrace();
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
@@ -150,7 +150,7 @@ describe.each(testMatrix())(
       vi.useFakeTimers({ shouldAdvanceTime: true });
       await waitForTransportToFinish(clientTransport);
       await waitForTransportToFinish(serverTransport);
-      await advanceFakeTimersByDisconnectGrace();
+      await advanceFakeTimersBySessionGrace();
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
@@ -217,7 +217,7 @@ describe.each(testMatrix())(
       vi.useFakeTimers({ shouldAdvanceTime: true });
       await waitForTransportToFinish(clientTransport);
       await waitForTransportToFinish(serverTransport);
-      await advanceFakeTimersByDisconnectGrace();
+      await advanceFakeTimersBySessionGrace();
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
@@ -276,7 +276,7 @@ describe.each(testMatrix())(
       vi.useFakeTimers({ shouldAdvanceTime: true });
       await waitForTransportToFinish(clientTransport);
       await waitForTransportToFinish(serverTransport);
-      await advanceFakeTimersByDisconnectGrace();
+      await advanceFakeTimersBySessionGrace();
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
 
@@ -335,7 +335,7 @@ describe.each(testMatrix())(
       vi.useFakeTimers({ shouldAdvanceTime: true });
       await waitForTransportToFinish(clientTransport);
       await waitForTransportToFinish(serverTransport);
-      await advanceFakeTimersByDisconnectGrace();
+      await advanceFakeTimersBySessionGrace();
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });

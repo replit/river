@@ -19,7 +19,7 @@ import { ProvidedTransportOptions } from '../../transport/transport';
 import { WebSocketClientTransport } from '../../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../../transport/impls/ws/server';
 
-export type ValidTransports = 'ws' | 'unix sockets' | 'node streams';
+export type ValidTransports = 'ws' | 'unix sockets';
 export const transports: Array<{
   name: ValidTransports;
   setup: (opts?: ProvidedTransportOptions) => Promise<{
