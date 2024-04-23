@@ -247,13 +247,8 @@ export class Session<ConnType extends Connection> {
   }
 
   updateBookkeeping(ack: number, seq: number) {
-    if (ack < this.ack) {
-      log?.error(`${this.from} -- received stale ack ${ack} < ${this.ack}`);
-      return;
-    }
-
-    if (seq < this.seq) {
-      log?.error(`${this.from} -- received stale seq ${seq} < ${this.seq}`);
+    if (seq + 1 < this.ack) {
+      log?.error(`${this.from} -- received stale seq ${seq} + 1 < ${this.ack}`);
       return;
     }
 
