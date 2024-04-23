@@ -123,16 +123,12 @@ export class Session<ConnType extends Connection> {
   advertisedSessionId?: string;
 
   /**
-   * Number of messages we've sent along this session.
-   * Starts at one due to the handshake message.
-   * This excludes acks.
+   * Number of messages we've sent along this session (excluding handshake and acks)
    */
   private seq: SequenceNumber = 0;
 
   /**
-   * Number of unique messages we've received this session.
-   * Starts at one due to the handshake message.
-   * This excludes acks.
+   * Number of unique messages we've received this session (excluding handshake and acks)
    */
   private ack: SequenceNumber = 0;
 

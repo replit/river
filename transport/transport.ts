@@ -180,7 +180,7 @@ export abstract class Transport<ConnType extends Connection> {
       conn,
     });
 
-    // check if the peer we are connected to is actually different by comparing instanceId
+    // check if the peer we are connected to is actually different by comparing session id
     let oldSession = this.sessions.get(connectedTo);
     if (
       oldSession?.advertisedSessionId &&
