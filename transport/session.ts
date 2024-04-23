@@ -247,8 +247,18 @@ export class Session<ConnType extends Connection> {
   }
 
   updateBookkeeping(ack: number, seq: number) {
+    if (ack < this.ack) {
+      log?.error(`${this.from} -- received stale ack ${ack} < ${this.ack}`);
+      return;
+    }
+
+    if (seq < this.ack) {
+      log?.error(`${this.from} -- received stale seq ${seq} < ${this.seq}`);
+      return;
+    }
+
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq > ack);
-    this.ack = Math.max(seq + 1, this.ack);
+    this.ack = seq + 1;
   }
 
   closeStaleConnection(conn?: ConnType) {
