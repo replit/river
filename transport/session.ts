@@ -252,7 +252,7 @@ export class Session<ConnType extends Connection> {
       return;
     }
 
-    this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq > ack);
+    this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
     this.ack = seq + 1;
   }
 
