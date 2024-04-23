@@ -252,7 +252,7 @@ export class Session<ConnType extends Connection> {
       return;
     }
 
-    if (seq < this.ack) {
+    if (seq < this.seq) {
       log?.error(`${this.from} -- received stale seq ${seq} < ${this.seq}`);
       return;
     }
