@@ -1,7 +1,8 @@
-import { TObject, Static, TUnion, TNever, Type } from '@sinclair/typebox';
+import { Static, TUnion, TNever, Type } from '@sinclair/typebox';
 import type { Pushable } from 'it-pushable';
 import { ServiceContextWithTransportInfo } from './context';
 import { Result, RiverError, RiverUncaughtSchema } from './result';
+import { RiverObject } from '../types';
 
 /**
  * Brands a type to prevent it from being directly constructed.
@@ -31,7 +32,7 @@ export type ValidProcType =
 /**
  * Represents the payload type for {@link Procedure}s.
  */
-export type PayloadType = TObject | TUnion<Array<TObject>>;
+export type PayloadType = RiverObject | TUnion<Array<RiverObject>>;
 
 /**
  * Represents results from a {@link Procedure}. Might come from inside a stream or
@@ -56,6 +57,7 @@ export interface RPCProcedure<
   O extends PayloadType,
   E extends RiverError,
 > {
+  description: string;
   type: 'rpc';
   input: I;
   output: O;
@@ -240,6 +242,7 @@ export type ProcedureMap<State = object> = Record<string, AnyProcedure<State>>;
  */
 // signature: default errors
 function rpc<State, I extends PayloadType, O extends PayloadType>(def: {
+  description: string;
   input: I;
   output: O;
   errors?: never;
@@ -253,6 +256,7 @@ function rpc<
   O extends PayloadType,
   E extends RiverError,
 >(def: {
+  description: string;
   input: I;
   output: O;
   errors: E;
@@ -261,11 +265,13 @@ function rpc<
 
 // implementation
 function rpc({
+  description,
   input,
   output,
   errors = Type.Never(),
   handler,
 }: {
+  description: string;
   input: PayloadType;
   output: PayloadType;
   errors?: RiverError;
@@ -276,7 +282,7 @@ function rpc({
     RiverError
   >['handler'];
 }) {
-  return { type: 'rpc', input, output, errors, handler };
+  return { description, type: 'rpc', input, output, errors, handler };
 }
 
 /**
@@ -289,6 +295,7 @@ function upload<
   O extends PayloadType,
   Init extends PayloadType,
 >(def: {
+  description: string;
   init: Init;
   input: I;
   output: O;
@@ -304,6 +311,7 @@ function upload<
   E extends RiverError,
   Init extends PayloadType,
 >(def: {
+  description: string;
   init: Init;
   input: I;
   output: O;
@@ -327,6 +335,7 @@ function upload<
   O extends PayloadType,
   E extends RiverError,
 >(def: {
+  description: string;
   init?: never;
   input: I;
   output: O;

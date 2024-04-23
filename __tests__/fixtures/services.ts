@@ -1,15 +1,21 @@
-import { Type } from '@sinclair/typebox';
+import { Type } from '../../types';
 import { ServiceSchema } from '../../router/services';
 import { Err, Ok } from '../../router/result';
 import { Observable } from './observable';
 import { Procedure } from '../../router';
 
-export const EchoRequest = Type.Object({
-  msg: Type.String(),
-  ignore: Type.Boolean(),
-  end: Type.Optional(Type.Boolean()),
-});
-export const EchoResponse = Type.Object({ response: Type.String() });
+export const EchoRequest = Type.Object(
+  {
+    msg: Type.String({ description: 'A string' }),
+    ignore: Type.Boolean({ description: 'A boolean' }),
+    end: Type.Optional(Type.Boolean({ description: 'A boolean' })),
+  },
+  { description: 'A request that echos' },
+);
+export const EchoResponse = Type.Object(
+  { response: Type.String({ description: 'A string' }) },
+  { description: 'A response from an echo' },
+);
 
 const TestServiceScaffold = ServiceSchema.scaffold({
   initializeState: () => ({ count: 0 }),
@@ -17,8 +23,15 @@ const TestServiceScaffold = ServiceSchema.scaffold({
 
 const testServiceProcedures = TestServiceScaffold.procedures({
   add: Procedure.rpc({
-    input: Type.Object({ n: Type.Number() }),
-    output: Type.Object({ result: Type.Number() }),
+    description: 'Adds two numbers and returns a value',
+    input: Type.Object(
+      { n: Type.Number({ description: 'A number' }) },
+      { description: 'An input object' },
+    ),
+    output: Type.Object(
+      { result: Type.Number({ description: 'A number' }) },
+      { description: 'An output object' },
+    ),
     async handler(ctx, { n }) {
       ctx.state.count += n;
       return Ok({ result: ctx.state.count });
@@ -42,7 +55,10 @@ const testServiceProcedures = TestServiceScaffold.procedures({
   }),
 
   echoWithPrefix: Procedure.stream({
-    init: Type.Object({ prefix: Type.String() }),
+    init: Type.Object(
+      { prefix: Type.String({ description: 'A prefix' }) },
+      { description: 'An init object' },
+    ),
     input: EchoRequest,
     output: EchoResponse,
     async handler(_ctx, init, msgStream, returnStream) {
@@ -63,8 +79,15 @@ export const OrderingServiceSchema = ServiceSchema.define(
   { initializeState: () => ({ msgs: [] as Array<number> }) },
   {
     add: Procedure.rpc({
-      input: Type.Object({ n: Type.Number() }),
-      output: Type.Object({ n: Type.Number() }),
+      description: 'Adds two numbers and returns a value',
+      input: Type.Object(
+        { n: Type.Number({ description: 'A number' }) },
+        { description: 'An input' },
+      ),
+      output: Type.Object(
+        { n: Type.Number({ description: 'A number' }) },
+        { description: 'An output' },
+      ),
       async handler(ctx, { n }) {
         ctx.state.msgs.push(n);
         return Ok({ n });
@@ -72,8 +95,16 @@ export const OrderingServiceSchema = ServiceSchema.define(
     }),
 
     getAll: Procedure.rpc({
-      input: Type.Object({}),
-      output: Type.Object({ msgs: Type.Array(Type.Number()) }),
+      description: 'Retrieves all messages',
+      input: Type.Object({}, { description: 'An input object' }),
+      output: Type.Object(
+        {
+          msgs: Type.Array(Type.Number({ description: 'A number' }), {
+            description: 'A set of messages',
+          }),
+        },
+        { description: 'An output object' },
+      ),
       async handler(ctx, _msg) {
         return Ok({ msgs: ctx.state.msgs });
       },
@@ -83,8 +114,15 @@ export const OrderingServiceSchema = ServiceSchema.define(
 
 export const BinaryFileServiceSchema = ServiceSchema.define({
   getFile: Procedure.rpc({
-    input: Type.Object({ file: Type.String() }),
-    output: Type.Object({ contents: Type.Uint8Array() }),
+    description: 'Retrieves a file from a path',
+    input: Type.Object(
+      { file: Type.String({ description: 'A file path' }) },
+      { description: 'An input object' },
+    ),
+    output: Type.Object(
+      { contents: Type.Uint8Array({ description: 'File contents' }) },
+      { description: 'An output object' },
+    ),
     async handler(_ctx, { file }) {
       const bytes: Uint8Array = Buffer.from(`contents for file ${file}`);
       return Ok({ contents: bytes });
@@ -97,14 +135,30 @@ export const STREAM_ERROR = 'STREAM_ERROR';
 
 export const FallibleServiceSchema = ServiceSchema.define({
   divide: Procedure.rpc({
-    input: Type.Object({ a: Type.Number(), b: Type.Number() }),
-    output: Type.Object({ result: Type.Number() }),
+    /* description: Get the probability of rain for a specific location */
+    input: Type.Object(
+      {
+        a: Type.Number({ description: 'A number' }),
+        b: Type.Number({ description: 'A number' }),
+      },
+      { description: 'An input object' },
+    ),
+    output: Type.Object(
+      { result: Type.Number({ description: 'A result' }) },
+      { description: 'An output object' },
+    ),
     errors: Type.Union([
-      Type.Object({
-        code: Type.Literal(DIV_BY_ZERO),
-        message: Type.String(),
-        extras: Type.Object({ test: Type.String() }),
-      }),
+      Type.Object(
+        {
+          code: Type.Literal(DIV_BY_ZERO, { description: 'A literal' }),
+          message: Type.String({ description: 'A message' }),
+          extras: Type.Object(
+            { test: Type.String({ description: 'A test string' }) },
+            { description: 'A set of extras' },
+          ),
+        },
+        { description: 'An error object' },
+      ),
     ]),
     async handler(_ctx, { a, b }) {
       if (b === 0) {
@@ -120,16 +174,25 @@ export const FallibleServiceSchema = ServiceSchema.define({
   }),
 
   echo: Procedure.stream({
-    input: Type.Object({
-      msg: Type.String(),
-      throwResult: Type.Boolean(),
-      throwError: Type.Boolean(),
-    }),
-    output: Type.Object({ response: Type.String() }),
-    errors: Type.Object({
-      code: Type.Literal(STREAM_ERROR),
-      message: Type.String(),
-    }),
+    input: Type.Object(
+      {
+        msg: Type.String({ description: 'The message' }),
+        throwResult: Type.Boolean({ description: 'Throw on result' }),
+        throwError: Type.Boolean({ description: 'Throw on error' }),
+      },
+      { description: 'An input' },
+    ),
+    output: Type.Object(
+      { response: Type.String({ description: 'A response' }) },
+      { description: 'An output' },
+    ),
+    errors: Type.Object(
+      {
+        code: Type.Literal(STREAM_ERROR, { description: 'A literal code' }),
+        message: Type.String({ description: 'A message' }),
+      },
+      { description: 'An error' },
+    ),
     async handler(_ctx, msgStream, returnStream) {
       for await (const { msg, throwError, throwResult } of msgStream) {
         if (throwError) {
@@ -153,8 +216,15 @@ export const SubscribableServiceSchema = ServiceSchema.define(
   { initializeState: () => ({ count: new Observable(0) }) },
   {
     add: Procedure.rpc({
-      input: Type.Object({ n: Type.Number() }),
-      output: Type.Object({ result: Type.Number() }),
+      description: 'Adds two numbers and returns a value',
+      input: Type.Object(
+        { n: Type.Number({ description: 'A number' }) },
+        { description: 'An input object' },
+      ),
+      output: Type.Object(
+        { result: Type.Number({ description: 'A result' }) },
+        { description: 'An output object' },
+      ),
       async handler(ctx, { n }) {
         ctx.state.count.set((prev) => prev + n);
         return Ok({ result: ctx.state.count.get() });
@@ -162,8 +232,11 @@ export const SubscribableServiceSchema = ServiceSchema.define(
     }),
 
     value: Procedure.subscription({
-      input: Type.Object({}),
-      output: Type.Object({ result: Type.Number() }),
+      input: Type.Object({}, { description: 'An input object' }),
+      output: Type.Object(
+        { result: Type.Number({ description: 'A result' }) },
+        { description: 'An output object' },
+      ),
       async handler(ctx, _msg, returnStream) {
         return ctx.state.count.observe((count) => {
           returnStream.push(Ok({ result: count }));
@@ -175,8 +248,14 @@ export const SubscribableServiceSchema = ServiceSchema.define(
 
 export const UploadableServiceSchema = ServiceSchema.define({
   addMultiple: Procedure.upload({
-    input: Type.Object({ n: Type.Number() }),
-    output: Type.Object({ result: Type.Number() }),
+    input: Type.Object(
+      { n: Type.Number({ description: 'A number' }) },
+      { description: 'An input object' },
+    ),
+    output: Type.Object(
+      { result: Type.Number({ description: 'A result' }) },
+      { description: 'An output object' },
+    ),
     async handler(_ctx, msgStream) {
       let result = 0;
       for await (const { n } of msgStream) {
@@ -188,9 +267,19 @@ export const UploadableServiceSchema = ServiceSchema.define({
   }),
 
   addMultipleWithPrefix: Procedure.upload({
-    init: Type.Object({ prefix: Type.String() }),
-    input: Type.Object({ n: Type.Number() }),
-    output: Type.Object({ result: Type.String() }),
+    description: 'Adds multiple numbers',
+    init: Type.Object(
+      { prefix: Type.String({ description: 'A prefix' }) },
+      { description: 'An initialization object' },
+    ),
+    input: Type.Object(
+      { n: Type.Number({ description: 'A number' }) },
+      { description: 'An input object' },
+    ),
+    output: Type.Object(
+      { result: Type.String({ description: 'A result' }) },
+      { description: 'An output object' },
+    ),
     async handler(_ctx, init, msgStream) {
       let result = 0;
       for await (const { n } of msgStream) {

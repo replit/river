@@ -1,27 +1,47 @@
 import { describe, expect, test } from 'vitest';
 import { Procedure } from '../router/procedures';
 import { ServiceSchema } from '../router/services';
-import { Type } from '@sinclair/typebox';
 import { createServer } from '../router/server';
 import { Connection, ClientTransport, ServerTransport } from '../transport';
 import { createClient } from '../router/client';
 import { Ok } from '../router/result';
 import { TestServiceSchema } from './fixtures/services';
+import { Type } from '../types';
 
 const input = Type.Union([
-  Type.Object({ a: Type.Number() }),
-  Type.Object({ c: Type.String() }),
+  Type.Object(
+    { a: Type.Number({ description: 'A number' }) },
+    { description: 'One type' },
+  ),
+  Type.Object(
+    { c: Type.String({ description: 'A string' }) },
+    { description: 'Another type' },
+  ),
 ]);
-const output = Type.Object({ b: Type.Union([Type.Number(), Type.String()]) });
+const output = Type.Object(
+  {
+    b: Type.Union([
+      Type.Number({ description: 'A number' }),
+      Type.String({ description: 'A string' }),
+    ]),
+  },
+  { description: 'An output type' },
+);
 const errors = Type.Union([
-  Type.Object({
-    code: Type.Literal('ERROR1'),
-    message: Type.String(),
-  }),
-  Type.Object({
-    code: Type.Literal('ERROR2'),
-    message: Type.String(),
-  }),
+  Type.Object(
+    {
+      code: Type.Literal('ERROR1', { description: 'An error literal' }),
+      message: Type.String({ description: 'Error message' }),
+    },
+    { description: 'One error' },
+  ),
+  Type.Object(
+    {
+      code: Type.Literal('ERROR2', { description: 'An error literal' }),
+      message: Type.String({ description: 'Error message' }),
+    },
+    { description: 'Another error' },
+  ),
 ]);
 
 const fnBody = Procedure.rpc<
@@ -30,6 +50,7 @@ const fnBody = Procedure.rpc<
   typeof output,
   typeof errors
 >({
+  description: 'A function',
   input,
   output,
   errors,
