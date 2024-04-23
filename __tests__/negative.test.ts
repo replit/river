@@ -183,7 +183,7 @@ describe('should handle incompatabilities', async () => {
 
     const ws = createLocalWebSocketClient(port);
     await new Promise((resolve) => ws.on('open', resolve));
-    const requestMsg = handshakeRequestMessage('client', 'SERVER', 'instance1');
+    const requestMsg = handshakeRequestMessage('client', 'SERVER', 'sessionId');
     ws.send(NaiveJsonCodec.toBuffer(requestMsg));
 
     // wait for both sides to be happy
@@ -236,7 +236,6 @@ describe('should handle incompatabilities', async () => {
     const ws = createLocalWebSocketClient(port);
     await new Promise((resolve) => ws.on('open', resolve));
 
-    const clientInstanceId = nanoid();
     const requestMsg = {
       id: nanoid(),
       from: 'client',
@@ -248,7 +247,7 @@ describe('should handle incompatabilities', async () => {
       payload: {
         type: 'HANDSHAKE_REQ',
         protocolVersion: 'v0',
-        instanceId: clientInstanceId,
+        sessionId: 'sessionId',
       } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
     };
     ws.send(NaiveJsonCodec.toBuffer(requestMsg));

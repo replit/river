@@ -114,7 +114,13 @@ export class Session<ConnType extends Connection> {
   /**
    * The unique ID of this session.
    */
-  debugId: string;
+  id: string;
+
+  /**
+   * What the other side advertised as their session ID
+   * for this session.
+   */
+  advertisedSessionId?: string;
 
   /**
    * Number of messages we've sent along this session (excluding handshake and acks)
@@ -140,18 +146,18 @@ export class Session<ConnType extends Connection> {
   /**
    * The interval for sending heartbeats.
    */
-  private heartbeat?: ReturnType<typeof setInterval>;
+  private heartbeat: ReturnType<typeof setInterval>;
 
   constructor(
-    from: TransportClientId,
-    connectedTo: TransportClientId,
     conn: ConnType | undefined,
+    from: TransportClientId,
+    to: TransportClientId,
     options: SessionOptions,
   ) {
+    this.id = `session-${nanoid(12)}`;
     this.options = options;
-    this.debugId = `sess-${unsafeId()}`; // for debugging, no collision safety needed
     this.from = from;
-    this.to = connectedTo;
+    this.to = to;
     this.connection = conn;
     this.codec = options.codec;
 
@@ -196,12 +202,11 @@ export class Session<ConnType extends Connection> {
         log?.info(
           `${this.from} -- closing connection (id: ${this.connection.debugId}) to ${this.to} due to inactivity`,
         );
-        this.closeStaleConnection(this.connection);
+        this.closeStaleConnection();
       }
       return;
     }
 
-    // don't send heartbeat if we don't have a connection
     this.send({
       streamId: 'heartbeat',
       controlFlags: ControlFlags.AckBit,
@@ -234,7 +239,7 @@ export class Session<ConnType extends Connection> {
       if (!ok) {
         // this should never happen unless the transport has an
         // incorrect implementation of `createNewOutgoingConnection`
-        const msg = `${this.from} -- failed to send buffered message to ${this.to} in session (id: ${this.debugId}) (if you hit this code path something is seriously wrong)`;
+        const msg = `${this.from} -- failed to send buffered message to ${this.to} in session (id: ${this.id}) (if you hit this code path something is seriously wrong)`;
         log?.error(msg);
         throw new Error(msg);
       }
@@ -242,28 +247,33 @@ export class Session<ConnType extends Connection> {
   }
 
   updateBookkeeping(ack: number, seq: number) {
+    if (seq + 1 < this.ack) {
+      log?.error(`${this.from} -- received stale seq ${seq} + 1 < ${this.ack}`);
+      return;
+    }
+
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq > ack);
     this.ack = seq + 1;
   }
 
   closeStaleConnection(conn?: ConnType) {
-    if (!this.connection || this.connection !== conn) return;
+    if (this.connection === undefined || this.connection === conn) return;
     log?.info(
-      `${this.from} -- closing old inner connection (id: ${this.connection.debugId}) from session (id: ${this.debugId}) to ${this.to}`,
+      `${this.from} -- closing old inner connection (id: ${this.connection.debugId}) from session (id: ${this.id}) to ${this.to}`,
     );
     this.connection.close();
     this.connection = undefined;
   }
 
   replaceWithNewConnection(newConn: ConnType) {
-    this.closeStaleConnection(this.connection);
+    this.closeStaleConnection(newConn);
     this.cancelGrace();
     this.connection = newConn;
   }
 
   beginGrace(cb: () => void) {
     log?.info(
-      `${this.from} -- starting ${this.options.sessionDisconnectGraceMs}ms grace period until session (id: ${this.debugId}) to ${this.to} is closed`,
+      `${this.from} -- starting ${this.options.sessionDisconnectGraceMs}ms grace period until session (id: ${this.id}) to ${this.to} is closed`,
     );
     this.disconnectionGrace = setTimeout(() => {
       this.close();
@@ -275,12 +285,13 @@ export class Session<ConnType extends Connection> {
   cancelGrace() {
     this.heartbeatMisses = 0;
     clearTimeout(this.disconnectionGrace);
+    this.disconnectionGrace = undefined;
   }
 
   // closed when we want to discard the whole session
   // (i.e. shutdown or session disconnect)
   close() {
-    this.closeStaleConnection(this.connection);
+    this.closeStaleConnection();
     this.cancelGrace();
     this.resetBufferedMessages();
     clearInterval(this.heartbeat);

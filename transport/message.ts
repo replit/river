@@ -51,11 +51,11 @@ export const ControlMessageCloseSchema = Type.Object({
   type: Type.Literal('CLOSE'),
 });
 
-export const PROTOCOL_VERSION = 'v1';
+export const PROTOCOL_VERSION = 'v1.1';
 export const ControlMessageHandshakeRequestSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_REQ'),
   protocolVersion: Type.String(),
-  instanceId: Type.String(),
+  sessionId: Type.String(),
 });
 
 export const ControlMessageHandshakeResponseSchema = Type.Object({
@@ -63,7 +63,7 @@ export const ControlMessageHandshakeResponseSchema = Type.Object({
   status: Type.Union([
     Type.Object({
       ok: Type.Literal(true),
-      instanceId: Type.String(),
+      sessionId: Type.String(),
     }),
     Type.Object({
       ok: Type.Literal(false),
@@ -123,7 +123,7 @@ export type PartialTransportMessage<
 export function handshakeRequestMessage(
   from: TransportClientId,
   to: TransportClientId,
-  instanceId: string,
+  sessionId: string,
 ): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {
   return {
     id: nanoid(),
@@ -136,17 +136,15 @@ export function handshakeRequestMessage(
     payload: {
       type: 'HANDSHAKE_REQ',
       protocolVersion: PROTOCOL_VERSION,
-      instanceId,
+      sessionId,
     } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
   };
 }
 
 export function handshakeResponseMessage(
   from: TransportClientId,
-  instanceId: string,
   to: TransportClientId,
-  ok: boolean,
-  reason?: string,
+  status: Static<typeof ControlMessageHandshakeResponseSchema>['status'],
 ): TransportMessage<Static<typeof ControlMessageHandshakeResponseSchema>> {
   return {
     id: nanoid(),
@@ -156,21 +154,10 @@ export function handshakeResponseMessage(
     ack: 0,
     streamId: nanoid(),
     controlFlags: 0,
-    payload: (ok
-      ? {
-          type: 'HANDSHAKE_RESP',
-          status: {
-            ok: true,
-            instanceId,
-          },
-        }
-      : {
-          type: 'HANDSHAKE_RESP',
-          status: {
-            ok: false,
-            reason: reason ?? 'Unknown reason',
-          },
-        }) satisfies Static<typeof ControlMessageHandshakeResponseSchema>,
+    payload: {
+      type: 'HANDSHAKE_RESP',
+      status,
+    } satisfies Static<typeof ControlMessageHandshakeResponseSchema>,
   };
 }
 

@@ -15,7 +15,7 @@ import {
 } from './fixtures/services';
 import { createClient, createServer } from '../router';
 import {
-  advanceFakeTimersByDisconnectGrace,
+  advanceFakeTimersBySessionGrace,
   testFinishesCleanly,
   waitFor,
 } from './fixtures/cleanup';
@@ -59,7 +59,7 @@ describe.each(testMatrix())(
       // end procedure
 
       // after we've disconnected, hit end of grace period
-      await advanceFakeTimersByDisconnectGrace();
+      await advanceFakeTimersBySessionGrace();
 
       // we should get an error + expect the streams to be cleaned up
       await expect(procPromise).resolves.toMatchObject(
@@ -105,7 +105,7 @@ describe.each(testMatrix())(
       // end procedure
 
       // after we've disconnected, hit end of grace period
-      await advanceFakeTimersByDisconnectGrace();
+      await advanceFakeTimersBySessionGrace();
 
       // we should get an error + expect the streams to be cleaned up
       await expect(nextResPromise).resolves.toMatchObject(
@@ -183,7 +183,7 @@ describe.each(testMatrix())(
       const nextResPromise = iterNext(subscription2);
 
       // after we've disconnected, hit end of grace period
-      await advanceFakeTimersByDisconnectGrace();
+      await advanceFakeTimersBySessionGrace();
 
       // we should get an error from the subscription on client2
       await expect(nextResPromise).resolves.toMatchObject(
@@ -242,7 +242,7 @@ describe.each(testMatrix())(
       clientTransport.connections.forEach((conn) => conn.close());
 
       // after we've disconnected, hit end of grace period
-      await advanceFakeTimersByDisconnectGrace();
+      await advanceFakeTimersBySessionGrace();
 
       // we should get an error + expect the streams to be cleaned up
       await expect(addResult).resolves.toMatchObject(

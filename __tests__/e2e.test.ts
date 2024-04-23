@@ -22,7 +22,7 @@ import {
 } from './fixtures/services';
 import { UNCAUGHT_ERROR } from '../router/result';
 import {
-  advanceFakeTimersByDisconnectGrace,
+  advanceFakeTimersBySessionGrace,
   testFinishesCleanly,
   waitFor,
 } from './fixtures/cleanup';
@@ -523,7 +523,7 @@ describe.each(testMatrix())(
       vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
       clientTransport.connections.forEach((conn) => conn.close());
-      await advanceFakeTimersByDisconnectGrace();
+      await advanceFakeTimersBySessionGrace();
       clientTransport.reconnectOnConnectionDrop = true;
 
       // we should have no connections
@@ -567,7 +567,7 @@ describe.each(testMatrix())(
       vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
       clientTransport.connections.forEach((conn) => conn.close());
-      await advanceFakeTimersByDisconnectGrace();
+      await advanceFakeTimersBySessionGrace();
 
       // we should have no connections
       expect(serverTransport.connections.size).toEqual(0);

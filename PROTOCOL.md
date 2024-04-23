@@ -1,4 +1,4 @@
-# River protocol `v1`
+# River protocol `v1.1`
 
 ## Abstract
 
@@ -281,8 +281,6 @@ A `Connection` is the actual raw underlying transport connection.
 It is responsible for dispatching to/from the actual connection itself.
 It's lifecycle is tied to the lifecycle of the underlying transport connection (i.e. if the WebSocket drops, this connection should be deleted).
 
-The protocol also defines the concept of an `instanceId`, which is a unique identifier for a specific instantiation of a client or server.
-
 ### Why distinguish between `Transport` and `Session`?
 
 The distinction between `Transport` and `Session` is important because it allows us to have transparent reconnections.
@@ -303,8 +301,8 @@ The process differs slightly between the client and server:
   - If the handshake fails, the `Connection` is closed immediately.
   - Otherwise, consider the handshake successful and proceed to the next step.
   - The client should check for an existing `Session` for the `clientId` associated with the `Connection`.
-    - If an existing `Session` is found, it is verified whether the last `instanceId` associated with the previous `Session` matches the `instanceId` in the handshake response.
-      - A match in `instanceId` means a reconnection to the same session, and that the server still has the state for this session.
+    - If an existing `Session` is found, it is verified whether the last `sessionId` associated with the previous `Session` matches the `sessionId` in the handshake response.
+      - A match in `sessionId` means a reconnection to the same session, and that the server still has the state for this session.
         - The stale `Connection` object associated with the `Session` is closed, and replaced with the new `Connection` object.
         - Any buffered messages are resent.
       - If they do not match, it indicates the server has lost the session state. The old session is removed, its `Connection` object and heartbeat are closed, and processing falls through to the case of not having an associated session.
@@ -343,7 +341,7 @@ The handshake request payload schema is the following:
 type HandshakeRequest = {
   type: 'HANDSHAKE_REQ';
   protocolVersion: string;
-  instanceId: string;
+  sessionId: string;
 };
 ```
 
@@ -355,7 +353,7 @@ type HandshakeResponse = {
   status:
     | {
         ok: true;
-        instanceId: string;
+        sessionId: string;
       }
     | {
         ok: false;
