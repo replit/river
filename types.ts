@@ -36,7 +36,7 @@ interface RiverArrayOptions extends ArrayOptions {
   description: string;
 }
 
-function Array(schema: RiverSchema, options: RiverArrayOptions): RiverArray {
+function _Array(schema: RiverSchema, options: RiverArrayOptions): RiverArray {
   return {
     ...TypeboxType.Array(schema, options),
     description: options.description,
@@ -47,7 +47,7 @@ export interface RiverBoolean extends TBoolean {
   description: string;
 }
 
-function Boolean(options: RiverSchemaOptions): RiverBoolean {
+function _Boolean(options: RiverSchemaOptions): RiverBoolean {
   return {
     ...TypeboxType.Boolean(options),
     description: options.description,
@@ -58,7 +58,7 @@ export interface RiverLiteral<T extends TLiteralValue> extends TLiteral<T> {
   description: string;
 }
 
-function Literal<T extends TLiteralValue>(
+function _Literal<T extends TLiteralValue>(
   value: T,
   options: RiverSchemaOptions,
 ): RiverLiteral<T> {
@@ -76,7 +76,7 @@ export interface RiverNumber extends TNumber {
   description: string;
 }
 
-function Number(options: RiverNumberOptions): RiverNumber {
+function _Number(options: RiverNumberOptions): RiverNumber {
   return {
     ...TypeboxType.Number(options),
     description: options.description,
@@ -97,7 +97,7 @@ interface RiverProperties extends TProperties {
   [x: number]: RiverSchema | TUnion<Array<RiverSchema>>;
 }
 
-function Object<T extends RiverProperties>(
+function _Object<T extends RiverProperties>(
   properties: T,
   options: RiverObjectOptions,
 ): RiverObject<T> {
@@ -115,7 +115,7 @@ export interface RiverString extends TString {
   description: string;
 }
 
-function String(options: RiverStringOptions): RiverString {
+function _String(options: RiverStringOptions): RiverString {
   return {
     ...TypeboxType.String(options),
     description: options.description,
@@ -130,14 +130,14 @@ export interface RiverUint8Array extends TUint8Array {
   description: string;
 }
 
-function Uint8Array(options: RiverUint8ArrayOptions): RiverUint8Array {
+function _Uint8Array(options: RiverUint8ArrayOptions): RiverUint8Array {
   return {
     ...TypeboxType.Uint8Array(options),
     description: options.description,
   };
 }
 
-function Union<T extends Array<RiverSchema>>(
+function _Union<T extends Array<RiverSchema>>(
   schemas: [...T],
   options?: RiverSchemaOptions,
 ) {
@@ -145,13 +145,14 @@ function Union<T extends Array<RiverSchema>>(
 }
 
 export const Type = {
-  Array,
-  Boolean,
-  Literal,
-  Number,
-  Object,
+  // We prefix with `_` to avoid colliding with builtins
+  Array: _Array,
+  Boolean: _Boolean,
+  Literal: _Literal,
+  Number: _Number,
+  Object: _Object,
   Optional: TypeboxType.Optional,
-  String,
-  Uint8Array,
-  Union,
+  String: _String,
+  Uint8Array: _Uint8Array,
+  Union: _Union,
 };

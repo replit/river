@@ -333,6 +333,7 @@ export class ServiceSchema<
         Object.entries(this.procedures).map(([procName, procDef]) => [
           procName,
           {
+            description: procDef.description,
             input: Type.Strict(procDef.input),
             output: Type.Strict(procDef.output),
             // Only add the `errors` field if it is non-never.

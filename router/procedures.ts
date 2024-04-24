@@ -86,6 +86,7 @@ export type UploadProcedure<
   Init extends PayloadType | null = null,
 > = Init extends PayloadType
   ? {
+      description: string;
       type: 'upload';
       init: Init;
       input: I;
@@ -98,6 +99,7 @@ export type UploadProcedure<
       ): Promise<ProcedureResult<O, E>>;
     }
   : {
+      description: string;
       type: 'upload';
       input: I;
       output: O;
@@ -122,6 +124,7 @@ export interface SubscriptionProcedure<
   O extends PayloadType,
   E extends RiverError,
 > {
+  description: string;
   type: 'subscription';
   input: I;
   output: O;
@@ -151,6 +154,7 @@ export type StreamProcedure<
   Init extends PayloadType | null = null,
 > = Init extends PayloadType
   ? {
+      description: string;
       type: 'stream';
       init: Init;
       input: I;
@@ -164,6 +168,7 @@ export type StreamProcedure<
       ): Promise<void>;
     }
   : {
+      description: string;
       type: 'stream';
       input: I;
       output: O;
@@ -321,6 +326,7 @@ function upload<
 
 // signature: no init with default errors
 function upload<State, I extends PayloadType, O extends PayloadType>(def: {
+  description: string;
   init?: never;
   input: I;
   output: O;
@@ -345,12 +351,14 @@ function upload<
 
 // implementation
 function upload({
+  description,
   init,
   input,
   output,
   errors = Type.Never(),
   handler,
 }: {
+  description: string;
   init?: PayloadType | null;
   input: PayloadType;
   output: PayloadType;
@@ -364,8 +372,8 @@ function upload({
   >['handler'];
 }) {
   return init !== undefined && init !== null
-    ? { type: 'upload', init, input, output, errors, handler }
-    : { type: 'upload', input, output, errors, handler };
+    ? { type: 'upload', description, init, input, output, errors, handler }
+    : { type: 'upload', description, input, output, errors, handler };
 }
 
 /**
@@ -377,6 +385,7 @@ function subscription<
   I extends PayloadType,
   O extends PayloadType,
 >(def: {
+  description: string;
   input: I;
   output: O;
   errors?: never;
@@ -390,6 +399,7 @@ function subscription<
   O extends PayloadType,
   E extends RiverError,
 >(def: {
+  description: string;
   input: I;
   output: O;
   errors: E;
@@ -398,11 +408,13 @@ function subscription<
 
 // implementation
 function subscription({
+  description,
   input,
   output,
   errors = Type.Never(),
   handler,
 }: {
+  description: string;
   input: PayloadType;
   output: PayloadType;
   errors?: RiverError;
@@ -413,7 +425,7 @@ function subscription({
     RiverError
   >['handler'];
 }) {
-  return { type: 'subscription', input, output, errors, handler };
+  return { type: 'subscription', description, input, output, errors, handler };
 }
 
 /**
@@ -426,6 +438,7 @@ function stream<
   O extends PayloadType,
   Init extends PayloadType,
 >(def: {
+  description: string;
   init: Init;
   input: I;
   output: O;
@@ -441,6 +454,7 @@ function stream<
   E extends RiverError,
   Init extends PayloadType,
 >(def: {
+  description: string;
   init: Init;
   input: I;
   output: O;
@@ -450,6 +464,7 @@ function stream<
 
 // signature: no init with default errors
 function stream<State, I extends PayloadType, O extends PayloadType>(def: {
+  description: string;
   init?: never;
   input: I;
   output: O;
@@ -464,6 +479,7 @@ function stream<
   O extends PayloadType,
   E extends RiverError,
 >(def: {
+  description: string;
   init?: never;
   input: I;
   output: O;
@@ -473,12 +489,14 @@ function stream<
 
 // implementation
 function stream({
+  description,
   init,
   input,
   output,
   errors = Type.Never(),
   handler,
 }: {
+  description: string;
   init?: PayloadType | null;
   input: PayloadType;
   output: PayloadType;
@@ -492,8 +510,8 @@ function stream({
   >['handler'];
 }) {
   return init !== undefined && init !== null
-    ? { type: 'stream', init, input, output, errors, handler }
-    : { type: 'stream', input, output, errors, handler };
+    ? { type: 'stream', description, init, input, output, errors, handler }
+    : { type: 'stream', description, input, output, errors, handler };
 }
 
 /**

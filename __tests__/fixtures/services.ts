@@ -39,6 +39,7 @@ const testServiceProcedures = TestServiceScaffold.procedures({
   }),
 
   echo: Procedure.stream({
+    description: 'Streams an echo back',
     input: EchoRequest,
     output: EchoResponse,
     async handler(_ctx, msgStream, returnStream) {
@@ -55,6 +56,7 @@ const testServiceProcedures = TestServiceScaffold.procedures({
   }),
 
   echoWithPrefix: Procedure.stream({
+    description: 'Streams an echo back',
     init: Type.Object(
       { prefix: Type.String({ description: 'A prefix' }) },
       { description: 'An init object' },
@@ -66,6 +68,37 @@ const testServiceProcedures = TestServiceScaffold.procedures({
         if (!ignore) {
           returnStream.push(Ok({ response: `${init.prefix} ${msg}` }));
         }
+      }
+    },
+  }),
+
+  echoUnion: Procedure.rpc({
+    description: 'Echos back whatever we sent',
+    input: Type.Union([
+      Type.Object(
+        { a: Type.Number({ description: 'A number' }) },
+        { description: 'A' },
+      ),
+      Type.Object(
+        { b: Type.String({ description: 'A string' }) },
+        { description: 'B' },
+      ),
+    ]),
+    output: Type.Union([
+      Type.Object(
+        { a: Type.Number({ description: 'A number' }) },
+        { description: 'A' },
+      ),
+      Type.Object(
+        { b: Type.String({ description: 'A string' }) },
+        { description: 'B' },
+      ),
+    ]),
+    async handler(_, i) {
+      if ('a' in i) {
+        return Ok({ a: i.a });
+      } else {
+        return Ok({ b: i.b });
       }
     },
   }),
@@ -135,7 +168,7 @@ export const STREAM_ERROR = 'STREAM_ERROR';
 
 export const FallibleServiceSchema = ServiceSchema.define({
   divide: Procedure.rpc({
-    /* description: Get the probability of rain for a specific location */
+    description: 'Divide one number by another number',
     input: Type.Object(
       {
         a: Type.Number({ description: 'A number' }),
@@ -174,6 +207,7 @@ export const FallibleServiceSchema = ServiceSchema.define({
   }),
 
   echo: Procedure.stream({
+    description: 'Streams an echo back',
     input: Type.Object(
       {
         msg: Type.String({ description: 'The message' }),
@@ -232,6 +266,7 @@ export const SubscribableServiceSchema = ServiceSchema.define(
     }),
 
     value: Procedure.subscription({
+      description: 'Subscribes to a count',
       input: Type.Object({}, { description: 'An input object' }),
       output: Type.Object(
         { result: Type.Number({ description: 'A result' }) },
@@ -248,6 +283,7 @@ export const SubscribableServiceSchema = ServiceSchema.define(
 
 export const UploadableServiceSchema = ServiceSchema.define({
   addMultiple: Procedure.upload({
+    description: 'Add multiple values over time',
     input: Type.Object(
       { n: Type.Number({ description: 'A number' }) },
       { description: 'An input object' },
