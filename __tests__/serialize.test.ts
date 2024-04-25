@@ -10,20 +10,17 @@ describe('serialize service to jsonschema', () => {
     expect(TestServiceSchema.serialize()).toStrictEqual({
       procedures: {
         add: {
-          description: 'Adds two numbers and returns a value',
           input: {
             properties: {
-              n: { description: 'A number', type: 'number' },
+              n: { type: 'number' },
             },
-            description: 'An input object',
             required: ['n'],
             type: 'object',
           },
           output: {
             properties: {
-              result: { description: 'A number', type: 'number' },
+              result: { type: 'number' },
             },
-            description: 'An output object',
             required: ['result'],
             type: 'object',
           },
@@ -33,21 +30,18 @@ describe('serialize service to jsonschema', () => {
           type: 'rpc',
         },
         echo: {
-          description: 'Streams an echo back',
           input: {
-            description: 'A request that echos',
             properties: {
-              msg: { description: 'A string', type: 'string' },
-              ignore: { description: 'A boolean', type: 'boolean' },
-              end: { description: 'A boolean', type: 'boolean' },
+              msg: { type: 'string' },
+              ignore: { type: 'boolean' },
+              end: { type: 'boolean' },
             },
             required: ['msg', 'ignore'],
             type: 'object',
           },
           output: {
-            description: 'A response from an echo',
             properties: {
-              response: { description: 'A string', type: 'string' },
+              response: { type: 'string' },
             },
             required: ['response'],
             type: 'object',
@@ -58,15 +52,12 @@ describe('serialize service to jsonschema', () => {
           type: 'stream',
         },
         echoWithPrefix: {
-          description: 'Streams an echo back',
           errors: {
             not: {},
           },
           init: {
-            description: 'An init object',
             properties: {
               prefix: {
-                description: 'A prefix',
                 type: 'string',
               },
             },
@@ -74,18 +65,14 @@ describe('serialize service to jsonschema', () => {
             type: 'object',
           },
           input: {
-            description: 'A request that echos',
             properties: {
               end: {
-                description: 'A boolean',
                 type: 'boolean',
               },
               ignore: {
-                description: 'A boolean',
                 type: 'boolean',
               },
               msg: {
-                description: 'A string',
                 type: 'string',
               },
             },
@@ -93,10 +80,8 @@ describe('serialize service to jsonschema', () => {
             type: 'object',
           },
           output: {
-            description: 'A response from an echo',
             properties: {
               response: {
-                description: 'A string',
                 type: 'string',
               },
             },
@@ -172,15 +157,12 @@ describe('serialize service to jsonschema', () => {
     expect(BinaryFileServiceSchema.serialize()).toStrictEqual({
       procedures: {
         getFile: {
-          description: 'Retrieves a file from a path',
           errors: {
             not: {},
           },
           input: {
-            description: 'An input object',
             properties: {
               file: {
-                description: 'A file path',
                 type: 'string',
               },
             },
@@ -188,10 +170,8 @@ describe('serialize service to jsonschema', () => {
             type: 'object',
           },
           output: {
-            description: 'An output object',
             properties: {
               contents: {
-                description: 'File contents',
                 type: 'Uint8Array',
               },
             },
@@ -208,38 +188,28 @@ describe('serialize service to jsonschema', () => {
     expect(FallibleServiceSchema.serialize()).toStrictEqual({
       procedures: {
         divide: {
-          description: 'Divide one number by another number',
           input: {
-            description: 'An input object',
             properties: {
-              a: { description: 'A number', type: 'number' },
-              b: { description: 'A number', type: 'number' },
+              a: { type: 'number' },
+              b: { type: 'number' },
             },
             required: ['a', 'b'],
             type: 'object',
           },
           output: {
-            description: 'An output object',
             properties: {
-              result: { description: 'A result', type: 'number' },
+              result: { type: 'number' },
             },
             required: ['result'],
             type: 'object',
           },
           errors: {
-            description: 'An error object',
             properties: {
-              code: {
-                description: 'A literal',
-                const: 'DIV_BY_ZERO',
-                type: 'string',
-              },
-              message: { description: 'A message', type: 'string' },
+              code: { const: 'DIV_BY_ZERO', type: 'string' },
+              message: { type: 'string' },
               extras: {
-                description: 'A set of extras',
                 properties: {
                   test: {
-                    description: 'A test string',
                     type: 'string',
                   },
                 },
@@ -253,34 +223,39 @@ describe('serialize service to jsonschema', () => {
           type: 'rpc',
         },
         echo: {
-          description: 'Streams an echo back',
           errors: {
-            description: 'An error',
             properties: {
               code: {
                 const: 'STREAM_ERROR',
-                description: 'A literal code',
                 type: 'string',
               },
-              message: { description: 'A message', type: 'string' },
+              message: {
+                type: 'string',
+              },
             },
             required: ['code', 'message'],
             type: 'object',
           },
           input: {
-            description: 'An input',
             properties: {
-              msg: { description: 'The message', type: 'string' },
-              throwError: { description: 'Throw on error', type: 'boolean' },
-              throwResult: { description: 'Throw on result', type: 'boolean' },
+              msg: {
+                type: 'string',
+              },
+              throwError: {
+                type: 'boolean',
+              },
+              throwResult: {
+                type: 'boolean',
+              },
             },
             required: ['msg', 'throwResult', 'throwError'],
             type: 'object',
           },
           output: {
-            description: 'An output',
             properties: {
-              response: { description: 'A response', type: 'string' },
+              response: {
+                type: 'string',
+              },
             },
             required: ['response'],
             type: 'object',

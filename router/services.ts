@@ -336,9 +336,9 @@ export class ServiceSchema<
             input: Type.Strict(procDef.input),
             output: Type.Strict(procDef.output),
             // Only add `description` field if it is non-never.
-            ...('description' in procDef
+            ...('description' in procDef && procDef.description
               ? {
-                  description: Type.Strict(procDef.description),
+                  description: procDef.description,
                 }
               : {}),
             // Only add the `errors` field if it is non-never.
