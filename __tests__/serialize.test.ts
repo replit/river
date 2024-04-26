@@ -4,6 +4,104 @@ import {
   FallibleServiceSchema,
   TestServiceSchema,
 } from './fixtures/services';
+import { createServer } from '../router/server';
+import { MockServerTransport } from './typescript-stress.test';
+
+describe('serialize server to jsonschema', () => {
+  test('serialize basic server', () => {
+    const server = createServer(new MockServerTransport('mock'), {
+      test: TestServiceSchema,
+    });
+
+    expect(server.serialize()).toStrictEqual({
+      test: {
+        procedures: {
+          add: {
+            input: {
+              properties: {
+                n: { type: 'number' },
+              },
+              required: ['n'],
+              type: 'object',
+            },
+            output: {
+              properties: {
+                result: { type: 'number' },
+              },
+              required: ['result'],
+              type: 'object',
+            },
+            errors: {
+              not: {},
+            },
+            type: 'rpc',
+          },
+          echo: {
+            input: {
+              properties: {
+                msg: { type: 'string' },
+                ignore: { type: 'boolean' },
+                end: { type: 'boolean' },
+              },
+              required: ['msg', 'ignore'],
+              type: 'object',
+            },
+            output: {
+              properties: {
+                response: { type: 'string' },
+              },
+              required: ['response'],
+              type: 'object',
+            },
+            errors: {
+              not: {},
+            },
+            type: 'stream',
+          },
+          echoWithPrefix: {
+            errors: {
+              not: {},
+            },
+            init: {
+              properties: {
+                prefix: {
+                  type: 'string',
+                },
+              },
+              required: ['prefix'],
+              type: 'object',
+            },
+            input: {
+              properties: {
+                end: {
+                  type: 'boolean',
+                },
+                ignore: {
+                  type: 'boolean',
+                },
+                msg: {
+                  type: 'string',
+                },
+              },
+              required: ['msg', 'ignore'],
+              type: 'object',
+            },
+            output: {
+              properties: {
+                response: {
+                  type: 'string',
+                },
+              },
+              required: ['response'],
+              type: 'object',
+            },
+            type: 'stream',
+          },
+        },
+      },
+    });
+  });
+});
 
 describe('serialize service to jsonschema', () => {
   test('serialize basic service', () => {
