@@ -1,4 +1,4 @@
-import { TObject, Static, TUnion, TNever, Type } from '@sinclair/typebox';
+import { Static, TUnion, TNever, Type, TObject } from '@sinclair/typebox';
 import type { Pushable } from 'it-pushable';
 import { ServiceContextWithTransportInfo } from './context';
 import { Result, RiverError, RiverUncaughtSchema } from './result';
@@ -60,6 +60,7 @@ export interface RPCProcedure<
   input: I;
   output: O;
   errors: E;
+  description?: string;
   handler(
     context: ServiceContextWithTransportInfo<State>,
     input: Static<I>,
@@ -89,6 +90,7 @@ export type UploadProcedure<
       input: I;
       output: O;
       errors: E;
+      description?: string;
       handler(
         context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
@@ -100,6 +102,7 @@ export type UploadProcedure<
       input: I;
       output: O;
       errors: E;
+      description?: string;
       handler(
         context: ServiceContextWithTransportInfo<State>,
         input: AsyncIterableIterator<Static<I>>,
@@ -124,6 +127,7 @@ export interface SubscriptionProcedure<
   input: I;
   output: O;
   errors: E;
+  description?: string;
   handler(
     context: ServiceContextWithTransportInfo<State>,
     input: Static<I>,
@@ -154,6 +158,7 @@ export type StreamProcedure<
       input: I;
       output: O;
       errors: E;
+      description?: string;
       handler(
         context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
@@ -166,6 +171,7 @@ export type StreamProcedure<
       input: I;
       output: O;
       errors: E;
+      description?: string;
       handler(
         context: ServiceContextWithTransportInfo<State>,
         input: AsyncIterableIterator<Static<I>>,
@@ -243,6 +249,7 @@ function rpc<State, I extends PayloadType, O extends PayloadType>(def: {
   input: I;
   output: O;
   errors?: never;
+  description?: string;
   handler: RPCProcedure<State, I, O, TNever>['handler'];
 }): Branded<RPCProcedure<State, I, O, TNever>>;
 
@@ -256,6 +263,7 @@ function rpc<
   input: I;
   output: O;
   errors: E;
+  description?: string;
   handler: RPCProcedure<State, I, O, E>['handler'];
 }): Branded<RPCProcedure<State, I, O, E>>;
 
@@ -264,11 +272,13 @@ function rpc({
   input,
   output,
   errors = Type.Never(),
+  description,
   handler,
 }: {
   input: PayloadType;
   output: PayloadType;
   errors?: RiverError;
+  description?: string;
   handler: RPCProcedure<
     object,
     PayloadType,
@@ -276,7 +286,14 @@ function rpc({
     RiverError
   >['handler'];
 }) {
-  return { type: 'rpc', input, output, errors, handler };
+  return {
+    ...(description ? { description } : {}),
+    type: 'rpc',
+    input,
+    output,
+    errors,
+    handler,
+  };
 }
 
 /**
@@ -293,6 +310,7 @@ function upload<
   input: I;
   output: O;
   errors?: never;
+  description?: string;
   handler: UploadProcedure<State, I, O, TNever, Init>['handler'];
 }): Branded<UploadProcedure<State, I, O, TNever, Init>>;
 
@@ -308,6 +326,7 @@ function upload<
   input: I;
   output: O;
   errors: E;
+  description?: string;
   handler: UploadProcedure<State, I, O, E, Init>['handler'];
 }): Branded<UploadProcedure<State, I, O, E, Init>>;
 
@@ -317,6 +336,7 @@ function upload<State, I extends PayloadType, O extends PayloadType>(def: {
   input: I;
   output: O;
   errors?: never;
+  description?: string;
   handler: UploadProcedure<State, I, O, TNever>['handler'];
 }): Branded<UploadProcedure<State, I, O, TNever>>;
 
@@ -331,6 +351,7 @@ function upload<
   input: I;
   output: O;
   errors: E;
+  description?: string;
   handler: UploadProcedure<State, I, O, E>['handler'];
 }): Branded<UploadProcedure<State, I, O, E>>;
 
@@ -340,12 +361,14 @@ function upload({
   input,
   output,
   errors = Type.Never(),
+  description,
   handler,
 }: {
   init?: PayloadType | null;
   input: PayloadType;
   output: PayloadType;
   errors?: RiverError;
+  description?: string;
   handler: UploadProcedure<
     object,
     PayloadType,
@@ -355,8 +378,23 @@ function upload({
   >['handler'];
 }) {
   return init !== undefined && init !== null
-    ? { type: 'upload', init, input, output, errors, handler }
-    : { type: 'upload', input, output, errors, handler };
+    ? {
+        type: 'upload',
+        ...(description ? { description } : {}),
+        init,
+        input,
+        output,
+        errors,
+        handler,
+      }
+    : {
+        type: 'upload',
+        ...(description ? { description } : {}),
+        input,
+        output,
+        errors,
+        handler,
+      };
 }
 
 /**
@@ -371,6 +409,7 @@ function subscription<
   input: I;
   output: O;
   errors?: never;
+  description?: string;
   handler: SubscriptionProcedure<State, I, O, TNever>['handler'];
 }): Branded<SubscriptionProcedure<State, I, O, TNever>>;
 
@@ -384,6 +423,7 @@ function subscription<
   input: I;
   output: O;
   errors: E;
+  description?: string;
   handler: SubscriptionProcedure<State, I, O, E>['handler'];
 }): Branded<SubscriptionProcedure<State, I, O, E>>;
 
@@ -392,11 +432,13 @@ function subscription({
   input,
   output,
   errors = Type.Never(),
+  description,
   handler,
 }: {
   input: PayloadType;
   output: PayloadType;
   errors?: RiverError;
+  description?: string;
   handler: SubscriptionProcedure<
     object,
     PayloadType,
@@ -404,7 +446,14 @@ function subscription({
     RiverError
   >['handler'];
 }) {
-  return { type: 'subscription', input, output, errors, handler };
+  return {
+    type: 'subscription',
+    ...(description ? { description } : {}),
+    input,
+    output,
+    errors,
+    handler,
+  };
 }
 
 /**
@@ -421,6 +470,7 @@ function stream<
   input: I;
   output: O;
   errors?: never;
+  description?: string;
   handler: StreamProcedure<State, I, O, TNever, Init>['handler'];
 }): Branded<StreamProcedure<State, I, O, TNever, Init>>;
 
@@ -436,6 +486,7 @@ function stream<
   input: I;
   output: O;
   errors: E;
+  description?: string;
   handler: StreamProcedure<State, I, O, E, Init>['handler'];
 }): Branded<StreamProcedure<State, I, O, E, Init>>;
 
@@ -445,6 +496,7 @@ function stream<State, I extends PayloadType, O extends PayloadType>(def: {
   input: I;
   output: O;
   errors?: never;
+  description?: string;
   handler: StreamProcedure<State, I, O, TNever>['handler'];
 }): Branded<StreamProcedure<State, I, O, TNever>>;
 
@@ -459,6 +511,7 @@ function stream<
   input: I;
   output: O;
   errors: E;
+  description?: string;
   handler: StreamProcedure<State, I, O, E>['handler'];
 }): Branded<StreamProcedure<State, I, O, E>>;
 
@@ -468,12 +521,14 @@ function stream({
   input,
   output,
   errors = Type.Never(),
+  description,
   handler,
 }: {
   init?: PayloadType | null;
   input: PayloadType;
   output: PayloadType;
   errors?: RiverError;
+  description?: string;
   handler: StreamProcedure<
     object,
     PayloadType,
@@ -483,8 +538,23 @@ function stream({
   >['handler'];
 }) {
   return init !== undefined && init !== null
-    ? { type: 'stream', init, input, output, errors, handler }
-    : { type: 'stream', input, output, errors, handler };
+    ? {
+        type: 'stream',
+        ...(description ? { description } : {}),
+        init,
+        input,
+        output,
+        errors,
+        handler,
+      }
+    : {
+        type: 'stream',
+        ...(description ? { description } : {}),
+        input,
+        output,
+        errors,
+        handler,
+      };
 }
 
 /**

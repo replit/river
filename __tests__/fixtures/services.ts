@@ -53,6 +53,33 @@ const testServiceProcedures = TestServiceScaffold.procedures({
       }
     },
   }),
+
+  echoUnion: Procedure.rpc({
+    description: 'Echos back whatever we sent',
+    input: Type.Union([
+      Type.Object(
+        { a: Type.Number({ description: 'A number' }) },
+        { description: 'A' },
+      ),
+      Type.Object(
+        { b: Type.String({ description: 'A string' }) },
+        { description: 'B' },
+      ),
+    ]),
+    output: Type.Union([
+      Type.Object(
+        { a: Type.Number({ description: 'A number' }) },
+        { description: 'A' },
+      ),
+      Type.Object(
+        { b: Type.String({ description: 'A string' }) },
+        { description: 'B' },
+      ),
+    ]),
+    async handler(_, input) {
+      return Ok(input);
+    },
+  }),
 });
 
 export const TestServiceSchema = TestServiceScaffold.finalize({
