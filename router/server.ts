@@ -4,6 +4,7 @@ import { AnyProcedure, PayloadType } from './procedures';
 import {
   AnyService,
   InstantiatedServiceSchemaMap,
+  SerializedServiceSchema,
   ServiceSchemaMap,
 } from './services';
 import { pushable } from 'it-pushable';
@@ -41,6 +42,7 @@ import { coerceErrorString } from '../util/stringify';
 export interface Server<Services extends ServiceSchemaMap> {
   services: InstantiatedServiceSchemaMap<Services>;
   streams: Map<string, ProcStream>;
+  serialize(): SerializedServerSchema;
   close(): Promise<void>;
 }
 
@@ -56,8 +58,11 @@ interface ProcStream {
   };
 }
 
+type SerializedServerSchema = Record<string, SerializedServiceSchema>;
+
 class RiverServer<Services extends ServiceSchemaMap> {
   transport: Transport<Connection>;
+  private serviceDefs: Services;
   services: InstantiatedServiceSchemaMap<Services>;
   contextMap: Map<AnyService, ServiceContextWithState<object>>;
   // map of streamId to ProcStream
@@ -71,6 +76,7 @@ class RiverServer<Services extends ServiceSchemaMap> {
     services: Services,
     extendedContext?: Omit<ServiceContext, 'state'>,
   ) {
+    this.serviceDefs = services;
     const instances: Record<string, AnyService> = {};
 
     this.services = instances as InstantiatedServiceSchemaMap<Services>;
@@ -96,6 +102,16 @@ class RiverServer<Services extends ServiceSchemaMap> {
 
   get streams() {
     return this.streamMap;
+  }
+
+  serialize(): SerializedServerSchema {
+    return Object.entries(this.serviceDefs).reduce<SerializedServerSchema>(
+      (acc, [name, value]) => {
+        acc[name] = value.serialize();
+        return acc;
+      },
+      {},
+    );
   }
 
   onMessage = async (message: OpaqueTransportMessage) => {
