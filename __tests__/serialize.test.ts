@@ -97,6 +97,65 @@ describe('serialize server to jsonschema', () => {
             },
             type: 'stream',
           },
+          echoUnion: {
+            description: 'Echos back whatever we sent',
+            errors: {
+              not: {},
+            },
+            input: {
+              anyOf: [
+                {
+                  description: 'A',
+                  properties: {
+                    a: {
+                      description: 'A number',
+                      type: 'number',
+                    },
+                  },
+                  required: ['a'],
+                  type: 'object',
+                },
+                {
+                  description: 'B',
+                  properties: {
+                    b: {
+                      description: 'A string',
+                      type: 'string',
+                    },
+                  },
+                  required: ['b'],
+                  type: 'object',
+                },
+              ],
+            },
+            output: {
+              anyOf: [
+                {
+                  description: 'A',
+                  properties: {
+                    a: {
+                      description: 'A number',
+                      type: 'number',
+                    },
+                  },
+                  required: ['a'],
+                  type: 'object',
+                },
+                {
+                  description: 'B',
+                  properties: {
+                    b: {
+                      description: 'A string',
+                      type: 'string',
+                    },
+                  },
+                  required: ['b'],
+                  type: 'object',
+                },
+              ],
+            },
+            type: 'rpc',
+          },
         },
       },
     });
