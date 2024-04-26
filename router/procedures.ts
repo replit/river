@@ -60,7 +60,7 @@ export interface RPCProcedure<
   input: I;
   output: O;
   errors: E;
-  description: string | undefined;
+  description?: string;
   handler(
     context: ServiceContextWithTransportInfo<State>,
     input: Static<I>,
@@ -90,7 +90,7 @@ export type UploadProcedure<
       input: I;
       output: O;
       errors: E;
-      description: string | undefined;
+      description?: string;
       handler(
         context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
@@ -102,7 +102,7 @@ export type UploadProcedure<
       input: I;
       output: O;
       errors: E;
-      description: string | undefined;
+      description?: string;
       handler(
         context: ServiceContextWithTransportInfo<State>,
         input: AsyncIterableIterator<Static<I>>,
@@ -127,7 +127,7 @@ export interface SubscriptionProcedure<
   input: I;
   output: O;
   errors: E;
-  description: string | undefined;
+  description?: string;
   handler(
     context: ServiceContextWithTransportInfo<State>,
     input: Static<I>,
@@ -158,7 +158,7 @@ export type StreamProcedure<
       input: I;
       output: O;
       errors: E;
-      description: string | undefined;
+      description?: string;
       handler(
         context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
@@ -171,7 +171,7 @@ export type StreamProcedure<
       input: I;
       output: O;
       errors: E;
-      description: string | undefined;
+      description?: string;
       handler(
         context: ServiceContextWithTransportInfo<State>,
         input: AsyncIterableIterator<Static<I>>,
@@ -286,7 +286,14 @@ function rpc({
     RiverError
   >['handler'];
 }) {
-  return { description, type: 'rpc', input, output, errors, handler };
+  return {
+    ...(description ? { description } : {}),
+    type: 'rpc',
+    input,
+    output,
+    errors,
+    handler,
+  };
 }
 
 /**
@@ -371,8 +378,23 @@ function upload({
   >['handler'];
 }) {
   return init !== undefined && init !== null
-    ? { type: 'upload', description, init, input, output, errors, handler }
-    : { type: 'upload', description, input, output, errors, handler };
+    ? {
+        type: 'upload',
+        ...(description ? { description } : {}),
+        init,
+        input,
+        output,
+        errors,
+        handler,
+      }
+    : {
+        type: 'upload',
+        ...(description ? { description } : {}),
+        input,
+        output,
+        errors,
+        handler,
+      };
 }
 
 /**
@@ -424,7 +446,14 @@ function subscription({
     RiverError
   >['handler'];
 }) {
-  return { type: 'subscription', description, input, output, errors, handler };
+  return {
+    type: 'subscription',
+    ...(description ? { description } : {}),
+    input,
+    output,
+    errors,
+    handler,
+  };
 }
 
 /**
@@ -509,8 +538,23 @@ function stream({
   >['handler'];
 }) {
   return init !== undefined && init !== null
-    ? { type: 'stream', description, init, input, output, errors, handler }
-    : { type: 'stream', description, input, output, errors, handler };
+    ? {
+        type: 'stream',
+        ...(description ? { description } : {}),
+        init,
+        input,
+        output,
+        errors,
+        handler,
+      }
+    : {
+        type: 'stream',
+        ...(description ? { description } : {}),
+        input,
+        output,
+        errors,
+        handler,
+      };
 }
 
 /**
