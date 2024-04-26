@@ -24,7 +24,6 @@ import {
 } from './events';
 import { Connection, Session, SessionOptions } from './session';
 import { Static } from '@sinclair/typebox';
-import { nanoid } from 'nanoid';
 import { coerceErrorString } from '../util/stringify';
 import { ConnectionRetryOptions, LeakyBucketRateLimit } from './rateLimit';
 import { NaiveJsonCodec } from '../codec';
@@ -39,7 +38,7 @@ export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
 type TransportOptions = SessionOptions;
 export type ProvidedTransportOptions = Partial<TransportOptions>;
-const defaultTransportOptions: TransportOptions = {
+export const defaultTransportOptions: TransportOptions = {
   heartbeatIntervalMs: 1_000,
   heartbeatsUntilDead: 2,
   sessionDisconnectGraceMs: 5_000,
@@ -93,14 +92,6 @@ const defaultClientTransportOptions: ClientTransportOptions = {
  * @abstract
  */
 export abstract class Transport<ConnType extends Connection> {
-  /**
-   * Unique per instance of the transport.
-   * This allows us to distinguish reconnects to different
-   * transports.
-   */
-  instanceId: string = nanoid();
-  connectedInstanceIds = new Map<TransportClientId, string>();
-
   /**
    * A flag indicating whether the transport has been destroyed.
    * A destroyed transport will not attempt to reconnect and cannot be used again.
@@ -182,59 +173,55 @@ export abstract class Transport<ConnType extends Connection> {
   protected onConnect(
     conn: ConnType,
     connectedTo: TransportClientId,
-    instanceId: string,
+    advertisedSessionId: string,
   ): Session<ConnType> {
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'connect',
       conn,
     });
 
-    // check if the peer we are connected to is actually different by comparing instanceId
+    // check if the peer we are connected to is actually different by comparing session id
     let oldSession = this.sessions.get(connectedTo);
-    const lastInstanceId = this.connectedInstanceIds.get(connectedTo);
     if (
-      oldSession &&
-      lastInstanceId !== undefined &&
-      lastInstanceId !== instanceId
+      oldSession?.advertisedSessionId &&
+      oldSession.advertisedSessionId !== advertisedSessionId
     ) {
       // mismatch, kill the old session and begin a new one
       log?.warn(
-        `${this.clientId} -- connection from ${connectedTo} is a different instance (got: ${instanceId}, last connected to: ${lastInstanceId}), starting a new session`,
+        `${this.clientId} -- connection from ${connectedTo} is a different session (id: ${advertisedSessionId}, last connected to: ${oldSession.advertisedSessionId}), starting a new session`,
       );
       oldSession.close();
       this.deleteSession(oldSession);
       oldSession = undefined;
     }
-    this.connectedInstanceIds.set(connectedTo, instanceId);
 
     // if we don't have an existing session, create a new one and return it
     if (oldSession === undefined) {
       const newSession = this.createSession(connectedTo, conn);
+      newSession.advertisedSessionId = advertisedSessionId;
       log?.info(
-        `${this.clientId} -- new connection (id: ${conn.debugId}) for new session (id: ${newSession.debugId}) to ${connectedTo}`,
+        `${this.clientId} -- new connection (id: ${conn.debugId}) for new session (id: ${newSession.id}) to ${connectedTo}`,
       );
       return newSession;
     }
 
     log?.info(
-      `${this.clientId} -- new connection (id: ${conn.debugId}) for existing session (id: ${oldSession.debugId}) to ${connectedTo}`,
+      `${this.clientId} -- new connection (id: ${conn.debugId}) for existing session (id: ${oldSession.id}) to ${connectedTo}`,
     );
 
     // otherwise, this is a new connection from the same user, let's consider
     // the old one as dead and call this connection canonical
     oldSession.replaceWithNewConnection(conn);
     oldSession.sendBufferedMessages();
+    oldSession.advertisedSessionId = advertisedSessionId;
     return oldSession;
   }
 
-  private createSession(
-    connectedTo: TransportClientId,
-    conn: ConnType | undefined,
-  ) {
+  protected createSession(to: TransportClientId, conn?: ConnType) {
     const session = new Session<ConnType>(
-      this.clientId,
-      connectedTo,
       conn,
+      this.clientId,
+      to,
       this.options,
     );
     this.sessions.set(session.to, session);
@@ -245,10 +232,22 @@ export abstract class Transport<ConnType extends Connection> {
     return session;
   }
 
+  protected getOrCreateSession(to: TransportClientId, conn?: ConnType) {
+    let session = this.sessions.get(to);
+    if (!session) {
+      session = this.createSession(to, conn);
+      log?.info(
+        `${this.clientId} -- no session for ${to}, created a new one (id: ${session.id})`,
+      );
+    }
+
+    return session;
+  }
+
   protected deleteSession(session: Session<ConnType>) {
     this.sessions.delete(session.to);
     log?.info(
-      `${this.clientId} -- session ${session.debugId} disconnect from ${session.to}`,
+      `${this.clientId} -- session ${session.id} disconnect from ${session.to}`,
     );
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'disconnect',
@@ -331,9 +330,12 @@ export abstract class Transport<ConnType extends Connection> {
         log?.error(
           `${
             this.clientId
-          } -- ${errMsg}, marking connection as dead: ${JSON.stringify(msg)}`,
+          } -- fatal: ${errMsg}, marking connection as dead: ${JSON.stringify(
+            msg,
+          )}`,
         );
         this.protocolError(ProtocolError.MessageOrderingViolated, errMsg);
+        session.close();
       }
 
       return;
@@ -399,18 +401,7 @@ export abstract class Transport<ConnType extends Connection> {
       return undefined;
     }
 
-    let session = this.sessions.get(to);
-    if (!session) {
-      // this case happens on the client as .send()
-      // can be called without a session existing so we
-      // must create the session here
-      session = this.createSession(to, undefined);
-      log?.info(
-        `${this.clientId} -- no session for ${to}, created a new one (id: ${session.debugId})`,
-      );
-    }
-
-    return session.send(msg);
+    return this.getOrCreateSession(to).send(msg);
   }
 
   // control helpers
@@ -498,13 +489,13 @@ export abstract class ClientTransport<
     if (this.state !== 'open') return;
     let session: Session<ConnType> | undefined = undefined;
     const handshakeHandler = (data: Uint8Array) => {
-      const handshake = this.receiveHandshakeResponseMessage(data);
-      if (!handshake) {
+      const maybeSession = this.receiveHandshakeResponseMessage(data, conn);
+      if (!maybeSession) {
         conn.close();
         return;
+      } else {
+        session = maybeSession;
       }
-
-      session = this.onConnect(conn, handshake.from, handshake.instanceId);
 
       // when we are done handshake sequence,
       // remove handshake listener and use the normal message listener
@@ -542,7 +533,10 @@ export abstract class ClientTransport<
     });
   }
 
-  receiveHandshakeResponseMessage(data: Uint8Array) {
+  receiveHandshakeResponseMessage(
+    data: Uint8Array,
+    conn: ConnType,
+  ): Session<ConnType> | false {
     const parsed = this.parseMsg(data);
     if (!parsed) {
       this.protocolError(
@@ -578,16 +572,18 @@ export abstract class ClientTransport<
       return false;
     }
 
-    const instanceId = parsed.payload.status.instanceId;
-    log?.debug(
-      `${this.clientId} -- handshake from ${parsed.from} ok (instance: ${instanceId})`,
+    log?.debug(`${this.clientId} -- handshake from ${parsed.from} ok`);
+    const session = this.onConnect(
+      conn,
+      parsed.from,
+      parsed.payload.status.sessionId,
     );
 
     // After a successful connection, we start restoring the budget
     // so that the next time we try to connect, we don't hit the client
     // with backoff forever.
     this.retryBudget.startRestoringBudget(parsed.from);
-    return { instanceId, from: parsed.from };
+    return session;
   }
 
   /**
@@ -682,11 +678,8 @@ export abstract class ClientTransport<
   }
 
   protected sendHandshake(to: TransportClientId, conn: ConnType) {
-    const requestMsg = handshakeRequestMessage(
-      this.clientId,
-      to,
-      this.instanceId,
-    );
+    const session = this.getOrCreateSession(to, conn);
+    const requestMsg = handshakeRequestMessage(this.clientId, to, session.id);
     log?.debug(`${this.clientId} -- sending handshake request to ${to}`);
     conn.send(this.codec.toBuffer(requestMsg));
   }
@@ -706,7 +699,7 @@ export abstract class ServerTransport<
   ) {
     super(clientId, providedOptions);
     log?.info(
-      `${this.clientId} -- initiated server transport (instance id: ${this.instanceId}, protocol: ${PROTOCOL_VERSION})`,
+      `${this.clientId} -- initiated server transport (protocol: ${PROTOCOL_VERSION})`,
     );
   }
 
@@ -719,13 +712,13 @@ export abstract class ServerTransport<
     let session: Session<ConnType> | undefined = undefined;
     const client = () => session?.to ?? 'unknown';
     const handshakeHandler = (data: Uint8Array) => {
-      const handshake = this.receiveHandshakeRequestMessage(data, conn);
-      if (!handshake) {
+      const maybeSession = this.receiveHandshakeRequestMessage(data, conn);
+      if (!maybeSession) {
         conn.close();
         return;
+      } else {
+        session = maybeSession;
       }
-
-      session = this.onConnect(conn, handshake.from, handshake.instanceId);
 
       // when we are done handshake sequence,
       // remove handshake listener and use the normal message listener
@@ -762,7 +755,10 @@ export abstract class ServerTransport<
     });
   }
 
-  receiveHandshakeRequestMessage(data: Uint8Array, conn: ConnType) {
+  receiveHandshakeRequestMessage(
+    data: Uint8Array,
+    conn: ConnType,
+  ): Session<ConnType> | false {
     const parsed = this.parseMsg(data);
     if (!parsed) {
       this.protocolError(
@@ -773,18 +769,13 @@ export abstract class ServerTransport<
     }
 
     if (!Value.Check(ControlMessageHandshakeRequestSchema, parsed.payload)) {
-      const responseMsg = handshakeResponseMessage(
-        this.clientId,
-        this.instanceId,
-        parsed.from,
-        false,
-      );
+      const reason = 'received invalid handshake msg';
+      const responseMsg = handshakeResponseMessage(this.clientId, parsed.from, {
+        ok: false,
+        reason,
+      });
       conn.send(this.codec.toBuffer(responseMsg));
-      log?.warn(
-        `${this.clientId} -- received invalid handshake msg: ${JSON.stringify(
-          parsed,
-        )}`,
-      );
+      log?.warn(`${this.clientId} -- ${reason}: ${JSON.stringify(parsed)}`);
       this.protocolError(
         ProtocolError.HandshakeFailed,
         'invalid handshake request',
@@ -795,34 +786,28 @@ export abstract class ServerTransport<
     // double check protocol version here
     const gotVersion = parsed.payload.protocolVersion;
     if (gotVersion !== PROTOCOL_VERSION) {
-      const responseMsg = handshakeResponseMessage(
-        this.clientId,
-        this.instanceId,
-        parsed.from,
-        false,
-      );
+      const reason = `incorrect version (got: ${gotVersion} wanted ${PROTOCOL_VERSION})`;
+      const responseMsg = handshakeResponseMessage(this.clientId, parsed.from, {
+        ok: false,
+        reason,
+      });
       conn.send(this.codec.toBuffer(responseMsg));
       log?.warn(
         `${this.clientId} -- received handshake msg with incompatible protocol version (got: ${gotVersion}, expected: ${PROTOCOL_VERSION})`,
       );
-      this.protocolError(
-        ProtocolError.HandshakeFailed,
-        `incorrect version (got: ${gotVersion} wanted ${PROTOCOL_VERSION})`,
-      );
+      this.protocolError(ProtocolError.HandshakeFailed, reason);
       return false;
     }
 
-    const instanceId = parsed.payload.instanceId;
+    const session = this.getOrCreateSession(parsed.from, conn);
     log?.debug(
-      `${this.clientId} -- handshake from ${parsed.from} ok (instance id: ${instanceId}), responding with handshake success`,
+      `${this.clientId} -- handshake from ${parsed.from} ok, responding with handshake success`,
     );
-    const responseMsg = handshakeResponseMessage(
-      this.clientId,
-      this.instanceId,
-      parsed.from,
-      true,
-    );
+    const responseMsg = handshakeResponseMessage(this.clientId, parsed.from, {
+      ok: true,
+      sessionId: session.id,
+    });
     conn.send(this.codec.toBuffer(responseMsg));
-    return { instanceId, from: parsed.from };
+    return this.onConnect(conn, parsed.from, parsed.payload.sessionId);
   }
 }

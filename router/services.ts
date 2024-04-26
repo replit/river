@@ -1,6 +1,12 @@
 import { TObject, Type, TUnion } from '@sinclair/typebox';
-import { RiverUncaughtSchema } from './result';
-import { Branded, ProcedureMap, Unbranded, AnyProcedure } from './procedures';
+import { RiverError, RiverUncaughtSchema } from './result';
+import {
+  Branded,
+  ProcedureMap,
+  Unbranded,
+  AnyProcedure,
+  PayloadType,
+} from './procedures';
 
 /**
  * An instantiated service, probably from a {@link ServiceSchema}.
@@ -126,6 +132,19 @@ export interface ServiceConfiguration<State extends object> {
    * A factory function for creating a fresh state.
    */
   initializeState: () => State;
+}
+
+export interface SerializedServiceSchema {
+  procedures: Record<
+    string,
+    {
+      input: PayloadType;
+      output: PayloadType;
+      errors?: RiverError;
+      type: 'rpc' | 'subscription' | 'upload' | 'stream';
+      init?: PayloadType;
+    }
+  >;
 }
 
 /**
@@ -327,7 +346,7 @@ export class ServiceSchema<
   /**
    * Serializes this schema's procedures into a plain object that is JSON compatible.
    */
-  serialize(): object {
+  serialize(): SerializedServiceSchema {
     return {
       procedures: Object.fromEntries(
         Object.entries(this.procedures).map(([procName, procDef]) => [
@@ -339,7 +358,7 @@ export class ServiceSchema<
             ...('description' in procDef
               ? { description: procDef.description }
               : {}),
-            // Only add the `errors` field if it is non-never.
+            // Only add the `errors` field if the type declares it.
             ...('errors' in procDef
               ? {
                   errors: Type.Strict(procDef.errors),
