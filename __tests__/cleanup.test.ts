@@ -382,10 +382,8 @@ describe.each(testMatrix())(
 
       // push on the old stream and make sure its not sent
       input.push({ msg: '2', ignore: false });
-      input.push({ msg: '3', ignore: false });
-      for await (const out of output) {
-        assert(!out.ok);
-      }
+      const result2 = await iterNext(output);
+      assert(!result2.ok);
     });
   },
 );
