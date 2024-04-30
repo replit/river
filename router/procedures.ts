@@ -55,7 +55,7 @@ type PayloadType2 =
  * unions. If you require more nesting, submit a PR to
  * add another layer :(
  */
-type PayloadType =
+export type PayloadType =
   | TObject
   | TUnion<Array<PayloadType2>>
   | TIntersect<Array<PayloadType2>>;
