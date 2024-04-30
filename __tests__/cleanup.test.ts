@@ -339,5 +339,51 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
+
+    test("shouldn't send messages across stale sessions", async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const server = createServer(serverTransport, { test: TestServiceSchema });
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+
+      // start a stream
+      const [input, output] = await client.test.echo.stream();
+      input.push({ msg: '1', ignore: false });
+
+      const result1 = await iterNext(output);
+      assert(result1.ok);
+      expect(result1.payload).toStrictEqual({ response: '1' });
+
+      // wait for session to disconnect
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      clientTransport.reconnectOnConnectionDrop = false;
+      clientTransport.connections.forEach((conn) => conn.close());
+      await advanceFakeTimersBySessionGrace();
+
+      expect(clientTransport.sessions.size).toEqual(0);
+
+      // reconnect
+      clientTransport.reconnectOnConnectionDrop = true;
+      void clientTransport.connect(serverTransport.clientId);
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+
+      // push on the old stream and make sure its not sent
+      input.push({ msg: '2', ignore: false });
+      const result2 = await iterNext(output);
+      assert(!result2.ok);
+    });
   },
 );
