@@ -46,14 +46,14 @@ export type Result<T, E> =
       payload: E;
     };
 
-export function Ok<const T, const E>(payload: T): Result<T, E> {
+export function Ok<T, E>(payload: T): Result<T, E> {
   return {
     ok: true,
     payload,
   };
 }
 
-export function Err<const T, const E>(error: E): Result<T, E> {
+export function Err<T, E>(error: E): Result<T, E> {
   return {
     ok: false,
     payload: error,
