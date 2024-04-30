@@ -28,10 +28,37 @@ export type ValidProcType =
   // Bidirectional stream (potentially preceded by an initialization message) (n:n).
   | 'stream';
 
+type PayloadType0 =
+  | TObject
+  | TUnion<Array<TObject>>
+  | TIntersect<Array<TObject>>;
+
+type PayloadType1 =
+  | TObject
+  | TUnion<Array<PayloadType0>>
+  | TIntersect<Array<PayloadType0>>;
+
+type PayloadType2 =
+  | TObject
+  | TUnion<Array<PayloadType1>>
+  | TIntersect<Array<PayloadType1>>;
+
 /**
  * Represents the payload type for {@link Procedure}s.
+ * We expect one of the following typebox schemas:
+ * - Type.Object
+ * - Type.Union (containing a nested valid payload)
+ * - Type.Intersect (containing a nested valid payload)
+ *
+ * Due to typescript limitations, we only allow a three
+ * layers of payload nesting inside intersection and
+ * unions. If you require more nesting, submit a PR to
+ * add another layer :(
  */
-export type PayloadType = TObject | TUnion<Array<TObject>>;
+type PayloadType =
+  | TObject
+  | TUnion<Array<PayloadType2>>
+  | TIntersect<Array<PayloadType2>>;
 
 /**
  * Represents results from a {@link Procedure}. Might come from inside a stream or
