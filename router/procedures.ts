@@ -1,4 +1,4 @@
-import { Static, TUnion, TNever, Type, TObject } from '@sinclair/typebox';
+import { Static, TUnion, TNever, Type, TObject, TIntersect } from '@sinclair/typebox';
 import type { Pushable } from 'it-pushable';
 import { ServiceContextWithTransportInfo } from './context';
 import { Result, RiverError, RiverUncaughtSchema } from './result';
