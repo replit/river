@@ -1,4 +1,3 @@
-import { log } from '../../../logging';
 import { type Server, type Socket } from 'node:net';
 import { ServerTransport, ProvidedTransportOptions } from '../../transport';
 import { TransportClientId } from '../../message';
@@ -15,9 +14,6 @@ export class UnixDomainSocketServerTransport extends ServerTransport<UdsConnecti
     super(clientId, providedOptions);
     this.server = server;
     server.addListener('connection', this.connectionHandler);
-    server.on('listening', () => {
-      log?.info(`${this.clientId} -- server is listening`);
-    });
   }
 
   connectionHandler = (sock: Socket) => {
