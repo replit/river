@@ -190,7 +190,6 @@ export abstract class Transport<ConnType extends Connection> {
       log?.warn(
         `${this.clientId} -- connection from ${connectedTo} is a different session (id: ${advertisedSessionId}, last connected to: ${oldSession.advertisedSessionId}), starting a new session`,
       );
-      oldSession.close();
       this.deleteSession(oldSession);
       oldSession = undefined;
     }
@@ -245,6 +244,7 @@ export abstract class Transport<ConnType extends Connection> {
   }
 
   protected deleteSession(session: Session<ConnType>) {
+    session.close();
     this.sessions.delete(session.to);
     log?.info(
       `${this.clientId} -- session ${session.id} disconnect from ${session.to}`,
@@ -427,7 +427,6 @@ export abstract class Transport<ConnType extends Connection> {
   close() {
     this.state = 'closed';
     for (const session of this.sessions.values()) {
-      session.close();
       this.deleteSession(session);
     }
 
@@ -442,7 +441,6 @@ export abstract class Transport<ConnType extends Connection> {
   destroy() {
     this.state = 'destroyed';
     for (const session of this.sessions.values()) {
-      session.close();
       this.deleteSession(session);
     }
 
@@ -675,6 +673,11 @@ export abstract class ClientTransport<
         return this.connect(to);
       }
     }
+  }
+
+  protected deleteSession(session: Session<ConnType>) {
+    this.inflightConnectionPromises.delete(session.to);
+    super.deleteSession(session);
   }
 
   protected sendHandshake(to: TransportClientId, conn: ConnType) {
