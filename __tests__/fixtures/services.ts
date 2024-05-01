@@ -227,3 +227,28 @@ export const UploadableServiceSchema = ServiceSchema.define({
     },
   }),
 });
+
+const RecursivePayload = Type.Recursive((This) =>
+  Type.Object({
+    n: Type.Number(),
+    next: Type.Optional(This),
+  }),
+);
+
+export const NonObjectSchemas = ServiceSchema.define({
+  add: Procedure.rpc({
+    input: Type.Number(),
+    output: Type.Number(),
+    async handler(_ctx, n) {
+      return Ok(n + 1);
+    },
+  }),
+
+  echoRecursive: Procedure.rpc({
+    input: RecursivePayload,
+    output: RecursivePayload,
+    async handler(_ctx, msg) {
+      return Ok(msg);
+    },
+  }),
+});

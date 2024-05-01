@@ -1,4 +1,4 @@
-import { TObject, Type, TUnion } from '@sinclair/typebox';
+import { Type, TUnion } from '@sinclair/typebox';
 import { RiverError, RiverUncaughtSchema } from './result';
 import {
   Branded,
@@ -64,7 +64,7 @@ export type ProcHandler<
 export type ProcHasInit<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName] extends { init: TObject } ? true : false;
+> = S['procedures'][ProcName] extends { init: PayloadType } ? true : false;
 
 /**
  * Helper to get the type definition for the procedure init type of a service.
@@ -74,7 +74,7 @@ export type ProcHasInit<
 export type ProcInit<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName] extends { init: TObject }
+> = S['procedures'][ProcName] extends { init: PayloadType }
   ? S['procedures'][ProcName]['init']
   : never;
 

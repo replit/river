@@ -19,6 +19,7 @@ import {
   TestServiceSchema,
   UploadableServiceSchema,
   OrderingServiceSchema,
+  NonObjectSchemas,
 } from './fixtures/services';
 import { UNCAUGHT_ERROR } from '../router/result';
 import {
@@ -577,6 +578,41 @@ describe.each(testMatrix())(
       void client.test.add.rpc({ n: 4 });
       const connectMock = vi.spyOn(clientTransport, 'connect');
       expect(connectMock).not.toHaveBeenCalled();
+    });
+
+    test('works with non-object schemas', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const server = createServer(serverTransport, {
+        nonObject: NonObjectSchemas,
+      });
+      const client = createClient<typeof server>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+
+      // test
+      const result = await client.nonObject.add.rpc(3);
+      assert(result.ok);
+      expect(result.payload).toStrictEqual(4);
+
+      const weirdRecursivePayload = {
+        n: 1,
+        next: { n: 2, next: { n: 3 } },
+      };
+      const result2 = await client.nonObject.echoRecursive.rpc(
+        weirdRecursivePayload,
+      );
+      assert(result2.ok);
+      expect(result2.payload).toStrictEqual(weirdRecursivePayload);
     });
   },
 );

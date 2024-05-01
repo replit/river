@@ -1,4 +1,4 @@
-import { Static, TUnion, TNever, Type, TObject } from '@sinclair/typebox';
+import { Static, TNever, Type, TSchema } from '@sinclair/typebox';
 import type { Pushable } from 'it-pushable';
 import { ServiceContextWithTransportInfo } from './context';
 import { Result, RiverError, RiverUncaughtSchema } from './result';
@@ -31,7 +31,7 @@ export type ValidProcType =
 /**
  * Represents the payload type for {@link Procedure}s.
  */
-export type PayloadType = TObject | TUnion<Array<TObject>>;
+export type PayloadType = TSchema;
 
 /**
  * Represents results from a {@link Procedure}. Might come from inside a stream or
@@ -204,9 +204,9 @@ export type Procedure<
   Init extends PayloadType | null = null,
 > = { type: Ty } & (
   Init extends PayloadType
-    ? Ty extends 'upload' ? UploadProcedure<State, I, O, E, Init>
-    : Ty extends 'stream' ? StreamProcedure<State, I, O, E, Init>
-    : never
+  ? Ty extends 'upload' ? UploadProcedure<State, I, O, E, Init>
+  : Ty extends 'stream' ? StreamProcedure<State, I, O, E, Init>
+  : never
   : Ty extends 'rpc' ? RPCProcedure<State, I, O, E>
   : Ty extends 'upload' ? UploadProcedure<State, I, O, E>
   : Ty extends 'subscription' ? SubscriptionProcedure<State, I, O, E>
