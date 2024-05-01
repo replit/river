@@ -1,7 +1,7 @@
 {
   "name": "@replit/river",
   "description": "It's like tRPC but... with JSON Schema Support, duplex streaming and support for service multiplexing. Transport agnostic!",
-  "version": "0.17.2",
+  "version": "0.17.3",
   "type": "module",
   "exports": {
     ".": {
@@ -82,7 +82,7 @@
     "release": "npm publish --access public",
     "test:ui": "echo \"remember to go to /__vitest__ in the webview\" && vitest --ui --api.host 0.0.0.0 --api.port 3000",
     "test": "vitest --test-timeout=500",
-    "test:single": "vitest run --test-timeout=500",
+    "test:single": "vitest run --test-timeout=500 --reporter=dot",
     "test:flake": "./flake.sh",
     "bench": "vitest bench"
   },

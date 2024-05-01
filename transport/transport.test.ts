@@ -685,7 +685,6 @@ describe.each(testMatrix())(
       });
 
       const msg1 = createDummyTransportMessage();
-
       const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
@@ -709,6 +708,7 @@ describe.each(testMatrix())(
         );
       }
 
+      // should have reconnected by now
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(serverConnStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(1));
@@ -718,6 +718,13 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverSessStart).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(0));
       await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(0));
+
+      // ensure sending across the connection still works
+      const msg2 = createDummyTransportMessage();
+      const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
+      await expect(
+        waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
+      ).resolves.toStrictEqual(msg2.payload);
     });
   },
 );
