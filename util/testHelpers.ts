@@ -146,22 +146,25 @@ function catchProcError(err: unknown) {
 
 export const testingSessionOptions: SessionOptions = defaultTransportOptions;
 
-function dummyCtx<State>(
-  state: State,
-  extendedContext?: Omit<ServiceContext, 'state'>,
-): ServiceContextWithTransportInfo<State> {
-  const session = new Session<Connection>(
+function dummySession() {
+  return new Session<Connection>(
     undefined,
     'client',
-    'SERVER',
+    'server',
     testingSessionOptions,
   );
+}
 
+function dummyCtx<State>(
+  state: State,
+  session: Session<Connection>,
+  extendedContext?: Omit<ServiceContext, 'state'>,
+): ServiceContextWithTransportInfo<State> {
   return {
     ...extendedContext,
     state,
-    to: 'SERVER',
-    from: 'client',
+    to: session.to,
+    from: session.from,
     streamId: nanoid(),
     session,
   };
@@ -177,6 +180,7 @@ export function asClientRpc<
   state: State,
   proc: Procedure<State, 'rpc', I, O, E, Init>,
   extendedContext?: Omit<ServiceContext, 'state'>,
+  session: Session<Connection> = dummySession(),
 ) {
   return async (
     msg: Static<I>,
@@ -184,7 +188,7 @@ export function asClientRpc<
     Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>
   > => {
     return await proc
-      .handler(dummyCtx(state, extendedContext), msg)
+      .handler(dummyCtx(state, session, extendedContext), msg)
       .catch(catchProcError);
   };
 }
@@ -200,6 +204,7 @@ export function asClientStream<
   proc: Procedure<State, 'stream', I, O, E, Init>,
   init?: Init extends PayloadType ? Static<Init> : null,
   extendedContext?: Omit<ServiceContext, 'state'>,
+  session: Session<Connection> = dummySession(),
 ) {
   const input = pushable<Static<I>>({ objectMode: true });
   const output = pushable<Result<Static<O>, Static<E>>>({
@@ -210,12 +215,12 @@ export function asClientStream<
     if (init) {
       const _proc = proc as Procedure<State, 'stream', I, O, E, PayloadType>;
       await _proc
-        .handler(dummyCtx(state, extendedContext), init, input, output)
+        .handler(dummyCtx(state, session, extendedContext), init, input, output)
         .catch((err) => output.push(catchProcError(err)));
     } else {
       const _proc = proc as Procedure<State, 'stream', I, O, E>;
       await _proc
-        .handler(dummyCtx(state, extendedContext), input, output)
+        .handler(dummyCtx(state, session, extendedContext), input, output)
         .catch((err) => output.push(catchProcError(err)));
     }
   })();
@@ -232,6 +237,7 @@ export function asClientSubscription<
   state: State,
   proc: Procedure<State, 'subscription', I, O, E>,
   extendedContext?: Omit<ServiceContext, 'state'>,
+  session: Session<Connection> = dummySession(),
 ) {
   const output = pushable<Result<Static<O>, Static<E>>>({
     objectMode: true,
@@ -240,7 +246,7 @@ export function asClientSubscription<
   return (msg: Static<I>) => {
     void (async () => {
       return await proc
-        .handler(dummyCtx(state, extendedContext), msg, output)
+        .handler(dummyCtx(state, session, extendedContext), msg, output)
         .catch((err) => output.push(catchProcError(err)));
     })();
     return output;
@@ -258,18 +264,19 @@ export function asClientUpload<
   proc: Procedure<State, 'upload', I, O, E, Init>,
   init?: Init extends PayloadType ? Static<Init> : null,
   extendedContext?: Omit<ServiceContext, 'state'>,
+  session: Session<Connection> = dummySession(),
 ) {
   const input = pushable<Static<I>>({ objectMode: true });
   if (init) {
     const _proc = proc as Procedure<State, 'upload', I, O, E, PayloadType>;
     const result = _proc
-      .handler(dummyCtx(state, extendedContext), init, input)
+      .handler(dummyCtx(state, session, extendedContext), init, input)
       .catch(catchProcError);
     return [input, result] as const;
   } else {
     const _proc = proc as Procedure<State, 'upload', I, O, E>;
     const result = _proc
-      .handler(dummyCtx(state, extendedContext), input)
+      .handler(dummyCtx(state, session, extendedContext), input)
       .catch(catchProcError);
     return [input, result] as const;
   }
