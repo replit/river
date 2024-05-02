@@ -311,6 +311,8 @@ The process differs slightly between the client and server:
 - A close event listener is attached to the `Connection` to handle unexpected closures. This event listener should:
   - Close the underlying wire connection if still open.
   - Initiate the grace period for the associated `Session`'s destruction.
+    - If the connection for the same session is re-established, cancel the grace timer.
+    - After the grace period has elapsed, consider the session and connection dead. Close the connection, stop the grace timer, stop trying to heartbeat, and delete all state associated with the session.
   - Attempt to reconnect to the server.
 
 #### Server
@@ -323,7 +325,7 @@ The process differs slightly between the client and server:
     - Send a successful protocol handshake response back to the client.
 - A close event listener is attached to the `Connection` to handle unexpected closures. This event listener should:
   - Close the underlying wire connection if still open.
-  - Initiate the grace period for the associated `Session`'s destruction.
+  - Initiate the grace period for the associated `Session`'s destruction (this code path is identical to the client). 
 
 ### Handshake
 
@@ -395,14 +397,15 @@ When sending messages to the other side, the session associated with the connect
 
 - Increment the `seq` for the session by 1.
 
-When receiving messages, the transport MUST ensure that the only messages it validates are those that have a `seq` that is exactly equal to the `ack` of the session. This ensures exactly-once delivery semantics.
+When receiving messages, the transport MUST ensure that the only messages it validates are those that have a `seq` that is exactly equal to the `ack` of the session.
+This ensures exactly-once delivery semantics.
 
 #### On disconnect
 
 Handling close events is detailed in the 'Creating Connections and Sessions' section above.
 
 When a connection is lost, the client and server should attempt to reconnect to the other side.
-The client and server should both have a grace period for the other side to reconnect before considering the session lost.
+The client and server should both have a grace period `sessionDisconnectGraceMs` for the other side to reconnect before considering the session as dead.
 
 It is important to note that this implies that there are two types of 'reconnects' in River:
 
@@ -421,9 +424,12 @@ Both clients and servers should listen for `sessionStatus` events to do some err
 Certain transports will not emit a close event when the underlying connection is lost.
 This is especially true for WebSockets in specific cases (e.g. closing your laptop lid).
 
-To detect these phantom disconnects, the session SHOULD send an explicit heartbeat message every `heartbeatInterval` milliseconds (this should be a parameter of the transport).
+To detect these phantom disconnects, the session SHOULD send an explicit heartbeat message every `heartbeatIntervalMs` milliseconds (this should be a parameter of the transport).
 This message is a control message with the `AckBit` set and the payload `{ type: 'ACK' }`.
 The `seq` and `ack` of the message should match that of the session itself and otherwise be transmitted like a normal message.
+
+We track the number of heartbeats that we've sent to the other side without hearing a message. When the number of heartbeat misses exceeds some threshold `heartbeatsUntilDead` (also a parameter of the transport),
+close the connection in that session. See the 'On disconnect' section above for more details on how to handle this.
 
 This explicit ack serves three purposes:
 
