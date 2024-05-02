@@ -325,7 +325,7 @@ The process differs slightly between the client and server:
     - Send a successful protocol handshake response back to the client.
 - A close event listener is attached to the `Connection` to handle unexpected closures. This event listener should:
   - Close the underlying wire connection if still open.
-  - Initiate the grace period for the associated `Session`'s destruction (this code path is identical to the client). 
+  - Initiate the grace period for the associated `Session`'s destruction (this code path is identical to the client).
 
 ### Handshake
 
