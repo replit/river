@@ -298,14 +298,20 @@ class RiverServer<Services extends ServiceSchemaMap> {
               return;
             }
 
-            return procedure
-              .handler(
+            try {
+              const dispose = await procedure.handler(
                 serviceContextWithTransportInfo,
                 initMessage.value,
                 incoming,
                 outgoing,
-              )
-              .catch(errorHandler);
+              );
+
+              if (dispose) {
+                disposables.push(dispose);
+              }
+            } catch (err) {
+              errorHandler(err);
+            }
           })();
         } else {
           inputHandler = procedure
@@ -326,6 +332,7 @@ class RiverServer<Services extends ServiceSchemaMap> {
               inputMessage.value,
               outgoing,
             );
+
             if (dispose) {
               disposables.push(dispose);
             }

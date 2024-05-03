@@ -164,7 +164,7 @@ export type StreamProcedure<
         init: Static<Init>,
         input: AsyncIterableIterator<Static<I>>,
         output: Pushable<ProcedureResult<O, E>>,
-      ): Promise<void>;
+      ): Promise<(() => void) | void>;
     }
   : {
       type: 'stream';
@@ -176,7 +176,7 @@ export type StreamProcedure<
         context: ServiceContextWithTransportInfo<State>,
         input: AsyncIterableIterator<Static<I>>,
         output: Pushable<ProcedureResult<O, E>>,
-      ): Promise<void>;
+      ): Promise<(() => void) | void>;
     };
 
 /**
