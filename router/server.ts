@@ -119,8 +119,13 @@ class RiverServer<Services extends ServiceSchemaMap> {
       log?.info(
         `${this.transport.clientId} -- got msg with destination that isn't the server, ignoring`,
       );
+
+      // This is a bad client
+      // TODO disconnect session
       return;
     }
+
+    // TODO check if TransportMessageSchema is satisfied
 
     let procStream = this.streamMap.get(message.streamId);
     const isInitMessage = !procStream;
@@ -167,14 +172,20 @@ class RiverServer<Services extends ServiceSchemaMap> {
         `${this.transport.clientId} -- can't create a new procedure stream from a message that doesn't have the stream open bit set`,
       );
       log?.debug(` -> ${JSON.stringify(message)}`);
+
+      // This is a bad client
+      // TODO: disconnect session.
       return;
     }
 
     if (!message.procedureName || !message.serviceName) {
-      log?.warn(
+      log?.error(
         `${this.transport.clientId} -- missing procedure or service name in stream open message`,
       );
       log?.debug(` -> ${JSON.stringify(message)}`);
+
+      // This is a bad client
+      // TODO: disconnect session.
       return;
     }
 
@@ -182,6 +193,11 @@ class RiverServer<Services extends ServiceSchemaMap> {
       log?.warn(
         `${this.transport.clientId} -- couldn't find service ${message.serviceName}`,
       );
+
+      // Either a bad client or backwards incompatible mismatched versions between client and server
+      // TODO: disconnect session
+      // TODO alternative 1: respond with an error message
+      // TODO alternative 2: respond with an error message and disconnect session
       return;
     }
 
@@ -191,6 +207,11 @@ class RiverServer<Services extends ServiceSchemaMap> {
       log?.warn(
         `${this.transport.clientId} -- couldn't find a matching procedure for ${message.serviceName}.${message.procedureName}`,
       );
+
+      // Either a bad client or backwards incompatible mismatched versions between client and server
+      // TODO: disconnect session
+      // TODO alternative 1: respond with an error message
+      // TODO alternative 2: respond with an error message and disconnect session
       return;
     }
 
@@ -199,6 +220,11 @@ class RiverServer<Services extends ServiceSchemaMap> {
       log?.warn(
         `${this.transport.clientId} -- couldn't find session for ${message.from}`,
       );
+
+      // Either a bad client or something really bad going on with servier
+      // TODO: disconnect session
+      // TODO alternative 1: respond with an error message
+      // TODO alternative 2: respond with an error message and disconnect session
       return;
     }
 
@@ -247,6 +273,7 @@ class RiverServer<Services extends ServiceSchemaMap> {
           })();
 
     const errorHandler = (err: unknown) => {
+      // TODO: should we end the stream if we run into an error?
       const errorMsg = coerceErrorString(err);
       log?.error(
         `${this.transport.clientId} -- procedure ${message.serviceName}.${message.procedureName}:${message.streamId} threw an uncaught error: ${errorMsg}`,
@@ -382,6 +409,9 @@ class RiverServer<Services extends ServiceSchemaMap> {
             (procedure as AnyProcedure).type
           } at ${message.serviceName}.${message.procedureName}`,
         );
+
+        // This is a bad client
+        // TODO: disconnect session
         return;
     }
 
@@ -419,6 +449,9 @@ class RiverServer<Services extends ServiceSchemaMap> {
       procHasInitMessage &&
       Value.Check(procedure.init, message.payload)
     ) {
+      // TODO if isInit && !procHasInitMessage, we should handle is an error
+      // TODO if !isInit && procHasInitMessage, we should handle is an error
+      // TODO if isInit && procHasInitMessage && schema mismatch, we should handle is an error
       procStream.incoming.push(message.payload as PayloadType);
     } else if (Value.Check(procedure.input, message.payload)) {
       procStream.incoming.push(message.payload as PayloadType);
@@ -430,6 +463,10 @@ class RiverServer<Services extends ServiceSchemaMap> {
           message.payload,
         )}`,
       );
+      // This is a bad client
+      // TODO: disconnect session
+      // TODO alternative 1: respond with an error message
+      // TODO alternative 2: respond with an error message and disconnect session
     }
 
     if (isStreamClose(message.controlFlags)) {

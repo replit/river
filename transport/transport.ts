@@ -283,6 +283,8 @@ export abstract class Transport<ConnType extends Connection> {
       log?.error(
         `${this.clientId} -- received malformed msg, killing conn: ${decodedBuffer}`,
       );
+      // This is a bad client or server
+      // TODO handle, probably disconnect the session, clients might want to retry?
       return null;
     }
 
@@ -292,6 +294,8 @@ export abstract class Transport<ConnType extends Connection> {
           parsedMsg,
         )}`,
       );
+      // This is a bad client or server
+      // TODO handle, probably disconnect the session, clients might want to retry?
       return null;
     }
 
@@ -309,6 +313,8 @@ export abstract class Transport<ConnType extends Connection> {
     if (!session) {
       const err = `${this.clientId} -- (invariant violation) no existing session for ${msg.from}`;
       log?.error(err);
+      // This is a bad client or server
+      // TODO handle, probably disconnect where-ever this is coming from, clients might want to retry?
       return;
     }
 
@@ -325,6 +331,8 @@ export abstract class Transport<ConnType extends Connection> {
             msg,
           )}`,
         );
+        // This is a bad client or server
+        // TODO handle, probably disconnect the session, clients might want to retry?
       } else {
         const errMsg = `received out-of-order msg (got seq: ${msg.seq}, wanted seq: ${session.nextExpectedSeq})`;
         log?.error(
