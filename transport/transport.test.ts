@@ -702,9 +702,9 @@ describe.each(testMatrix())(
       // now, let's wait until the connection is considered dead
       simulatePhantomDisconnect();
       await vi.runOnlyPendingTimersAsync();
-      for (let i = 0; i < testingSessionOptions.heartbeatsUntilDead; i++) {
+      for (let i = 0; i < testingSessionOptions.heartbeatsUntilDead + 1; i++) {
         await vi.advanceTimersByTimeAsync(
-          testingSessionOptions.heartbeatIntervalMs + 1,
+          testingSessionOptions.heartbeatIntervalMs,
         );
       }
 

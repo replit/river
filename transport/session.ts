@@ -197,10 +197,12 @@ export class Session<ConnType extends Connection> {
   }
 
   sendHeartbeat() {
-    if (this.heartbeatMisses >= this.options.heartbeatsUntilDead) {
+    const misses = this.heartbeatMisses;
+    const missDuration = misses * this.options.heartbeatIntervalMs;
+    if (misses > this.options.heartbeatsUntilDead) {
       if (this.connection) {
         log?.info(
-          `${this.from} -- closing connection (id: ${this.connection.debugId}) to ${this.to} due to inactivity`,
+          `${this.from} -- closing connection (id: ${this.connection.debugId}) to ${this.to} due to inactivity (missed ${misses} heartbeats which is ${missDuration}ms)`,
         );
         this.closeStaleConnection();
       }
