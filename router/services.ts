@@ -36,6 +36,9 @@ export type AnyServiceSchema = ServiceSchema<object, ProcedureMap>;
  */
 export type AnyServiceSchemaMap = Record<string, AnyServiceSchema>;
 
+// This has the secret sauce to keep go to definition working, the structure is
+// somewhat delicate, so be careful when modifying it. Would be nice to add a
+// static
 /**
  * Takes a {@link AnyServiceSchemaMap} and returns a dictionary of instantiated
  * services.

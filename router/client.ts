@@ -128,12 +128,12 @@ type ServiceClient<Router extends AnyService> = {
  * Defines a type that represents a client for a server with a set of services.
  * @template Srv - The type of the server.
  */
-export type ServerClient<
-  ServiceSchemaMap extends AnyServiceSchemaMap,
-  Services extends
-    InstantiatedServiceSchemaMap<ServiceSchemaMap> = InstantiatedServiceSchemaMap<ServiceSchemaMap>,
+export type Client<
+  Services extends AnyServiceSchemaMap,
+  IS extends
+    InstantiatedServiceSchemaMap<Services> = InstantiatedServiceSchemaMap<Services>,
 > = {
-  [SvcName in keyof Services]: ServiceClient<Services[SvcName]>;
+  [SvcName in keyof IS]: ServiceClient<IS[SvcName]>;
 };
 
 interface ProxyCallbackOptions {
@@ -194,7 +194,7 @@ export const createClient = <ServiceSchemaMap extends AnyServiceSchemaMap>(
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   providedClientOptions: Partial<ClientOptions> = {},
-) => {
+): Client<ServiceSchemaMap> => {
   const options = { ...defaultClientOptions, ...providedClientOptions };
   if (options.eagerlyConnect) {
     void transport.connect(serverId);
@@ -256,7 +256,7 @@ export const createClient = <ServiceSchemaMap extends AnyServiceSchemaMap>(
     } else {
       throw new Error(`invalid river call, unknown procedure type ${procType}`);
     }
-  }, []) as ServerClient<ServiceSchemaMap>;
+  }, []) as Client<ServiceSchemaMap>;
 };
 
 function createSessionDisconnectHandler(
