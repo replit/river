@@ -34,13 +34,13 @@ export type AnyServiceSchema = ServiceSchema<object, ProcedureMap>;
 /**
  * A dictionary of {@link ServiceSchema}s, where the key is the service name.
  */
-export type ServiceSchemaMap = Record<string, AnyServiceSchema>;
+export type AnyServiceSchemaMap = Record<string, AnyServiceSchema>;
 
 /**
- * Takes a {@link ServiceSchemaMap} and returns a dictionary of instantiated
+ * Takes a {@link AnyServiceSchemaMap} and returns a dictionary of instantiated
  * services.
  */
-export type InstantiatedServiceSchemaMap<T extends ServiceSchemaMap> = {
+export type InstantiatedServiceSchemaMap<T extends AnyServiceSchemaMap> = {
   [K in keyof T]: T[K] extends ServiceSchema<infer S, infer P>
     ? Service<S, P>
     : never;

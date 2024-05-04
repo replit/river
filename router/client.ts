@@ -7,11 +7,11 @@ import {
   ProcInput,
   ProcOutput,
   ProcType,
-  ServiceSchemaMap,
+  AnyServiceSchemaMap,
+  InstantiatedServiceSchemaMap,
 } from './services';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
-import { Server } from './server';
 import {
   OpaqueTransportMessage,
   ControlFlags,
@@ -128,8 +128,12 @@ type ServiceClient<Router extends AnyService> = {
  * Defines a type that represents a client for a server with a set of services.
  * @template Srv - The type of the server.
  */
-export type ServerClient<Srv extends Server<ServiceSchemaMap>> = {
-  [SvcName in keyof Srv['services']]: ServiceClient<Srv['services'][SvcName]>;
+export type ServerClient<
+  ServiceSchemaMap extends AnyServiceSchemaMap,
+  Services extends
+    InstantiatedServiceSchemaMap<ServiceSchemaMap> = InstantiatedServiceSchemaMap<ServiceSchemaMap>,
+> = {
+  [SvcName in keyof Services]: ServiceClient<Services[SvcName]>;
 };
 
 interface ProxyCallbackOptions {
@@ -186,7 +190,7 @@ const defaultClientOptions: ClientOptions = {
  * @param {Transport} transport - The transport to use for communication.
  * @returns The client for the server.
  */
-export const createClient = <Srv extends Server<ServiceSchemaMap>>(
+export const createClient = <ServiceSchemaMap extends AnyServiceSchemaMap>(
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   providedClientOptions: Partial<ClientOptions> = {},
@@ -252,7 +256,7 @@ export const createClient = <Srv extends Server<ServiceSchemaMap>>(
     } else {
       throw new Error(`invalid river call, unknown procedure type ${procType}`);
     }
-  }, []) as ServerClient<Srv>;
+  }, []) as ServerClient<ServiceSchemaMap>;
 };
 
 function createSessionDisconnectHandler(
