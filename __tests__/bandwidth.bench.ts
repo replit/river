@@ -25,8 +25,9 @@ describe('bandwidth', async () => {
 
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
-    const server = createServer(serverTransport, { test: TestServiceSchema });
-    const client = createClient<typeof server>(
+    const services = { test: TestServiceSchema };
+    createServer(serverTransport, services);
+    const client = createClient<typeof services>(
       clientTransport,
       serverTransport.clientId,
     );

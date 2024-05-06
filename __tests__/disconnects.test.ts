@@ -33,8 +33,9 @@ describe.each(testMatrix())(
     test('rpc', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      const server = createServer(serverTransport, { test: TestServiceSchema });
-      const client = createClient<typeof server>(
+      const services = { test: TestServiceSchema };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
         clientTransport,
         serverTransport.clientId,
       );
@@ -75,8 +76,9 @@ describe.each(testMatrix())(
     test('stream', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      const server = createServer(serverTransport, { test: TestServiceSchema });
-      const client = createClient<typeof server>(
+      const services = { test: TestServiceSchema };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
         clientTransport,
         serverTransport.clientId,
       );
@@ -123,14 +125,15 @@ describe.each(testMatrix())(
       const client2Transport = getClientTransport('client2');
       const serverTransport = getServerTransport();
 
-      const server = createServer(serverTransport, {
+      const services = {
         subscribable: SubscribableServiceSchema,
-      });
-      const client1 = createClient<typeof server>(
+      };
+      const server = createServer(serverTransport, services);
+      const client1 = createClient<typeof services>(
         client1Transport,
         serverTransport.clientId,
       );
-      const client2 = createClient<typeof server>(
+      const client2 = createClient<typeof services>(
         client2Transport,
         serverTransport.clientId,
       );
@@ -211,10 +214,11 @@ describe.each(testMatrix())(
     test('upload', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      const server = createServer(serverTransport, {
+      const services = {
         uploadable: UploadableServiceSchema,
-      });
-      const client = createClient<typeof server>(
+      };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
         clientTransport,
         serverTransport.clientId,
       );
