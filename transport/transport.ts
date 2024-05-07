@@ -14,7 +14,7 @@ import {
   isAck,
   PROTOCOL_VERSION,
 } from './message';
-import { log } from '../logging';
+import { log } from '../logging/log';
 import {
   EventDispatcher,
   EventHandler,
@@ -188,7 +188,8 @@ export abstract class Transport<ConnType extends Connection> {
     ) {
       // mismatch, kill the old session and begin a new one
       log?.warn(
-        `${this.clientId} -- connection from ${connectedTo} is a different session (id: ${advertisedSessionId}, last connected to: ${oldSession.advertisedSessionId}), starting a new session`,
+        `connection from ${connectedTo} is a different session (id: ${advertisedSessionId}, last connected to: ${oldSession.advertisedSessionId}), killing old session and starting a new one`,
+        oldSession.loggingMetadata,
       );
       this.deleteSession(oldSession);
       oldSession = undefined;
@@ -199,20 +200,22 @@ export abstract class Transport<ConnType extends Connection> {
       const newSession = this.createSession(connectedTo, conn);
       newSession.advertisedSessionId = advertisedSessionId;
       log?.info(
-        `${this.clientId} -- new connection (id: ${conn.debugId}) for new session (id: ${newSession.id}) to ${connectedTo}`,
+        `new connection for new session to ${connectedTo}`,
+        newSession.loggingMetadata,
       );
       return newSession;
     }
-
-    log?.info(
-      `${this.clientId} -- new connection (id: ${conn.debugId}) for existing session (id: ${oldSession.id}) to ${connectedTo}`,
-    );
 
     // otherwise, this is a new connection from the same user, let's consider
     // the old one as dead and call this connection canonical
     oldSession.replaceWithNewConnection(conn);
     oldSession.sendBufferedMessages();
     oldSession.advertisedSessionId = advertisedSessionId;
+    log?.info(
+      `new connection for existing session to ${connectedTo}`,
+      oldSession.loggingMetadata,
+    );
+
     return oldSession;
   }
 
@@ -236,7 +239,8 @@ export abstract class Transport<ConnType extends Connection> {
     if (!session) {
       session = this.createSession(to, conn);
       log?.info(
-        `${this.clientId} -- no session for ${to}, created a new one (id: ${session.id})`,
+        `no session for ${to}, created a new one`,
+        session.loggingMetadata,
       );
     }
 
@@ -247,7 +251,8 @@ export abstract class Transport<ConnType extends Connection> {
     session.close();
     this.sessions.delete(session.to);
     log?.info(
-      `${this.clientId} -- session ${session.id} disconnect from ${session.to}`,
+      `session ${session.id} disconnect from ${session.to}`,
+      session.loggingMetadata,
     );
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'disconnect',
@@ -280,18 +285,16 @@ export abstract class Transport<ConnType extends Connection> {
 
     if (parsedMsg === null) {
       const decodedBuffer = new TextDecoder().decode(Buffer.from(msg));
-      log?.error(
-        `${this.clientId} -- received malformed msg, killing conn: ${decodedBuffer}`,
-      );
+      log?.error(`received malformed msg, killing conn: ${decodedBuffer}`, {
+        clientId: this.clientId,
+      });
       return null;
     }
 
     if (!Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
-      log?.error(
-        `${this.clientId} -- received invalid msg: ${JSON.stringify(
-          parsedMsg,
-        )}`,
-      );
+      log?.error(`received invalid msg: ${JSON.stringify(parsedMsg)}`, {
+        clientId: this.clientId,
+      });
       return null;
     }
 
@@ -307,33 +310,32 @@ export abstract class Transport<ConnType extends Connection> {
     if (this.state !== 'open') return;
     const session = this.sessions.get(msg.from);
     if (!session) {
-      const err = `${this.clientId} -- (invariant violation) no existing session for ${msg.from}`;
-      log?.error(err);
+      log?.error(`(invariant violation) no existing session for ${msg.from}`, {
+        clientId: this.clientId,
+        fullTransportMessage: msg,
+      });
       return;
     }
 
     // got a msg so we know the other end is alive, reset the grace period
     session.cancelGrace();
 
-    log?.debug(`${this.clientId} -- received msg: ${JSON.stringify(msg)}`);
+    log?.debug(`received msg`, {
+      clientId: this.clientId,
+      fullTransportMessage: msg,
+    });
     if (msg.seq !== session.nextExpectedSeq) {
       if (msg.seq < session.nextExpectedSeq) {
         log?.debug(
-          `${this.clientId} -- received duplicate msg (got: ${
-            msg.seq
-          }, wanted: ${session.nextExpectedSeq}), discarding: ${JSON.stringify(
-            msg,
-          )}`,
+          `received duplicate msg (got seq: ${msg.seq}, wanted seq: ${session.nextExpectedSeq}), discarding`,
+          { clientId: this.clientId, fullTransportMessage: msg },
         );
       } else {
         const errMsg = `received out-of-order msg (got seq: ${msg.seq}, wanted seq: ${session.nextExpectedSeq})`;
-        log?.error(
-          `${
-            this.clientId
-          } -- fatal: ${errMsg}, marking connection as dead: ${JSON.stringify(
-            msg,
-          )}`,
-        );
+        log?.error(`${errMsg}, marking connection as dead`, {
+          clientId: this.clientId,
+          fullTransportMessage: msg,
+        });
         this.protocolError(ProtocolError.MessageOrderingViolated, errMsg);
         session.close();
       }
@@ -347,7 +349,10 @@ export abstract class Transport<ConnType extends Connection> {
     if (!isAck(msg.controlFlags)) {
       this.eventDispatcher.dispatchEvent('message', msg);
     } else {
-      log?.debug(`${this.clientId} -- discarding msg ${msg.id} (ack bit set)`);
+      log?.debug(`discarding msg (ack bit set)`, {
+        clientId: this.clientId,
+        fullTransportMessage: msg,
+      });
     }
   }
 
@@ -387,17 +392,17 @@ export abstract class Transport<ConnType extends Connection> {
   ): string | undefined {
     if (this.state === 'destroyed') {
       const err = 'transport is destroyed, cant send';
-      log?.error(`${this.clientId} -- ` + err + `: ${JSON.stringify(msg)}`);
+      log?.error(err, {
+        clientId: this.clientId,
+        partialTransportMessage: msg,
+      });
       this.protocolError(ProtocolError.UseAfterDestroy, err);
       return undefined;
     } else if (this.state === 'closed') {
-      log?.info(
-        `${
-          this.clientId
-        } -- transport closed when sending, discarding : ${JSON.stringify(
-          msg,
-        )}`,
-      );
+      log?.info(`transport closed when sending, discarding`, {
+        clientId: this.clientId,
+        partialTransportMessage: msg,
+      });
       return undefined;
     }
 
@@ -430,7 +435,7 @@ export abstract class Transport<ConnType extends Connection> {
       this.deleteSession(session);
     }
 
-    log?.info(`${this.clientId} -- manually closed transport`);
+    log?.info(`manually closed transport`, { clientId: this.clientId });
   }
 
   /**
@@ -444,7 +449,7 @@ export abstract class Transport<ConnType extends Connection> {
       this.deleteSession(session);
     }
 
-    log?.info(`${this.clientId} -- manually destroyed transport`);
+    log?.info(`manually destroyed transport`, { clientId: this.clientId });
   }
 }
 
@@ -514,20 +519,22 @@ export abstract class ClientTransport<
       if (session) {
         this.onDisconnect(conn, session);
       }
-      log?.info(
-        `${this.clientId} -- connection (id: ${conn.debugId}) to ${to} disconnected`,
-      );
+      log?.info(`connection to ${to} disconnected`, {
+        ...session?.loggingMetadata,
+        clientId: this.clientId,
+        connectedTo: to,
+      });
       this.inflightConnectionPromises.delete(to);
       if (this.reconnectOnConnectionDrop) {
         void this.connect(to);
       }
     });
     conn.addErrorListener((err) => {
-      log?.warn(
-        `${this.clientId} -- error in connection (id: ${
-          conn.debugId
-        }) to ${to}: ${coerceErrorString(err)}`,
-      );
+      log?.warn(`error in connection to ${to}: ${coerceErrorString(err)}`, {
+        ...session?.loggingMetadata,
+        clientId: this.clientId,
+        connectedTo: to,
+      });
     });
   }
 
@@ -545,11 +552,11 @@ export abstract class ClientTransport<
     }
 
     if (!Value.Check(ControlMessageHandshakeResponseSchema, parsed.payload)) {
-      log?.warn(
-        `${this.clientId} -- received invalid handshake resp: ${JSON.stringify(
-          parsed,
-        )}`,
-      );
+      log?.warn(`received invalid handshake resp`, {
+        clientId: this.clientId,
+        connectedTo: parsed.from,
+        fullTransportMessage: parsed,
+      });
       this.protocolError(
         ProtocolError.HandshakeFailed,
         'invalid handshake resp',
@@ -558,11 +565,11 @@ export abstract class ClientTransport<
     }
 
     if (!parsed.payload.status.ok) {
-      log?.warn(
-        `${this.clientId} -- received failed handshake resp: ${JSON.stringify(
-          parsed,
-        )}`,
-      );
+      log?.warn(`received invalid handshake resp`, {
+        clientId: this.clientId,
+        connectedTo: parsed.from,
+        fullTransportMessage: parsed,
+      });
       this.protocolError(
         ProtocolError.HandshakeFailed,
         parsed.payload.status.reason,
@@ -570,7 +577,11 @@ export abstract class ClientTransport<
       return false;
     }
 
-    log?.debug(`${this.clientId} -- handshake from ${parsed.from} ok`);
+    log?.debug(`handshake from ${parsed.from} ok`, {
+      clientId: this.clientId,
+      connectedTo: parsed.from,
+      fullTransportMessage: parsed,
+    });
     const session = this.onConnect(
       conn,
       parsed.from,
@@ -604,7 +615,8 @@ export abstract class ClientTransport<
     const canProceedWithConnection = () => this.state === 'open';
     if (!canProceedWithConnection()) {
       log?.info(
-        `${this.clientId} -- transport state is no longer open, cancelling attempt to connect to ${to}`,
+        `transport state is no longer open, cancelling attempt to connect to ${to}`,
+        { clientId: this.clientId, connectedTo: to },
       );
       return;
     }
@@ -615,7 +627,7 @@ export abstract class ClientTransport<
       const budgetConsumed = this.retryBudget.getBudgetConsumed(to);
       if (!this.retryBudget.hasBudget(to)) {
         const errMsg = `tried to connect to ${to} but retry budget exceeded (more than ${budgetConsumed} attempts in the last ${this.retryBudget.totalBudgetRestoreTime}ms)`;
-        log?.warn(`${this.clientId} -- ${errMsg}`);
+        log?.warn(errMsg, { clientId: this.clientId, connectedTo: to });
         this.protocolError(ProtocolError.RetriesExceeded, errMsg);
         return;
       }
@@ -626,9 +638,10 @@ export abstract class ClientTransport<
         sleep = new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
 
-      log?.info(
-        `${this.clientId} -- attempting connection to ${to} (${backoffMs}ms backoff)`,
-      );
+      log?.info(`attempting connection to ${to} (${backoffMs}ms backoff)`, {
+        clientId: this.clientId,
+        connectedTo: to,
+      });
       this.retryBudget.consumeBudget(to);
       reconnectPromise = sleep
         .then(() => {
@@ -640,7 +653,12 @@ export abstract class ClientTransport<
         .then((conn) => {
           if (!canProceedWithConnection()) {
             log?.info(
-              `${this.clientId} -- transport state is no longer open, closing pre-handshake connection (id: ${conn.debugId}) to ${to}`,
+              `transport state is no longer open, closing pre-handshake connection to ${to}`,
+              {
+                clientId: this.clientId,
+                connectedTo: to,
+                connId: conn.debugId,
+              },
             );
             conn.close();
             throw new Error('transport state is no longer open');
@@ -653,9 +671,10 @@ export abstract class ClientTransport<
 
       this.inflightConnectionPromises.set(to, reconnectPromise);
     } else {
-      log?.info(
-        `${this.clientId} -- attempting connection to ${to} (reusing previous attempt)`,
-      );
+      log?.info(`attempting connection to ${to} (reusing previous attempt)`, {
+        clientId: this.clientId,
+        connectedTo: to,
+      });
     }
 
     try {
@@ -665,11 +684,15 @@ export abstract class ClientTransport<
       const errStr = coerceErrorString(error);
 
       if (!this.reconnectOnConnectionDrop || !canProceedWithConnection()) {
-        log?.warn(`${this.clientId} -- connection to ${to} failed (${errStr})`);
+        log?.warn(`connection to ${to} failed (${errStr})`, {
+          clientId: this.clientId,
+          connectedTo: to,
+        });
       } else {
-        log?.warn(
-          `${this.clientId} -- connection to ${to} failed (${errStr}), retrying`,
-        );
+        log?.warn(`connection to ${to} failed (${errStr}), retrying`, {
+          clientId: this.clientId,
+          connectedTo: to,
+        });
         return this.connect(to);
       }
     }
@@ -683,7 +706,10 @@ export abstract class ClientTransport<
   protected sendHandshake(to: TransportClientId, conn: ConnType) {
     const session = this.getOrCreateSession(to, conn);
     const requestMsg = handshakeRequestMessage(this.clientId, to, session.id);
-    log?.debug(`${this.clientId} -- sending handshake request to ${to}`);
+    log?.debug(`sending handshake request to ${to}`, {
+      clientId: this.clientId,
+      connectedTo: to,
+    });
     conn.send(this.codec.toBuffer(requestMsg));
   }
 
@@ -701,17 +727,19 @@ export abstract class ServerTransport<
     providedOptions?: ProvidedTransportOptions,
   ) {
     super(clientId, providedOptions);
-    log?.info(
-      `${this.clientId} -- initiated server transport (protocol: ${PROTOCOL_VERSION})`,
-    );
+    log?.info(`initiated server transport`, {
+      clientId: this.clientId,
+      protocolVersion: PROTOCOL_VERSION,
+    });
   }
 
   protected handleConnection(conn: ConnType) {
     if (this.state !== 'open') return;
 
-    log?.info(
-      `${this.clientId} -- new incoming connection (id: ${conn.debugId})`,
-    );
+    log?.info(`new incoming connection`, {
+      clientId: this.clientId,
+      connId: conn.debugId,
+    });
     let session: Session<ConnType> | undefined = undefined;
     const client = () => session?.to ?? 'unknown';
     const handshakeHandler = (data: Uint8Array) => {
@@ -740,20 +768,18 @@ export abstract class ServerTransport<
     conn.addDataListener(handshakeHandler);
     conn.addCloseListener(() => {
       if (!session) return;
-      log?.info(
-        `${this.clientId} -- connection (id: ${
-          conn.debugId
-        }) to ${client()} disconnected`,
-      );
+      log?.info(`connection to ${client()} disconnected`, {
+        clientId: this.clientId,
+        connId: conn.debugId,
+      });
       this.onDisconnect(conn, session);
     });
 
     conn.addErrorListener((err) => {
       if (!session) return;
       log?.warn(
-        `${this.clientId} -- connection (id: ${
-          conn.debugId
-        }) to ${client()} got an error: ${coerceErrorString(err)}`,
+        `connection to ${client()} got an error: ${coerceErrorString(err)}`,
+        { clientId: this.clientId, connId: conn.debugId },
       );
     });
   }
@@ -778,7 +804,10 @@ export abstract class ServerTransport<
         reason,
       });
       conn.send(this.codec.toBuffer(responseMsg));
-      log?.warn(`${this.clientId} -- ${reason}: ${JSON.stringify(parsed)}`);
+      log?.warn(`${reason}: ${JSON.stringify(parsed)}`, {
+        clientId: this.clientId,
+        connId: conn.debugId,
+      });
       this.protocolError(
         ProtocolError.HandshakeFailed,
         'invalid handshake request',
@@ -796,7 +825,8 @@ export abstract class ServerTransport<
       });
       conn.send(this.codec.toBuffer(responseMsg));
       log?.warn(
-        `${this.clientId} -- received handshake msg with incompatible protocol version (got: ${gotVersion}, expected: ${PROTOCOL_VERSION})`,
+        `received handshake msg with incompatible protocol version (got: ${gotVersion}, expected: ${PROTOCOL_VERSION})`,
+        { clientId: this.clientId, connId: conn.debugId },
       );
       this.protocolError(ProtocolError.HandshakeFailed, reason);
       return false;
@@ -804,7 +834,8 @@ export abstract class ServerTransport<
 
     const session = this.getOrCreateSession(parsed.from, conn);
     log?.debug(
-      `${this.clientId} -- handshake from ${parsed.from} ok, responding with handshake success`,
+      `handshake from ${parsed.from} ok, responding with handshake success`,
+      { clientId: this.clientId, connId: conn.debugId },
     );
     const responseMsg = handshakeResponseMessage(this.clientId, parsed.from, {
       ok: true,

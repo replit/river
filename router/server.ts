@@ -22,7 +22,7 @@ import {
   ServiceContextWithState,
   ServiceContextWithTransportInfo,
 } from './context';
-import { log } from '../logging';
+import { log } from '../logging/log';
 import { Value } from '@sinclair/typebox/value';
 import {
   Err,
@@ -116,9 +116,10 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
 
   onMessage = async (message: OpaqueTransportMessage) => {
     if (message.to !== this.transport.clientId) {
-      log?.info(
-        `${this.transport.clientId} -- got msg with destination that isn't the server, ignoring`,
-      );
+      log?.info(`got msg with destination that isn't this server, ignoring`, {
+        clientId: this.transport.clientId,
+        fullTransportMessage: message,
+      });
       return;
     }
 
@@ -141,7 +142,8 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
 
     const disconnectedClientId = evt.session.to;
     log?.info(
-      `${this.transport.clientId} -- got session disconnect from ${disconnectedClientId}, cleaning up streams`,
+      `got session disconnect from ${disconnectedClientId}, cleaning up streams`,
+      evt.session.loggingMetadata,
     );
 
     const streamsFromThisClient = this.clientStreams.get(disconnectedClientId);
@@ -164,24 +166,25 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
   createNewProcStream(message: OpaqueTransportMessage) {
     if (!isStreamOpen(message.controlFlags)) {
       log?.error(
-        `${this.transport.clientId} -- can't create a new procedure stream from a message that doesn't have the stream open bit set`,
+        `can't create a new procedure stream from a message that doesn't have the stream open bit set`,
+        { clientId: this.transport.clientId, fullTransportMessage: message },
       );
-      log?.debug(` -> ${JSON.stringify(message)}`);
       return;
     }
 
     if (!message.procedureName || !message.serviceName) {
-      log?.warn(
-        `${this.transport.clientId} -- missing procedure or service name in stream open message`,
-      );
-      log?.debug(` -> ${JSON.stringify(message)}`);
+      log?.warn(`missing procedure or service name in stream open message`, {
+        clientId: this.transport.clientId,
+        fullTransportMessage: message,
+      });
       return;
     }
 
     if (!(message.serviceName in this.services)) {
-      log?.warn(
-        `${this.transport.clientId} -- couldn't find service ${message.serviceName}`,
-      );
+      log?.warn(`couldn't find service ${message.serviceName}`, {
+        clientId: this.transport.clientId,
+        fullTransportMessage: message,
+      });
       return;
     }
 
@@ -189,16 +192,21 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     const serviceContext = this.getContext(service, message.serviceName);
     if (!(message.procedureName in service.procedures)) {
       log?.warn(
-        `${this.transport.clientId} -- couldn't find a matching procedure for ${message.serviceName}.${message.procedureName}`,
+        `couldn't find a matching procedure for ${message.serviceName}.${message.procedureName}`,
+        {
+          clientId: this.transport.clientId,
+          fullTransportMessage: message,
+        },
       );
       return;
     }
 
     const session = this.transport.sessions.get(message.from);
     if (!session) {
-      log?.warn(
-        `${this.transport.clientId} -- couldn't find session for ${message.from}`,
-      );
+      log?.warn(`couldn't find session for ${message.from}`, {
+        clientId: this.transport.clientId,
+        fullTransportMessage: message,
+      });
       return;
     }
 
@@ -249,8 +257,10 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     const errorHandler = (err: unknown) => {
       const errorMsg = coerceErrorString(err);
       log?.error(
-        `${this.transport.clientId} -- procedure ${message.serviceName}.${message.procedureName}:${message.streamId} threw an uncaught error: ${errorMsg}`,
+        `procedure ${message.serviceName}.${message.procedureName} threw an uncaught error: ${errorMsg}`,
+        session.loggingMetadata,
       );
+
       outgoing.push(
         Err({
           code: UNCAUGHT_ERROR,
@@ -383,11 +393,10 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
         // procedure is inferred to be never here as this is not a valid procedure type
         // we cast just to log
         log?.warn(
-          `${
-            this.transport.clientId
-          } -- got request for invalid procedure type ${
+          `got request for invalid procedure type ${
             (procedure as AnyProcedure).type
           } at ${message.serviceName}.${message.procedureName}`,
+          { ...session.loggingMetadata, fullTransportMessage: message },
         );
         return;
     }
@@ -431,11 +440,8 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       procStream.incoming.push(message.payload as PayloadType);
     } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
       log?.error(
-        `${
-          this.transport.clientId
-        } -- procedure ${serviceName}.${procedureName} received invalid payload: ${JSON.stringify(
-          message.payload,
-        )}`,
+        `procedure ${serviceName}.${procedureName} received invalid payload`,
+        { clientId: this.transport.clientId, fullTransportMessage: message },
       );
     }
 
@@ -452,11 +458,13 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     }
   }
 
-  private getContext(service: AnyService, name: string) {
+  private getContext(service: AnyService, serviceName: string) {
     const context = this.contextMap.get(service);
     if (!context) {
-      const err = `${this.transport.clientId} -- no context found for ${name}`;
-      log?.error(err);
+      const err = `no context found for ${serviceName}`;
+      log?.error(err, {
+        clientId: this.transport.clientId,
+      });
       throw new Error(err);
     }
 

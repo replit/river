@@ -1,6 +1,6 @@
 import { TransportClientId } from '../..';
 import { Socket } from 'node:net';
-import { log } from '../../../logging';
+import { log } from '../../../logging/log';
 import { UdsConnection } from './connection';
 import {
   ClientTransport,
@@ -25,7 +25,11 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
       oldConnection.close();
     }
 
-    log?.info(`${this.clientId} -- establishing a new uds to ${to}`);
+    log?.info(`establishing a new uds to ${to}`, {
+      clientId: this.clientId,
+      connectedTo: to,
+    });
+
     const sock = await new Promise<Socket>((resolve, reject) => {
       const sock = new Socket();
       sock.on('connect', () => resolve(sock));
