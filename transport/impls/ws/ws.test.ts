@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { describe, test, expect, afterAll, onTestFinished } from 'vitest';
+import { describe, test, expect, afterAll, onTestFinished, vi } from 'vitest';
 import {
   createWebSocketServer,
   onWsServerReady,
@@ -10,7 +10,10 @@ import {
 } from '../../../util/testHelpers';
 import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
-import { testFinishesCleanly } from '../../../__tests__/fixtures/cleanup';
+import {
+  advanceFakeTimersBySessionGrace,
+  testFinishesCleanly,
+} from '../../../__tests__/fixtures/cleanup';
 import { PartialTransportMessage } from '../../message';
 
 describe('sending and receiving across websockets works', async () => {
@@ -95,7 +98,7 @@ describe('sending and receiving across websockets works', async () => {
   });
 });
 
-describe('reconnect', async () => {
+describe('network edge cases', async () => {
   const server = http.createServer();
   const port = await onWsServerReady(server);
   const wss = createWebSocketServer(server);
@@ -103,6 +106,34 @@ describe('reconnect', async () => {
   afterAll(() => {
     wss.close();
     server.close();
+  });
+
+  test('hanging ws connection with no handshake is cleaned up after grace', async () => {
+    const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
+    onTestFinished(async () => {
+      await testFinishesCleanly({
+        clientTransports: [],
+        serverTransport,
+      });
+    });
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const ws = createLocalWebSocketClient(port);
+
+    // wait for ws to be open
+    await new Promise((resolve) => ws.on('open', resolve));
+
+    // we never sent a handshake so there should be no connections or sessions
+    expect(serverTransport.connections.size).toBe(0);
+    expect(serverTransport.sessions.size).toBe(0);
+
+    // advance time past the grace period
+    await advanceFakeTimersBySessionGrace();
+
+    // the connection should have been cleaned up
+    expect(serverTransport.connections.size).toBe(0);
+    expect(serverTransport.sessions.size).toBe(0);
+    expect(ws.readyState).toBe(ws.CLOSED);
   });
 
   test('ws connection is recreated after unclean disconnect', async () => {

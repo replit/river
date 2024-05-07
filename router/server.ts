@@ -1,5 +1,5 @@
 import { Static } from '@sinclair/typebox';
-import { ServerTransport, Transport } from '../transport/transport';
+import { ServerTransport } from '../transport/transport';
 import { AnyProcedure, PayloadType } from './procedures';
 import {
   AnyService,
@@ -61,7 +61,7 @@ interface ProcStream {
 type SerializedServerSchema = Record<string, SerializedServiceSchema>;
 
 class RiverServer<Services extends AnyServiceSchemaMap> {
-  transport: Transport<Connection>;
+  transport: ServerTransport<Connection>;
   private serviceDefs: Services;
   services: InstantiatedServiceSchemaMap<Services>;
   contextMap: Map<AnyService, ServiceContextWithState<object>>;
@@ -72,7 +72,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
   disconnectedSessions: Set<TransportClientId>;
 
   constructor(
-    transport: Transport<Connection>,
+    transport: ServerTransport<Connection>,
     services: Services,
     extendedContext?: Omit<ServiceContext, 'state'>,
   ) {
