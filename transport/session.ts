@@ -8,7 +8,7 @@ import {
   TransportMessage,
 } from './message';
 import { Codec } from '../codec';
-import { log } from '../logging';
+import { MessageMetadata, log } from '../logging';
 import { Static } from '@sinclair/typebox';
 
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvxyz', 6);
@@ -169,6 +169,15 @@ export class Session<ConnType extends Connection> {
     );
   }
 
+  get loggingMetadata(): Omit<MessageMetadata, 'parsedMsg'> {
+    return {
+      clientId: this.from,
+      connectedTo: this.to,
+      sessionId: this.id,
+      connId: this.connection?.debugId,
+    };
+  }
+
   /**
    * Sends a message over the session's connection.
    * If the connection is not ready or the message fails to send, the message can be buffered for retry unless skipped.
@@ -179,17 +188,25 @@ export class Session<ConnType extends Connection> {
    */
   send(msg: PartialTransportMessage): string {
     const fullMsg: TransportMessage = this.constructMsg(msg);
-    log?.debug(`${this.from} -- sending ${JSON.stringify(fullMsg)}`);
+    log?.debug(`sending msg`, {
+      ...this.loggingMetadata,
+      fullTransportMessage: fullMsg,
+    });
 
     if (this.connection) {
       const ok = this.connection.send(this.codec.toBuffer(fullMsg));
       if (ok) return fullMsg.id;
       log?.info(
-        `${this.from} -- failed to send ${fullMsg.id} (seq: ${fullMsg.seq}) to ${fullMsg.to}, connection (id: ${this.connection.debugId}) is probably dead`,
+        `failed to send msg to ${fullMsg.to}, connection is probably dead`,
+        {
+          ...this.loggingMetadata,
+          fullTransportMessage: fullMsg,
+        },
       );
     } else {
       log?.info(
-        `${this.from} -- failed to send ${fullMsg.id} (seq: ${fullMsg.seq}) to ${fullMsg.to}, connection not ready yet`,
+        `failed to send msg to ${fullMsg.to}, connection not ready yet`,
+        { ...this.loggingMetadata, fullTransportMessage: fullMsg },
       );
     }
 
@@ -202,7 +219,8 @@ export class Session<ConnType extends Connection> {
     if (misses > this.options.heartbeatsUntilDead) {
       if (this.connection) {
         log?.info(
-          `${this.from} -- closing connection (id: ${this.connection.debugId}) to ${this.to} due to inactivity (missed ${misses} heartbeats which is ${missDuration}ms)`,
+          `closing connection to ${this.to} due to inactivity (missed ${misses} heartbeats which is ${missDuration}ms)`,
+          this.loggingMetadata,
         );
         this.closeStaleConnection();
       }
@@ -227,30 +245,40 @@ export class Session<ConnType extends Connection> {
 
   sendBufferedMessages() {
     if (!this.connection) {
-      const msg = `${this.from} -- tried sending buffered messages without a connection (if you hit this code path something is seriously wrong)`;
-      log?.error(msg);
+      const msg = `tried sending buffered messages without a connection (if you hit this code path something is seriously wrong)`;
+      log?.error(msg, this.loggingMetadata);
       throw new Error(msg);
     }
 
     log?.info(
-      `${this.from} -- resending ${this.sendBuffer.length} buffered messages`,
+      `resending ${this.sendBuffer.length} buffered messages`,
+      this.loggingMetadata,
     );
     for (const msg of this.sendBuffer) {
-      log?.debug(`${this.from} -- resending ${msg.id} (seq: ${msg.seq})`);
+      log?.debug(`resending msg`, {
+        ...this.loggingMetadata,
+        fullTransportMessage: msg,
+      });
       const ok = this.connection.send(this.codec.toBuffer(msg));
       if (!ok) {
         // this should never happen unless the transport has an
         // incorrect implementation of `createNewOutgoingConnection`
-        const msg = `${this.from} -- failed to send buffered message to ${this.to} in session (id: ${this.id}) (if you hit this code path something is seriously wrong)`;
-        log?.error(msg);
-        throw new Error(msg);
+        const errMsg = `failed to send buffered message to ${this.to} (if you hit this code path something is seriously wrong)`;
+        log?.error(errMsg, {
+          ...this.loggingMetadata,
+          fullTransportMessage: msg,
+        });
+        throw new Error(errMsg);
       }
     }
   }
 
   updateBookkeeping(ack: number, seq: number) {
     if (seq + 1 < this.ack) {
-      log?.error(`${this.from} -- received stale seq ${seq} + 1 < ${this.ack}`);
+      log?.error(
+        `received stale seq ${seq} + 1 < ${this.ack}`,
+        this.loggingMetadata,
+      );
       return;
     }
 
@@ -261,7 +289,8 @@ export class Session<ConnType extends Connection> {
   closeStaleConnection(conn?: ConnType) {
     if (this.connection === undefined || this.connection === conn) return;
     log?.info(
-      `${this.from} -- closing old inner connection (id: ${this.connection.debugId}) from session (id: ${this.id}) to ${this.to}`,
+      `closing old inner connection from session to ${this.to}`,
+      this.loggingMetadata,
     );
     this.connection.close();
     this.connection = undefined;
@@ -275,7 +304,8 @@ export class Session<ConnType extends Connection> {
 
   beginGrace(cb: () => void) {
     log?.info(
-      `${this.from} -- starting ${this.options.sessionDisconnectGraceMs}ms grace period until session (id: ${this.id}) to ${this.to} is closed`,
+      `starting ${this.options.sessionDisconnectGraceMs}ms grace period until session to ${this.to} is closed`,
+      this.loggingMetadata,
     );
     this.disconnectionGrace = setTimeout(() => {
       this.close();
@@ -307,7 +337,7 @@ export class Session<ConnType extends Connection> {
     return this.ack;
   }
 
-  constructMsg<Payload extends Record<string, unknown>>(
+  constructMsg<Payload>(
     partialMsg: PartialTransportMessage<Payload>,
   ): TransportMessage<Payload> {
     const msg = {

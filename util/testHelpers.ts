@@ -86,9 +86,9 @@ export async function iterNext<T>(iter: AsyncIterableIterator<T>) {
   return await iter.next().then((res) => res.value as T);
 }
 
-export function payloadToTransportMessage<
-  Payload extends Record<string, unknown>,
->(payload: Payload): PartialTransportMessage<Payload> {
+export function payloadToTransportMessage<Payload>(
+  payload: Payload,
+): PartialTransportMessage<Payload> {
   return {
     streamId: 'stream',
     controlFlags: 0,

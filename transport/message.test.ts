@@ -13,7 +13,7 @@ const msg = (
   to: string,
   from: string,
   streamId: string,
-  payload: Record<string, unknown>,
+  payload: unknown,
   serviceName: string,
   procedureName: string,
 ): TransportMessage => ({

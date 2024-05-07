@@ -206,11 +206,15 @@ export const createClient = <Srv extends Server<ServiceSchemaMap>>(
 
     const [input] = opts.args;
     log?.info(
-      `${
-        transport.clientId
-      } -- invoked ${procType}: ${serviceName}.${procName} with args: ${JSON.stringify(
-        input,
-      )}`,
+      `${transport.clientId} -- invoked ${procType} ${serviceName}.${procName}`,
+      {
+        clientId: transport.clientId,
+        partialTransportMessage: {
+          procedureName: procName,
+          serviceName,
+          payload: input,
+        },
+      },
     );
 
     if (options.connectOnInvoke && !transport.connections.has(serverId)) {
@@ -218,37 +222,13 @@ export const createClient = <Srv extends Server<ServiceSchemaMap>>(
     }
 
     if (procType === 'rpc') {
-      return handleRpc(
-        transport,
-        serverId,
-        input as Record<string, unknown>,
-        serviceName,
-        procName,
-      );
+      return handleRpc(transport, serverId, input, serviceName, procName);
     } else if (procType === 'stream') {
-      return handleStream(
-        transport,
-        serverId,
-        input as Record<string, unknown> | undefined,
-        serviceName,
-        procName,
-      );
+      return handleStream(transport, serverId, input, serviceName, procName);
     } else if (procType === 'subscribe') {
-      return handleSubscribe(
-        transport,
-        serverId,
-        input as Record<string, unknown>,
-        serviceName,
-        procName,
-      );
+      return handleSubscribe(transport, serverId, input, serviceName, procName);
     } else if (procType === 'upload') {
-      return handleUpload(
-        transport,
-        serverId,
-        input as Record<string, unknown> | undefined,
-        serviceName,
-        procName,
-      );
+      return handleUpload(transport, serverId, input, serviceName, procName);
     } else {
       throw new Error(`invalid river call, unknown procedure type ${procType}`);
     }
@@ -269,7 +249,7 @@ function createSessionDisconnectHandler(
 function handleRpc(
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
-  input: Record<string, unknown>,
+  input: unknown,
   serviceName: string,
   procedureName: string,
 ) {
@@ -318,7 +298,7 @@ function handleRpc(
 function handleStream(
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
-  init: Record<string, unknown> | undefined,
+  init: unknown,
   serviceName: string,
   procedureName: string,
 ) {
@@ -346,7 +326,7 @@ function handleStream(
     for await (const rawIn of inputStream) {
       const m: PartialTransportMessage = {
         streamId,
-        payload: rawIn as Record<string, unknown>,
+        payload: rawIn,
         controlFlags: 0,
       };
 
@@ -406,7 +386,7 @@ function handleStream(
 function handleSubscribe(
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
-  input: Record<string, unknown>,
+  input: unknown,
   serviceName: string,
   procedureName: string,
 ) {
@@ -466,7 +446,7 @@ function handleSubscribe(
 function handleUpload(
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
-  init: Record<string, unknown> | undefined,
+  init: unknown,
   serviceName: string,
   procedureName: string,
 ) {
@@ -493,7 +473,7 @@ function handleUpload(
     for await (const rawIn of inputStream) {
       const m: PartialTransportMessage = {
         streamId,
-        payload: rawIn as Record<string, unknown>,
+        payload: rawIn,
         controlFlags: 0,
       };
 

@@ -168,11 +168,12 @@ if (result.ok) {
 To add logging,
 
 ```ts
-import { bindLogger, setLevel } from '@replit/river/logging';
+import { bindLogger, stringLogger } from '@replit/river/logging';
 
-bindLogger(console.log);
-setLevel('info');
+bindLogger(stringLogger, 'info');
 ```
+
+You can define your own logging functions that satisfy the `LogFn` type.
 
 ### Connection status
 

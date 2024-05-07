@@ -103,7 +103,7 @@ export const OpaqueTransportMessageSchema = TransportMessageSchema(
  *   contain any payload that is relevant to the application so should not be delivered.
  * @template Payload The type of the payload.
  */
-export interface TransportMessage<Payload = Record<string, unknown>> {
+export interface TransportMessage<Payload = unknown> {
   id: string;
   from: string;
   to: string;
@@ -116,9 +116,10 @@ export interface TransportMessage<Payload = Record<string, unknown>> {
   payload: Payload;
 }
 
-export type PartialTransportMessage<
-  Payload extends Record<string, unknown> = Record<string, unknown>,
-> = Omit<TransportMessage<Payload>, 'id' | 'from' | 'to' | 'seq' | 'ack'>;
+export type PartialTransportMessage<Payload = unknown> = Omit<
+  TransportMessage<Payload>,
+  'id' | 'from' | 'to' | 'seq' | 'ack'
+>;
 
 export function handshakeRequestMessage(
   from: TransportClientId,
@@ -165,7 +166,7 @@ export function handshakeResponseMessage(
  * A type alias for a transport message with an opaque payload.
  * @template T - The type of the opaque payload.
  */
-export type OpaqueTransportMessage = TransportMessage<unknown>;
+export type OpaqueTransportMessage = TransportMessage;
 export type TransportClientId = string;
 
 /**

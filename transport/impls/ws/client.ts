@@ -39,7 +39,11 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
   async createNewOutgoingConnection(to: string) {
     // get a promise to an actual websocket that's ready
     const wsRes = await new Promise<WebSocketResult>((resolve) => {
-      log?.info(`${this.clientId} -- establishing a new websocket to ${to}`);
+      log?.info(`establishing a new websocket to ${to}`, {
+        clientId: this.clientId,
+        connectedTo: to,
+      });
+
       this.wsGetter(to)
         .then((ws) => {
           if (ws.readyState === ws.OPEN) {
@@ -75,9 +79,11 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
 
     if ('ws' in wsRes) {
       const conn = new WebSocketConnection(wsRes.ws);
-      log?.info(
-        `${this.clientId} -- websocket (id: ${conn.debugId}) to ${to} ok`,
-      );
+      log?.info(`raw websocket to ${to} ok, starting handshake`, {
+        clientId: this.clientId,
+        connectedTo: to,
+      });
+
       this.handleConnection(conn, to);
       return conn;
     } else {
