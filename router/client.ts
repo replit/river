@@ -205,17 +205,14 @@ export const createClient = <Srv extends Server<ServiceSchemaMap>>(
     }
 
     const [input] = opts.args;
-    log?.info(
-      `${transport.clientId} -- invoked ${procType} ${serviceName}.${procName}`,
-      {
-        clientId: transport.clientId,
-        partialTransportMessage: {
-          procedureName: procName,
-          serviceName,
-          payload: input,
-        },
+    log?.info(`invoked ${procType} ${serviceName}.${procName}`, {
+      clientId: transport.clientId,
+      partialTransportMessage: {
+        procedureName: procName,
+        serviceName,
+        payload: input,
       },
-    );
+    });
 
     if (options.connectOnInvoke && !transport.connections.has(serverId)) {
       void transport.connect(serverId);

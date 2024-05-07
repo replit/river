@@ -25,7 +25,7 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
       oldConnection.close();
     }
 
-    log?.info(`${this.clientId} -- establishing a new uds to ${to}`, {
+    log?.info(`establishing a new uds to ${to}`, {
       clientId: this.clientId,
       connectedTo: to,
     });
