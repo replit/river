@@ -79,7 +79,7 @@ export const jsonLogger: LogFn = (msg, ctx, level) => {
   console.log(JSON.stringify({ msg, ctx, level }));
 };
 
-export let log: Logger | undefined = undefined;
+export let log: BaseLogger | undefined = undefined;
 export function bindLogger(fn: LogFn | BaseLogger, level?: LoggingLevel) {
   if (fn instanceof BaseLogger) {
     log = fn;
