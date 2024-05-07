@@ -21,7 +21,7 @@ export type {
 } from './procedures';
 export { Procedure } from './procedures';
 export { createClient } from './client';
-export type { ServerClient } from './client';
+export type { Client } from './client';
 export { createServer } from './server';
 export type { Server } from './server';
 export type {

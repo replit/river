@@ -2,7 +2,7 @@ import { expect, vi } from 'vitest';
 import { Connection, OpaqueTransportMessage, Transport } from '../../transport';
 import { Server } from '../../router';
 import { log } from '../../logging/log';
-import { ServiceSchemaMap } from '../../router/services';
+import { AnyServiceSchemaMap } from '../../router/services';
 import { testingSessionOptions } from '../../util/testHelpers';
 
 const waitUntilOptions = {
@@ -93,7 +93,7 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
   );
 }
 
-export async function ensureServerIsClean(s: Server<ServiceSchemaMap>) {
+export async function ensureServerIsClean(s: Server<AnyServiceSchemaMap>) {
   return waitFor(() =>
     expect(
       s.streams,
@@ -109,7 +109,7 @@ export async function testFinishesCleanly({
 }: Partial<{
   clientTransports: Array<Transport<Connection>>;
   serverTransport: Transport<Connection>;
-  server: Server<ServiceSchemaMap>;
+  server: Server<AnyServiceSchemaMap>;
 }>) {
   log?.info('*** end of test cleanup ***');
   vi.useFakeTimers({ shouldAdvanceTime: true });

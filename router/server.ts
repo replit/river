@@ -5,7 +5,7 @@ import {
   AnyService,
   InstantiatedServiceSchemaMap,
   SerializedServiceSchema,
-  ServiceSchemaMap,
+  AnyServiceSchemaMap,
 } from './services';
 import { pushable } from 'it-pushable';
 import type { Pushable } from 'it-pushable';
@@ -39,7 +39,7 @@ import { coerceErrorString } from '../util/stringify';
  * Represents a server with a set of services. Use {@link createServer} to create it.
  * @template Services - The type of services provided by the server.
  */
-export interface Server<Services extends ServiceSchemaMap> {
+export interface Server<Services extends AnyServiceSchemaMap> {
   services: InstantiatedServiceSchemaMap<Services>;
   streams: Map<string, ProcStream>;
   serialize(): SerializedServerSchema;
@@ -60,7 +60,7 @@ interface ProcStream {
 
 type SerializedServerSchema = Record<string, SerializedServiceSchema>;
 
-class RiverServer<Services extends ServiceSchemaMap> {
+class RiverServer<Services extends AnyServiceSchemaMap> {
   transport: Transport<Connection>;
   private serviceDefs: Services;
   services: InstantiatedServiceSchemaMap<Services>;
@@ -494,7 +494,7 @@ class RiverServer<Services extends ServiceSchemaMap> {
  * @param extendedContext - An optional object containing additional context to be passed to all services.
  * @returns A promise that resolves to a server instance with the registered services.
  */
-export function createServer<Services extends ServiceSchemaMap>(
+export function createServer<Services extends AnyServiceSchemaMap>(
   transport: ServerTransport<Connection>,
   services: Services,
   extendedContext?: Omit<ServiceContext, 'state'>,

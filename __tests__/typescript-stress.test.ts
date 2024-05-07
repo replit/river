@@ -124,7 +124,7 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
   });
 
   test('server client should support many services with many procedures', () => {
-    const server = createServer(new MockServerTransport('SERVER'), {
+    const services = {
       a: StupidlyLargeServiceSchema,
       b: StupidlyLargeServiceSchema,
       c: StupidlyLargeServiceSchema,
@@ -178,9 +178,10 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
       y1: StupidlyLargeServiceSchema,
       z1: StupidlyLargeServiceSchema,
       test: TestServiceSchema,
-    });
+    };
+    const server = createServer(new MockServerTransport('SERVER'), services);
 
-    const client = createClient<typeof server>(
+    const client = createClient<typeof services>(
       new MockClientTransport('client'),
       'SERVER',
       { eagerlyConnect: false },
