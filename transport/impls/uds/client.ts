@@ -1,6 +1,6 @@
 import { TransportClientId } from '../..';
 import { Socket } from 'node:net';
-import { log } from '../../../logging';
+import { log } from '../../../logging/log';
 import { UdsConnection } from './connection';
 import {
   ClientTransport,

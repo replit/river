@@ -8,7 +8,7 @@ import {
   TransportMessage,
 } from './message';
 import { Codec } from '../codec';
-import { MessageMetadata, log } from '../logging';
+import { MessageMetadata, log } from '../logging/log';
 import { Static } from '@sinclair/typebox';
 
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvxyz', 6);

@@ -4,7 +4,7 @@ import {
   ProvidedClientTransportOptions,
 } from '../../transport';
 import { TransportClientId } from '../../message';
-import { log } from '../../../logging';
+import { log } from '../../../logging/log';
 import { WebSocketConnection } from './connection';
 
 type WebSocketResult = { ws: WebSocket } | { err: string };

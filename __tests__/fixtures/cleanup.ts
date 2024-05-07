@@ -1,7 +1,7 @@
 import { expect, vi } from 'vitest';
 import { Connection, OpaqueTransportMessage, Transport } from '../../transport';
 import { Server } from '../../router';
-import { log } from '../../logging';
+import { log } from '../../logging/log';
 import { ServiceSchemaMap } from '../../router/services';
 import { testingSessionOptions } from '../../util/testHelpers';
 

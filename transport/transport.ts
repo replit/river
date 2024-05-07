@@ -14,7 +14,7 @@ import {
   isAck,
   PROTOCOL_VERSION,
 } from './message';
-import { log } from '../logging';
+import { log } from '../logging/log';
 import {
   EventDispatcher,
   EventHandler,

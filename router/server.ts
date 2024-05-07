@@ -22,7 +22,7 @@ import {
   ServiceContextWithState,
   ServiceContextWithTransportInfo,
 } from './context';
-import { log } from '../logging';
+import { log } from '../logging/log';
 import { Value } from '@sinclair/typebox/value';
 import {
   Err,
