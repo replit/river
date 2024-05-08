@@ -11,8 +11,8 @@ type LoggingLevel = keyof typeof LoggingLevels;
 
 export type LogFn = (
   msg: string,
-  ctx: MessageMetadata,
-  level: LoggingLevel,
+  ctx?: MessageMetadata,
+  level?: LoggingLevel,
 ) => void;
 export type Logger = {
   [key in LoggingLevel]: LogFn;
@@ -29,7 +29,7 @@ export type MessageMetadata = Record<string, unknown> &
     partialTransportMessage: Partial<PartialTransportMessage>;
   }>;
 
-class BaseLogger {
+class BaseLogger implements Logger {
   minLevel: LoggingLevel;
   private output: LogFn;
 
@@ -75,7 +75,7 @@ const colorMap = {
 };
 
 export const coloredStringLogger: LogFn = (msg, _ctx, level) => {
-  const color = colorMap[level];
+  const color = colorMap[level ?? 'info'];
   console.log(`[river:${color}${level}\u001b[0m] ${msg}`);
 };
 
@@ -83,21 +83,21 @@ export const jsonLogger: LogFn = (msg, ctx, level) => {
   console.log(JSON.stringify({ msg, ctx, level }));
 };
 
-export let log: BaseLogger | undefined = undefined;
+export let log: Logger | undefined = undefined;
 export function bindLogger(
-  fn: LogFn | BaseLogger | undefined,
+  fn: LogFn | Logger | undefined,
   level?: LoggingLevel,
-) {
+): Logger | undefined {
   if (!fn) {
     log = undefined;
     return;
   }
 
-  if (fn instanceof BaseLogger) {
-    log = fn;
-    return fn;
+  if (fn instanceof Function) {
+    log = new BaseLogger(fn, level);
+    return log;
   }
 
-  log = new BaseLogger(fn, level);
-  return log;
+  log = fn;
+  return fn;
 }
