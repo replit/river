@@ -28,10 +28,12 @@ export type RiverError =
 
 export const UNCAUGHT_ERROR = 'UNCAUGHT_ERROR';
 export const UNEXPECTED_DISCONNECT = 'UNEXPECTED_DISCONNECT';
+export const INVALID_REQUEST = 'INVALID_REQUEST';
 export const RiverUncaughtSchema = Type.Object({
   code: Type.Union([
     Type.Literal(UNCAUGHT_ERROR),
     Type.Literal(UNEXPECTED_DISCONNECT),
+    Type.Literal(INVALID_REQUEST),
   ]),
   message: Type.String(),
 });
