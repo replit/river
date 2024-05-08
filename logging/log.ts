@@ -29,7 +29,7 @@ export type MessageMetadata = Record<string, unknown> &
     partialTransportMessage: Partial<PartialTransportMessage>;
   }>;
 
-class BaseLogger {
+class BaseLogger implements Logger {
   minLevel: LoggingLevel;
   private output: LogFn;
 
@@ -83,21 +83,21 @@ export const jsonLogger: LogFn = (msg, ctx, level) => {
   console.log(JSON.stringify({ msg, ctx, level }));
 };
 
-export let log: BaseLogger | undefined = undefined;
+export let log: Logger | undefined = undefined;
 export function bindLogger(
-  fn: LogFn | BaseLogger | undefined,
+  fn: LogFn | Logger | undefined,
   level?: LoggingLevel,
-) {
+): Logger | undefined {
   if (!fn) {
     log = undefined;
     return;
   }
 
-  if (fn instanceof BaseLogger) {
-    log = fn;
-    return fn;
+  if (fn instanceof Function) {
+    log = new BaseLogger(fn, level);
+    return log;
   }
 
-  log = new BaseLogger(fn, level);
-  return log;
+  log = fn;
+  return fn;
 }

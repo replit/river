@@ -4,4 +4,4 @@ export {
   jsonLogger,
   bindLogger,
 } from './log';
-export type { LogFn, MessageMetadata } from './log';
+export type { Logger, LogFn, MessageMetadata } from './log';
