@@ -63,7 +63,7 @@ class BaseLogger implements Logger {
   }
 }
 
-export const stringLogger: LogFn = (msg, _ctx, level) => {
+export const stringLogger: LogFn = (msg, _ctx, level = 'info') => {
   console.log(`[river:${level}] ${msg}`);
 };
 
@@ -74,8 +74,8 @@ const colorMap = {
   error: '\u001b[31m',
 };
 
-export const coloredStringLogger: LogFn = (msg, _ctx, level) => {
-  const color = colorMap[level ?? 'info'];
+export const coloredStringLogger: LogFn = (msg, _ctx, level = 'info') => {
+  const color = colorMap[level];
   console.log(`[river:${color}${level}\u001b[0m] ${msg}`);
 };
 
@@ -93,7 +93,7 @@ export function bindLogger(
     return;
   }
 
-  if (fn instanceof Function) {
+  if (typeof fn === 'function') {
     log = new BaseLogger(fn, level);
     return log;
   }
