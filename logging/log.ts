@@ -11,8 +11,8 @@ type LoggingLevel = keyof typeof LoggingLevels;
 
 export type LogFn = (
   msg: string,
-  ctx: MessageMetadata,
-  level: LoggingLevel,
+  ctx?: MessageMetadata,
+  level?: LoggingLevel,
 ) => void;
 export type Logger = {
   [key in LoggingLevel]: LogFn;
@@ -75,7 +75,7 @@ const colorMap = {
 };
 
 export const coloredStringLogger: LogFn = (msg, _ctx, level) => {
-  const color = colorMap[level];
+  const color = colorMap[level ?? 'info'];
   console.log(`[river:${color}${level}\u001b[0m] ${msg}`);
 };
 
