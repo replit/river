@@ -491,6 +491,18 @@ export abstract class ClientTransport<
   protected handleConnection(conn: ConnType, to: TransportClientId): void {
     if (this.state !== 'open') return;
     let session: Session<ConnType> | undefined = undefined;
+
+    // kill the conn after the grace period if we haven't received a handshake
+    const handshakeTimeout = setTimeout(() => {
+      if (!session) {
+        log?.warn(
+          `connection to ${to} timed out waiting for handshake, closing`,
+          { clientId: this.clientId, connectedTo: to, connId: conn.debugId },
+        );
+        conn.close();
+      }
+    }, this.options.sessionDisconnectGraceMs);
+
     const handshakeHandler = (data: Uint8Array) => {
       const maybeSession = this.receiveHandshakeResponseMessage(data, conn);
       if (!maybeSession) {
@@ -498,6 +510,7 @@ export abstract class ClientTransport<
         return;
       } else {
         session = maybeSession;
+        clearTimeout(handshakeTimeout);
       }
 
       // when we are done handshake sequence,
@@ -740,8 +753,25 @@ export abstract class ServerTransport<
       clientId: this.clientId,
       connId: conn.debugId,
     });
+
     let session: Session<ConnType> | undefined = undefined;
     const client = () => session?.to ?? 'unknown';
+
+    // kill the conn after the grace period if we haven't received a handshake
+    const handshakeTimeout = setTimeout(() => {
+      if (!session) {
+        log?.warn(
+          `connection to ${client()} timed out waiting for handshake, closing`,
+          {
+            clientId: this.clientId,
+            connectedTo: client(),
+            connId: conn.debugId,
+          },
+        );
+        conn.close();
+      }
+    }, this.options.sessionDisconnectGraceMs);
+
     const handshakeHandler = (data: Uint8Array) => {
       const maybeSession = this.receiveHandshakeRequestMessage(data, conn);
       if (!maybeSession) {
@@ -749,6 +779,7 @@ export abstract class ServerTransport<
         return;
       } else {
         session = maybeSession;
+        clearTimeout(handshakeTimeout);
       }
 
       // when we are done handshake sequence,
