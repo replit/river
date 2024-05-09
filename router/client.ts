@@ -11,7 +11,6 @@ import {
   InstantiatedServiceSchemaMap,
 } from './services';
 import { pushable } from 'it-pushable';
-import type { Pushable } from 'it-pushable';
 import {
   OpaqueTransportMessage,
   ControlFlags,
@@ -32,6 +31,13 @@ export type AsyncIter<T> = AsyncGenerator<T, T>;
 /**
  * A helper type to transform an actual service type into a type
  * we can case to in the proxy.
+ *
+ * If you end up here in "click to definition", you probably want
+ * to click to definition on the procedure not the procedure type,
+ * which will take you to the schema definition that contains the
+ * input, output, and error types.
+ * e.g. client.someService.someProcedure.rpc
+ *                         ^^^^^^^^^^^^^ Click here
  * @template Router - The type of the Router.
  */
 type ServiceClient<Router extends AnyService> = {
@@ -54,26 +60,26 @@ type ServiceClient<Router extends AnyService> = {
       ? {
           upload: (init: Static<ProcInit<Router, ProcName>>) => Promise<
             [
-              Pushable<Static<ProcInput<Router, ProcName>>>, // input
-              Promise<
+              (input: Static<ProcInput<Router, ProcName>>) => void, // input
+              () => Promise<
                 Result<
                   Static<ProcOutput<Router, ProcName>>,
                   Static<ProcErrors<Router, ProcName>>
                 >
-              >, // output
+              >, // finalize
             ]
           >;
         }
       : {
           upload: () => Promise<
             [
-              Pushable<Static<ProcInput<Router, ProcName>>>, // input
-              Promise<
+              (input: Static<ProcInput<Router, ProcName>>) => void, // input
+              () => Promise<
                 Result<
                   Static<ProcOutput<Router, ProcName>>,
                   Static<ProcErrors<Router, ProcName>>
                 >
-              >, // output
+              >, // finalize
             ]
           >;
         }
@@ -82,7 +88,7 @@ type ServiceClient<Router extends AnyService> = {
       ? {
           stream: (init: Static<ProcInit<Router, ProcName>>) => Promise<
             [
-              Pushable<Static<ProcInput<Router, ProcName>>>, // input
+              (input: Static<ProcInput<Router, ProcName>>) => void, // input
               AsyncIter<
                 Result<
                   Static<ProcOutput<Router, ProcName>>,
@@ -96,7 +102,7 @@ type ServiceClient<Router extends AnyService> = {
       : {
           stream: () => Promise<
             [
-              Pushable<Static<ProcInput<Router, ProcName>>>, // input
+              (input: Static<ProcInput<Router, ProcName>>) => void, // input
               AsyncIter<
                 Result<
                   Static<ProcOutput<Router, ProcName>>,
@@ -263,9 +269,7 @@ function handleRpc(
     controlFlags: ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit,
   });
 
-  const responsePromise = new Promise((resolve) => {
-    // on disconnect, set a timer to return an error
-    // on (re)connect, clear the timer
+  return new Promise((resolve) => {
     const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
       cleanup();
       resolve(
@@ -285,7 +289,6 @@ function handleRpc(
       if (msg.streamId !== streamId) return;
       if (msg.to !== transport.clientId) return;
 
-      // cleanup and resolve as soon as we get a message
       cleanup();
       resolve(msg.payload);
     }
@@ -293,7 +296,6 @@ function handleRpc(
     transport.addEventListener('message', onMessage);
     transport.addEventListener('sessionStatus', onSessionStatus);
   });
-  return responsePromise;
 }
 
 function handleStream(
@@ -304,49 +306,40 @@ function handleStream(
   procedureName: string,
 ) {
   const streamId = nanoid();
-  const inputStream = pushable({ objectMode: true });
   const outputStream = pushable({ objectMode: true });
   let firstMessage = true;
-  let healthyClose = true;
+  let didClose = false;
+  let didClientClose = false;
 
-  if (init) {
-    transport.send(serverId, {
-      streamId,
-      serviceName,
-      procedureName,
-      payload: init,
-      controlFlags: ControlFlags.StreamOpenBit,
-    });
-
-    firstMessage = false;
-  }
-
-  // input -> transport
-  // this gets cleaned up on inputStream.end() which is called by closeHandler
-  const pipeInputToTransport = async () => {
-    for await (const rawIn of inputStream) {
-      const m: PartialTransportMessage = {
-        streamId,
-        payload: rawIn,
-        controlFlags: 0,
-      };
-
-      if (firstMessage) {
-        m.serviceName = serviceName;
-        m.procedureName = procedureName;
-        m.controlFlags |= ControlFlags.StreamOpenBit;
-        firstMessage = false;
-      }
-
-      transport.send(serverId, m);
+  function sendInput(payload: unknown) {
+    if (didClientClose) {
+      throw new Error('cannot send stream input messages after closing');
     }
 
-    // after ending input stream, send a close message to the server
-    if (!healthyClose) return;
-    transport.sendCloseStream(serverId, streamId);
-  };
+    if (didClose) {
+      // TODO: should sendInput let you know if the stream is closed?
+      return;
+    }
 
-  void pipeInputToTransport();
+    const m: PartialTransportMessage = {
+      streamId,
+      payload,
+      controlFlags: 0,
+    };
+
+    if (firstMessage) {
+      m.serviceName = serviceName;
+      m.procedureName = procedureName;
+      m.controlFlags |= ControlFlags.StreamOpenBit;
+      firstMessage = false;
+    }
+
+    transport.send(serverId, m);
+  }
+
+  if (init) {
+    sendInput(init);
+  }
 
   // transport -> output
   function onMessage(msg: OpaqueTransportMessage) {
@@ -361,13 +354,21 @@ function handleStream(
   }
 
   function cleanup() {
-    inputStream.end();
     outputStream.end();
     transport.removeEventListener('message', onMessage);
     transport.removeEventListener('sessionStatus', onSessionStatus);
+    didClose = true;
   }
 
-  // close stream after disconnect + grace period elapses
+  function closeHandler() {
+    didClientClose = true;
+
+    if (didClose) return;
+
+    cleanup();
+    transport.sendCloseStream(serverId, streamId);
+  }
+
   const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
     outputStream.push(
       Err({
@@ -375,13 +376,14 @@ function handleStream(
         message: `${serverId} unexpectedly disconnected`,
       }),
     );
-    healthyClose = false;
+
     cleanup();
   });
 
   transport.addEventListener('message', onMessage);
   transport.addEventListener('sessionStatus', onSessionStatus);
-  return [inputStream, outputStream, cleanup];
+
+  return [sendInput, outputStream, closeHandler];
 }
 
 function handleSubscribe(
@@ -392,6 +394,7 @@ function handleSubscribe(
   procedureName: string,
 ) {
   const streamId = nanoid();
+  let didClose = false;
   transport.send(serverId, {
     streamId,
     serviceName,
@@ -399,8 +402,6 @@ function handleSubscribe(
     payload: input,
     controlFlags: ControlFlags.StreamOpenBit,
   });
-
-  let healthyClose = true;
 
   // transport -> output
   const outputStream = pushable({ objectMode: true });
@@ -419,15 +420,16 @@ function handleSubscribe(
     outputStream.end();
     transport.removeEventListener('message', onMessage);
     transport.removeEventListener('sessionStatus', onSessionStatus);
+    didClose = true;
   }
 
   const closeHandler = () => {
+    if (didClose) return;
+
     cleanup();
-    if (!healthyClose) return;
     transport.sendCloseStream(serverId, streamId);
   };
 
-  // close stream after disconnect + grace period elapses
   const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
     outputStream.push(
       Err({
@@ -435,7 +437,6 @@ function handleSubscribe(
         message: `${serverId} unexpectedly disconnected`,
       }),
     );
-    healthyClose = false;
     cleanup();
   });
 
@@ -452,80 +453,105 @@ function handleUpload(
   procedureName: string,
 ) {
   const streamId = nanoid();
-  const inputStream = pushable({ objectMode: true });
   let firstMessage = true;
-  let healthyClose = true;
+  let didSessionDisconnect = false;
+  let didFinalize = false;
 
-  if (init) {
-    transport.send(serverId, {
-      streamId,
-      serviceName,
-      procedureName,
-      payload: init,
-      controlFlags: ControlFlags.StreamOpenBit,
-    });
-
-    firstMessage = false;
-  }
-
-  // input -> transport
-  // this gets cleaned up on inputStream.end(), which the caller should call.
-  const pipeInputToTransport = async () => {
-    for await (const rawIn of inputStream) {
-      const m: PartialTransportMessage = {
-        streamId,
-        payload: rawIn,
-        controlFlags: 0,
-      };
-
-      if (firstMessage) {
-        m.serviceName = serviceName;
-        m.procedureName = procedureName;
-        m.controlFlags |= ControlFlags.StreamOpenBit;
-        firstMessage = false;
-      }
-
-      transport.send(serverId, m);
+  function sendInput(payload: unknown) {
+    if (didFinalize) {
+      throw new Error('cannot send more upload messages after finalization');
     }
 
-    // after ending input stream, send a close message to the server
-    if (!healthyClose) return;
-    transport.sendCloseStream(serverId, streamId);
-  };
+    if (didSessionDisconnect) {
+      // TODO: should sendInput let you know if the stream is closed?
+      return;
+    }
 
-  void pipeInputToTransport();
+    const m: PartialTransportMessage = {
+      streamId,
+      payload,
+      controlFlags: 0,
+    };
 
-  const responsePromise = new Promise((resolve) => {
-    // on disconnect, set a timer to return an error
-    // on (re)connect, clear the timer
-    const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
-      healthyClose = false;
-      cleanup();
-      resolve(
+    if (firstMessage) {
+      m.serviceName = serviceName;
+      m.procedureName = procedureName;
+      m.controlFlags |= ControlFlags.StreamOpenBit;
+      firstMessage = false;
+    }
+
+    transport.send(serverId, m);
+  }
+
+  if (init) {
+    sendInput(init);
+  }
+
+  const outerOnSessionStatus = createSessionDisconnectHandler(serverId, () => {
+    didSessionDisconnect = true;
+  });
+
+  function onMessageInvariant(msg: OpaqueTransportMessage) {
+    if (msg.streamId !== streamId) return;
+    if (msg.to !== transport.clientId) return;
+
+    // TODO handle server-side initiated closes
+
+    log?.error('received response for upload before client-side finalization');
+  }
+
+  transport.addEventListener('message', onMessageInvariant);
+
+  function finalize() {
+    if (didFinalize) {
+      throw new Error('cannot finalize multiple times');
+    }
+
+    transport.removeEventListener('message', onMessageInvariant);
+    transport.removeEventListener('sessionStatus', outerOnSessionStatus);
+
+    didFinalize = true;
+
+    outerCleanup();
+
+    if (didSessionDisconnect) {
+      return Promise.resolve(
         Err({
           code: UNEXPECTED_DISCONNECT,
           message: `${serverId} unexpectedly disconnected`,
         }),
       );
+    }
+
+    return new Promise((resolve) => {
+      const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
+        cleanup();
+        resolve(
+          Err({
+            code: UNEXPECTED_DISCONNECT,
+            message: `${serverId} unexpectedly disconnected`,
+          }),
+        );
+      });
+
+      function onMessage(msg: OpaqueTransportMessage) {
+        if (msg.streamId !== streamId) return;
+        if (msg.to !== transport.clientId) return;
+
+        cleanup();
+        resolve(msg.payload);
+      }
+
+      function cleanup() {
+        transport.removeEventListener('message', onMessage);
+        transport.removeEventListener('sessionStatus', onSessionStatus);
+      }
+
+      transport.addEventListener('sessionStatus', onSessionStatus);
+      transport.addEventListener('message', onMessage);
+      transport.sendCloseStream(serverId, streamId);
     });
+  }
 
-    function cleanup() {
-      inputStream.end();
-      transport.removeEventListener('message', onMessage);
-      transport.removeEventListener('sessionStatus', onSessionStatus);
-    }
-
-    function onMessage(msg: OpaqueTransportMessage) {
-      if (msg.streamId !== streamId) return;
-      if (msg.to !== transport.clientId) return;
-
-      // cleanup and resolve as soon as we get a message
-      cleanup();
-      resolve(msg.payload);
-    }
-
-    transport.addEventListener('message', onMessage);
-    transport.addEventListener('sessionStatus', onSessionStatus);
-  });
-  return [inputStream, responsePromise];
+  return [sendInput, finalize];
 }
