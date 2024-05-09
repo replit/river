@@ -125,6 +125,8 @@ export class Session<ConnType extends Connection> {
 
   /**
    * The metadata for this session, as parsed from the handshake.
+   *
+   * Will only ever be populated on the server side.
    */
   handshakeMetadata?: ParsedHandshakeMetadata;
 

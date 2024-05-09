@@ -948,6 +948,7 @@ export abstract class ServerTransport<
     }
 
     let session = this.sessions.get(parsed.from);
+    let handshakeMetadata: HandshakeRequestMetadata | undefined;
 
     if (this.options.handshake) {
       // check that the metadata that was sent is the correct shape
@@ -1013,12 +1014,11 @@ export abstract class ServerTransport<
         return false;
       }
 
-      session ??= this.getOrCreateSession(parsed.from, conn);
-      session.handshakeMetadata = parsedMetadata;
-    } else {
-      session ??= this.getOrCreateSession(parsed.from, conn);
-      session.handshakeMetadata = {} as ParsedHandshakeMetadata;
+      handshakeMetadata = parsedMetadata;
     }
+
+    session ??= this.getOrCreateSession(parsed.from, conn);
+    handshakeMetadata ??= {} as HandshakeRequestMetadata;
 
     log?.debug(
       `handshake from ${parsed.from} ok, responding with handshake success`,
@@ -1029,6 +1029,12 @@ export abstract class ServerTransport<
       sessionId: session.id,
     });
     conn.send(this.codec.toBuffer(responseMsg));
-    return this.onConnect(conn, parsed.from, parsed.payload.sessionId);
+
+    // we may get a different session back, so we need to make sure the metadata
+    // is attached to it
+    session = this.onConnect(conn, parsed.from, parsed.payload.sessionId);
+    session.handshakeMetadata = handshakeMetadata;
+
+    return session;
   }
 }
