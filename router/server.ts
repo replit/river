@@ -4,7 +4,6 @@ import { AnyProcedure, PayloadType } from './procedures';
 import {
   AnyService,
   InstantiatedServiceSchemaMap,
-  SerializedServiceSchema,
   AnyServiceSchemaMap,
 } from './services';
 import { pushable } from 'it-pushable';
@@ -55,19 +54,6 @@ interface ProcStream {
     outputHandler: Promise<unknown>;
     inputHandler: Promise<unknown>;
   };
-}
-
-type SerializedServerSchema = Record<string, SerializedServiceSchema>;
-export function serializeSchema(
-  services: AnyServiceSchemaMap,
-): SerializedServerSchema {
-  return Object.entries(services).reduce<SerializedServerSchema>(
-    (acc, [name, value]) => {
-      acc[name] = value.serialize();
-      return acc;
-    },
-    {},
-  );
 }
 
 class RiverServer<Services extends AnyServiceSchemaMap> {

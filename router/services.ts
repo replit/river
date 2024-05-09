@@ -150,6 +150,19 @@ export interface SerializedServiceSchema {
   >;
 }
 
+export type SerializedServerSchema = Record<string, SerializedServiceSchema>;
+export function serializeSchema(
+  services: AnyServiceSchemaMap,
+): SerializedServerSchema {
+  return Object.entries(services).reduce<SerializedServerSchema>(
+    (acc, [name, value]) => {
+      acc[name] = value.serialize();
+      return acc;
+    },
+    {},
+  );
+}
+
 /**
  * The schema for a {@link Service}. This is used to define a service, specifically
  * its initial state and procedures.
