@@ -237,6 +237,7 @@ export function handshakeRequestMessage(
       type: 'HANDSHAKE_REQ',
       protocolVersion: PROTOCOL_VERSION,
       sessionId,
+      metadata,
     } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
   };
 }

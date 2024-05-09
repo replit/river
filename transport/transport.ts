@@ -16,7 +16,6 @@ import {
   ClientHandshakeOptions,
   ServerHandshakeOptions,
   HandshakeRequestMetadata,
-  ParsedHandshakeMetadata,
 } from './message';
 import { log } from '../logging/log';
 import {
