@@ -15,6 +15,8 @@ import {
   PROTOCOL_VERSION,
   ClientHandshakeOptions,
   ServerHandshakeOptions,
+  HandshakeRequestMetadata,
+  ParsedHandshakeMetadata,
 } from './message';
 import { log } from '../logging/log';
 import {
@@ -700,8 +702,7 @@ export abstract class ClientTransport<
           }
 
           // only send handshake once per attempt
-          this.sendHandshake(to, conn);
-          return conn;
+          return this.sendHandshake(to, conn).then(() => conn);
         });
 
       this.inflightConnectionPromises.set(to, reconnectPromise);
@@ -738,9 +739,32 @@ export abstract class ClientTransport<
     super.deleteSession(session);
   }
 
-  protected sendHandshake(to: TransportClientId, conn: ConnType) {
+  protected async sendHandshake(to: TransportClientId, conn: ConnType) {
+    let metadata: HandshakeRequestMetadata | undefined;
+
+    if (this.options.handshake) {
+      metadata = await this.options.handshake.get();
+
+      if (!Value.Check(this.options.handshake.schema, metadata)) {
+        log?.error(`handshake metadata did not match schema`, {
+          clientId: this.clientId,
+          connectedTo: to,
+        });
+        this.protocolError(
+          ProtocolError.HandshakeFailed,
+          'handshake metadata did not match schema',
+        );
+        return;
+      }
+    }
+
     const session = this.getOrCreateSession(to, conn);
-    const requestMsg = handshakeRequestMessage(this.clientId, to, session.id);
+    const requestMsg = handshakeRequestMessage(
+      this.clientId,
+      to,
+      session.id,
+      metadata,
+    );
     log?.debug(`sending handshake request to ${to}`, {
       clientId: this.clientId,
       connectedTo: to,
@@ -803,28 +827,52 @@ export abstract class ServerTransport<
       }
     }, this.options.sessionDisconnectGraceMs);
 
+    const buffer: Array<Uint8Array> = [];
+    let receivedHandshakeMessage = false;
+
     const handshakeHandler = (data: Uint8Array) => {
-      const maybeSession = this.receiveHandshakeRequestMessage(data, conn);
-      if (!maybeSession) {
-        conn.close();
+      // if we've already received, just buffer the data
+      if (receivedHandshakeMessage) {
+        buffer.push(data);
         return;
-      } else {
-        session = maybeSession;
-        clearTimeout(handshakeTimeout);
       }
 
-      // when we are done handshake sequence,
-      // remove handshake listener and use the normal message listener
-      conn.removeDataListener(handshakeHandler);
-      conn.addDataListener((data) => {
-        const parsed = this.parseMsg(data);
-        if (!parsed) {
-          conn.close();
-          return;
-        }
+      receivedHandshakeMessage = true;
+      clearTimeout(handshakeTimeout);
 
-        this.handleMsg(parsed);
-      });
+      void this.receiveHandshakeRequestMessage(data, conn).then(
+        (maybeSession) => {
+          if (!maybeSession) {
+            conn.close();
+            return;
+          }
+
+          session = maybeSession;
+
+          // when we are done handshake sequence,
+          // remove handshake listener and use the normal message listener
+
+          const dataHandler = (data: Uint8Array) => {
+            const parsed = this.parseMsg(data);
+            if (!parsed) {
+              conn.close();
+              return;
+            }
+
+            this.handleMsg(parsed);
+          };
+
+          conn.removeDataListener(handshakeHandler);
+          conn.addDataListener(dataHandler);
+
+          // process any data we missed
+          for (const data of buffer) {
+            dataHandler(data);
+          }
+
+          buffer.length = 0;
+        },
+      );
     };
 
     conn.addDataListener(handshakeHandler);
@@ -846,10 +894,10 @@ export abstract class ServerTransport<
     });
   }
 
-  receiveHandshakeRequestMessage(
+  async receiveHandshakeRequestMessage(
     data: Uint8Array,
     conn: ConnType,
-  ): Session<ConnType> | false {
+  ): Promise<Session<ConnType> | false> {
     const parsed = this.parseMsg(data);
     if (!parsed) {
       this.protocolError(
@@ -866,7 +914,12 @@ export abstract class ServerTransport<
         reason,
       });
       conn.send(this.codec.toBuffer(responseMsg));
-      log?.warn(`${reason}: ${JSON.stringify(parsed)}`, {
+      // note: do _not_ log the payload, it may contain secrets
+      const logData =
+        typeof parsed.payload === 'object' && parsed.payload !== null
+          ? { ...parsed, payload: { ...parsed.payload, metadata: 'redacted' } }
+          : { ...parsed };
+      log?.warn(`${reason}: ${JSON.stringify(logData)}`, {
         clientId: this.clientId,
         connId: conn.debugId,
       });
@@ -894,7 +947,79 @@ export abstract class ServerTransport<
       return false;
     }
 
-    const session = this.getOrCreateSession(parsed.from, conn);
+    let session = this.sessions.get(parsed.from);
+
+    if (this.options.handshake) {
+      // check that the metadata that was sent is the correct shape
+      if (
+        !Value.Check(
+          this.options.handshake.requestSchema,
+          parsed.payload.metadata,
+        )
+      ) {
+        const reason = 'received malformed handshake metadata';
+        const responseMsg = handshakeResponseMessage(
+          this.clientId,
+          parsed.from,
+          { ok: false, reason },
+        );
+        conn.send(this.codec.toBuffer(responseMsg));
+        // note: do _not_ log the metadata, it may contain secrets
+        log?.warn(`received malformed handshake metadata from ${parsed.from}`, {
+          clientId: this.clientId,
+          connId: conn.debugId,
+        });
+        this.protocolError(ProtocolError.HandshakeFailed, reason);
+        return false;
+      }
+
+      const parsedMetadata = await this.options.handshake.parse(
+        parsed.payload.metadata as HandshakeRequestMetadata,
+        session ?? null,
+      );
+
+      // handler rejected the connection
+      if (parsedMetadata === false) {
+        const reason = 'rejected by server';
+        const responseMsg = handshakeResponseMessage(
+          this.clientId,
+          parsed.from,
+          { ok: false, reason },
+        );
+        conn.send(this.codec.toBuffer(responseMsg));
+        log?.warn(`rejected handshake from ${parsed.from}`, {
+          clientId: this.clientId,
+          connId: conn.debugId,
+        });
+        this.protocolError(ProtocolError.HandshakeFailed, reason);
+        return false;
+      }
+
+      // check that the parsed metadata is the correct shape
+      if (!Value.Check(this.options.handshake.parsedSchema, parsedMetadata)) {
+        const reason = 'failed to parse handshake metadata';
+        const responseMsg = handshakeResponseMessage(
+          this.clientId,
+          parsed.from,
+          { ok: false, reason },
+        );
+        conn.send(this.codec.toBuffer(responseMsg));
+        // note: do _not_ log the metadata, it may contain secrets
+        log?.error(`failed to parse handshake metadata`, {
+          clientId: this.clientId,
+          connId: conn.debugId,
+        });
+        this.protocolError(ProtocolError.HandshakeFailed, reason);
+        return false;
+      }
+
+      session ??= this.getOrCreateSession(parsed.from, conn);
+      session.handshakeMetadata = parsedMetadata;
+    } else {
+      session ??= this.getOrCreateSession(parsed.from, conn);
+      session.handshakeMetadata = {} as ParsedHandshakeMetadata;
+    }
+
     log?.debug(
       `handshake from ${parsed.from} ok, responding with handshake success`,
       { clientId: this.clientId, connId: conn.debugId },
