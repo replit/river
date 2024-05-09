@@ -30,7 +30,7 @@ export interface ServiceContext {}
 export type ServiceContextWithState<State> = ServiceContext & { state: State };
 
 export type ServiceContextWithTransportInfo<State> = ServiceContext & {
-  state: State;
+  state: Omit<State, typeof Symbol.dispose>;
   to: TransportClientId;
   from: TransportClientId;
   streamId: string;
