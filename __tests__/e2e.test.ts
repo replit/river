@@ -651,13 +651,11 @@ describe.each(testMatrix())(
           serverTransport,
           server,
         });
-        expect(dispose).toBeCalledTimes(1);
       });
 
       // test
-      const result = await client.disposable.add.rpc(3);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual(4);
+      await server.close();
+      expect(dispose).toBeCalledTimes(1);
     });
   },
 );
