@@ -4,7 +4,7 @@ import {
   FallibleServiceSchema,
   TestServiceSchema,
 } from './fixtures/services';
-import { serializeSchema } from '../router/server';
+import { serializeSchema } from '../router';
 
 describe('serialize server to jsonschema', () => {
   test('serialize entire service schema', () => {

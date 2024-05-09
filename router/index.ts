@@ -8,7 +8,11 @@ export type {
   ProcErrors,
   ProcType,
 } from './services';
-export { ServiceSchema } from './services';
+export {
+  ServiceSchema,
+  serializeSchema,
+  SerializedServerSchema,
+} from './services';
 export type {
   ValidProcType,
   PayloadType,
