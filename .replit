@@ -11,3 +11,37 @@ channel = "stable-23_05"
 [[ports]]
 localPort = 3000
 externalPort = 80
+
+[languages.eslint]
+pattern = "**{*.ts,*.js,*.tsx,*.jsx}"
+[languages.eslint.languageServer]
+start = "./node_modules/vscode-langservers-extracted/bin/vscode-eslint-language-server --stdio"
+[languages.eslint.languageServer.configuration]
+nodePath = "node"        # this should resolve to nvm
+validate = "probe"
+useESLintClass = false
+format = false
+quiet = false
+run = "onType"
+packageManager = "npm"
+rulesCustomizations = []
+onIgnoredFiles = "off"
+trace = "verbose"        # uncomment to debug
+[languages.eslint.languageServer.configuration.codeActionOnSave]
+mode = "auto"
+[languages.eslint.languageServer.configuration.workspaceFolder]
+name = "river"
+# we seem to not be able to use ${REPL_HOME} here as the vscode package does
+# not evaluate the environment variable, and we need a `/` prefix so it
+# knows we gave it an absolute path
+uri = "file:///home/runner/${REPL_SLUG}"
+[languages.eslint.languageServer.configuration.experimental]
+useFlatConfig = false
+[languages.eslint.languageServer.configuration.problems]
+shortenToSingleLine = false
+[languages.eslint.languageServer.configuration.codeAction.disableRuleComment]
+enable = true
+location = "separateLine"
+commentStyle = "line"
+[languages.eslint.languageServer.configuration.codeAction.showDocumentation]
+enable = true
