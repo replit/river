@@ -220,7 +220,7 @@ For an incoming message to be considered valid on the server, the transport mess
 - If this is the first message of the stream AND the associated procedure declares an `Init` message, the internal payload of the message should match the JSON schema for the `Init` type of the associated handler, and the server should pass the `Init` message to the handler.
 - If this is not the first message of the stream OR the associated procedure *does not* declare an `Init` message, the internal payload of the message should match the JSON schema for the `Input` type of the associated handler, and the server should pass the `Input` message to the handler.
 
-If the message is invalid, the server will discard the message and send back an error message `{ ok: false, payload: { code: 'INVALID_REQUEST', message: 'could be anything' } }` and a `StreamClosedBit`.
+If the message is invalid, the server MUST discard the message and send back an error message `{ ok: false, payload: { code: 'INVALID_REQUEST', message: 'could be anything' } }` and a `StreamClosedBit`.
 Otherwise, the message is a normal message. Unwrap the payload and pass it to the handler associated with the `streamId` of the message.
 
 In the special case that the message payload matches the `ControlMessagePayloadSchema` and has the `StreamClosedBit` set, the server should close the input stream for the handler. The message MUST NOT be passed to the handler.
