@@ -312,7 +312,7 @@ A `subscription` procedure starts with the client sending a single message with 
 
 ```
 client: >       {
-server:  -  -- - {
+server:  -  -- -
 ```
 or
 
