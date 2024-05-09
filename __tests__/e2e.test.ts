@@ -641,10 +641,6 @@ describe.each(testMatrix())(
         disposable: SchemaWithDisposableState(dispose),
       };
       const server = createServer(serverTransport, services);
-      const client = createClient<typeof services>(
-        clientTransport,
-        serverTransport.clientId,
-      );
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
