@@ -161,6 +161,15 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     this.transport.removeEventListener('message', this.onMessage);
     this.transport.removeEventListener('sessionStatus', this.onSessionStatus);
     await Promise.all([...this.streamMap.keys()].map(this.cleanupStream));
+
+    for (const [_, context] of this.contextMap.entries()) {
+      if (Symbol.dispose in context.state) {
+        const dispose = context.state[Symbol.dispose];
+        if (typeof dispose === 'function') {
+          dispose();
+        }
+      }
+    }
   }
 
   createNewProcStream(message: OpaqueTransportMessage) {

@@ -20,6 +20,7 @@ import {
   UploadableServiceSchema,
   OrderingServiceSchema,
   NonObjectSchemas,
+  SchemaWithDisposableState,
 } from './fixtures/services';
 import { UNCAUGHT_ERROR } from '../router/result';
 import {
@@ -629,6 +630,34 @@ describe.each(testMatrix())(
       );
       assert(result2.ok);
       expect(result2.payload).toStrictEqual(weirdRecursivePayload);
+    });
+
+    test('calls service dispose methods on cleanup', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const dispose = vi.fn();
+      const services = {
+        disposable: SchemaWithDisposableState(dispose),
+      };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+        expect(dispose).toBeCalledTimes(1);
+      });
+
+      // test
+      const result = await client.disposable.add.rpc(3);
+      assert(result.ok);
+      expect(result.payload).toStrictEqual(4);
     });
   },
 );
