@@ -162,7 +162,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     this.transport.removeEventListener('sessionStatus', this.onSessionStatus);
     await Promise.all([...this.streamMap.keys()].map(this.cleanupStream));
 
-    for (const [_, context] of this.contextMap.entries()) {
+    for (const context of this.contextMap.values()) {
       if (Symbol.dispose in context.state) {
         const dispose = context.state[Symbol.dispose];
         if (typeof dispose === 'function') {

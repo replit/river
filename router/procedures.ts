@@ -62,9 +62,7 @@ export interface RPCProcedure<
   errors: E;
   description?: string;
   handler(
-    context: ServiceContextWithTransportInfo<
-      Omit<State, typeof Symbol.dispose>
-    >,
+    context: ServiceContextWithTransportInfo<State>,
     input: Static<I>,
   ): Promise<ProcedureResult<O, E>>;
 }
@@ -94,9 +92,7 @@ export type UploadProcedure<
       errors: E;
       description?: string;
       handler(
-        context: ServiceContextWithTransportInfo<
-          Omit<State, typeof Symbol.dispose>
-        >,
+        context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
         input: AsyncIterableIterator<Static<I>>,
       ): Promise<ProcedureResult<O, E>>;
@@ -108,9 +104,7 @@ export type UploadProcedure<
       errors: E;
       description?: string;
       handler(
-        context: ServiceContextWithTransportInfo<
-          Omit<State, typeof Symbol.dispose>
-        >,
+        context: ServiceContextWithTransportInfo<State>,
         input: AsyncIterableIterator<Static<I>>,
       ): Promise<ProcedureResult<O, E>>;
     };
@@ -135,9 +129,7 @@ export interface SubscriptionProcedure<
   errors: E;
   description?: string;
   handler(
-    context: ServiceContextWithTransportInfo<
-      Omit<State, typeof Symbol.dispose>
-    >,
+    context: ServiceContextWithTransportInfo<State>,
     input: Static<I>,
     output: Pushable<ProcedureResult<O, E>>,
   ): Promise<(() => void) | void>;
@@ -168,9 +160,7 @@ export type StreamProcedure<
       errors: E;
       description?: string;
       handler(
-        context: ServiceContextWithTransportInfo<
-          Omit<State, typeof Symbol.dispose>
-        >,
+        context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
         input: AsyncIterableIterator<Static<I>>,
         output: Pushable<ProcedureResult<O, E>>,
@@ -183,9 +173,7 @@ export type StreamProcedure<
       errors: E;
       description?: string;
       handler(
-        context: ServiceContextWithTransportInfo<
-          Omit<State, typeof Symbol.dispose>
-        >,
+        context: ServiceContextWithTransportInfo<State>,
         input: AsyncIterableIterator<Static<I>>,
         output: Pushable<ProcedureResult<O, E>>,
       ): Promise<(() => void) | void>;
