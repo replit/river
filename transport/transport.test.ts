@@ -19,7 +19,7 @@ describe.each(testMatrix())(
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
     const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup(opts);
+      await transport.setup({ client: opts, server: opts });
     afterAll(cleanup);
 
     test('connection is recreated after clean client disconnect', async () => {
@@ -405,7 +405,7 @@ describe.each(testMatrix())(
     test('messages should not be resent when the client loses all state and reconnects to the server', async () => {
       const opts = { codec: codec.codec };
       const { getClientTransport, getServerTransport, cleanup } =
-        await transport.setup(opts);
+        await transport.setup({ client: opts, server: opts });
       onTestFinished(cleanup);
 
       let clientTransport = getClientTransport('client');
@@ -497,7 +497,7 @@ describe.each(testMatrix())(
     test('messages should not be resent when client reconnects to a different instance of the server', async () => {
       const opts = { codec: codec.codec };
       const { getClientTransport, getServerTransport, restartServer, cleanup } =
-        await transport.setup(opts);
+        await transport.setup({ client: opts, server: opts });
       onTestFinished(cleanup);
 
       const clientTransport = getClientTransport('client');
@@ -604,7 +604,7 @@ describe.each(testMatrix())(
         getServerTransport,
         simulatePhantomDisconnect,
         cleanup,
-      } = await transport.setup(opts);
+      } = await transport.setup({ client: opts, server: opts });
       onTestFinished(cleanup);
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const clientTransport = getClientTransport('client');

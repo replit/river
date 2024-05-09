@@ -28,7 +28,7 @@ describe.each(testMatrix())(
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
     const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup(opts);
+      await transport.setup({ client: opts, server: opts });
     afterAll(cleanup);
 
     test('closing a transport from the client cleans up connection on the server', async () => {

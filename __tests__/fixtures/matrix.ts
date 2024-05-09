@@ -5,14 +5,17 @@ import {
   ServerTransport,
   TransportClientId,
 } from '../../transport';
-import { ProvidedTransportOptions } from '../../transport/transport';
 import { ValidCodecs, codecs } from './codec';
-import { ValidTransports, transports } from './transports';
+import {
+  TestTransportOptions,
+  ValidTransports,
+  transports,
+} from './transports';
 
 interface TestMatrixEntry {
   transport: {
     name: string;
-    setup: (opts?: ProvidedTransportOptions) => Promise<{
+    setup: (opts?: TestTransportOptions) => Promise<{
       simulatePhantomDisconnect: () => void;
       getClientTransport: (
         id: TransportClientId,

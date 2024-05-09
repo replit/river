@@ -38,6 +38,7 @@ export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
 type TransportOptions = SessionOptions;
 export type ProvidedTransportOptions = Partial<TransportOptions>;
+
 export const defaultTransportOptions: TransportOptions = {
   heartbeatIntervalMs: 1_000,
   heartbeatsUntilDead: 2,
@@ -45,8 +46,8 @@ export const defaultTransportOptions: TransportOptions = {
   codec: NaiveJsonCodec,
 };
 
-export type ProvidedClientTransportOptions = Partial<ClientTransportOptions>;
 type ClientTransportOptions = SessionOptions & ConnectionRetryOptions;
+export type ProvidedClientTransportOptions = Partial<ClientTransportOptions>;
 
 const defaultConnectionRetryOptions: ConnectionRetryOptions = {
   baseIntervalMs: 250,
@@ -61,9 +62,16 @@ const defaultClientTransportOptions: ClientTransportOptions = {
   ...defaultConnectionRetryOptions,
 };
 
+type ServerTransportOptions = TransportOptions;
+export type ProvidedServerTransportOptions = Partial<ServerTransportOptions>;
+
+const defaultServerTransportOptions: ServerTransportOptions = {
+  ...defaultTransportOptions,
+};
+
 /**
  * Transports manage the lifecycle (creation/deletion) of sessions and connections. Its responsibilities include:
- * 
+ *
  *  1) Constructing a new {@link Session} and {@link Connection} on {@link TransportMessage}s from new clients.
  *     After constructing the {@link Connection}, {@link onConnect} is called which adds it to the connection map.
  *  2) Delegating message listening of the connection to the newly created {@link Connection}.
@@ -735,11 +743,20 @@ export abstract class ClientTransport<
 export abstract class ServerTransport<
   ConnType extends Connection,
 > extends Transport<ConnType> {
+  /**
+   * The options for this transport.
+   */
+  protected options: ServerTransportOptions;
+
   constructor(
     clientId: TransportClientId,
-    providedOptions?: ProvidedTransportOptions,
+    providedOptions?: ProvidedServerTransportOptions,
   ) {
     super(clientId, providedOptions);
+    this.options = {
+      ...defaultServerTransportOptions,
+      ...providedOptions,
+    };
     log?.info(`initiated server transport`, {
       clientId: this.clientId,
       protocolVersion: PROTOCOL_VERSION,

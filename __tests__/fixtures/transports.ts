@@ -15,14 +15,23 @@ import {
 } from '../../util/testHelpers';
 import { UnixDomainSocketClientTransport } from '../../transport/impls/uds/client';
 import { UnixDomainSocketServerTransport } from '../../transport/impls/uds/server';
-import { ProvidedTransportOptions } from '../../transport/transport';
+import {
+  ProvidedClientTransportOptions,
+  ProvidedServerTransportOptions,
+} from '../../transport/transport';
 import { WebSocketClientTransport } from '../../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../../transport/impls/ws/server';
 
 export type ValidTransports = 'ws' | 'unix sockets';
+
+export interface TestTransportOptions {
+  client?: ProvidedClientTransportOptions;
+  server?: ProvidedServerTransportOptions;
+}
+
 export const transports: Array<{
   name: ValidTransports;
-  setup: (opts?: ProvidedTransportOptions) => Promise<{
+  setup: (opts?: TestTransportOptions) => Promise<{
     getClientTransport: (id: TransportClientId) => ClientTransport<Connection>;
     getServerTransport: () => ServerTransport<Connection>;
     simulatePhantomDisconnect: () => void;
@@ -52,7 +61,7 @@ export const transports: Array<{
           const clientTransport = new WebSocketClientTransport(
             () => Promise.resolve(createLocalWebSocketClient(port)),
             id,
-            opts,
+            opts?.client,
           );
           void clientTransport.connect('SERVER');
           transports.push(clientTransport);
@@ -62,7 +71,7 @@ export const transports: Array<{
           const serverTransport = new WebSocketServerTransport(
             wss,
             'SERVER',
-            opts,
+            opts?.server,
           );
           transports.push(serverTransport);
           return serverTransport;
@@ -113,7 +122,7 @@ export const transports: Array<{
           const clientTransport = new UnixDomainSocketClientTransport(
             socketPath,
             id,
-            opts,
+            opts?.client,
           );
           void clientTransport.connect('SERVER');
           transports.push(clientTransport);
@@ -123,7 +132,7 @@ export const transports: Array<{
           const serverTransport = new UnixDomainSocketServerTransport(
             server,
             'SERVER',
-            opts,
+            opts?.server,
           );
           transports.push(serverTransport);
           return serverTransport;
