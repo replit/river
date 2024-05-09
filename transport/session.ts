@@ -3,6 +3,7 @@ import {
   ControlFlags,
   ControlMessageAckSchema,
   OpaqueTransportMessage,
+  ParsedHandshakeMetadata,
   PartialTransportMessage,
   TransportClientId,
   TransportMessage,
@@ -121,6 +122,11 @@ export class Session<ConnType extends Connection> {
    * for this session.
    */
   advertisedSessionId?: string;
+
+  /**
+   * The metadata for this session, as parsed from the handshake.
+   */
+  handshakeMetadata?: ParsedHandshakeMetadata;
 
   /**
    * Number of messages we've sent along this session (excluding handshake and acks)

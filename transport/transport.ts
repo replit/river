@@ -13,6 +13,8 @@ import {
   ControlMessagePayloadSchema,
   isAck,
   PROTOCOL_VERSION,
+  ClientHandshakeOptions,
+  ServerHandshakeOptions,
 } from './message';
 import { log } from '../logging/log';
 import {
@@ -36,7 +38,10 @@ import { NaiveJsonCodec } from '../codec';
  */
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
 
+// -- base transport options
+
 type TransportOptions = SessionOptions;
+
 export type ProvidedTransportOptions = Partial<TransportOptions>;
 
 export const defaultTransportOptions: TransportOptions = {
@@ -46,7 +51,11 @@ export const defaultTransportOptions: TransportOptions = {
   codec: NaiveJsonCodec,
 };
 
-type ClientTransportOptions = SessionOptions & ConnectionRetryOptions;
+// -- client transport options
+
+type ClientTransportOptions = TransportOptions &
+  ConnectionRetryOptions & { handshake?: ClientHandshakeOptions };
+
 export type ProvidedClientTransportOptions = Partial<ClientTransportOptions>;
 
 const defaultConnectionRetryOptions: ConnectionRetryOptions = {
@@ -62,7 +71,12 @@ const defaultClientTransportOptions: ClientTransportOptions = {
   ...defaultConnectionRetryOptions,
 };
 
-type ServerTransportOptions = TransportOptions;
+// -- server transport options
+
+type ServerTransportOptions = TransportOptions & {
+  handshake?: ServerHandshakeOptions;
+};
+
 export type ProvidedServerTransportOptions = Partial<ServerTransportOptions>;
 
 const defaultServerTransportOptions: ServerTransportOptions = {
