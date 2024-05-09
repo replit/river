@@ -4,16 +4,12 @@ import {
   FallibleServiceSchema,
   TestServiceSchema,
 } from './fixtures/services';
-import { createServer } from '../router/server';
-import { MockServerTransport } from './typescript-stress.test';
+import { serializeSchema } from '../router/server';
 
 describe('serialize server to jsonschema', () => {
-  test('serialize basic server', () => {
-    const server = createServer(new MockServerTransport('mock'), {
-      test: TestServiceSchema,
-    });
-
-    expect(server.serialize()).toStrictEqual({
+  test('serialize entire service schema', () => {
+    const schema = { test: TestServiceSchema };
+    expect(serializeSchema(schema)).toStrictEqual({
       test: {
         procedures: {
           add: {
