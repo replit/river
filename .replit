@@ -26,7 +26,6 @@ run = "onType"
 packageManager = "npm"
 rulesCustomizations = []
 onIgnoredFiles = "off"
-trace = "verbose"        # uncomment to debug
 [languages.eslint.languageServer.configuration.codeActionOnSave]
 mode = "auto"
 [languages.eslint.languageServer.configuration.workspaceFolder]
