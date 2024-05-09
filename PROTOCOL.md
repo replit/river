@@ -1,4 +1,4 @@
-# River protocol `v1.1`
+# River protocol `v2.0`
 
 ## Abstract
 
@@ -66,6 +66,8 @@ Note that this protocol specification does NOT detail the language-level specifi
 A server (also called a router) is made up of multiple 'services'. Each 'service' has multiple 'procedures'.
 A procedure declares its type (`rpc | stream | upload | subscription`), an input message type (`Input`), an output message type (`Output`), an error type (`Error`), and the associated handler.
 
+*Note: all types in this document are expressed roughly in TypeScript.*
+
 The type signatures (in TypeScript) for the handlers of each of the procedure types are as follows:
 
 - `rpc`: `Input -> Result<Output, Error>`
@@ -77,9 +79,30 @@ The type signatures (in TypeScript) for the handlers of each of the procedure ty
 
 Note that any procedure that has a client-to-server procedure stream (i.e. `stream` and `upload`) can optionally define a single initialization message to be sent to the server before the client starts sending the actual `Input` messages.
 
-The types of `Input`, `Init`, `Output`, and `Error` MUST be representable as JSON schema.
+The types of `Input`, `Init`, and `Output` can be anything as long as they are representable as JSON schema.
 In the official TypeScript implementation, this is done via [TypeBox](https://github.com/sinclairzx81/typebox).
 The server is responsible for doing run-time type validation on incoming messages to ensure they match the handler's type signature before passing it to the handler.
+
+The type of `Error` must extend the `BaseError` type:
+
+```ts
+interface BaseError {
+  // This should be a defined literal to make sure errors are easily differentiated
+  code: string;
+  // This can be any string
+  message: string;
+  // Any extra metadata
+  extra?: any;
+}
+```
+
+The `Result` type must conform to:
+
+```ts
+type Result<T, E extends BaseError> =
+      | { ok: true; payload: T }
+      | { ok: false; payload: E };
+```
 
 However, the messages from the client to the server must also contain additional information so that the server knows where to route the message payload.
 This wrapper message is referred to as a 'transport message'.
@@ -119,8 +142,6 @@ interface TransportMessage<Payload> {
   seq: number;
   ack: number;
 }
-
-type Result<T, E> = { ok: true; payload: T } | { ok: false; payload: E };
 ```
 
 A single 'invocation' of a handler is assigned a unique `streamId`, which is used to label all inbound and outbound messages associated with that invocation (this grouping is referred to as a 'procedure stream' or 'stream').
@@ -131,7 +152,8 @@ The `controlFlags` property is a [bit field](https://en.wikipedia.org/wiki/Bit_f
 - The `StreamOpenBit` (`0b00010`) MUST be set for the first message of a new stream.
 - The `StreamClosedBit` (`0b00100`) MUST be set for the last message of a stream.
 - Bits `0b01000` and `0b10000` are reserved for future use and are currently unused.
-  - `0b01000` will likely be used to signal `StreamAbort` (i.e., the client is aborting the stream)
+  - `0b10000` will likely be used to signal `StreamAbort` (i.e., the client is aborting the stream)
+- The `StreamCloseBit
 
 All messages MUST have no control flags set (i.e., the `controlFlags` field is `0b00000`) unless:
 
@@ -167,6 +189,11 @@ When a message is received, it MUST be validated before being processed.
 - The `to` field of the message MUST match the transport's `clientId`.
 - Have the expected `seq` number (see the 'Handling Transparent Reconnections' heading for more information on seq/ack).
 - Is not an explicit heartbeat (i.e. the `AckBit` is not set).
+- Stop sending any messages upon receiving a `StreamClosedBit`
+  - Any side can close the stream
+  - For simplicity, all closes are full closes (i.e. there are no half-open streams) and no acks are required for stream closing. 
+  - If the closing side receives a message after closing a stream, it is safe to discard it.
+    - It is recommended that you log an error if one side recieves a message for an unknown stream, therefore, after closing a stream it is recommended that you leave a tombstone for the closed stream id to differentiate between streams that were never opened and streams that have been closed.
 
 When a message is validated at this level, the implementor must update the bookkeeping information for the session (see the 'Transparent Reconnections' heading for more information).
 
@@ -191,9 +218,9 @@ For an incoming message to be considered valid on the server, the transport mess
 - If the message has the `StreamOpenBit` set, it MUST have a `serviceName` and `procedureName`. The server MUST open a new stream and start a new instantiation of the handler for the specific `serviceName` and `procedureName`. The server should maintain a mapping of `streamId` to the handler instantiation so that future messages with the same `streamId` can be routed to the correct instantiation of the handler.
 - If the message does not have the `StreamOpenBit` set, it MUST have a `streamId` that the server recognizes and has an associated handler open for.
 - If this is the first message of the stream AND the associated procedure declares an `Init` message, the internal payload of the message should match the JSON schema for the `Init` type of the associated handler, and the server should pass the `Init` message to the handler.
-- If this is not the first message of the stream, the internal payload of the message should match the JSON schema for the `Input` type of the associated handler, and the server should pass the `Input` message to the handler.
+- If this is not the first message of the stream OR the associated procedure *does not* declare an `Init` message, the internal payload of the message should match the JSON schema for the `Input` type of the associated handler, and the server should pass the `Input` message to the handler.
 
-If the message is invalid, the server MUST silently discard the message without delivering it to the handler.
+If the message is invalid, the server will discard the message and send back an error message `{ ok: false, payload: { code: 'INVALID_REQUEST', message: 'could be anything' } }` and a `StreamClosedBit`.
 Otherwise, the message is a normal message. Unwrap the payload and pass it to the handler associated with the `streamId` of the message.
 
 In the special case that the message payload matches the `ControlMessagePayloadSchema` and has the `StreamClosedBit` set, the server should close the input stream for the handler. The message MUST NOT be passed to the handler.
@@ -204,53 +231,94 @@ The following section will provide diagrams detailing the lifetime of streams fo
 
 The legend is as follows:
 
-- `>` represents a message with the `StreamOpenBit` set.
-- `<` represents a message with the `StreamClosedBit` set.
-  - `{` represents a message with the `StreamClosedBit` set and the payload `{ type: 'CLOSE' }`.
-- `x` represents a message with both the `StreamOpenBit` and `StreamClosedBit` set.
-- `-` represents a message with no control flags set.
+- `>` represents an `Input` or `Init` message with the `StreamOpenBit` set.
+- `<` represents a `Result` message with the `StreamClosedBit` set and the result is `{ ok: true, payload: any }` (an ok result).
+- `!` represents a `Result` message with the `StreamClosedBit` set and the result is `{ ok: false, payload: any }` (an error result).
+- `{` represents a `Control` message with the `StreamClosedBit` set and the payload is `{ type: 'CLOSE' }`.
+- `-` represents any message with no control flags set.
+- `x` represents any message that is discarded by the receiver due to stream closure.
+
 
 As the `ACK` control message is unrelated to the stream lifecycle, it will not be included in the diagrams.
 
+With the exception of `rpc`, stream closes by the server are reserved only for errors.
+
 ##### RPC
 
-An `rpc` procedure starts with the client sending a single message with `StreamOpenBit` set and `StreamClosedBit` set and waits for a response message with the `StreamClosedBit` set.
+An `rpc` procedure starts with the client sending a single message with `StreamOpenBit` set and `StreamClosedBit` set and waits for a response message.
 
 ```
-client: x
+client: >
 server:  <
 ```
 
+or 
+
+```
+client: >
+server:  !
+```
+
+
 ##### Stream
 
-A `stream` procedure starts with the client sending a single message with the `StreamOpenBit` set. It remains open until the client manually ends the stream by sending a final control message with the `StreamClosedBit` set.
+A `stream` procedure starts with the client sending a single message with the `StreamOpenBit` set. It remains open until the client or server manually ends the stream by sending a final control message with the `StreamClosedBit` set.
 
-After receiving, the server MUST send a final control message with the `StreamClosedBit` set when the input stream is exhausted.
+Note that not every message from the client will result in a message from the server. The server may choose to send messages at any time.
 
 ```
 client: > --  - {
-server:  -  -- - {
+server:  -  -- -
 ```
 
-Note that not every message from the client will result in a message from the server. The server may choose to send messages at any time.
+or
+
+```
+client: > --  - {
+server:  -  -- -  x
+```
+
+or
+
+```
+client: > --  -    x
+server:  -  -- - !
+```
+
 
 ##### Upload
 
 An `upload` procedure starts with the client sending a single message with `StreamOpenBit` set and remains open until the client manually closes the input stream by sending a final control message with the `StreamClosedBit` set.
 The server MUST send a final control message with the `StreamClosedBit` set when the input stream is exhausted.
 
+
 ```
 client: > --  - {
-server:          <
+server:          -
 ```
+
+or
+
+```
+client: > --  -   x
+server:         !
+```
+
 
 ##### Subscription
 
 A `subscription` procedure starts with the client sending a single message with the `StreamOpenBit` set and remains open until the client manually ends the stream by sending a final control message with the `StreamClosedBit` set.
 
+
 ```
 client: >       {
 server:  -  -- - {
+```
+or
+
+```
+client: >
+server:  -  -- !
 ```
 
 ## Wire format
