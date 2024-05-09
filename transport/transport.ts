@@ -701,7 +701,14 @@ export abstract class ClientTransport<
           }
 
           // only send handshake once per attempt
-          return this.sendHandshake(to, conn).then(() => conn);
+          return this.sendHandshake(to, conn).then((ok) => {
+            if (!ok) {
+              conn.close();
+              throw new Error('failed to send handshake');
+            }
+
+            return conn;
+          });
         });
 
       this.inflightConnectionPromises.set(to, reconnectPromise);
@@ -753,7 +760,7 @@ export abstract class ClientTransport<
           ProtocolError.HandshakeFailed,
           'handshake metadata did not match schema',
         );
-        return;
+        return false;
       }
     }
 
@@ -769,6 +776,7 @@ export abstract class ClientTransport<
       connectedTo: to,
     });
     conn.send(this.codec.toBuffer(requestMsg));
+    return true;
   }
 
   close() {
