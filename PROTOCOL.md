@@ -278,7 +278,7 @@ If the message is invalid, the server MUST discard the message and send back an 
 
 Otherwise, the message is a normal message. Unwrap the payload and pass it to the handler associated with the `streamId` of the message.
 
-In the special case that the message payload matches the `ControlClose` and has the `StreamClosedBit` set, the server should close the input stream for the handler. The message MUST NOT be passed to the handler.
+In cases where the incoming message is a `ControlClose` message, the server should close the input stream for the handler. The message MUST NOT be passed to the handler.
 
 #### Lifetime of streams
 
