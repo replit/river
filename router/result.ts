@@ -95,7 +95,7 @@ export type Output<
   ProcedureName extends keyof RiverClient[ServiceName],
   Procedure = RiverClient[ServiceName][ProcedureName],
   Fn extends (...args: never) => unknown = (...args: never) => unknown,
-> = RiverClient extends Client<infer __Y>
+> = RiverClient extends Client<infer __ServiceSchemaMap>
   ? Procedure extends object
     ? Procedure extends object & { rpc: infer RpcHandler extends Fn }
       ? Awaited<ReturnType<RpcHandler>>
