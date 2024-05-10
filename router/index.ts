@@ -34,6 +34,13 @@ export type {
   ServiceContextWithTransportInfo,
 } from './context';
 export { Ok, Err, UNCAUGHT_ERROR, RiverUncaughtSchema } from './result';
-export type { RiverErrorSchema, RiverError, Result } from './result';
+export type {
+  RiverErrorSchema,
+  RiverError,
+  Result,
+  ResultOk,
+  ResultErr,
+  Output,
+} from './result';
 
 export { version as RIVER_VERSION } from '../package.json';
