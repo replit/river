@@ -79,7 +79,7 @@ The type signatures (in TypeScript) for the handlers of each of the procedure ty
 
 Note that any procedure that has a client-to-server procedure stream (i.e. `stream` and `upload`) can optionally define a single initialization message to be sent to the server before the client starts sending the actual `Input` messages.
 
-The types of `Input`, `Init`, and `Output` MUST be representable as JSON schema..
+The types of `Input`, `Init`, and `Output` MUST be representable as JSON schema.
 In the official TypeScript implementation, this is done via [TypeBox](https://github.com/sinclairzx81/typebox).
 The server is responsible for doing run-time type validation on incoming messages to ensure they match the handler's type signature before passing it to the handler.
 
