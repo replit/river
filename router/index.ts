@@ -38,8 +38,8 @@ export type {
   RiverErrorSchema,
   RiverError,
   Result,
-  ResultOk,
-  ResultErr,
+  ResultUnwrapOk,
+  ResultUnwrapErr,
   Output,
 } from './result';
 

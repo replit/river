@@ -62,23 +62,17 @@ export function Err<const T, const E>(error: E): Result<T, E> {
 }
 
 /**
- * Refine a {@link Result} type to its returned value.
+ * Refine a {@link Result} type to its returned payload.
  */
-export type ResultOk<R> = R extends Result<infer __T, infer __E> & {
-  ok: true;
-  payload: infer A;
-}
-  ? A
+export type ResultUnwrapOk<R> = R extends Result<infer T, infer __E>
+  ? T
   : never;
 
 /**
- * Refine a {@link Result} type to its error value.
+ * Refine a {@link Result} type to its error payload.
  */
-export type ResultErr<R> = R extends Result<infer __T, infer __E> & {
-  ok: false;
-  payload: infer A;
-}
-  ? A
+export type ResultUnwrapErr<R> = R extends Result<infer __T, infer E>
+  ? E
   : never;
 
 /**
