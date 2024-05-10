@@ -262,7 +262,7 @@ For an incoming message to be considered valid on the client, the transport mess
 If the message is invalid, the client MUST silently discard the message.
 Otherwise, this is a normal message. Unwrap the payload and return it to the caller of the original procedure.
 
-In cases where the incoming transport message has a `ControlClose` payload, the client MUST end the user-facing output stream (see the section below on 'Lifetime of Streams' for more information on when these explicit close messages are sent). The message MUST NOT be passed to the user-facing output stream.
+In cases where the incoming message is a `ControlClose` message, the client MUST end the user-facing output stream (see the section below on 'Lifetime of Streams' for more information on when these explicit close messages are sent). The message MUST NOT be passed to the user-facing output stream.
 
 #### On the server
 
