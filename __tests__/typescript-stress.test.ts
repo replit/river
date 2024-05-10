@@ -1,12 +1,19 @@
-import { describe, expect, test } from 'vitest';
+import { assert, describe, expect, test } from 'vitest';
 import { Procedure } from '../router/procedures';
 import { ServiceSchema } from '../router/services';
 import { Type } from '@sinclair/typebox';
 import { createServer } from '../router/server';
 import { Connection, ClientTransport, ServerTransport } from '../transport';
 import { createClient } from '../router/client';
-import { Ok } from '../router/result';
+import {
+  Err,
+  Ok,
+  Output,
+  ResultUnwrapErr,
+  ResultUnwrapOk,
+} from '../router/result';
 import { TestServiceSchema } from './fixtures/services';
+import { iterNext } from '../util/testHelpers';
 
 const input = Type.Union([
   Type.Object({ a: Type.Number() }),
@@ -193,5 +200,131 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
     expect(client.z1.f40.rpc({ a: 1 })).toBeTruthy();
     expect(server).toBeTruthy();
     expect(client).toBeTruthy();
+  });
+});
+
+describe('Output<> type', () => {
+  const services = {
+    test: ServiceSchema.define({
+      rpc: Procedure.rpc({
+        input: Type.Object({ n: Type.Number() }),
+        output: Type.Object({ n: Type.Number() }),
+        async handler(_, { n }) {
+          return Ok({ n });
+        },
+      }),
+      stream: Procedure.stream({
+        input: Type.Object({ n: Type.Number() }),
+        output: Type.Object({ n: Type.Number() }),
+        async handler(_c, _in, output) {
+          output.push(Ok({ n: 1 }));
+        },
+      }),
+      subscription: Procedure.subscription({
+        input: Type.Object({ n: Type.Number() }),
+        output: Type.Object({ n: Type.Number() }),
+        async handler(_c, _in, output) {
+          output.push(Ok({ n: 1 }));
+        },
+      }),
+      upload: Procedure.upload({
+        input: Type.Object({ n: Type.Number() }),
+        output: Type.Object({ n: Type.Number() }),
+        async handler(_c, _in) {
+          return Ok({ n: 1 });
+        },
+      }),
+    }),
+  };
+  createServer(new MockServerTransport('SERVER'), services);
+  const client = createClient<typeof services>(
+    new MockClientTransport('client'),
+    'SERVER',
+    { eagerlyConnect: false },
+  );
+
+  test('it unwraps rpc outputs correctly', async () => {
+    // Given
+    function acceptOutput(output: Output<typeof client, 'test', 'rpc'>) {
+      return output;
+    }
+
+    // Then
+    void client.test.rpc.rpc({ n: 1 }).then(acceptOutput);
+    expect(client).toBeTruthy();
+  });
+
+  test('it unwraps stream outputs correctly', async () => {
+    // Given
+    function acceptOutput(output: Output<typeof client, 'test', 'stream'>) {
+      return output;
+    }
+
+    // Then
+    void client.test.stream
+      .stream()
+      .then(([_in, output, _close]) => iterNext(output))
+      .then(acceptOutput);
+    expect(client).toBeTruthy();
+  });
+
+  test('it unwraps subscription outputs correctly', async () => {
+    // Given
+    function acceptOutput(
+      output: Output<typeof client, 'test', 'subscription'>,
+    ) {
+      return output;
+    }
+
+    // Then
+    void client.test.subscription
+      .subscribe({ n: 1 })
+      .then(([output, _close]) => iterNext(output))
+      .then(acceptOutput);
+    expect(client).toBeTruthy();
+  });
+
+  test('it unwraps upload outputs correctly', async () => {
+    // Given
+    function acceptOutput(output: Output<typeof client, 'test', 'upload'>) {
+      return output;
+    }
+
+    // Then
+    void client.test.upload
+      .upload()
+      .then(([_input, result]) => result)
+      .then(acceptOutput);
+    expect(client).toBeTruthy();
+  });
+});
+
+describe('ResultUwrap types', () => {
+  test('it unwraps Ok correctly', () => {
+    // Given
+    const result = Ok({ hello: 'world' });
+
+    // When
+    function acceptOk(payload: ResultUnwrapOk<typeof result>) {
+      return payload;
+    }
+
+    // Then
+    assert(result.ok);
+    expect(acceptOk(result.payload)).toEqual({ hello: 'world' });
+  });
+
+  test('it unwraps Err correctly', () => {
+    // Given
+    const result = Err({ hello: 'world' });
+
+    // When
+    function acceptErr(payload: ResultUnwrapErr<typeof result>) {
+      return payload;
+    }
+
+    // Then
+    assert(!result.ok);
+    expect(acceptErr(result.payload)).toEqual({ hello: 'world' });
   });
 });
