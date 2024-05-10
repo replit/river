@@ -300,12 +300,14 @@ As other `Control` messages are unrelated to the stream lifecycle, they will not
 An `rpc` procedure starts with the client sending a single message with `StreamOpenBit` set and `StreamClosedBit` set and waits for a response message which MUST contain a `StreamClosedBit`.
 
 Typical request:
+
 ```
 client: x
 server:  <
 ```
 
 Protocol error:
+
 ```
 client: x
 server:  !
@@ -318,18 +320,21 @@ A `stream` procedure starts with the client sending a single message with the `S
 Note that either side may choose to independently send a message at any time while their side is still open.
 
 Client initiated close:
+
 ```
 client: > --  - {
 server:  -  -- - -- {
 ```
 
 Server initiated close:
+
 ```
 client: > --  -- -- {
 server:  -  --  {
 ```
 
 Protocol error (abrupt close):
+
 ```
 client: > --  -   (any further messages are ignored)
 server:  -  -- - !
@@ -340,18 +345,21 @@ server:  -  -- - !
 An `upload` procedure starts with the client sending a single message with `StreamOpenBit` set and remains open until the client manually closes the input stream by sending `CloseControl` message. The server MUST send a final `Result` message with the `StreamClosedBit`.
 
 Client finalizes upload:
+
 ```
 client: > --  - {
 server:          <
 ```
 
 Protocol error (abrupt close):
+
 ```
 client: > --  -   (any further messages are ignored)
 server:         !
 ```
 
 Client finalizes upload, leading to a protocol error (abrupt close):
+
 ```
 client: > --  - {
 server:          !
@@ -362,18 +370,21 @@ server:          !
 A `subscription` procedure starts with the client sending a single message with the `StreamOpenBit` set and remains open until either side ends the stream by sending a `ControlClose` message. The party receiving the `ControlClose` message must respond with a final `CloseControl` message.
 
 Client initiated close:
+
 ```
 client: >       {
 server:  -  -- - {
 ```
 
 Server ends subscription:
+
 ```
 client: >       {
 server:  -  -- - {
 ```
 
 Protocol error (abrupt close):
+
 ```
 client: >       (any further messages are ignored)
 server:  -  -- !
@@ -562,5 +573,3 @@ This explicit ack serves three purposes:
 1. It keeps the connection alive by preventing the underlying transport from timing out.
 2. It allows the session to detect when the underlying transport has been lost, even in cases where the transport does not emit a close event.
 3. It provides an upper bound on how many messages the session buffers in the case of a reconnection (consider the case where an upload procedure is really long-lived and the server doesn't send any messages until the upload is finished. Without these explicit heartbeats, the client will buffer everything!).
-
----
