@@ -288,7 +288,7 @@ The legend is as follows:
 
 - `>` represents an `Input` or `Init` message with the `StreamOpenBit` set.
 - `x` represents an `Input` or `Init` message with both `StreamOpenBit`and `StreamClosedBit` set.
-- `<` represents a `Result` message with the `StreamClosedBit`, errors in this message are only service-level errors.
+- `<` represents a `Result` message with the `StreamClosedBit` set, errors in this message are only service-level errors.
 - `!` represents a `Result` message with the `StreamClosedBit` set and a `ProtocolError` in the payload (`{ ok: false, payload: ProtocolError }`).
 - `{` represents a `ControlClose` message.
 - `-` represents any message with no control flags set.
