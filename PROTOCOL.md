@@ -257,7 +257,7 @@ Then, depending on whether this is a client or server, the message must undergo 
 For an incoming message to be considered valid on the client, the transport message MUST fulfill the following criteria:
 
 - It should have a `streamId` that the client recognizes. That is, there MUST already be a message listener waiting for messages on the `streamId` of the original request message (recall that streams are only initiated by clients).
-- If a server sends an `ProtocolError` message the client MUST NOT send any further messages to the server including a `ControlClose` message.
+- If a server sends an `ProtocolError` message the client MUST NOT send any further messages to the server for that stream including a `ControlClose` message.
 
 If the message is invalid, the client MUST silently discard the message.
 Otherwise, this is a normal message. Unwrap the payload and return it to the caller of the original procedure.
