@@ -66,7 +66,7 @@ Note that this protocol specification does NOT detail the language-level specifi
 A server (also called a router) is made up of multiple 'services'. Each 'service' has multiple 'procedures'.
 A procedure declares its type (`rpc | stream | upload | subscription`), an input message type (`Input`), an output message type (`Output`), an error type (`Error`), and the associated handler.
 
-*Note: all types in this document are expressed roughly in TypeScript.*
+_Note: all types in this document are expressed roughly in TypeScript._
 
 The type signatures (in TypeScript) for the handlers of each of the procedure types are as follows:
 
@@ -79,7 +79,7 @@ The type signatures (in TypeScript) for the handlers of each of the procedure ty
 
 Note that any procedure that has a client-to-server procedure stream (i.e. `stream` and `upload`) can optionally define a single initialization message to be sent to the server before the client starts sending the actual `Input` messages.
 
-The types of `Input`, `Init`, and `Output` can be anything as long as they are representable as JSON schema.
+The types of `Input`, `Init`, and `Output` MUST be representable as JSON schema..
 In the official TypeScript implementation, this is done via [TypeBox](https://github.com/sinclairzx81/typebox).
 The server is responsible for doing run-time type validation on incoming messages to ensure they match the handler's type signature before passing it to the handler.
 
@@ -100,14 +100,11 @@ The `Result` type must conform to:
 
 ```ts
 type Result<T, E extends BaseError> =
-      | { ok: true; payload: T }
-      | { ok: false; payload: E };
+  | { ok: true; payload: T }
+  | { ok: false; payload: E };
 ```
 
-However, the messages from the client to the server must also contain additional information so that the server knows where to route the message payload.
-This wrapper message is referred to as a 'transport message'.
-
-The schema for the transport message is as follows:
+The messages server must also contain additional information so that the server knows where to route the message payload. This wrapper message is referred to as a `TransportMessage` and its payload can be a `Control`, a `Result`, an `Input`, or an `Output`. The schema for the transport message is as follows:
 
 ```ts
 interface TransportMessage<Payload> {
@@ -127,6 +124,7 @@ interface TransportMessage<Payload> {
   // the actual payload
   // - `Input` in the client to server direction
   // - `Result<Output, Error>` in the server to client direction
+  // - `Control` in either direction
   payload: Payload;
 
   // unique id for each specific instantiation of an RPC call
@@ -153,7 +151,6 @@ The `controlFlags` property is a [bit field](https://en.wikipedia.org/wiki/Bit_f
 - The `StreamClosedBit` (`0b00100`) MUST be set for the last message of a stream.
 - Bits `0b01000` and `0b10000` are reserved for future use and are currently unused.
   - `0b10000` will likely be used to signal `StreamAbort` (i.e., the client is aborting the stream)
-- The `StreamCloseBit
 
 All messages MUST have no control flags set (i.e., the `controlFlags` field is `0b00000`) unless:
 
@@ -167,6 +164,64 @@ All messages MUST have no control flags set (i.e., the `controlFlags` field is `
 - It is an explicit heartbeat, so the `AckBit` MUST be the only bit set.
   - The payload MUST be `{ type: 'ACK' }`.
   - Because this is a control message that is not associated with a specific stream, you MUST NOT set `serviceName` or `procedureName` and `streamId` can be something arbitrary (e.g. `heartbeat`).
+
+There are 2 error payloads that are defined in the protocol sent from server to client, these codes are reserved:
+
+```ts
+// When a client sends a malformed request. This can be
+// for a variety of reasons which would  be included
+// in the message.
+interface InvalidRequest extends BaseError {
+  code: 'INVALID_REQUEST';
+  message: string;
+}
+
+// This is sent when an exception happens in the handler of a stream.
+interface UncaughtError extends BaseError {
+  code: 'UNCAUGHT_ERROR';
+  message: string;
+}
+
+type ProtocolError = UncaughtError | InvalidRequest;
+```
+
+`ProtocolError`s, just like service-level errors, are wrapped with a `Result`, which is further wrapped with `TransportMessage` and MUST have a `StreamClosedBit` flag.
+
+There are 4 `Control` payloads:
+
+```ts
+// Used in cases where we want to send a close without
+// a payload. MUST have a `StreamClosedBit` flag
+interface ControlClose {
+  type: 'CLOSE';
+}
+
+// Heartbeat messages. MUST have an `AckBit` flag
+interface ControlAck {
+  type: 'ACK';
+}
+
+interface ControlHandshakeRequest {
+  type: 'HANDSHAKE_REQ';
+  protocolVersion: 'v2.0';
+  sessionId: string;
+}
+
+interface ControlHandshakeResponse {
+  type: 'HANDSHAKE_RESP';
+  status: { ok: true; sessionId: string } | { ok: false; reason: string };
+}
+
+type Control =
+  | ControlClose
+  | ControlAck
+  | ControlHandshakeRequest
+  | ControlHandshakeResponse;
+```
+
+`Control` is a payload that is wrapped with `TransportMessage`.
+
+??? TODO Faris: there's no differentiation between a `Control` in the protocol and an `Input` message with the the same schema. Yikes. Should probably fix this in this protocol bump.
 
 ## Streams
 
@@ -189,11 +244,9 @@ When a message is received, it MUST be validated before being processed.
 - The `to` field of the message MUST match the transport's `clientId`.
 - Have the expected `seq` number (see the 'Handling Transparent Reconnections' heading for more information on seq/ack).
 - Is not an explicit heartbeat (i.e. the `AckBit` is not set).
-- Stop sending any messages upon receiving a `StreamClosedBit`
-  - Any side can close the stream
-  - For simplicity, all closes are full closes (i.e. there are no half-open streams) and no acks are required for stream closing. 
-  - If the closing side receives a message after closing a stream, it is safe to discard it.
-    - It is recommended that you log an error if one side recieves a message for an unknown stream, therefore, after closing a stream it is recommended that you leave a tombstone for the closed stream id to differentiate between streams that were never opened and streams that have been closed.
+- Either side can initiate a close by sending a message with a `StreamClosedBit`
+  - The closing side goes into a half-closed state, meaning they're MUST NOT send any more messages.
+  - To get a full close, the other side MUST respond with a `StreamClosedBit` acknowledging the close.
 
 When a message is validated at this level, the implementor must update the bookkeeping information for the session (see the 'Transparent Reconnections' heading for more information).
 
@@ -204,11 +257,12 @@ Then, depending on whether this is a client or server, the message must undergo 
 For an incoming message to be considered valid on the client, the transport message MUST fulfill the following criteria:
 
 - It should have a `streamId` that the client recognizes. That is, there MUST already be a message listener waiting for messages on the `streamId` of the original request message (recall that streams are only initiated by clients).
+- If a server sends an `INVALID_REQUEST` message with a `StreamClosdeBit` the client MUST NOT send any further messages to the server including a close response.
 
 If the message is invalid, the client MUST silently discard the message.
 Otherwise, this is a normal message. Unwrap the payload and return it to the caller of the original procedure.
 
-In the special case that the incoming message is an explicit stream close control message, the client MUST end the user-facing output stream and cleanup the stream (see the section below on 'Lifetime of Streams' for more information on when these explicit close messages are sent). The message MUST NOT be passed to the user-facing output stream.
+In cases where the incoming transport message has a `ControlClose` payload, the client MUST end the user-facing output stream (see the section below on 'Lifetime of Streams' for more information on when these explicit close messages are sent). The message MUST NOT be passed to the user-facing output stream.
 
 #### On the server
 
@@ -218,12 +272,13 @@ For an incoming message to be considered valid on the server, the transport mess
 - If the message has the `StreamOpenBit` set, it MUST have a `serviceName` and `procedureName`. The server MUST open a new stream and start a new instantiation of the handler for the specific `serviceName` and `procedureName`. The server should maintain a mapping of `streamId` to the handler instantiation so that future messages with the same `streamId` can be routed to the correct instantiation of the handler.
 - If the message does not have the `StreamOpenBit` set, it MUST have a `streamId` that the server recognizes and has an associated handler open for.
 - If this is the first message of the stream AND the associated procedure declares an `Init` message, the internal payload of the message should match the JSON schema for the `Init` type of the associated handler, and the server should pass the `Init` message to the handler.
-- If this is not the first message of the stream OR the associated procedure *does not* declare an `Init` message, the internal payload of the message should match the JSON schema for the `Input` type of the associated handler, and the server should pass the `Input` message to the handler.
+- If this is not the first message of the stream OR the associated procedure _does not_ declare an `Init` message, the internal payload of the message should match the JSON schema for the `Input` type of the associated handler, and the server should pass the `Input` message to the handler.
 
-If the message is invalid, the server MUST discard the message and send back an error message `{ ok: false, payload: { code: 'INVALID_REQUEST', message: 'could be anything' } }` and a `StreamClosedBit`.
+If the message is invalid, the server MUST discard the message and send back an `INVALID_REQUEST` error message with a `StreamClosedBit`, this is an abrupt full close, the server should cleanup all associated resources with the stream without expecting a close response from the client. The server may choose to keep track of `INVALID_REQUEST` stream ids to avoid sending multiple errors back.
+
 Otherwise, the message is a normal message. Unwrap the payload and pass it to the handler associated with the `streamId` of the message.
 
-In the special case that the message payload matches the `ControlMessagePayloadSchema` and has the `StreamClosedBit` set, the server should close the input stream for the handler. The message MUST NOT be passed to the handler.
+In the special case that the message payload matches the `ControlClose` and has the `StreamClosedBit` set, the server should close the input stream for the handler. The message MUST NOT be passed to the handler.
 
 #### Lifetime of streams
 
@@ -232,92 +287,95 @@ The following section will provide diagrams detailing the lifetime of streams fo
 The legend is as follows:
 
 - `>` represents an `Input` or `Init` message with the `StreamOpenBit` set.
-- `<` represents a `Result` message with the `StreamClosedBit` set and the result is `{ ok: true, payload: any }` (an ok result).
-- `!` represents a `Result` message with the `StreamClosedBit` set and the result is `{ ok: false, payload: any }` (an error result).
-- `{` represents a `Control` message with the `StreamClosedBit` set and the payload is `{ type: 'CLOSE' }`.
+- `x` represents an `Input` or `Init` message with both `StreamOpenBit`and `StreamClosedBit` set.
+- `<` represents a `Result` message with the `StreamClosedBit`, errors in this message are only service-level errors.
+- `!` represents a `Result` message with the `StreamClosedBit` set and a `ProtocolError` in the payload (`{ ok: false, payload: ProtocolError }`).
+- `{` represents a `ControlClose` message.
 - `-` represents any message with no control flags set.
-- `x` represents any message that is discarded by the receiver due to stream closure.
 
-
-As the `ACK` control message is unrelated to the stream lifecycle, it will not be included in the diagrams.
-
-With the exception of `rpc`, stream closes by the server are reserved only for errors.
+As other `Control` messages are unrelated to the stream lifecycle, they will not be included in the diagrams.
 
 ##### RPC
 
-An `rpc` procedure starts with the client sending a single message with `StreamOpenBit` set and `StreamClosedBit` set and waits for a response message.
+An `rpc` procedure starts with the client sending a single message with `StreamOpenBit` set and `StreamClosedBit` set and waits for a response message which MUST contain a `StreamClosedBit`.
 
+Typical request:
 ```
-client: >
+client: x
 server:  <
 ```
 
-or 
-
+Protocol error:
 ```
-client: >
+client: x
 server:  !
 ```
 
-
 ##### Stream
 
-A `stream` procedure starts with the client sending a single message with the `StreamOpenBit` set. It remains open until the client or server manually ends the stream by sending a final control message with the `StreamClosedBit` set.
+A `stream` procedure starts with the client sending a single message with the `StreamOpenBit` set. The client or server initiates a close by sending a final `ControlClose` message, the initiator MUST continue to accept data until the other side sends a `ControlClose` message.
 
-Note that not every message from the client will result in a message from the server. The server may choose to send messages at any time.
+Note that either side may choose to independently send a message at any time while their side is still open.
 
+Client initiated close:
 ```
 client: > --  - {
-server:  -  -- -
+server:  -  -- - -- {
 ```
 
-or
-
+Server initiated close:
 ```
-client: > --  - {
-server:  -  -- -  x
+client: > --  -- -- {
+server:  -  --  {
 ```
 
-or
-
+Protocol error (abrupt close):
 ```
-client: > --  -    x
+client: > --  -   (any further messages are ignored)
 server:  -  -- - !
 ```
 
-
 ##### Upload
 
-An `upload` procedure starts with the client sending a single message with `StreamOpenBit` set and remains open until the client manually closes the input stream by sending a final control message with the `StreamClosedBit` set.
-The server MUST send a final control message with the `StreamClosedBit` set when the input stream is exhausted.
+An `upload` procedure starts with the client sending a single message with `StreamOpenBit` set and remains open until the client manually closes the input stream by sending `CloseControl` message. The server MUST send a final `Result` message with the `StreamClosedBit`.
 
-
+Client finalizes upload:
 ```
 client: > --  - {
-server:          -
+server:          <
 ```
 
-or
-
+Protocol error (abrupt close):
 ```
-client: > --  -   x
+client: > --  -   (any further messages are ignored)
 server:         !
 ```
 
+Client finalizes upload, leading to a protocol error (abrupt close):
+```
+client: > --  - {
+server:          !
+```
 
 ##### Subscription
 
-A `subscription` procedure starts with the client sending a single message with the `StreamOpenBit` set and remains open until the client manually ends the stream by sending a final control message with the `StreamClosedBit` set.
+A `subscription` procedure starts with the client sending a single message with the `StreamOpenBit` set and remains open until either side ends the stream by sending a `ControlClose` message. The party receiving the `ControlClose` message must respond with a final `CloseControl` message.
 
-
+Client initiated close:
 ```
 client: >       {
-server:  -  -- -
+server:  -  -- - {
 ```
-or
 
+Server ends subscription:
 ```
-client: >
+client: >       {
+server:  -  -- - {
+```
+
+Protocol error (abrupt close):
+```
+client: >       (any further messages are ignored)
 server:  -  -- !
 ```
 
@@ -445,7 +503,7 @@ This metadata is tracked within the `Session` object.
 Though this is very [TCP](https://jzhao.xyz/thoughts/TCP) inspired, River has the benefit of assuming the underlying transport is an ordered byte stream which simplifies the protocol significantly.
 
 The send buffer is a queue of messages that have been sent but not yet acknowledged by the other side.
-When a message is sent (including control messages like explicit acks[^1]), it is added to the send buffer.
+When a message is sent (including `Control` messages like explicit acks[^1]), it is added to the send buffer.
 
 [^1]:
     There is a protocol optimization here that treats explicit acks purely as status updates for bookkeeping.
@@ -493,7 +551,7 @@ Certain transports will not emit a close event when the underlying connection is
 This is especially true for WebSockets in specific cases (e.g. closing your laptop lid).
 
 To detect these phantom disconnects, the session SHOULD send an explicit heartbeat message every `heartbeatIntervalMs` milliseconds (this should be a parameter of the transport).
-This message is a control message with the `AckBit` set and the payload `{ type: 'ACK' }`.
+This message is a `ControlAck` message.
 The `seq` and `ack` of the message should match that of the session itself and otherwise be transmitted like a normal message.
 
 We track the number of heartbeats that we've sent to the other side without hearing a message. When the number of heartbeat misses exceeds some threshold `heartbeatsUntilDead` (also a parameter of the transport),
@@ -504,3 +562,5 @@ This explicit ack serves three purposes:
 1. It keeps the connection alive by preventing the underlying transport from timing out.
 2. It allows the session to detect when the underlying transport has been lost, even in cases where the transport does not emit a close event.
 3. It provides an upper bound on how many messages the session buffers in the case of a reconnection (consider the case where an upload procedure is really long-lived and the server doesn't send any messages until the upload is finished. Without these explicit heartbeats, the client will buffer everything!).
+
+---
