@@ -150,7 +150,7 @@ The `controlFlags` property is a [bit field](https://en.wikipedia.org/wiki/Bit_f
 - The `StreamOpenBit` (`0b00010`) MUST be set for the first message of a new stream.
 - The `StreamClosedBit` (`0b00100`) MUST be set for the last message of a stream.
 - Bits `0b01000` and `0b10000` are reserved for future use and are currently unused.
-  - `0b10000` will likely be used to signal `StreamAbort` (i.e., the client is aborting the stream)
+  - `0b01000` will likely be used to signal `StreamAbort` (i.e., the client is aborting the stream)
 
 All messages MUST have no control flags set (i.e., the `controlFlags` field is `0b00000`) unless:
 
