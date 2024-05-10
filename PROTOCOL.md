@@ -245,7 +245,7 @@ When a message is received, it MUST be validated before being processed.
 - Have the expected `seq` number (see the 'Handling Transparent Reconnections' heading for more information on seq/ack).
 - Is not an explicit heartbeat (i.e. the `AckBit` is not set).
 - Either side can initiate a close by sending a message with a `StreamClosedBit`
-  - The closing side goes into a half-closed state, meaning they're MUST NOT send any more messages.
+  - The closing side goes into a half-closed state, meaning they MUST NOT send any more messages.
   - To get a full close, the other side MUST respond with a `StreamClosedBit` acknowledging the close.
 
 When a message is validated at this level, the implementor must update the bookkeeping information for the session (see the 'Transparent Reconnections' heading for more information).
