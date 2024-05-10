@@ -367,7 +367,7 @@ server:          !
 
 ##### Subscription
 
-A `subscription` procedure starts with the client sending a single message with the `StreamOpenBit` set and remains open until either side ends the stream by sending a `ControlClose` message. The party receiving the `ControlClose` message must respond with a final `CloseControl` message, but may choose to continue to send messages.
+A `subscription` procedure starts with the client sending a single message with the `StreamOpenBit` set and remains open until either side ends the stream by sending a `ControlClose` message. The party receiving the `ControlClose` message must respond with a final `CloseControl` message. If the client initiates the closing, it MUST continue to accept data until the other side sends a `ControlClose` message.
 
 Client initiated close:
 
