@@ -96,7 +96,7 @@ interface BaseError {
 }
 ```
 
-The `Result` type must conform to:
+The `Result` type MUST conform to:
 
 ```ts
 type Result<T, E extends BaseError> =
