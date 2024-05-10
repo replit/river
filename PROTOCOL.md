@@ -83,7 +83,7 @@ The types of `Input`, `Init`, and `Output` MUST be representable as JSON schema.
 In the official TypeScript implementation, this is done via [TypeBox](https://github.com/sinclairzx81/typebox).
 The server is responsible for doing run-time type validation on incoming messages to ensure they match the handler's type signature before passing it to the handler.
 
-The type of `Error` must extend the `BaseError` type:
+Additionally, the type of `Error` MUST implement the `BaseError` type:
 
 ```ts
 interface BaseError {
