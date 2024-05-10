@@ -376,10 +376,10 @@ client: >       {
 server:  -  -- - {
 ```
 
-Server ends subscription:
+Server initiated close:
 
 ```
-client: >       {
+client: >         {
 server:  -  -- - {
 ```
 
