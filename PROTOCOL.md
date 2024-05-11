@@ -221,7 +221,6 @@ type Control =
 
 `Control` is a payload that is wrapped with `TransportMessage`.
 
-??? TODO Faris: there's no differentiation between a `Control` in the protocol and an `Input` message with the the same schema. Yikes. Should probably fix this in this protocol bump.
 
 ## Streams
 
