@@ -221,7 +221,6 @@ type Control =
 
 `Control` is a payload that is wrapped with `TransportMessage`.
 
-
 ## Streams
 
 Streams tie together a series of messages into a single logical 'stream' of communication associated with a single remote procedure invocation.
