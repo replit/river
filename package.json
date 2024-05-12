@@ -54,6 +54,7 @@
   },
   "peerDependencies": {
     "@sinclair/typebox": "~0.32.8",
+    "@opentelemetry/api": "^1.7.0",
     "isomorphic-ws": "^5.0.0",
     "ws": "^8.13.0"
   },
