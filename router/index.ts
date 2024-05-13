@@ -8,7 +8,11 @@ export type {
   ProcErrors,
   ProcType,
 } from './services';
-export { ServiceSchema } from './services';
+export {
+  ServiceSchema,
+  serializeSchema,
+  SerializedServerSchema,
+} from './services';
 export type {
   ValidProcType,
   PayloadType,
@@ -30,6 +34,13 @@ export type {
   ServiceContextWithTransportInfo,
 } from './context';
 export { Ok, Err, UNCAUGHT_ERROR, RiverUncaughtSchema } from './result';
-export type { RiverErrorSchema, RiverError, Result } from './result';
+export type {
+  RiverErrorSchema,
+  RiverError,
+  Result,
+  ResultUnwrapOk,
+  ResultUnwrapErr,
+  Output,
+} from './result';
 
 export { version as RIVER_VERSION } from '../package.json';
