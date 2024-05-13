@@ -1,12 +1,6 @@
 import WebSocket from 'isomorphic-ws';
 import { WebSocketServer } from 'ws';
 import http from 'node:http';
-import {
-  Connection,
-  OpaqueTransportMessage,
-  Session,
-  Transport,
-} from '../transport';
 import { pushable } from 'it-pushable';
 import {
   PayloadType,
@@ -21,10 +15,13 @@ import {
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import net from 'node:net';
-import { PartialTransportMessage } from '../transport/message';
+import {
+  OpaqueTransportMessage,
+  PartialTransportMessage,
+} from '../transport/message';
 import { coerceErrorString } from './stringify';
-import { SessionOptions } from '../transport/session';
-import { defaultTransportOptions } from '../transport/transport';
+import { Connection, Session, SessionOptions } from '../transport/session';
+import { Transport, defaultTransportOptions } from '../transport/transport';
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.

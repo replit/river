@@ -31,7 +31,7 @@ import {
   UNCAUGHT_ERROR,
 } from './result';
 import { EventMap } from '../transport/events';
-import { Connection } from '../transport';
+import { Connection } from '../transport/session';
 import { coerceErrorString } from '../util/stringify';
 
 /**

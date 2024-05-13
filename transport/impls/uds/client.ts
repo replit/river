@@ -1,4 +1,3 @@
-import { TransportClientId } from '../..';
 import { Socket } from 'node:net';
 import { log } from '../../../logging/log';
 import { UdsConnection } from './connection';
@@ -6,6 +5,7 @@ import {
   ClientTransport,
   ProvidedClientTransportOptions,
 } from '../../transport';
+import { TransportClientId } from '../../message';
 
 export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnection> {
   path: string;

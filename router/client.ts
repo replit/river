@@ -23,7 +23,7 @@ import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
-import { Connection } from '../transport';
+import { Connection } from '../transport/session';
 import { log } from '../logging/log';
 
 // helper to make next, yield, and return all the same type
