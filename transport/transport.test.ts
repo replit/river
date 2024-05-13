@@ -13,7 +13,7 @@ import {
   waitForMessage,
   testingSessionOptions,
 } from '../util/testHelpers';
-import { EventMap } from '../transport/events';
+import { EventMap, ProtocolError } from '../transport/events';
 import {
   advanceFakeTimersBySessionGrace,
   testFinishesCleanly,
@@ -841,7 +841,7 @@ describe.each(testMatrix())(
 
       const clientHandshakeFailed = vi.fn();
       const clientHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === 'handshake_failed') {
+        if (evt.type === ProtocolError.HandshakeFailed) {
           clientHandshakeFailed();
         }
       };
@@ -852,7 +852,7 @@ describe.each(testMatrix())(
 
       const serverHandshakeFailed = vi.fn();
       const serverHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === 'handshake_failed') {
+        if (evt.type === ProtocolError.HandshakeFailed) {
           serverHandshakeFailed();
         }
       };
@@ -935,7 +935,7 @@ describe.each(testMatrix())(
 
       const clientHandshakeFailed = vi.fn();
       const clientHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === 'handshake_failed') {
+        if (evt.type === ProtocolError.HandshakeFailed) {
           clientHandshakeFailed();
         }
       };
@@ -946,7 +946,7 @@ describe.each(testMatrix())(
 
       const serverHandshakeFailed = vi.fn();
       const serverHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === 'handshake_failed') {
+        if (evt.type === ProtocolError.HandshakeFailed) {
           serverHandshakeFailed();
         }
       };
@@ -1020,7 +1020,7 @@ describe.each(testMatrix())(
 
       const clientHandshakeFailed = vi.fn();
       const clientHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === 'handshake_failed') {
+        if (evt.type === ProtocolError.HandshakeFailed) {
           clientHandshakeFailed();
         }
       };
@@ -1031,7 +1031,7 @@ describe.each(testMatrix())(
 
       const serverHandshakeFailed = vi.fn();
       const serverHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === 'handshake_failed') {
+        if (evt.type === ProtocolError.HandshakeFailed) {
           serverHandshakeFailed();
         }
       };
@@ -1104,7 +1104,7 @@ describe.each(testMatrix())(
 
       const clientHandshakeFailed = vi.fn();
       const clientHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === 'handshake_failed') {
+        if (evt.type === ProtocolError.HandshakeFailed) {
           clientHandshakeFailed();
         }
       };
@@ -1118,7 +1118,7 @@ describe.each(testMatrix())(
         evt: EventMap['protocolError'],
       ) => {
         if (
-          evt.type === 'handshake_failed' &&
+          evt.type === ProtocolError.HandshakeFailed &&
           evt.message.includes('rejected by server')
         ) {
           serverRejectedConnection();
@@ -1203,7 +1203,7 @@ describe.each(testMatrix())(
 
       const clientHandshakeFailed = vi.fn();
       const clientHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === 'handshake_failed') {
+        if (evt.type === ProtocolError.HandshakeFailed) {
           clientHandshakeFailed();
         }
       };
@@ -1217,7 +1217,7 @@ describe.each(testMatrix())(
         evt: EventMap['protocolError'],
       ) => {
         if (
-          evt.type === 'handshake_failed' &&
+          evt.type === ProtocolError.HandshakeFailed &&
           evt.message.includes('rejected by server')
         ) {
           serverRejectedConnection();
