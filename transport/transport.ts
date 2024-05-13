@@ -209,7 +209,6 @@ export abstract class Transport<ConnType extends Connection> {
     // otherwise, this is a new connection from the same user, let's consider
     // the old one as dead and call this connection canonical
     oldSession.replaceWithNewConnection(conn);
-    oldSession.sendBufferedMessages();
     oldSession.advertisedSessionId = advertisedSessionId;
     log?.info(
       `new connection for existing session to ${connectedTo}`,
