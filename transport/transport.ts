@@ -923,7 +923,7 @@ export abstract class ServerTransport<
       conn.send(this.codec.toBuffer(responseMsg));
       // note: do _not_ log the payload, it may contain secrets
       const logData =
-        typeof parsed.payload === 'object' && parsed.payload !== null
+        typeof parsed.payload === 'object'
           ? { ...parsed, payload: { ...parsed.payload, metadata: 'redacted' } }
           : { ...parsed };
       log?.warn(`${reason}: ${JSON.stringify(logData)}`, {
