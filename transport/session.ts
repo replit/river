@@ -251,30 +251,26 @@ export class Session<ConnType extends Connection> {
     this.ack = 0;
   }
 
-  sendBufferedMessages() {
-    if (!this.connection) {
-      const msg = `tried sending buffered messages without a connection (if you hit this code path something is seriously wrong)`;
-      log?.error(msg, this.loggingMetadata);
-      throw new Error(msg);
-    }
-
-    log?.info(
-      `resending ${this.sendBuffer.length} buffered messages`,
-      this.loggingMetadata,
-    );
+  sendBufferedMessages(conn: ConnType) {
+    log?.info(`resending ${this.sendBuffer.length} buffered messages`, {
+      ...this.loggingMetadata,
+      connId: conn.debugId,
+    });
     for (const msg of this.sendBuffer) {
       log?.debug(`resending msg`, {
         ...this.loggingMetadata,
         fullTransportMessage: msg,
+        connId: conn.debugId,
       });
-      const ok = this.connection.send(this.codec.toBuffer(msg));
+      const ok = conn.send(this.codec.toBuffer(msg));
       if (!ok) {
         // this should never happen unless the transport has an
         // incorrect implementation of `createNewOutgoingConnection`
-        const errMsg = `failed to send buffered message to ${this.to} (if you hit this code path something is seriously wrong)`;
+        const errMsg = `failed to send buffered message to ${this.to} (sus, this is a fresh connection)`;
         log?.error(errMsg, {
           ...this.loggingMetadata,
           fullTransportMessage: msg,
+          connId: conn.debugId,
         });
         throw new Error(errMsg);
       }
@@ -308,6 +304,7 @@ export class Session<ConnType extends Connection> {
     this.closeStaleConnection(newConn);
     this.cancelGrace();
     this.connection = newConn;
+    this.sendBufferedMessages(newConn);
   }
 
   beginGrace(cb: () => void) {
