@@ -793,7 +793,7 @@ describe.each(testMatrix())(
 
       const session = serverTransport.sessions.get(clientTransport.clientId);
       assert(session);
-      expect(session.handshakeMetadata).toEqual({ kept: 'kept' });
+      expect(session.metadata).toEqual({ kept: 'kept' });
     });
 
     test('client checks request schema', async () => {
@@ -1164,15 +1164,17 @@ describe.each(testMatrix())(
 
       const get = vi.fn(async () => ({ foo: 'foo' }));
 
-      const parse = vi.fn(async (metadata: unknown, session: unknown) => {
-        if (session) {
-          return false;
-        }
+      const parse = vi.fn(
+        async (metadata: unknown, _session: unknown, isReconnect: boolean) => {
+          if (isReconnect) {
+            return false;
+          }
 
-        // @ts-expect-error - we haven't extended the global type here
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        return { foo: metadata.foo };
-      });
+          // @ts-expect-error - we haven't extended the global type here
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          return { foo: metadata.foo };
+        },
+      );
 
       const opts: TestTransportOptions = {
         client: {

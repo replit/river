@@ -128,7 +128,7 @@ export class Session<ConnType extends Connection> {
    *
    * Will only ever be populated on the server side.
    */
-  handshakeMetadata?: ParsedHandshakeMetadata;
+  metadata?: ParsedHandshakeMetadata;
 
   /**
    * Number of messages we've sent along this session (excluding handshake and acks)

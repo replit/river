@@ -196,50 +196,19 @@ export abstract class Transport<ConnType extends Connection> {
   protected onConnect(
     conn: ConnType,
     connectedTo: TransportClientId,
-    advertisedSessionId: string,
-  ): Session<ConnType> {
+    session: Session<ConnType>,
+    isReconnect: boolean,
+  ) {
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'connect',
       conn,
     });
 
-    // check if the peer we are connected to is actually different by comparing session id
-    let oldSession = this.sessions.get(connectedTo);
-    if (
-      oldSession?.advertisedSessionId &&
-      oldSession.advertisedSessionId !== advertisedSessionId
-    ) {
-      // mismatch, kill the old session and begin a new one
-      log?.warn(
-        `connection from ${connectedTo} is a different session (id: ${advertisedSessionId}, last connected to: ${oldSession.advertisedSessionId}), killing old session and starting a new one`,
-        oldSession.loggingMetadata,
-      );
-      this.deleteSession(oldSession);
-      oldSession = undefined;
+    if (isReconnect) {
+      session.replaceWithNewConnection(conn);
+      session.sendBufferedMessages();
+      log?.info(`reconnected to ${connectedTo}`, session.loggingMetadata);
     }
-
-    // if we don't have an existing session, create a new one and return it
-    if (oldSession === undefined) {
-      const newSession = this.createSession(connectedTo, conn);
-      newSession.advertisedSessionId = advertisedSessionId;
-      log?.info(
-        `new connection for new session to ${connectedTo}`,
-        newSession.loggingMetadata,
-      );
-      return newSession;
-    }
-
-    // otherwise, this is a new connection from the same user, let's consider
-    // the old one as dead and call this connection canonical
-    oldSession.replaceWithNewConnection(conn);
-    oldSession.sendBufferedMessages();
-    oldSession.advertisedSessionId = advertisedSessionId;
-    log?.info(
-      `new connection for existing session to ${connectedTo}`,
-      oldSession.loggingMetadata,
-    );
-
-    return oldSession;
   }
 
   protected createSession(to: TransportClientId, conn?: ConnType) {
@@ -257,8 +226,28 @@ export abstract class Transport<ConnType extends Connection> {
     return session;
   }
 
-  protected getOrCreateSession(to: TransportClientId, conn?: ConnType) {
+  protected getOrCreateSession(
+    to: TransportClientId,
+    conn?: ConnType,
+    sessionId?: string,
+  ) {
     let session = this.sessions.get(to);
+    let isReconnect = session !== undefined;
+
+    if (
+      session?.advertisedSessionId !== undefined &&
+      sessionId !== undefined &&
+      session.advertisedSessionId !== sessionId
+    ) {
+      log?.warn(
+        `session for ${to} already exists but has a different session id (expected: ${session.advertisedSessionId}, got: ${sessionId}), creating a new one`,
+        session.loggingMetadata,
+      );
+      this.deleteSession(session);
+      isReconnect = false;
+      session = undefined;
+    }
+
     if (!session) {
       session = this.createSession(to, conn);
       log?.info(
@@ -267,7 +256,11 @@ export abstract class Transport<ConnType extends Connection> {
       );
     }
 
-    return session;
+    if (sessionId !== undefined) {
+      session.advertisedSessionId = sessionId;
+    }
+
+    return { session, isReconnect };
   }
 
   protected deleteSession(session: Session<ConnType>) {
@@ -429,7 +422,7 @@ export abstract class Transport<ConnType extends Connection> {
       return undefined;
     }
 
-    return this.getOrCreateSession(to).send(msg);
+    return this.getOrCreateSession(to).session.send(msg);
   }
 
   // control helpers
@@ -618,11 +611,14 @@ export abstract class ClientTransport<
       connectedTo: parsed.from,
       fullTransportMessage: parsed,
     });
-    const session = this.onConnect(
-      conn,
+
+    const { session, isReconnect } = this.getOrCreateSession(
       parsed.from,
+      conn,
       parsed.payload.status.sessionId,
     );
+
+    this.onConnect(conn, parsed.from, session, isReconnect);
 
     // After a successful connection, we start restoring the budget
     // so that the next time we try to connect, we don't hit the client
@@ -764,7 +760,7 @@ export abstract class ClientTransport<
       }
     }
 
-    const session = this.getOrCreateSession(to, conn);
+    const { session } = this.getOrCreateSession(to, conn);
     const requestMsg = handshakeRequestMessage(
       this.clientId,
       to,
@@ -954,7 +950,12 @@ export abstract class ServerTransport<
       return false;
     }
 
-    let session = this.sessions.get(parsed.from);
+    const { session, isReconnect } = this.getOrCreateSession(
+      parsed.from,
+      conn,
+      parsed.payload.sessionId,
+    );
+
     let handshakeMetadata: HandshakeRequestMetadata | undefined;
 
     if (this.options.handshake) {
@@ -978,12 +979,14 @@ export abstract class ServerTransport<
           connId: conn.debugId,
         });
         this.protocolError(ProtocolError.HandshakeFailed, reason);
+        this.deleteSession(session);
         return false;
       }
 
       const parsedMetadata = await this.options.handshake.parse(
         parsed.payload.metadata as HandshakeRequestMetadata,
-        session ?? null,
+        session,
+        isReconnect,
       );
 
       // handler rejected the connection
@@ -1000,6 +1003,7 @@ export abstract class ServerTransport<
           connId: conn.debugId,
         });
         this.protocolError(ProtocolError.HandshakeFailed, reason);
+        this.deleteSession(session);
         return false;
       }
 
@@ -1018,14 +1022,15 @@ export abstract class ServerTransport<
           connId: conn.debugId,
         });
         this.protocolError(ProtocolError.HandshakeFailed, reason);
+        this.deleteSession(session);
         return false;
       }
 
       handshakeMetadata = parsedMetadata;
     }
 
-    session ??= this.getOrCreateSession(parsed.from, conn);
     handshakeMetadata ??= {} as HandshakeRequestMetadata;
+    session.metadata = handshakeMetadata;
 
     log?.debug(
       `handshake from ${parsed.from} ok, responding with handshake success`,
@@ -1036,11 +1041,7 @@ export abstract class ServerTransport<
       sessionId: session.id,
     });
     conn.send(this.codec.toBuffer(responseMsg));
-
-    // we may get a different session back, so we need to make sure the metadata
-    // is attached to it
-    session = this.onConnect(conn, parsed.from, parsed.payload.sessionId);
-    session.handshakeMetadata = handshakeMetadata;
+    this.onConnect(conn, parsed.from, session, isReconnect);
 
     return session;
   }

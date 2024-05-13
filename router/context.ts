@@ -38,5 +38,5 @@ export type ServiceContextWithTransportInfo<State> = ServiceContext & {
   to: TransportClientId;
   from: TransportClientId;
   streamId: string;
-  session: Session<Connection> & { handshakeMetadata: ParsedHandshakeMetadata };
+  session: Session<Connection> & { metadata: ParsedHandshakeMetadata };
 };

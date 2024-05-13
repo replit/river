@@ -99,12 +99,14 @@ export interface ServerHandshakeOptions {
    * May return `false` if the client should be rejected.
    *
    * @param metadata - The metadata sent by the client.
-   * @param session - The session this client was already associated with (reconnects),
-   *                  if any.
+   * @param session - The session that the client would be associated with.
+   * @param isReconnect - Whether the client is reconnecting to the session,
+   *                      or if this is a new session.
    */
   parse: (
     metadata: HandshakeRequestMetadata,
-    session: Session<Connection> | null,
+    session: Session<Connection>,
+    isReconnect: boolean,
   ) =>
     | false
     | ParsedHandshakeMetadata
