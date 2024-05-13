@@ -206,7 +206,6 @@ export abstract class Transport<ConnType extends Connection> {
 
     if (isReconnect) {
       session.replaceWithNewConnection(conn);
-      session.sendBufferedMessages();
       log?.info(`reconnected to ${connectedTo}`, session.loggingMetadata);
     }
   }
