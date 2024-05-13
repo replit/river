@@ -1,3 +1,10 @@
+import {
+  Connection,
+  ParsedHandshakeMetadata,
+  Session,
+  TransportClientId,
+} from '../transport';
+
 /**
  * The context for services/procedures. This is used only on
  * the server.
@@ -18,9 +25,6 @@
  * }
  * ```
  */
-
-import { Connection, Session, TransportClientId } from '../transport';
-
 /* eslint-disable-next-line @typescript-eslint/no-empty-interface */
 export interface ServiceContext {}
 
@@ -34,5 +38,5 @@ export type ServiceContextWithTransportInfo<State> = ServiceContext & {
   to: TransportClientId;
   from: TransportClientId;
   streamId: string;
-  session: Session<Connection>;
+  session: Session<Connection> & { metadata: ParsedHandshakeMetadata };
 };

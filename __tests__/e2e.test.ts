@@ -22,20 +22,22 @@ import {
   NonObjectSchemas,
   SchemaWithDisposableState,
 } from './fixtures/services';
-import { UNCAUGHT_ERROR } from '../router/result';
+import { Ok, UNCAUGHT_ERROR } from '../router/result';
 import {
   advanceFakeTimersBySessionGrace,
   testFinishesCleanly,
   waitFor,
 } from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
+import { Type } from '@sinclair/typebox';
+import { Procedure, ServiceSchema } from '../router';
 
 describe.each(testMatrix())(
   'client <-> server integration test ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
     const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup(opts);
+      await transport.setup({ client: opts, server: opts });
     afterAll(cleanup);
 
     test('rpc', async () => {
@@ -652,6 +654,89 @@ describe.each(testMatrix())(
       // test
       await server.close();
       expect(dispose).toBeCalledTimes(1);
+    });
+  },
+);
+
+describe.each(testMatrix())(
+  'client <-> server with handshake tests ($transport.name transport, $codec.name codec)',
+  async ({ transport, codec }) => {
+    const requestSchema = Type.Object({
+      data: Type.String(),
+    });
+
+    const parsedSchema = Type.Object({
+      data: Type.String(),
+      extra: Type.Number(),
+    });
+
+    const { getClientTransport, getServerTransport, cleanup } =
+      await transport.setup({
+        client: {
+          codec: codec.codec,
+          handshake: {
+            schema: requestSchema,
+            get: () => ({ data: 'foobar' }),
+          },
+        },
+
+        server: {
+          codec: codec.codec,
+          handshake: {
+            requestSchema,
+            parsedSchema,
+            parse: (metadata) => {
+              return {
+                // @ts-expect-error we haven't extended the interface
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                data: metadata.data,
+                extra: 42,
+              };
+            },
+          },
+        },
+      });
+
+    afterAll(cleanup);
+
+    test('procedure can use metadata', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = {
+        test: ServiceSchema.define({
+          getData: Procedure.rpc({
+            input: Type.Object({}),
+            output: Type.Object({
+              data: Type.String(),
+              extra: Type.Number(),
+            }),
+            handler: async (ctx) => {
+              // we haven't extended the interface, so we need to suppress the error
+              // with a cast
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              return Ok({ ...ctx.session.metadata } as any);
+            },
+          }),
+        }),
+      };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+
+      // test
+      const result = await client.test.getData.rpc({});
+      assert(result.ok);
+      expect(result.payload).toStrictEqual({ data: 'foobar', extra: 42 });
     });
   },
 );

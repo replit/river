@@ -262,6 +262,15 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       );
     };
 
+    // by this point, our sessions should always have their handshake metadata
+    if (session.metadata === undefined) {
+      log?.error(
+        `(invariant violation) session doesn't have handshake metadata`,
+        session.loggingMetadata,
+      );
+      return;
+    }
+
     // pump incoming message stream -> handler -> outgoing message stream
     let inputHandler: Promise<unknown>;
     const procHasInitMessage = 'init' in procedure;
@@ -271,7 +280,8 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
         to: message.to,
         from: message.from,
         streamId: message.streamId,
-        session,
+        // we've already validated that the session has handshake metadata
+        session: session as ServiceContextWithTransportInfo<object>['session'],
       };
 
     switch (procedure.type) {

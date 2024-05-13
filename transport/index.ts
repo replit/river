@@ -2,6 +2,7 @@ export { Transport, ClientTransport, ServerTransport } from './transport';
 export type {
   ProvidedTransportOptions as TransportOptions,
   ProvidedClientTransportOptions as ClientTransportOptions,
+  ProvidedServerTransportOptions as ServerTransportOptions,
   TransportStatus,
 } from './transport';
 export { Connection, Session } from './session';
@@ -13,6 +14,10 @@ export type {
   TransportMessage,
   OpaqueTransportMessage,
   TransportClientId,
+  HandshakeRequestMetadata,
+  ParsedHandshakeMetadata,
+  ClientHandshakeOptions,
+  ServerHandshakeOptions,
   isStreamOpen,
   isStreamClose,
 } from './message';

@@ -1,5 +1,6 @@
 import { Type, TSchema, Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
+import { Connection, Session } from './session';
 
 /**
  * Control flags for transport messages.
@@ -12,6 +13,104 @@ export const enum ControlFlags {
   AckBit = 0b0001,
   StreamOpenBit = 0b0010,
   StreamClosedBit = 0b0100,
+}
+
+/**
+ * Metadata associated with a handshake request, as sent by the client.
+ *
+ * You should use declaration merging to extend this interface
+ * with whatever you need. For example, if you need to store an
+ * identifier for the client, you could do:
+ * ```
+ * declare module '@replit/river' {
+ *   interface HandshakeMetadataClient {
+ *     id: string;
+ *   }
+ * }
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface HandshakeRequestMetadata {}
+
+/**
+ * Metadata associated with a handshake response, after the server
+ * has processed the data in {@link HandshakeRequestMetadata}. This
+ * is a separate interface for multiple reasons, but one of the main
+ * ones is that the server should remove any sensitive data from the
+ * client's request metadata before storing it in the session, that
+ * way no secrets are persisted in memory.
+ *
+ * You should use declaration merging to extend this interface
+ * with whatever you need. For example, if you need to store an
+ * identifier for the client, you could do:
+ * ```
+ * declare module '@replit/river' {
+ *   interface HandshakeMetadataServer {
+ *     id: string;
+ *   }
+ * }
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface ParsedHandshakeMetadata {}
+
+/**
+ * Options for extending the client handshake process.
+ */
+export interface ClientHandshakeOptions {
+  /**
+   * Schema for the metadata that the client sends to the server
+   * during the handshake.
+   *
+   * Needs to match {@link HandshakeRequestMetadata}.
+   */
+  schema: TSchema;
+
+  /**
+   * Gets the {@link HandshakeRequestMetadata} to send to the server.
+   */
+  get: () => HandshakeRequestMetadata | Promise<HandshakeRequestMetadata>;
+}
+
+/**
+ * Options for extending the server handshake process.
+ */
+export interface ServerHandshakeOptions {
+  /**
+   * Schema for the metadata that the server receives from the client
+   * during the handshake.
+   *
+   * Needs to match {@link HandshakeRequestMetadata}.
+   */
+  requestSchema: TSchema;
+
+  /**
+   * Schema for the transformed metadata that is then associated with the
+   * client's session.
+   *
+   * Needs to match {@link ParsedHandshakeMetadata}.
+   */
+  parsedSchema: TSchema;
+
+  /**
+   * Parses the {@link HandshakeRequestMetadata} sent by the client, transforming
+   * it into {@link ParsedHandshakeMetadata}.
+   *
+   * May return `false` if the client should be rejected.
+   *
+   * @param metadata - The metadata sent by the client.
+   * @param session - The session that the client would be associated with.
+   * @param isReconnect - Whether the client is reconnecting to the session,
+   *                      or if this is a new session.
+   */
+  parse: (
+    metadata: HandshakeRequestMetadata,
+    session: Session<Connection>,
+    isReconnect: boolean,
+  ) =>
+    | false
+    | ParsedHandshakeMetadata
+    | Promise<false | ParsedHandshakeMetadata>;
 }
 
 /**
@@ -56,6 +155,7 @@ export const ControlMessageHandshakeRequestSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_REQ'),
   protocolVersion: Type.String(),
   sessionId: Type.String(),
+  metadata: Type.Optional(Type.Unknown()),
 });
 
 export const ControlMessageHandshakeResponseSchema = Type.Object({
@@ -125,6 +225,7 @@ export function handshakeRequestMessage(
   from: TransportClientId,
   to: TransportClientId,
   sessionId: string,
+  metadata?: HandshakeRequestMetadata,
 ): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {
   return {
     id: nanoid(),
@@ -138,6 +239,7 @@ export function handshakeRequestMessage(
       type: 'HANDSHAKE_REQ',
       protocolVersion: PROTOCOL_VERSION,
       sessionId,
+      metadata,
     } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
   };
 }

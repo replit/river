@@ -27,7 +27,7 @@ describe.each(testMatrix())(
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
     const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup(opts);
+      await transport.setup({ client: opts, server: opts });
     afterAll(cleanup);
 
     test('rpc', async () => {
