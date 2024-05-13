@@ -1,9 +1,8 @@
 import {
-  Connection,
   ParsedHandshakeMetadata,
-  Session,
   TransportClientId,
-} from '../transport';
+} from '../transport/message';
+import { Connection, Session } from '../transport/session';
 
 /**
  * The context for services/procedures. This is used only on
