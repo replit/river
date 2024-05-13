@@ -265,7 +265,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     // by this point, our sessions should always have their handshake metadata
     if (session.metadata === undefined) {
       log?.error(
-        `session ${message.from} doesn't have handshake metadata, can't proceed with procedure`,
+        `(invariant violation) session doesn't have handshake metadata`,
         session.loggingMetadata,
       );
       return;
