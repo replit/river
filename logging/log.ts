@@ -84,6 +84,9 @@ export const jsonLogger: LogFn = (msg, ctx, level) => {
 };
 
 export let log: Logger | undefined = undefined;
+
+export function bindLogger(fn: undefined, level?: LoggingLevel): undefined;
+export function bindLogger(fn: LogFn | Logger, level?: LoggingLevel): Logger;
 export function bindLogger(
   fn: LogFn | Logger | undefined,
   level?: LoggingLevel,
