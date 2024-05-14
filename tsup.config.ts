@@ -13,7 +13,7 @@ export default defineConfig({
     'transport/impls/uds/server.ts',
   ],
   format: ['esm', 'cjs'],
-  sourcemap: false,
+  sourcemap: true,
   clean: true,
   dts: true,
   noExternal: ['it-pushable'],
