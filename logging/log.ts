@@ -15,7 +15,7 @@ export type LogFn = (
   level?: LoggingLevel,
 ) => void;
 export type Logger = {
-  [key in LoggingLevel]: LogFn;
+  [key in LoggingLevel]: (msg: string, metadata?: MessageMetadata) => void;
 };
 
 export type MessageMetadata = Record<string, unknown> &
@@ -84,15 +84,13 @@ export const jsonLogger: LogFn = (msg, ctx, level) => {
 };
 
 export let log: Logger | undefined = undefined;
+
+export function bindLogger(fn: undefined, level?: LoggingLevel): undefined;
+export function bindLogger(fn: LogFn | Logger, level?: LoggingLevel): Logger;
 export function bindLogger(
   fn: LogFn | Logger | undefined,
   level?: LoggingLevel,
 ): Logger | undefined {
-  if (!fn) {
-    log = undefined;
-    return;
-  }
-
   if (typeof fn === 'function') {
     log = new BaseLogger(fn, level);
     return log;
