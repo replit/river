@@ -25,6 +25,8 @@ import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { log } from '../logging/log';
+import { createProcSpan } from '../tracing';
+import { SpanStatusCode } from '@opentelemetry/api';
 
 // helper to make next, yield, and return all the same type
 export type AsyncIter<T> = AsyncGenerator<T, T>;
@@ -255,11 +257,18 @@ function handleRpc(
   procedureName: string,
 ) {
   const streamId = nanoid();
+  const [span, tracing] = createProcSpan(
+    'rpc',
+    serviceName,
+    procedureName,
+    streamId,
+  );
   transport.send(serverId, {
     streamId,
     serviceName,
     procedureName,
     payload: input,
+    tracing,
     controlFlags: ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit,
   });
 
@@ -279,6 +288,7 @@ function handleRpc(
     function cleanup() {
       transport.removeEventListener('message', onMessage);
       transport.removeEventListener('sessionStatus', onSessionStatus);
+      span.end();
     }
 
     function onMessage(msg: OpaqueTransportMessage) {
@@ -304,6 +314,12 @@ function handleStream(
   procedureName: string,
 ) {
   const streamId = nanoid();
+  const [span, tracing] = createProcSpan(
+    'stream',
+    serviceName,
+    procedureName,
+    streamId,
+  );
   const inputStream = pushable({ objectMode: true });
   const outputStream = pushable({ objectMode: true });
   let firstMessage = true;
@@ -315,6 +331,7 @@ function handleStream(
       serviceName,
       procedureName,
       payload: init,
+      tracing,
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
@@ -334,6 +351,7 @@ function handleStream(
       if (firstMessage) {
         m.serviceName = serviceName;
         m.procedureName = procedureName;
+        m.tracing = tracing;
         m.controlFlags |= ControlFlags.StreamOpenBit;
         firstMessage = false;
       }
@@ -365,6 +383,7 @@ function handleStream(
     outputStream.end();
     transport.removeEventListener('message', onMessage);
     transport.removeEventListener('sessionStatus', onSessionStatus);
+    span.end();
   }
 
   // close stream after disconnect + grace period elapses
@@ -392,11 +411,19 @@ function handleSubscribe(
   procedureName: string,
 ) {
   const streamId = nanoid();
+  const [span, tracing] = createProcSpan(
+    'subscription',
+    serviceName,
+    procedureName,
+    streamId,
+  );
+
   transport.send(serverId, {
     streamId,
     serviceName,
     procedureName,
     payload: input,
+    tracing,
     controlFlags: ControlFlags.StreamOpenBit,
   });
 
@@ -419,6 +446,7 @@ function handleSubscribe(
     outputStream.end();
     transport.removeEventListener('message', onMessage);
     transport.removeEventListener('sessionStatus', onSessionStatus);
+    span.end();
   }
 
   const closeHandler = () => {
@@ -452,6 +480,12 @@ function handleUpload(
   procedureName: string,
 ) {
   const streamId = nanoid();
+  const [span, tracing] = createProcSpan(
+    'upload',
+    serviceName,
+    procedureName,
+    streamId,
+  );
   const inputStream = pushable({ objectMode: true });
   let firstMessage = true;
   let healthyClose = true;
@@ -462,6 +496,7 @@ function handleUpload(
       serviceName,
       procedureName,
       payload: init,
+      tracing,
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
@@ -481,6 +516,7 @@ function handleUpload(
       if (firstMessage) {
         m.serviceName = serviceName;
         m.procedureName = procedureName;
+        m.tracing = tracing;
         m.controlFlags |= ControlFlags.StreamOpenBit;
         firstMessage = false;
       }
@@ -513,6 +549,7 @@ function handleUpload(
       inputStream.end();
       transport.removeEventListener('message', onMessage);
       transport.removeEventListener('sessionStatus', onSessionStatus);
+      span.end();
     }
 
     function onMessage(msg: OpaqueTransportMessage) {

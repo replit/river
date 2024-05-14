@@ -33,6 +33,8 @@ import {
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { coerceErrorString } from '../util/stringify';
+import { Span, SpanStatusCode } from '@opentelemetry/api';
+import { createHandlerSpan } from '../tracing';
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -251,13 +253,15 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
             }
           })();
 
-    const errorHandler = (err: unknown) => {
+    const errorHandler = (err: unknown, span: Span) => {
       const errorMsg = coerceErrorString(err);
       log?.error(
         `procedure ${message.serviceName}.${message.procedureName} threw an uncaught error: ${errorMsg}`,
         session.loggingMetadata,
       );
 
+      span.recordException(err instanceof Error ? err : new Error(errorMsg));
+      span.setStatus({ code: SpanStatusCode.ERROR });
       outgoing.push(
         Err({
           code: UNCAUGHT_ERROR,
@@ -290,36 +294,94 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
 
     switch (procedure.type) {
       case 'rpc':
-        inputHandler = (async () => {
-          const inputMessage = await incoming.next();
-          if (inputMessage.done) {
-            return;
-          }
-
-          try {
-            const outputMessage = await procedure.handler(
-              serviceContextWithTransportInfo,
-              inputMessage.value,
-            );
-            outgoing.push(outputMessage);
-          } catch (err) {
-            errorHandler(err);
-          }
-        })();
+        inputHandler = createHandlerSpan(
+          procedure.type,
+          message,
+          async (span) => {
+            const inputMessage = await incoming.next();
+            if (inputMessage.done) {
+              return;
+            }
+            try {
+              const outputMessage = await procedure.handler(
+                serviceContextWithTransportInfo,
+                inputMessage.value,
+              );
+              outgoing.push(outputMessage);
+            } catch (err) {
+              errorHandler(err, span);
+            } finally {
+              span.end();
+            }
+          },
+        );
         break;
       case 'stream':
         if (procHasInitMessage) {
-          inputHandler = (async () => {
-            const initMessage = await incoming.next();
-            if (initMessage.done) {
+          inputHandler = createHandlerSpan(
+            procedure.type,
+            message,
+            async (span) => {
+              const initMessage = await incoming.next();
+              if (initMessage.done) {
+                return;
+              }
+
+              try {
+                const dispose = await procedure.handler(
+                  serviceContextWithTransportInfo,
+                  initMessage.value,
+                  incoming,
+                  outgoing,
+                );
+
+                if (dispose) {
+                  disposables.push(dispose);
+                }
+              } catch (err) {
+                errorHandler(err, span);
+              } finally {
+                span.end();
+              }
+            },
+          );
+        } else {
+          inputHandler = createHandlerSpan(
+            procedure.type,
+            message,
+            async (span) => {
+              try {
+                const dispose = await procedure.handler(
+                  serviceContextWithTransportInfo,
+                  incoming,
+                  outgoing,
+                );
+                if (dispose) {
+                  disposables.push(dispose);
+                }
+              } catch (err) {
+                errorHandler(err, span);
+              } finally {
+                span.end();
+              }
+            },
+          );
+        }
+        break;
+      case 'subscription':
+        inputHandler = createHandlerSpan(
+          procedure.type,
+          message,
+          async (span) => {
+            const inputMessage = await incoming.next();
+            if (inputMessage.done) {
               return;
             }
 
             try {
               const dispose = await procedure.handler(
                 serviceContextWithTransportInfo,
-                initMessage.value,
-                incoming,
+                inputMessage.value,
                 outgoing,
               );
 
@@ -327,74 +389,63 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
                 disposables.push(dispose);
               }
             } catch (err) {
-              errorHandler(err);
+              errorHandler(err, span);
+            } finally {
+              span.end();
             }
-          })();
-        } else {
-          inputHandler = procedure
-            .handler(serviceContextWithTransportInfo, incoming, outgoing)
-            .catch(errorHandler);
-        }
-        break;
-      case 'subscription':
-        inputHandler = (async () => {
-          const inputMessage = await incoming.next();
-          if (inputMessage.done) {
-            return;
-          }
-
-          try {
-            const dispose = await procedure.handler(
-              serviceContextWithTransportInfo,
-              inputMessage.value,
-              outgoing,
-            );
-
-            if (dispose) {
-              disposables.push(dispose);
-            }
-          } catch (err) {
-            errorHandler(err);
-          }
-        })();
+          },
+        );
         break;
       case 'upload':
         if (procHasInitMessage) {
-          inputHandler = (async () => {
-            const initMessage = await incoming.next();
-            if (initMessage.done) {
-              return;
-            }
-            try {
-              const outputMessage = await procedure.handler(
-                serviceContextWithTransportInfo,
-                initMessage.value,
-                incoming,
-              );
-
-              if (!this.disconnectedSessions.has(message.from)) {
-                outgoing.push(outputMessage);
+          inputHandler = createHandlerSpan(
+            procedure.type,
+            message,
+            async (span) => {
+              const initMessage = await incoming.next();
+              if (initMessage.done) {
+                return;
               }
-            } catch (err) {
-              errorHandler(err);
-            }
-          })();
+              try {
+                const outputMessage = await procedure.handler(
+                  serviceContextWithTransportInfo,
+                  initMessage.value,
+                  incoming,
+                );
+
+                if (!this.disconnectedSessions.has(message.from)) {
+                  outgoing.push(outputMessage);
+                }
+              } catch (err) {
+                errorHandler(err, span);
+              } finally {
+                span.end();
+              }
+            },
+          );
         } else {
-          inputHandler = (async () => {
-            try {
-              const outputMessage = await procedure.handler(
-                serviceContextWithTransportInfo,
-                incoming,
-              );
+          inputHandler = createHandlerSpan(
+            procedure.type,
+            message,
+            async (span) => {
+              try {
+                const outputMessage = await procedure.handler(
+                  serviceContextWithTransportInfo,
+                  incoming,
+                );
 
-              if (!this.disconnectedSessions.has(message.from)) {
-                outgoing.push(outputMessage);
+                if (!this.disconnectedSessions.has(message.from)) {
+                  outgoing.push(outputMessage);
+                }
+              } catch (err) {
+                errorHandler(err, span);
+              } finally {
+                span.end();
               }
-            } catch (err) {
-              errorHandler(err);
-            }
-          })();
+            },
+          );
         }
+
         break;
       default:
         // procedure is inferred to be never here as this is not a valid procedure type

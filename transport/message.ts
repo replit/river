@@ -1,6 +1,7 @@
 import { Type, TSchema, Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import { Connection, Session } from './session';
+import { PropagationContext } from '../tracing';
 
 /**
  * Control flags for transport messages.
@@ -130,6 +131,12 @@ export const TransportMessageSchema = <T extends TSchema>(t: T) =>
     procedureName: Type.Optional(Type.String()),
     streamId: Type.String(),
     controlFlags: Type.Integer(),
+    tracing: Type.Optional(
+      Type.Object({
+        traceparent: Type.String(),
+        tracestate: Type.Optional(Type.String()),
+      }),
+    ),
     payload: t,
   });
 
@@ -213,6 +220,7 @@ export interface TransportMessage<Payload = unknown> {
   procedureName?: string;
   streamId: string;
   controlFlags: number;
+  tracing?: PropagationContext;
   payload: Payload;
 }
 
