@@ -25,8 +25,7 @@ import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { log } from '../logging/log';
-import { createProcSpan } from '../tracing';
-import { SpanStatusCode } from '@opentelemetry/api';
+import { createProcTelemetryInfo, getPropagationContext } from '../tracing';
 
 // helper to make next, yield, and return all the same type
 export type AsyncIter<T> = AsyncGenerator<T, T>;
@@ -257,7 +256,7 @@ function handleRpc(
   procedureName: string,
 ) {
   const streamId = nanoid();
-  const [span, tracing] = createProcSpan(
+  const { span, ctx } = createProcTelemetryInfo(
     'rpc',
     serviceName,
     procedureName,
@@ -268,7 +267,7 @@ function handleRpc(
     serviceName,
     procedureName,
     payload: input,
-    tracing,
+    tracing: getPropagationContext(ctx),
     controlFlags: ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit,
   });
 
@@ -314,7 +313,7 @@ function handleStream(
   procedureName: string,
 ) {
   const streamId = nanoid();
-  const [span, tracing] = createProcSpan(
+  const { span, ctx } = createProcTelemetryInfo(
     'stream',
     serviceName,
     procedureName,
@@ -331,7 +330,7 @@ function handleStream(
       serviceName,
       procedureName,
       payload: init,
-      tracing,
+      tracing: getPropagationContext(ctx),
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
@@ -351,7 +350,7 @@ function handleStream(
       if (firstMessage) {
         m.serviceName = serviceName;
         m.procedureName = procedureName;
-        m.tracing = tracing;
+        m.tracing = getPropagationContext(ctx);
         m.controlFlags |= ControlFlags.StreamOpenBit;
         firstMessage = false;
       }
@@ -411,7 +410,7 @@ function handleSubscribe(
   procedureName: string,
 ) {
   const streamId = nanoid();
-  const [span, tracing] = createProcSpan(
+  const { span, ctx } = createProcTelemetryInfo(
     'subscription',
     serviceName,
     procedureName,
@@ -423,7 +422,7 @@ function handleSubscribe(
     serviceName,
     procedureName,
     payload: input,
-    tracing,
+    tracing: getPropagationContext(ctx),
     controlFlags: ControlFlags.StreamOpenBit,
   });
 
@@ -480,7 +479,7 @@ function handleUpload(
   procedureName: string,
 ) {
   const streamId = nanoid();
-  const [span, tracing] = createProcSpan(
+  const { span, ctx } = createProcTelemetryInfo(
     'upload',
     serviceName,
     procedureName,
@@ -496,7 +495,7 @@ function handleUpload(
       serviceName,
       procedureName,
       payload: init,
-      tracing,
+      tracing: getPropagationContext(ctx),
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
@@ -516,7 +515,7 @@ function handleUpload(
       if (firstMessage) {
         m.serviceName = serviceName;
         m.procedureName = procedureName;
-        m.tracing = tracing;
+        m.tracing = getPropagationContext(ctx);
         m.controlFlags |= ControlFlags.StreamOpenBit;
         firstMessage = false;
       }

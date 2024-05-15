@@ -30,6 +30,11 @@ import { Static } from '@sinclair/typebox';
 import { coerceErrorString } from '../util/stringify';
 import { ConnectionRetryOptions, LeakyBucketRateLimit } from './rateLimit';
 import { NaiveJsonCodec } from '../codec';
+import {
+  PropagationContext,
+  createConnectionTelemetryInfo,
+  getPropagationContext,
+} from '../tracing';
 
 /**
  * Represents the possible states of a transport.
@@ -204,18 +209,28 @@ export abstract class Transport<ConnType extends Connection> {
       conn,
     });
 
+    conn.telemetry = createConnectionTelemetryInfo(
+      conn,
+      session.telemetry.span,
+    );
+
     if (isReconnect) {
       session.replaceWithNewConnection(conn);
       log?.info(`reconnected to ${connectedTo}`, session.loggingMetadata);
     }
   }
 
-  protected createSession(to: TransportClientId, conn?: ConnType) {
+  protected createSession(
+    to: TransportClientId,
+    conn?: ConnType,
+    propagationCtx?: PropagationContext,
+  ) {
     const session = new Session<ConnType>(
       conn,
       this.clientId,
       to,
       this.options,
+      propagationCtx,
     );
     this.sessions.set(session.to, session);
     this.eventDispatcher.dispatchEvent('sessionStatus', {
@@ -229,6 +244,7 @@ export abstract class Transport<ConnType extends Connection> {
     to: TransportClientId,
     conn?: ConnType,
     sessionId?: string,
+    propagationCtx?: PropagationContext,
   ) {
     let session = this.sessions.get(to);
     let isReconnect = session !== undefined;
@@ -248,7 +264,7 @@ export abstract class Transport<ConnType extends Connection> {
     }
 
     if (!session) {
-      session = this.createSession(to, conn);
+      session = this.createSession(to, conn, propagationCtx);
       log?.info(
         `no session for ${to}, created a new one`,
         session.loggingMetadata,
@@ -264,6 +280,7 @@ export abstract class Transport<ConnType extends Connection> {
 
   protected deleteSession(session: Session<ConnType>) {
     session.close();
+    session.telemetry.span.end();
     this.sessions.delete(session.to);
     log?.info(
       `session ${session.id} disconnect from ${session.to}`,
@@ -281,6 +298,7 @@ export abstract class Transport<ConnType extends Connection> {
    * @param connectedTo The peer we are connected to.
    */
   protected onDisconnect(conn: ConnType, session: Session<ConnType>) {
+    conn.telemetry?.span.end();
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'disconnect',
       conn,
@@ -515,7 +533,7 @@ export abstract class ClientTransport<
       if (!session) {
         log?.warn(
           `connection to ${to} timed out waiting for handshake, closing`,
-          { clientId: this.clientId, connectedTo: to, connId: conn.debugId },
+          { clientId: this.clientId, connectedTo: to, connId: conn.id },
         );
         conn.close();
       }
@@ -691,7 +709,7 @@ export abstract class ClientTransport<
               {
                 clientId: this.clientId,
                 connectedTo: to,
-                connId: conn.debugId,
+                connId: conn.id,
               },
             );
             conn.close();
@@ -769,6 +787,7 @@ export abstract class ClientTransport<
       to,
       session.id,
       metadata,
+      getPropagationContext(session.telemetry.ctx),
     );
     log?.debug(`sending handshake request to ${to}`, {
       clientId: this.clientId,
@@ -812,7 +831,7 @@ export abstract class ServerTransport<
 
     log?.info(`new incoming connection`, {
       clientId: this.clientId,
-      connId: conn.debugId,
+      connId: conn.id,
     });
 
     let session: Session<ConnType> | undefined = undefined;
@@ -826,7 +845,7 @@ export abstract class ServerTransport<
           {
             clientId: this.clientId,
             connectedTo: client(),
-            connId: conn.debugId,
+            connId: conn.id,
           },
         );
         conn.close();
@@ -886,7 +905,7 @@ export abstract class ServerTransport<
       if (!session) return;
       log?.info(`connection to ${client()} disconnected`, {
         clientId: this.clientId,
-        connId: conn.debugId,
+        connId: conn.id,
       });
       this.onDisconnect(conn, session);
     });
@@ -895,7 +914,7 @@ export abstract class ServerTransport<
       if (!session) return;
       log?.warn(
         `connection to ${client()} got an error: ${coerceErrorString(err)}`,
-        { clientId: this.clientId, connId: conn.debugId },
+        { clientId: this.clientId, connId: conn.id },
       );
     });
   }
@@ -927,7 +946,7 @@ export abstract class ServerTransport<
           : { ...parsed };
       log?.warn(`${reason}: ${JSON.stringify(logData)}`, {
         clientId: this.clientId,
-        connId: conn.debugId,
+        connId: conn.id,
       });
       this.protocolError(
         ProtocolError.HandshakeFailed,
@@ -947,7 +966,7 @@ export abstract class ServerTransport<
       conn.send(this.codec.toBuffer(responseMsg));
       log?.warn(
         `received handshake msg with incompatible protocol version (got: ${gotVersion}, expected: ${PROTOCOL_VERSION})`,
-        { clientId: this.clientId, connId: conn.debugId },
+        { clientId: this.clientId, connId: conn.id },
       );
       this.protocolError(ProtocolError.HandshakeFailed, reason);
       return false;
@@ -957,6 +976,7 @@ export abstract class ServerTransport<
       parsed.from,
       conn,
       parsed.payload.sessionId,
+      parsed.tracing,
     );
 
     let handshakeMetadata: HandshakeRequestMetadata | undefined;
@@ -979,7 +999,7 @@ export abstract class ServerTransport<
         // note: do _not_ log the metadata, it may contain secrets
         log?.warn(`received malformed handshake metadata from ${parsed.from}`, {
           clientId: this.clientId,
-          connId: conn.debugId,
+          connId: conn.id,
         });
         this.protocolError(ProtocolError.HandshakeFailed, reason);
         this.deleteSession(session);
@@ -1003,7 +1023,7 @@ export abstract class ServerTransport<
         conn.send(this.codec.toBuffer(responseMsg));
         log?.warn(`rejected handshake from ${parsed.from}`, {
           clientId: this.clientId,
-          connId: conn.debugId,
+          connId: conn.id,
         });
         this.protocolError(ProtocolError.HandshakeFailed, reason);
         this.deleteSession(session);
@@ -1022,7 +1042,7 @@ export abstract class ServerTransport<
         // note: do _not_ log the metadata, it may contain secrets
         log?.error(`failed to parse handshake metadata`, {
           clientId: this.clientId,
-          connId: conn.debugId,
+          connId: conn.id,
         });
         this.protocolError(ProtocolError.HandshakeFailed, reason);
         this.deleteSession(session);
@@ -1037,7 +1057,7 @@ export abstract class ServerTransport<
 
     log?.debug(
       `handshake from ${parsed.from} ok, responding with handshake success`,
-      { clientId: this.clientId, connId: conn.debugId },
+      { clientId: this.clientId, connId: conn.id },
     );
     const responseMsg = handshakeResponseMessage(this.clientId, parsed.from, {
       ok: true,

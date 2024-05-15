@@ -8,28 +8,39 @@ import {
 } from '@opentelemetry/api';
 import { version as RIVER_VERSION } from '../package.json';
 import { ValidProcType } from '../router';
-import { OpaqueTransportMessage } from '../transport';
-
-// trace hierarchy
-// sessions -> connections -> this is an independent set of spans
-// procedures == streams -> parent for most things
+import { Connection, OpaqueTransportMessage, Session } from '../transport';
 
 export interface PropagationContext {
   traceparent: string;
   tracestate: string;
 }
 
-export function createProcSpan(
+export interface TelemetryInfo {
+  span: Span;
+  ctx: Context;
+}
+
+export function getPropagationContext(
+  ctx: Context,
+): PropagationContext | undefined {
+  const tracing = {
+    traceparent: '',
+    tracestate: '',
+  };
+  propagation.inject(ctx, tracing);
+  return tracing;
+}
+
+export function createProcTelemetryInfo(
   kind: ValidProcType,
   serviceName: string,
   procedureName: string,
   streamId: string,
-  ctx?: Context,
-): [Span, PropagationContext] {
-  const tracing = { traceparent: '', tracestate: '' };
-  propagation.inject(ctx ?? context.active(), tracing);
-  return [
-    tracer.startSpan(`${serviceName}.${procedureName}`, {
+): TelemetryInfo {
+  const ctx = context.active();
+  const span = tracer.startSpan(
+    `procedure call ${serviceName}.${procedureName}`,
+    {
       attributes: {
         component: 'river',
         'river.method.kind': kind,
@@ -39,9 +50,55 @@ export function createProcSpan(
         'span.kind': 'client',
       },
       kind: SpanKind.CLIENT,
-    }),
-    tracing,
-  ];
+    },
+    ctx,
+  );
+
+  return { span, ctx };
+}
+
+export function createSessionTelemetryInfo(
+  session: Session<Connection>,
+  propagationCtx?: PropagationContext,
+): TelemetryInfo {
+  const ctx = propagationCtx
+    ? propagation.extract(context.active(), propagationCtx)
+    : context.active();
+
+  const span = tracer.startSpan(
+    `session ${session.id}`,
+    {
+      attributes: {
+        component: 'river',
+        'river.session.id': session.id,
+        'river.session.to': session.to,
+        'river.session.from': session.from,
+      },
+    },
+    ctx,
+  );
+
+  return { span, ctx };
+}
+
+export function createConnectionTelemetryInfo(
+  connection: Connection,
+  sessionSpan: Span,
+): TelemetryInfo {
+  const ctx = trace.setSpan(context.active(), sessionSpan);
+  const span = tracer.startSpan(
+    `connection ${connection.id}`,
+    {
+      attributes: {
+        component: 'river',
+        'river.connection.id': connection.id,
+      },
+      links: [{ context: sessionSpan.spanContext() }],
+    },
+    ctx,
+  );
+
+  return { span, ctx };
 }
 
 export function createHandlerSpan(
@@ -49,12 +106,12 @@ export function createHandlerSpan(
   message: OpaqueTransportMessage,
   fn: (span: Span) => Promise<unknown>,
 ) {
-  const tracingContext = message.tracing
+  const ctx = message.tracing
     ? propagation.extract(context.active(), message.tracing)
     : context.active();
 
   return tracer.startActiveSpan(
-    `${message.serviceName}.${message.procedureName}`,
+    `procedure handler ${message.serviceName}.${message.procedureName}`,
     {
       attributes: {
         component: 'river',
@@ -66,7 +123,7 @@ export function createHandlerSpan(
       },
       kind: SpanKind.SERVER,
     },
-    tracingContext,
+    ctx,
     fn,
   );
 }

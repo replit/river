@@ -134,7 +134,7 @@ export const TransportMessageSchema = <T extends TSchema>(t: T) =>
     tracing: Type.Optional(
       Type.Object({
         traceparent: Type.String(),
-        tracestate: Type.Optional(Type.String()),
+        tracestate: Type.String(),
       }),
     ),
     payload: t,
@@ -234,6 +234,7 @@ export function handshakeRequestMessage(
   to: TransportClientId,
   sessionId: string,
   metadata?: HandshakeRequestMetadata,
+  tracing?: PropagationContext,
 ): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {
   return {
     id: nanoid(),
@@ -243,6 +244,7 @@ export function handshakeRequestMessage(
     ack: 0,
     streamId: nanoid(),
     controlFlags: 0,
+    tracing,
     payload: {
       type: 'HANDSHAKE_REQ',
       protocolVersion: PROTOCOL_VERSION,

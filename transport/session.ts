@@ -11,6 +11,11 @@ import {
 import { Codec } from '../codec';
 import { MessageMetadata, log } from '../logging/log';
 import { Static } from '@sinclair/typebox';
+import {
+  PropagationContext,
+  TelemetryInfo,
+  createSessionTelemetryInfo,
+} from '../tracing';
 
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvxyz', 6);
 export const unsafeId = () => nanoid();
@@ -24,9 +29,10 @@ type SequenceNumber = number;
  * It’s tied to the lifecycle of the underlying transport connection (i.e. if the WS drops, this connection should be deleted)
  */
 export abstract class Connection {
-  debugId: string;
+  id: string;
+  telemetry?: TelemetryInfo;
   constructor() {
-    this.debugId = `conn-${unsafeId()}`; // for debugging, no collision safety needed
+    this.id = `conn-${nanoid(12)}`; // for debugging, no collision safety needed
   }
 
   /**
@@ -99,6 +105,7 @@ export interface SessionOptions {
 export class Session<ConnType extends Connection> {
   private codec: Codec;
   private options: SessionOptions;
+  telemetry: TelemetryInfo;
 
   /**
    * The buffer of messages that have been sent but not yet acknowledged.
@@ -161,6 +168,7 @@ export class Session<ConnType extends Connection> {
     from: TransportClientId,
     to: TransportClientId,
     options: SessionOptions,
+    propagationCtx?: PropagationContext,
   ) {
     this.id = `session-${nanoid(12)}`;
     this.options = options;
@@ -175,6 +183,7 @@ export class Session<ConnType extends Connection> {
       () => this.sendHeartbeat(),
       options.heartbeatIntervalMs,
     );
+    this.telemetry = createSessionTelemetryInfo(this, propagationCtx);
   }
 
   get loggingMetadata(): Omit<MessageMetadata, 'parsedMsg'> {
@@ -182,7 +191,7 @@ export class Session<ConnType extends Connection> {
       clientId: this.from,
       connectedTo: this.to,
       sessionId: this.id,
-      connId: this.connection?.debugId,
+      connId: this.connection?.id,
     };
   }
 
@@ -254,13 +263,13 @@ export class Session<ConnType extends Connection> {
   sendBufferedMessages(conn: ConnType) {
     log?.info(`resending ${this.sendBuffer.length} buffered messages`, {
       ...this.loggingMetadata,
-      connId: conn.debugId,
+      connId: conn.id,
     });
     for (const msg of this.sendBuffer) {
       log?.debug(`resending msg`, {
         ...this.loggingMetadata,
         fullTransportMessage: msg,
-        connId: conn.debugId,
+        connId: conn.id,
       });
       const ok = conn.send(this.codec.toBuffer(msg));
       if (!ok) {
@@ -270,7 +279,7 @@ export class Session<ConnType extends Connection> {
         log?.error(errMsg, {
           ...this.loggingMetadata,
           fullTransportMessage: msg,
-          connId: conn.debugId,
+          connId: conn.id,
           tags: ['invariant-violation'],
         });
         conn.close();
