@@ -31,7 +31,14 @@ export class UdsConnection extends Connection {
   }
 
   addErrorListener(cb: (err: Error) => void): void {
-    this.sock.on('error', cb);
+    this.sock.on('error', (err) => {
+      if (err instanceof Error && 'code' in err && err.code === 'EPIPE') {
+        // Ignore EPIPE errors
+        return;
+      }
+
+      cb(err);
+    });
   }
 
   send(payload: Uint8Array) {
