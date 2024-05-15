@@ -30,11 +30,12 @@ import { Static } from '@sinclair/typebox';
 import { coerceErrorString } from '../util/stringify';
 import { ConnectionRetryOptions, LeakyBucketRateLimit } from './rateLimit';
 import { NaiveJsonCodec } from '../codec';
-import {
+import tracer, {
   PropagationContext,
   createConnectionTelemetryInfo,
   getPropagationContext,
 } from '../tracing';
+import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 
 /**
  * Represents the possible states of a transport.
@@ -695,14 +696,16 @@ export abstract class ClientTransport<
         connectedTo: to,
       });
       this.retryBudget.consumeBudget(to);
-      reconnectPromise = sleep
-        .then(() => {
+      reconnectPromise = tracer.startActiveSpan('connect', async (span) => {
+        try {
+          span.addEvent('backoff', { backoffMs });
+          await sleep;
           if (!canProceedWithConnection()) {
             throw new Error('transport state is no longer open');
           }
-        })
-        .then(() => this.createNewOutgoingConnection(to))
-        .then((conn) => {
+
+          span.addEvent('connecting');
+          const conn = await this.createNewOutgoingConnection(to);
           if (!canProceedWithConnection()) {
             log?.info(
               `transport state is no longer open, closing pre-handshake connection to ${to}`,
@@ -716,16 +719,25 @@ export abstract class ClientTransport<
             throw new Error('transport state is no longer open');
           }
 
-          // only send handshake once per attempt
-          return this.sendHandshake(to, conn).then((ok) => {
-            if (!ok) {
-              conn.close();
-              throw new Error('failed to send handshake');
-            }
+          span.addEvent('sending handshake');
+          const ok = await this.sendHandshake(to, conn);
+          if (!ok) {
+            conn.close();
+            throw new Error('failed to send handshake');
+          }
 
-            return conn;
-          });
-        });
+          return conn;
+        } catch (err) {
+          // rethrow the error so that the promise is rejected
+          // as it was before we wrapped it in a span
+          const errStr = coerceErrorString(err);
+          span.recordException(errStr);
+          span.setStatus({ code: SpanStatusCode.ERROR });
+          throw err;
+        } finally {
+          span.end();
+        }
+      });
 
       this.inflightConnectionPromises.set(to, reconnectPromise);
     } else {

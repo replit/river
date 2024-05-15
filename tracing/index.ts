@@ -31,32 +31,6 @@ export function getPropagationContext(
   return tracing;
 }
 
-export function createProcTelemetryInfo(
-  kind: ValidProcType,
-  serviceName: string,
-  procedureName: string,
-  streamId: string,
-): TelemetryInfo {
-  const ctx = context.active();
-  const span = tracer.startSpan(
-    `procedure call ${serviceName}.${procedureName}`,
-    {
-      attributes: {
-        component: 'river',
-        'river.method.kind': kind,
-        'river.method.service': serviceName,
-        'river.method.name': procedureName,
-        'river.streamId': streamId,
-        'span.kind': 'client',
-      },
-      kind: SpanKind.CLIENT,
-    },
-    ctx,
-  );
-
-  return { span, ctx };
-}
-
 export function createSessionTelemetryInfo(
   session: Session<Connection>,
   propagationCtx?: PropagationContext,
@@ -94,6 +68,32 @@ export function createConnectionTelemetryInfo(
         'river.connection.id': connection.id,
       },
       links: [{ context: sessionSpan.spanContext() }],
+    },
+    ctx,
+  );
+
+  return { span, ctx };
+}
+
+export function createProcTelemetryInfo(
+  kind: ValidProcType,
+  serviceName: string,
+  procedureName: string,
+  streamId: string,
+): TelemetryInfo {
+  const ctx = context.active();
+  const span = tracer.startSpan(
+    `procedure call ${serviceName}.${procedureName}`,
+    {
+      attributes: {
+        component: 'river',
+        'river.method.kind': kind,
+        'river.method.service': serviceName,
+        'river.method.name': procedureName,
+        'river.streamId': streamId,
+        'span.kind': 'client',
+      },
+      kind: SpanKind.CLIENT,
     },
     ctx,
   );
