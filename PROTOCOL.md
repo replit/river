@@ -149,8 +149,8 @@ The `controlFlags` property is a [bit field](https://en.wikipedia.org/wiki/Bit_f
 - The `AckBit` (`0b00001`) MUST only be set in the case of an explicit heartbeat that _only_ contains ack/seq information and no application-level payload (i.e., only used to update transport level bookkeeping).
 - The `StreamOpenBit` (`0b00010`) MUST be set for the first message of a new stream.
 - The `StreamClosedBit` (`0b00100`) MUST be set for the last message of a stream.
-- Bits `0b01000` and `0b10000` are reserved for future use and are currently unused.
-  - `0b01000` will likely be used to signal `StreamAbort` (i.e., the client is aborting the stream)
+- The `StreamCloseRequestBit` (`0b10000`) MUST be set for a message that is requesting the other side to close the stream.
+- Bits `0b01000` is reserved for future use and is currently unused.
 
 All messages MUST have no control flags set (i.e., the `controlFlags` field is `0b00000`) unless:
 
@@ -160,7 +160,9 @@ All messages MUST have no control flags set (i.e., the `controlFlags` field is `
   - The client must set `serviceName` and `procedureName` as the correct string for the associated service and procedure.
     - All further messages MAY omit `serviceName` and `procedureName` as they are implied by the first message and are constant throughout the lifetime of a stream.
 - It is the last message of a stream, in which case the `StreamClosedBit` MUST be set.
-  - If this is a control message sent due to manual closure or the handler itself ending the stream, the payload MUST be `{ type: 'CLOSE' }`. This case will be detailed further down in the 'Ending Streams' subheader of the 'Stream Lifecycle' heading.
+  - If this is sent with no payload, it is a control message the payload MUST Be a `ControlClose`.
+- It is a message requesting the other side to stop writing to the stream, in which case the `StreamCloseRequestBit` MUST be set.
+  - This is a control message and the payload MUST be a `ControlClose`.
 - It is an explicit heartbeat, so the `AckBit` MUST be the only bit set.
   - The payload MUST be `{ type: 'ACK' }`.
   - Because this is a control message that is not associated with a specific stream, you MUST NOT set `serviceName` or `procedureName` and `streamId` can be something arbitrary (e.g. `heartbeat`).
@@ -191,7 +193,7 @@ There are 4 `Control` payloads:
 
 ```ts
 // Used in cases where we want to send a close without
-// a payload. MUST have a `StreamClosedBit` flag
+// a payload. MUST have either a `StreamClosedBit` or `StreamCloseRequestBit` flag
 interface ControlClose {
   type: 'CLOSE';
 }
@@ -230,6 +232,27 @@ For example, in the case of a `stream` RPC, the client will send a series of mes
 
 Streams MUST only be started by the client through the invocation of a procedure.
 Once a procedure is invoked, it opens a new stream and sends the first message of the stream (in accordance with the 'Sending Messages' heading below) and listen to messages on that same `streamId`.
+
+### Reader and Writer Semantics
+
+All procedure types (`rpc`, `stream`, `upload`, `subscription`) are powered by bidirectional streams in the underlying protocol, but they are exposed differently at the API level and have different constraints on the number of messages sent and received. Bidirectional stream implies that for a given procedure, the client has a reader and the writer, and the server has a reader and a writer. The `stream` procedure type is the most general case exposing full bidirectional stream semantics.
+
+Writers send messages that are recieved by the other side's reader. ONLY writers can end streams. Readers can send a signal to the writer that they are no longer interested in the stream, but the writer can choose to ignore this signal and continue sending messages.
+
+Recommendation for API:
+
+- RPC:
+  - Client: a normal function call, arguments gets passed in and result is returned. Do not expose streams.
+  - Server: handler receives the arguments and returns the result.
+- Stream:
+  - Client: calls a function and gets back a writer and a reader interface.
+  - Server: handler recieves a writer and a reader interface.
+- Upload:
+  - Client: calls a function and gets back a writer interface, with a way to get the result at the end of the write.
+  - Server: handler recieves a reader interface, and returns the result at the end of the write.
+- Subscription:
+  - Client: calls a function and gets back a reader interface.
+  - Server: handler recieves a writer interface.
 
 ### Handling messages for streams
 
@@ -292,6 +315,9 @@ The legend is as follows:
 - `-` represents any message with no control flags set.
 
 As other `Control` messages are unrelated to the stream lifecycle, they will not be included in the diagrams.
+
+The diagrams don't differentiate readers and writers as it does not matter for the lifecycle of the stream. You can assume if a message is sent,
+it is sent by the writer, and if a stream is closed, it is closed by the writer.
 
 ##### RPC
 
