@@ -1,5 +1,7 @@
 # River
 
+⚠️ Not production ready, while Replit is using parts of river in production, we are still going through rapid breaking changes. First production ready version will be 1.x.x ⚠️
+
 River allows multiple clients to connect to and make remote procedure calls to a remote server as if they were local procedures.
 
 ## Long-lived streaming remote procedure calls
