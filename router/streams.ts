@@ -34,8 +34,8 @@ export interface ReadStream<T> {
   /**
    * `drain` locks the stream and discards any existing or future data.
    *
-   * If there is an existing lock (e.g. using `iter`), `drain` causes
-   * it to throw an {@link InterruptedStreamError}.
+   * If there is an existing Promise waiting for the next value,
+   * `drain` causes it to throw an {@link InterruptedStreamError}.
    */
   drain(): undefined;
   /**
