@@ -1,91 +1,67 @@
-interface MinimalAsyncIterator<T> {
-  next(): Promise<
-    | {
-        done: false;
-        value: T;
-      }
-    | {
-        done: true;
-        value: undefined;
-      }
-  >;
-}
-
-interface MinimalAsyncIterable<T> {
-  [Symbol.asyncIterator](): MinimalAsyncIterator<T>;
-}
-
 /**
  * A `ReadStream` represents a stream of data.
  *
- * This stream is not closable by the reader, the reader must wait for the writer to close it.
+ * This stream is not closable by the reader, the reader must wait for
+ * the writer to close it.
  *
- * The stream can only be consumed once. All consumers apply a permanent lock on the stream.
- *
- * To avoid memory leaks, ensure the stream is fully drained when it is no longer needed.
+ * The stream can only be locked (aka consumed) once and will remain
+ * locked, trying to lock the stream again will throw an TypeError.
  */
 export interface ReadStream<T> {
   /**
-   * `iter` consumes/locks the stream and returns an iterable that can
-   * be used to iterate over the stream.
+   * Stream implements AsyncIterator API and can be consumed via
+   * for-await-of loops.
    *
-   * Consuming a locked stream will throw an error.
    */
-  iter(): MinimalAsyncIterable<T>;
+  [Symbol.asyncIterator](): {
+    next(): Promise<
+      | {
+          done: false;
+          value: T;
+        }
+      | {
+          done: true;
+          value: undefined;
+        }
+    >;
+  };
   /**
-   * `drain` consumes/locks the stream and discards the content.
-   *
-   * Consuming a locked stream will throw an error.
-   */
-  drain(): undefined;
-  /**
-   * `asArray` consumes/locks the stream and returns a promise that resolves
+   * `asArray` locks the stream and returns a promise that resolves
    * with an array of the stream's content when the stream is closed.
    *
-   * Consuming a locked stream will throw an error.
    */
   asArray(): Promise<Array<T>>;
   /**
-   * `tee` splits the stream into two {@link ReadStream} instances that
-   * can be consumed independently. The original stream will be locked forever.
+   * `drain` locks the stream and discards any existing or future data.
    *
-   * Consuming a locked stream will throw an error.
+   * If there is an existing Promise waiting for the next value,
+   * `drain` causes it to throw an {@link InterruptedStreamError}.
    */
-  tee(): [ReadStream<T>, ReadStream<T>];
+  drain(): undefined;
   /**
-   * `waitForClose` returns a promise that resolves when the stream is closed.
-   */
-  waitForClose(): Promise<void>;
-  /**
-   * `isClosed` returns true if the stream was closed by the writer.
-   */
-  isClosed(): boolean;
-  /**
-   * `isLocked` returns true if the stream is being consumed (aka locked).
+   * `isLocked` returns true if the stream is locked.
    */
   isLocked(): boolean;
   /**
-   * `breakConsumer` interrupts the consumer of the stream, causing it to throw an {@link BreakConsumerError}.
-   * The stream will remain locked forever and draining. If there is no consumer, this method is synonymous
-   * with {@link drain}.
+   * `waitForClose` returns a promise that resolves when the stream is closed,
+   * does not send a close request.
    */
-  breakConsumer(): undefined;
+  waitForClose(): Promise<undefined>;
   /**
-   * `breakConsumerUnsafe` same as {@link breakConsumer}, but doesn't throw an error. The reason
-   * it is unsafe is that the consumer will not be notified that the stream was interrupted, but
-   * they can manually check by calling {@link isBroken}.
+   * `isClosed` returns true if the stream was closed by the writer.
+   *
+   * Note that the stream can still have queued data and can still be
+   * consumed.
    */
-  breakConsumerUnsafe(): undefined;
+  isClosed(): boolean;
   /**
-   * `isBroken` returns true if the consumer was interrupted using {@link breakConsumer}
-   * or {@link breakConsumerUnsafe}.
+   * `requestClose` sends a request to the writer to close the stream,
+   * and resolves the writer closes its end of the stream..
+   *
+   * The stream can still receive more data after the request is sent. If you
+   * no longer wish to use the stream, make sure to call `drain`.
    */
-  isBroken(): boolean;
-  /**
-   * `requestClose` sends a request to the writer to close the stream, and resolves when the stream
-   * is fully closed. The stream can still receive more data after the request is sent.
-   */
-  requestClose(): undefined;
+  requestClose(): Promise<undefined>;
   /**
    * `isCloseRequested` checks if the reader has requested to close the stream.
    */
@@ -93,15 +69,15 @@ export interface ReadStream<T> {
 }
 
 /**
- * `BreakConsumerError` is an error that is thrown when the consumer is interrupted.
+ * `InterruptedStreamError` is an error that is thrown when the consumer is interrupted.
  */
-export class BreakConsumerError extends Error {
+export class InterruptedStreamError extends Error {
   constructor() {
     super('Consumer was interrupted');
-    this.name = 'BreakConsumerError';
+    this.name = 'InterruptedStreamError';
 
     if ('captureStackTrace' in Error) {
-      Error.captureStackTrace(this, BreakConsumerError);
+      Error.captureStackTrace(this, InterruptedStreamError);
     }
   }
 }
@@ -150,4 +126,213 @@ export interface ReadWriteStream<TRead, TWrite> {
    * The writer side of the stream.
    */
   writer: WriteStream<TWrite>;
+}
+
+/**
+ * Internal implementation of a `ReadStream`.
+ * Has internal methods to pushed data to the stream and close it.
+ */
+export class ReadStreamImpl<T> implements ReadStream<T> {
+  /**
+   * Whether the stream is closed.
+   */
+  private closed = false;
+  /**
+   * Used to for `waitForClose` and `requestClose`.
+   */
+  private closePromise: Promise<undefined>;
+  /**
+   * Resolves closePromise
+   */
+  private resolveClosePromise: () => void = () => undefined;
+  /**
+   * Whether the user has requested to close the stream.
+   */
+  private closeRequested = false;
+  /**
+   * Used to signal to the outside world that the user has requested to close the stream.
+   */
+  private closeRequestCallback: () => void;
+  /**
+   * Whether the stream is locked.
+   */
+  private locked = false;
+  /**
+   * Whether drain was called.
+   */
+  private drained = false;
+  /**
+   * This flag helps us decide what to do in cases where
+   * we called drain, and stream has already closed. It
+   * helps us avoid throwing an error when we could
+   * simply signal that iteration is done/stream is closed.
+   */
+  private didDrainDisposeValues = false;
+  /**
+   * A list of values that have been pushed to the stream but not yet emitted to the user.
+   */
+  private queue: Array<T> = [];
+  /**
+   * Used by methods in the class to signal to the iterator that it
+   * should check for the next value.
+   */
+  private nextPromise: Promise<void> | null = null;
+  /**
+   * Resolves nextPromise
+   */
+  private resolveNext: null | (() => void) = null;
+
+  constructor(closeRequestCallback: () => void) {
+    this.closeRequestCallback = closeRequestCallback;
+    this.closePromise = new Promise((resolve) => {
+      this.resolveClosePromise = () => resolve(undefined);
+    });
+  }
+
+  public [Symbol.asyncIterator]() {
+    if (this.locked) {
+      throw new TypeError('ReadStream is already locked');
+    }
+
+    this.locked = true;
+
+    return {
+      next: async () => {
+        // Wait until we have something in the queue
+        while (this.queue.length === 0) {
+          if (this.didDrainDisposeValues) {
+            throw new InterruptedStreamError();
+          }
+
+          if (this.closed) {
+            return {
+              done: true,
+              value: undefined,
+            } as const;
+          }
+
+          if (this.drained) {
+            // while we could just wait and let
+            // one of the above cases handle it
+            // after we know if there are more
+            // incoming values or the stream will
+            // simply close, let's just clean up
+            // as soon as possible and end the iteration
+            throw new InterruptedStreamError();
+          }
+
+          if (!this.nextPromise) {
+            this.nextPromise = new Promise<void>((resolve) => {
+              this.resolveNext = resolve;
+            });
+          }
+
+          await this.nextPromise;
+          this.nextPromise = null;
+          this.resolveNext = null;
+        }
+
+        // Unfortunately we have to use non-null assertion here, because T can be undefined
+        // we already check for array length above anyway
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const value = this.queue.shift()!;
+
+        return { done: false, value } as const;
+      },
+      return: async () => {
+        // clean up when exiting the iterator early with `break` or `return`
+        this.drain();
+        return { done: true, value: undefined } as const;
+      },
+    };
+  }
+
+  public async asArray(): Promise<Array<T>> {
+    const array: Array<T> = [];
+    for await (const value of this) {
+      array.push(value);
+    }
+
+    return array;
+  }
+
+  public drain(): undefined {
+    if (this.drained) {
+      return;
+    }
+
+    this.locked = true;
+    this.drained = true;
+    this.didDrainDisposeValues = this.queue.length > 0;
+    this.queue.length = 0;
+
+    this.resolveNext?.();
+  }
+
+  public isClosed(): boolean {
+    return this.closed;
+  }
+
+  public isLocked(): boolean {
+    return this.locked;
+  }
+
+  public waitForClose(): Promise<undefined> {
+    return this.closePromise;
+  }
+
+  public requestClose(): Promise<undefined> {
+    if (!this.closeRequested) {
+      this.closeRequested = true;
+      this.closeRequestCallback();
+    }
+
+    return this.closePromise;
+  }
+
+  public isCloseRequested(): boolean {
+    return this.closeRequested;
+  }
+
+  /**
+   * @internal meant for use within river, not exposed as a public API
+   *
+   * Pushes a value to the stream.
+   */
+  public pushValue(value: T): undefined {
+    if (this.drained) {
+      this.didDrainDisposeValues = true;
+      return;
+    }
+
+    if (this.closed) {
+      throw new Error('Cannot push to closed stream');
+    }
+
+    this.queue.push(value);
+    this.resolveNext?.();
+  }
+
+  /**
+   * @internal meant for use within river, not exposed as a public API
+   *
+   * Triggers the close of the stream. Make sure to push all remaining
+   * values before calling this method.
+   */
+  public triggerClose(): undefined {
+    if (this.closed) {
+      throw new Error('Unexpected closing multiple times');
+    }
+
+    this.closed = true;
+    this.resolveNext?.();
+    this.resolveClosePromise();
+  }
+
+  /**
+   * @internal meant for use within river, not exposed as a public API
+   */
+  public hasValuesInQueue(): boolean {
+    return this.queue.length > 0;
+  }
 }
