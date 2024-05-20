@@ -183,7 +183,7 @@ describe.each(testMatrix())(
 
       // start procedure
       const [input, output, close] = await client.test.echo.stream();
-      input.push({ msg: '1', ignore: false });
+      input.push({ msg: '1', ignore: false, end: undefined });
       input.push({ msg: '2', ignore: false, end: true });
 
       const result1 = await iterNext(output);
