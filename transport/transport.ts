@@ -35,7 +35,7 @@ import tracer, {
   createConnectionTelemetryInfo,
   getPropagationContext,
 } from '../tracing';
-import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
+import { SpanStatusCode } from '@opentelemetry/api';
 
 /**
  * Represents the possible states of a transport.
@@ -44,8 +44,6 @@ import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
  * @property {'destroyed'} destroyed - The transport is permanently destroyed and cannot be reopened.
  */
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
-
-// -- base transport options
 
 type TransportOptions = SessionOptions;
 
@@ -57,8 +55,6 @@ export const defaultTransportOptions: TransportOptions = {
   sessionDisconnectGraceMs: 5_000,
   codec: NaiveJsonCodec,
 };
-
-// -- client transport options
 
 type ClientTransportOptions = TransportOptions &
   ConnectionRetryOptions & { handshake?: ClientHandshakeOptions };
@@ -77,8 +73,6 @@ const defaultClientTransportOptions: ClientTransportOptions = {
   ...defaultTransportOptions,
   ...defaultConnectionRetryOptions,
 };
-
-// -- server transport options
 
 type ServerTransportOptions = TransportOptions & {
   handshake?: ServerHandshakeOptions;
