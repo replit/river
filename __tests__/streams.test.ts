@@ -232,7 +232,7 @@ describe('ReadStream unit', () => {
     expect(() => stream.triggerClose()).toThrowError(Error);
   });
 
-  it('should support for-await-of with iter', async () => {
+  it('should support for-await-of', async () => {
     const stream = new ReadStreamImpl<number>(noopCb);
 
     stream.pushValue(1);
@@ -252,6 +252,22 @@ describe('ReadStream unit', () => {
     }
 
     expect(values).toEqual([1, 2]);
+  });
+
+  it('should support for-await-of with break', async () => {
+    const stream = new ReadStreamImpl<number>(noopCb);
+
+    stream.pushValue(1);
+    stream.pushValue(2);
+
+    expect(stream.hasValuesInQueue()).toBeTruthy();
+
+    for await (const value of stream) {
+      expect(value).toEqual(1);
+      break;
+    }
+
+    expect(stream.hasValuesInQueue()).toBeFalsy();
   });
 
   describe('drain', () => {
@@ -278,7 +294,9 @@ describe('ReadStream unit', () => {
       const stream = new ReadStreamImpl<number>(noopCb);
       const iterator = stream[Symbol.asyncIterator]();
       stream.pushValue(1);
+      expect(stream.hasValuesInQueue()).toBeTruthy();
       stream.drain();
+      expect(stream.hasValuesInQueue()).toBeFalsy();
       await expect(async () => iterator.next()).rejects.toThrow(
         InterruptedStreamError,
       );

@@ -4,15 +4,13 @@
  * This stream is not closable by the reader, the reader must wait for
  * the writer to close it.
  *
- * The stream can only be locked (aka consumed) once and will remain locked, trying
- * to lock the stream again will throw an TypeError.
- *
- * To avoid memory leaks, ensure the stream is drained when it is no longer needed.
+ * The stream can only be locked (aka consumed) once and will remain
+ * locked, trying to lock the stream again will throw an TypeError.
  */
 export interface ReadStream<T> {
   /**
-   * `iter` locks the stream and returns an iterable that can
-   * be used to iterate over the stream.
+   * Stream implements AsyncIterator API and can be consumed via
+   * for-await-of loops.
    *
    */
   [Symbol.asyncIterator](): {
@@ -241,6 +239,11 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
 
         return { done: false, value } as const;
       },
+      return: async () => {
+        // clean up when exiting the iterator early with `break` or `return`
+        this.drain();
+        return { done: true, value: undefined } as const;
+      },
     };
   }
 
@@ -292,7 +295,7 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
   }
 
   /**
-   * @internal
+   * @internal meant for use within river, not exposed as a public API
    *
    * Pushes a value to the stream.
    */
@@ -311,7 +314,7 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
   }
 
   /**
-   * @internal
+   * @internal meant for use within river, not exposed as a public API
    *
    * Triggers the close of the stream. Make sure to push all remaining
    * values before calling this method.
@@ -324,5 +327,12 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
     this.closed = true;
     this.resolveNext?.();
     this.resolveClosePromise();
+  }
+
+  /**
+   * @internal meant for use within river, not exposed as a public API
+   */
+  public hasValuesInQueue(): boolean {
+    return this.queue.length > 0;
   }
 }
