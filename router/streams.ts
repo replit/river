@@ -51,13 +51,6 @@ export interface ReadStream<T> {
    */
   isLocked(): boolean;
   /**
-   * `tee` splits the stream into two {@link ReadStream} instances that
-   * can be consumed independently. The original stream will be locked forever.
-   *
-   * Consuming a locked stream will throw an error.
-   */
-  tee(): [ReadStream<T>, ReadStream<T>];
-  /**
    * `waitForClose` returns a promise that resolves when the stream is closed,
    * does not send a close request.
    */
@@ -280,10 +273,6 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
     this.queue.length = 0;
 
     this.resolveNext?.();
-  }
-
-  public tee(): [ReadStream<T>, ReadStream<T>] {
-    throw new Error('Method not implemented.');
   }
 
   public isClosed(): boolean {

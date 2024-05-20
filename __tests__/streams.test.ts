@@ -37,14 +37,6 @@ describe('ReadStream unit', () => {
     stream.triggerClose();
   });
 
-  it.fails('should synchronously lock the stream when tee() is called', () => {
-    const stream = new ReadStreamImpl<number>(noopCb);
-    stream.tee();
-    expect(stream.isLocked()).toBe(true);
-    expect(() => stream.iter()).toThrowError(TypeError);
-    stream.triggerClose();
-  });
-
   it('should iterate over the values pushed to the stream', async () => {
     const stream = new ReadStreamImpl<number>(noopCb);
     const iterator = stream.iter()[Symbol.asyncIterator]();
