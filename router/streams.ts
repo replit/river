@@ -1,20 +1,3 @@
-interface MinimalAsyncIterator<T> {
-  next(): Promise<
-    | {
-        done: false;
-        value: T;
-      }
-    | {
-        done: true;
-        value: undefined;
-      }
-  >;
-}
-
-interface MinimalAsyncIterable<T> {
-  [Symbol.asyncIterator](): MinimalAsyncIterator<T>;
-}
-
 /**
  * A `ReadStream` represents a stream of data.
  *
@@ -32,7 +15,18 @@ export interface ReadStream<T> {
    * be used to iterate over the stream.
    *
    */
-  iter(): MinimalAsyncIterable<T>;
+  [Symbol.asyncIterator](): {
+    next(): Promise<
+      | {
+          done: false;
+          value: T;
+        }
+      | {
+          done: true;
+          value: undefined;
+        }
+    >;
+  };
   /**
    * `asArray` locks the stream and returns a promise that resolves
    * with an array of the stream's content when the stream is closed.
@@ -170,7 +164,7 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
    */
   private drained = false;
   /**
-   * Thsi flag helps us decide what to do in cases where
+   * This flag helps us decide what to do in cases where
    * we called drain, and stream has already closed. It
    * helps us avoid throwing an error when we could
    * simply signal that iteration is done/stream is closed.
@@ -197,7 +191,7 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
     });
   }
 
-  public iter(): MinimalAsyncIterable<T> {
+  public [Symbol.asyncIterator]() {
     if (this.locked) {
       throw new TypeError('ReadStream is already locked');
     }
@@ -205,57 +199,54 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
     this.locked = true;
 
     return {
-      [Symbol.asyncIterator]: () => ({
-        next: async () => {
-          // Wait until we have something in the queue
-          while (this.queue.length === 0) {
-            if (this.didDrainDisposeValues) {
-              throw new InterruptedStreamError();
-            }
-
-            if (this.closed) {
-              return {
-                done: true,
-                value: undefined,
-              };
-            }
-
-            if (this.drained) {
-              // while we could just wait and let
-              // one of the above cases handle it
-              // after we know if there are more
-              // incoming values or the stream will
-              // simply close, let's just clean up
-              // as soon as possible and end the iteration
-              throw new InterruptedStreamError();
-            }
-
-            if (!this.nextPromise) {
-              this.nextPromise = new Promise<void>((resolve) => {
-                this.resolveNext = resolve;
-              });
-            }
-
-            await this.nextPromise;
-            this.nextPromise = null;
-            this.resolveNext = null;
+      next: async () => {
+        // Wait until we have something in the queue
+        while (this.queue.length === 0) {
+          if (this.didDrainDisposeValues) {
+            throw new InterruptedStreamError();
           }
 
-          // Unfortunately we have to use non-null assertion here, because T can be undefined
-          // we already check for array length above anyway
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          const value = this.queue.shift()!;
+          if (this.closed) {
+            return {
+              done: true,
+              value: undefined,
+            } as const;
+          }
 
-          return { done: false, value };
-        },
-      }),
+          if (this.drained) {
+            // while we could just wait and let
+            // one of the above cases handle it
+            // after we know if there are more
+            // incoming values or the stream will
+            // simply close, let's just clean up
+            // as soon as possible and end the iteration
+            throw new InterruptedStreamError();
+          }
+
+          if (!this.nextPromise) {
+            this.nextPromise = new Promise<void>((resolve) => {
+              this.resolveNext = resolve;
+            });
+          }
+
+          await this.nextPromise;
+          this.nextPromise = null;
+          this.resolveNext = null;
+        }
+
+        // Unfortunately we have to use non-null assertion here, because T can be undefined
+        // we already check for array length above anyway
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const value = this.queue.shift()!;
+
+        return { done: false, value } as const;
+      },
     };
   }
 
   public async asArray(): Promise<Array<T>> {
-    const iter = this.iter();
     const array: Array<T> = [];
-    for await (const value of iter) {
+    for await (const value of this) {
       array.push(value);
     }
 
