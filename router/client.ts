@@ -389,7 +389,7 @@ function handleStream(
           span.setStatus({ code: SpanStatusCode.OK });
         },
       );
-      const readStreamRequestCloseNotImplemented = () => void 0;
+      const readStreamRequestCloseNotImplemented = () => undefined;
       const outputReader = new ReadStreamImpl(
         readStreamRequestCloseNotImplemented,
       );
@@ -492,7 +492,7 @@ function handleSubscribe(
       let healthyClose = true;
 
       // transport -> output
-      const readStreamRequestCloseNotImplemented = () => void 0;
+      const readStreamRequestCloseNotImplemented = () => undefined;
       const outputReader = new ReadStreamImpl(
         readStreamRequestCloseNotImplemented,
       );
