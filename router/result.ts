@@ -8,6 +8,7 @@ import {
   Type,
 } from '@sinclair/typebox';
 import { Client } from './client';
+import { ReadStream } from './streams';
 
 type TLiteralString = TLiteral<string>;
 
@@ -110,7 +111,7 @@ export type Output<
       : Procedure extends object & { stream: infer StreamHandler extends Fn }
       ? Awaited<ReturnType<StreamHandler>> extends [
           infer __StreamInputMessage,
-          AsyncGenerator<infer StreamOutputMessage>,
+          ReadStream<infer StreamOutputMessage>,
           infer __StreamCloseHandle,
         ]
         ? StreamOutputMessage
@@ -119,7 +120,7 @@ export type Output<
           subscribe: infer SubscriptionHandler extends Fn;
         }
       ? Awaited<ReturnType<SubscriptionHandler>> extends [
-          AsyncGenerator<infer SubscriptionOutputMessage>,
+          ReadStream<infer SubscriptionOutputMessage>,
           infer __SubscriptionCloseHandle,
         ]
         ? SubscriptionOutputMessage
