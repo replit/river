@@ -103,11 +103,7 @@ export interface WriteStream<T> {
    * `waitForCloseRequest` returns a promise that resolves when the reader requests
    * to close the stream.
    */
-  waitForCloseRequest(): Promise<void>;
-  /**
-   * `waitForClose` returns a promise that resolves when the stream is closed
-   */
-  waitForClose(): Promise<void>;
+  waitForCloseRequest(): Promise<undefined>;
   /**
    * `isClosed` returns true if the stream was closed by the writer.
    */
@@ -130,7 +126,9 @@ export interface ReadWriteStream<TRead, TWrite> {
 
 /**
  * Internal implementation of a `ReadStream`.
- * Has internal methods to pushed data to the stream and close it.
+ * This won't be exposed as an interface to river
+ * consumers directly, it has internal river methods
+ * to pushed data to the stream and close it.
  */
 export class ReadStreamImpl<T> implements ReadStream<T> {
   /**
@@ -180,7 +178,7 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
   /**
    * Resolves nextPromise
    */
-  private resolveNext: null | (() => void) = null;
+  private resolveNextPromise: null | (() => void) = null;
 
   constructor(closeRequestCallback: () => void) {
     this.closeRequestCallback = closeRequestCallback;
@@ -223,13 +221,13 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
 
           if (!this.nextPromise) {
             this.nextPromise = new Promise<void>((resolve) => {
-              this.resolveNext = resolve;
+              this.resolveNextPromise = resolve;
             });
           }
 
           await this.nextPromise;
           this.nextPromise = null;
-          this.resolveNext = null;
+          this.resolveNextPromise = null;
         }
 
         // Unfortunately we have to use non-null assertion here, because T can be undefined
@@ -266,7 +264,7 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
     this.didDrainDisposeValues = this.queue.length > 0;
     this.queue.length = 0;
 
-    this.resolveNext?.();
+    this.resolveNextPromise?.();
   }
 
   public isClosed(): boolean {
@@ -310,7 +308,7 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
     }
 
     this.queue.push(value);
-    this.resolveNext?.();
+    this.resolveNextPromise?.();
   }
 
   /**
@@ -325,7 +323,7 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
     }
 
     this.closed = true;
-    this.resolveNext?.();
+    this.resolveNextPromise?.();
     this.resolveClosePromise();
   }
 
@@ -334,5 +332,95 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
    */
   public hasValuesInQueue(): boolean {
     return this.queue.length > 0;
+  }
+}
+
+/**
+ * Internal implementation of a `WriteStream`.
+ * This won't be exposed as an interface to river
+ * consumers directly, it has internal river methods
+ * to trigger a close request, a way to pass on close
+ * signals, and a way to push data to the stream.
+ */
+export class WriteStreamImpl<T> implements WriteStream<T> {
+  /**
+   * Passed via constructor to pass on write requests
+   */
+  private writeCb: (value: T) => void;
+  /**
+   * Passed via constructor to pass on close requests
+   */
+  private closeCb: () => void;
+  /**
+   * Whether the stream is closed.
+   */
+  private closed = false;
+  /**
+   * Whether the reader has requested to close the stream.
+   */
+  private closeRequested = false;
+  /**
+   * A promise that resolves when we recive a close request.
+   */
+  private closeRequestPromise: Promise<undefined>;
+  /**
+   * Resolves closePromise
+   */
+  private resolveRequestClosePromise: () => void = () => undefined;
+
+  constructor(writeCb: (value: T) => void, closeCb: () => void) {
+    this.writeCb = writeCb;
+    this.closeCb = closeCb;
+
+    this.closeRequestPromise = new Promise((resolve) => {
+      this.resolveRequestClosePromise = () => resolve(undefined);
+    });
+  }
+
+  public write(value: T): undefined {
+    if (this.closed) {
+      throw new Error('Cannot write to closed stream');
+    }
+
+    this.writeCb(value);
+  }
+
+  public close(): undefined {
+    if (this.closed) {
+      return;
+    }
+
+    this.closed = true;
+    this.closeCb();
+  }
+
+  public isCloseRequested(): boolean {
+    return this.closeRequested;
+  }
+
+  public waitForCloseRequest(): Promise<undefined> {
+    return this.closeRequestPromise;
+  }
+
+  public isClosed(): boolean {
+    return this.closed;
+  }
+
+  /**
+   * @internal meant for use within river, not exposed as a public API
+   *
+   * Triggers a close request.
+   */
+  public triggerCloseRequest(): undefined {
+    if (this.closeRequested) {
+      throw new Error('Cannot trigger close request multiple times');
+    }
+
+    if (this.closed) {
+      throw new Error('Cannot trigger close request on closed stream');
+    }
+
+    this.closeRequested = true;
+    this.resolveRequestClosePromise();
   }
 }
