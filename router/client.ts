@@ -10,8 +10,6 @@ import {
   AnyServiceSchemaMap,
   InstantiatedServiceSchemaMap,
 } from './services';
-import { pushable } from 'it-pushable';
-import type { Pushable } from 'it-pushable';
 import {
   OpaqueTransportMessage,
   ControlFlags,
@@ -27,8 +25,13 @@ import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { log } from '../logging/log';
 import { createProcTelemetryInfo, getPropagationContext } from '../tracing';
+import {
+  ReadStream,
+  ReadStreamImpl,
+  WriteStream,
+  WriteStreamImpl,
+} from './streams';
 
-// helper to make next, yield, and return all the same type
 export type AsyncIter<T> = AsyncGenerator<T, T>;
 
 /**
@@ -56,7 +59,7 @@ type ServiceClient<Router extends AnyService> = {
       ? {
           upload: (init: Static<ProcInit<Router, ProcName>>) => Promise<
             [
-              Pushable<Static<ProcInput<Router, ProcName>>>, // input
+              WriteStream<Static<ProcInput<Router, ProcName>>>, // input
               Promise<
                 Result<
                   Static<ProcOutput<Router, ProcName>>,
@@ -69,7 +72,7 @@ type ServiceClient<Router extends AnyService> = {
       : {
           upload: () => Promise<
             [
-              Pushable<Static<ProcInput<Router, ProcName>>>, // input
+              WriteStream<Static<ProcInput<Router, ProcName>>>, // input
               Promise<
                 Result<
                   Static<ProcOutput<Router, ProcName>>,
@@ -84,8 +87,8 @@ type ServiceClient<Router extends AnyService> = {
       ? {
           stream: (init: Static<ProcInit<Router, ProcName>>) => Promise<
             [
-              Pushable<Static<ProcInput<Router, ProcName>>>, // input
-              AsyncIter<
+              WriteStream<Static<ProcInput<Router, ProcName>>>, // input
+              ReadStream<
                 Result<
                   Static<ProcOutput<Router, ProcName>>,
                   Static<ProcErrors<Router, ProcName>>
@@ -98,8 +101,8 @@ type ServiceClient<Router extends AnyService> = {
       : {
           stream: () => Promise<
             [
-              Pushable<Static<ProcInput<Router, ProcName>>>, // input
-              AsyncIter<
+              WriteStream<Static<ProcInput<Router, ProcName>>>, // input
+              ReadStream<
                 Result<
                   Static<ProcOutput<Router, ProcName>>,
                   Static<ProcErrors<Router, ProcName>>
@@ -113,7 +116,7 @@ type ServiceClient<Router extends AnyService> = {
     ? {
         subscribe: (input: Static<ProcInput<Router, ProcName>>) => Promise<
           [
-            AsyncIter<
+            ReadStream<
               Result<
                 Static<ProcOutput<Router, ProcName>>,
                 Static<ProcErrors<Router, ProcName>>
@@ -327,28 +330,11 @@ function handleStream(
     procedureName,
     streamId,
   );
-  const inputStream = pushable({ objectMode: true });
-  const outputStream = pushable({ objectMode: true });
   let firstMessage = true;
   let healthyClose = true;
 
-  if (init) {
-    transport.send(serverId, {
-      streamId,
-      serviceName,
-      procedureName,
-      payload: init,
-      tracing: getPropagationContext(ctx),
-      controlFlags: ControlFlags.StreamOpenBit,
-    });
-
-    firstMessage = false;
-  }
-
-  // input -> transport
-  // this gets cleaned up on inputStream.end() which is called by closeHandler
-  const pipeInputToTransport = async () => {
-    for await (const rawIn of inputStream) {
+  const inputWriter = new WriteStreamImpl(
+    (rawIn: unknown) => {
       const m: PartialTransportMessage = {
         streamId,
         payload: rawIn,
@@ -364,14 +350,28 @@ function handleStream(
       }
 
       transport.send(serverId, m);
-    }
+    },
+    () => {
+      // after closing input stream, send a close message to the server
+      if (!healthyClose) return;
+      transport.sendCloseStream(serverId, streamId);
+    },
+  );
+  const readStreamRequestCloseNotImplemented = () => undefined;
+  const outputReader = new ReadStreamImpl(readStreamRequestCloseNotImplemented);
 
-    // after ending input stream, send a close message to the server
-    if (!healthyClose) return;
-    transport.sendCloseStream(serverId, streamId);
-  };
+  if (init) {
+    transport.send(serverId, {
+      streamId,
+      serviceName,
+      procedureName,
+      tracing: getPropagationContext(ctx),
+      payload: init,
+      controlFlags: ControlFlags.StreamOpenBit,
+    });
 
-  void pipeInputToTransport();
+    firstMessage = false;
+  }
 
   // transport -> output
   function onMessage(msg: OpaqueTransportMessage) {
@@ -381,13 +381,23 @@ function handleStream(
     if (isStreamClose(msg.controlFlags)) {
       cleanup();
     } else {
-      outputStream.push(msg.payload);
+      outputReader.pushValue(msg.payload);
     }
   }
 
   function cleanup() {
-    inputStream.end();
-    outputStream.end();
+    if (!inputWriter.isClosed()) {
+      // TODO we should not need this check once we have good
+      // close semantics
+      inputWriter.close();
+    }
+
+    if (!outputReader.isClosed()) {
+      // TODO we should not need this check once we have good
+      // close semantics
+      outputReader.triggerClose();
+    }
+
     transport.removeEventListener('message', onMessage);
     transport.removeEventListener('sessionStatus', onSessionStatus);
     span.end();
@@ -395,7 +405,7 @@ function handleStream(
 
   // close stream after disconnect + grace period elapses
   const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
-    outputStream.push(
+    outputReader.pushValue(
       Err({
         code: UNEXPECTED_DISCONNECT,
         message: `${serverId} unexpectedly disconnected`,
@@ -407,7 +417,7 @@ function handleStream(
 
   transport.addEventListener('message', onMessage);
   transport.addEventListener('sessionStatus', onSessionStatus);
-  return [inputStream, outputStream, cleanup];
+  return [inputWriter, outputReader, cleanup];
 }
 
 function handleSubscribe(
@@ -433,11 +443,11 @@ function handleSubscribe(
     tracing: getPropagationContext(ctx),
     controlFlags: ControlFlags.StreamOpenBit,
   });
-
   let healthyClose = true;
 
   // transport -> output
-  const outputStream = pushable({ objectMode: true });
+  const readStreamRequestCloseNotImplemented = () => undefined;
+  const outputReader = new ReadStreamImpl(readStreamRequestCloseNotImplemented);
   function onMessage(msg: OpaqueTransportMessage) {
     if (msg.streamId !== streamId) return;
     if (msg.to !== transport.clientId) return;
@@ -445,12 +455,17 @@ function handleSubscribe(
     if (isStreamClose(msg.controlFlags)) {
       cleanup();
     } else {
-      outputStream.push(msg.payload);
+      outputReader.pushValue(msg.payload);
     }
   }
 
   function cleanup() {
-    outputStream.end();
+    if (!outputReader.isClosed()) {
+      // TODO we should not need this check once we have good
+      // close semantics
+      outputReader.triggerClose();
+    }
+
     transport.removeEventListener('message', onMessage);
     transport.removeEventListener('sessionStatus', onSessionStatus);
     span.end();
@@ -464,7 +479,7 @@ function handleSubscribe(
 
   // close stream after disconnect + grace period elapses
   const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
-    outputStream.push(
+    outputReader.pushValue(
       Err({
         code: UNEXPECTED_DISCONNECT,
         message: `${serverId} unexpectedly disconnected`,
@@ -476,7 +491,8 @@ function handleSubscribe(
 
   transport.addEventListener('message', onMessage);
   transport.addEventListener('sessionStatus', onSessionStatus);
-  return [outputStream, closeHandler];
+
+  return [outputReader, closeHandler];
 }
 
 function handleUpload(
@@ -493,27 +509,12 @@ function handleUpload(
     procedureName,
     streamId,
   );
-  const inputStream = pushable({ objectMode: true });
+
   let firstMessage = true;
   let healthyClose = true;
 
-  if (init) {
-    transport.send(serverId, {
-      streamId,
-      serviceName,
-      procedureName,
-      payload: init,
-      tracing: getPropagationContext(ctx),
-      controlFlags: ControlFlags.StreamOpenBit,
-    });
-
-    firstMessage = false;
-  }
-
-  // input -> transport
-  // this gets cleaned up on inputStream.end(), which the caller should call.
-  const pipeInputToTransport = async () => {
-    for await (const rawIn of inputStream) {
+  const inputWriter = new WriteStreamImpl(
+    (rawIn: unknown) => {
       const m: PartialTransportMessage = {
         streamId,
         payload: rawIn,
@@ -529,14 +530,26 @@ function handleUpload(
       }
 
       transport.send(serverId, m);
-    }
+    },
+    () => {
+      // after closing input stream, send a close message to the server
+      if (!healthyClose) return;
+      transport.sendCloseStream(serverId, streamId);
+    },
+  );
 
-    // after ending input stream, send a close message to the server
-    if (!healthyClose) return;
-    transport.sendCloseStream(serverId, streamId);
-  };
+  if (init) {
+    transport.send(serverId, {
+      streamId,
+      serviceName,
+      procedureName,
+      tracing: getPropagationContext(ctx),
+      payload: init,
+      controlFlags: ControlFlags.StreamOpenBit,
+    });
 
-  void pipeInputToTransport();
+    firstMessage = false;
+  }
 
   const responsePromise = new Promise((resolve) => {
     // on disconnect, set a timer to return an error
@@ -553,7 +566,12 @@ function handleUpload(
     });
 
     function cleanup() {
-      inputStream.end();
+      if (!inputWriter.isClosed()) {
+        // TODO we should not need this check once we have good
+        // close semantics
+        inputWriter.close();
+      }
+
       transport.removeEventListener('message', onMessage);
       transport.removeEventListener('sessionStatus', onSessionStatus);
       span.end();
@@ -571,5 +589,6 @@ function handleUpload(
     transport.addEventListener('message', onMessage);
     transport.addEventListener('sessionStatus', onSessionStatus);
   });
-  return [inputStream, responsePromise];
+
+  return [inputWriter, responsePromise];
 }
