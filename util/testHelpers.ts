@@ -20,6 +20,7 @@ import {
 import { coerceErrorString } from './stringify';
 import { Connection, Session, SessionOptions } from '../transport/session';
 import { Transport, defaultTransportOptions } from '../transport/transport';
+import { ReadStream } from '../router/streams';
 import { WsLike } from '../transport/impls/ws/wslike';
 
 /**
@@ -74,12 +75,27 @@ export function onUdsServeReady(
   });
 }
 
+export function getIteratorFromStream<T>(readStream: ReadStream<T>) {
+  return readStream[Symbol.asyncIterator]();
+}
+
 /**
  * Retrieves the next value from an async iterable iterator.
  * @param iter The async iterable iterator.
  * @returns A promise that resolves to the next value from the iterator.
  */
-export async function iterNext<T>(iter: AsyncIterableIterator<T>) {
+export async function iterNext<T>(iter: {
+  next(): Promise<
+    | {
+        done: false;
+        value: T;
+      }
+    | {
+        done: true;
+        value: undefined;
+      }
+  >;
+}) {
   return await iter.next().then((res) => res.value as T);
 }
 
