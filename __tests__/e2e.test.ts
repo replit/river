@@ -1,5 +1,5 @@
 import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
-import { iterNext } from '../util/testHelpers';
+import { getIteratorFromStream, iterNext } from '../util/testHelpers';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import {
@@ -156,25 +156,29 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [input, output, close] = await client.test.echo.stream();
-      input.push({ msg: 'abc', ignore: false });
-      input.push({ msg: 'def', ignore: true });
-      input.push({ msg: 'ghi', ignore: false });
-      input.push({ msg: 'end', ignore: false, end: true });
-      input.end();
+      const [inputWriter, outputReader, close] =
+        await client.test.echo.stream();
+      const outputIterator = getIteratorFromStream(outputReader);
 
-      const result1 = await iterNext(output);
+      inputWriter.write({ msg: 'abc', ignore: false });
+      inputWriter.write({ msg: 'def', ignore: true });
+      inputWriter.write({ msg: 'ghi', ignore: false });
+      inputWriter.write({ msg: 'end', ignore: false, end: true });
+      inputWriter.close();
+
+      const result1 = await iterNext(outputIterator);
       expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
-      const result2 = await iterNext(output);
+      const result2 = await iterNext(outputIterator);
       expect(result2).toStrictEqual({ ok: true, payload: { response: 'ghi' } });
 
-      const result3 = await iterNext(output);
+      const result3 = await iterNext(outputIterator);
       expect(result3).toStrictEqual({ ok: true, payload: { response: 'end' } });
 
       // after the server stream is ended, the client stream should be ended too
-      const result4 = await output.next();
+      const result4 = await outputIterator.next();
       expect(result4).toStrictEqual({ done: true, value: undefined });
+
       close();
 
       await testFinishesCleanly({
@@ -199,25 +203,28 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [input, output, close] = await client.test.echoWithPrefix.stream({
-        prefix: 'test',
-      });
-      input.push({ msg: 'abc', ignore: false });
-      input.push({ msg: 'def', ignore: true });
-      input.push({ msg: 'ghi', ignore: false });
-      input.end();
+      const [inputWriter, outputReader, close] =
+        await client.test.echoWithPrefix.stream({
+          prefix: 'test',
+        });
+      const outputIterator = getIteratorFromStream(outputReader);
+      inputWriter.write({ msg: 'abc', ignore: false });
+      inputWriter.write({ msg: 'def', ignore: true });
+      inputWriter.write({ msg: 'ghi', ignore: false });
+      inputWriter.close();
 
-      const result1 = await iterNext(output);
+      const result1 = await iterNext(outputIterator);
       expect(result1).toStrictEqual({
         ok: true,
         payload: { response: 'test abc' },
       });
 
-      const result2 = await iterNext(output);
+      const result2 = await iterNext(outputIterator);
       expect(result2).toStrictEqual({
         ok: true,
         payload: { response: 'test ghi' },
       });
+
       close();
 
       await testFinishesCleanly({
@@ -244,20 +251,22 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [input, output, close] = await client.fallible.echo.stream();
-      input.push({ msg: 'abc', throwResult: false, throwError: false });
-      const result1 = await iterNext(output);
+      const [inputWriter, outputReader, close] =
+        await client.fallible.echo.stream();
+      const outputIterator = getIteratorFromStream(outputReader);
+      inputWriter.write({ msg: 'abc', throwResult: false, throwError: false });
+      const result1 = await iterNext(outputIterator);
       expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
-      input.push({ msg: 'def', throwResult: true, throwError: false });
-      const result2 = await iterNext(output);
+      inputWriter.write({ msg: 'def', throwResult: true, throwError: false });
+      const result2 = await iterNext(outputIterator);
       expect(result2).toMatchObject({
         ok: false,
         payload: { code: STREAM_ERROR },
       });
 
-      input.push({ msg: 'ghi', throwResult: false, throwError: true });
-      const result3 = await iterNext(output);
+      inputWriter.write({ msg: 'ghi', throwResult: false, throwError: true });
+      const result3 = await iterNext(outputIterator);
       expect(result3).toStrictEqual({
         ok: false,
         payload: {
@@ -292,22 +301,24 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [subscription, close] = await client.subscribable.value.subscribe(
+      const [outputReader, close] = await client.subscribable.value.subscribe(
         {},
       );
-      let result = await iterNext(subscription);
+
+      const outputIterator = getIteratorFromStream(outputReader);
+      let result = await iterNext(outputIterator);
       expect(result).toStrictEqual({ ok: true, payload: { result: 0 } });
 
       const add1 = await client.subscribable.add.rpc({ n: 1 });
       expect(add1).toMatchObject({ ok: true });
 
-      result = await iterNext(subscription);
+      result = await iterNext(outputIterator);
       expect(result).toStrictEqual({ ok: true, payload: { result: 1 } });
 
       const add2 = await client.subscribable.add.rpc({ n: 3 });
       expect(add2).toMatchObject({ ok: true });
 
-      result = await iterNext(subscription);
+      result = await iterNext(outputIterator);
       expect(result).toStrictEqual({ ok: true, payload: { result: 4 } });
 
       close();
@@ -336,11 +347,11 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [addStream, addResult] =
+      const [inputWriter, addResult] =
         await client.uploadable.addMultiple.upload();
-      addStream.push({ n: 1 });
-      addStream.push({ n: 2 });
-      addStream.end();
+      inputWriter.write({ n: 1 });
+      inputWriter.write({ n: 2 });
+      inputWriter.close();
       const result = await addResult;
       expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
 
@@ -368,13 +379,13 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [addStream, addResult] =
+      const [inputWriter, addResult] =
         await client.uploadable.addMultipleWithPrefix.upload({
           prefix: 'test',
         });
-      addStream.push({ n: 1 });
-      addStream.push({ n: 2 });
-      addStream.end();
+      inputWriter.write({ n: 1 });
+      inputWriter.write({ n: 2 });
+      inputWriter.close();
       const result = await addResult;
       expect(result).toStrictEqual({ ok: true, payload: { result: 'test 3' } });
       await testFinishesCleanly({
@@ -486,21 +497,22 @@ describe.each(testMatrix())(
       const openStreams = [];
       for (let i = 0; i < CONCURRENCY; i++) {
         const streamHandle = await client.test.echo.stream();
-        const input = streamHandle[0];
-        input.push({ msg: `${i}-1`, ignore: false });
-        input.push({ msg: `${i}-2`, ignore: false });
+        const inputWriter = streamHandle[0];
+        inputWriter.write({ msg: `${i}-1`, ignore: false });
+        inputWriter.write({ msg: `${i}-2`, ignore: false });
         openStreams.push(streamHandle);
       }
 
       for (let i = 0; i < CONCURRENCY; i++) {
-        const output = openStreams[i][1];
-        const result1 = await iterNext(output);
+        const outputReader = openStreams[i][1];
+        const outputIterator = getIteratorFromStream(outputReader);
+        const result1 = await iterNext(outputIterator);
         expect(result1).toStrictEqual({
           ok: true,
           payload: { response: `${i}-1` },
         });
 
-        const result2 = await iterNext(output);
+        const result2 = await iterNext(outputIterator);
         expect(result2).toStrictEqual({
           ok: true,
           payload: { response: `${i}-2` },
