@@ -8,6 +8,7 @@ import { log } from '../../../logging/log';
 import { WebSocketConnection } from './connection';
 
 type WebSocketResult = { ws: WebSocket } | { err: string };
+type UrlGetter = (to: TransportClientId) => Promise<string> | string;
 
 /**
  * A transport implementation that uses a WebSocket connection with automatic reconnection.
@@ -16,9 +17,9 @@ type WebSocketResult = { ws: WebSocket } | { err: string };
  */
 export class WebSocketClientTransport extends ClientTransport<WebSocketConnection> {
   /**
-   * A function that returns a Promise that resolves to a WebSocket instance.
+   * A function that returns a Promise that resolves to a websocket URL.
    */
-  wsGetter: (to: TransportClientId) => Promise<WebSocket>;
+  urlGetter: (to: TransportClientId) => Promise<string> | string;
 
   /**
    * Creates a new WebSocketClientTransport instance.
@@ -28,12 +29,12 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
    * @param providedOptions An optional object containing configuration options for the transport.
    */
   constructor(
-    wsGetter: () => Promise<WebSocket>,
+    urlGetter: UrlGetter,
     clientId: TransportClientId,
     providedOptions?: ProvidedClientTransportOptions,
   ) {
     super(clientId, providedOptions);
-    this.wsGetter = wsGetter;
+    this.urlGetter = urlGetter;
   }
 
   async createNewOutgoingConnection(to: string) {
@@ -44,7 +45,14 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
         connectedTo: to,
       });
 
-      this.wsGetter(to)
+      const urlMaybePromise = this.urlGetter(to);
+      const urlPromise =
+        urlMaybePromise instanceof Promise
+          ? urlMaybePromise
+          : Promise.resolve(urlMaybePromise);
+
+      urlPromise
+        .then((url) => new WebSocket(url))
         .then((ws) => {
           if (ws.readyState === WebSocket.OPEN) {
             resolve({ ws });

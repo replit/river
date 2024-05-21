@@ -3,7 +3,6 @@ import http from 'node:http';
 import { testFinishesCleanly, waitFor } from './fixtures/cleanup';
 import {
   createDummyTransportMessage,
-  createLocalWebSocketClient,
   createWebSocketServer,
   onWsServerReady,
 } from '../util/testHelpers';
@@ -33,7 +32,7 @@ describe('should handle incompatabilities', async () => {
 
   test('emits use after destroy events', async () => {
     const clientTransport = new WebSocketClientTransport(
-      () => Promise.resolve(createLocalWebSocketClient(port)),
+      () => `ws://localhost:${port}`,
       'client',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
@@ -105,10 +104,7 @@ describe('should handle incompatabilities', async () => {
     const maxAttempts = 10;
     wss.on('connection', serverWsConnHandler);
     const clientTransport = new WebSocketClientTransport(
-      () => {
-        const ws = createLocalWebSocketClient(port);
-        return Promise.resolve(ws);
-      },
+      () => `ws://localhost:${port}`,
       'client',
       { attemptBudgetCapacity: maxAttempts },
     );
@@ -146,7 +142,7 @@ describe('should handle incompatabilities', async () => {
       });
     });
 
-    const ws = createLocalWebSocketClient(port);
+    const ws = new WebSocket(`ws://localhost:${port}`);
     await new Promise((resolve) => (ws.onopen = resolve));
     ws.send(Buffer.from('bad handshake'));
 
@@ -181,7 +177,7 @@ describe('should handle incompatabilities', async () => {
       });
     });
 
-    const ws = createLocalWebSocketClient(port);
+    const ws = new WebSocket(`ws://localhost:${port}`);
     await new Promise((resolve) => (ws.onopen = resolve));
     const requestMsg = handshakeRequestMessage('client', 'SERVER', 'sessionId');
     ws.send(NaiveJsonCodec.toBuffer(requestMsg));
@@ -233,7 +229,7 @@ describe('should handle incompatabilities', async () => {
       });
     });
 
-    const ws = createLocalWebSocketClient(port);
+    const ws = new WebSocket(`ws://localhost:${port}`);
     await new Promise((resolve) => (ws.onopen = resolve));
 
     const requestMsg = {

@@ -7,7 +7,6 @@ import {
 import http from 'node:http';
 import net from 'node:net';
 import {
-  createLocalWebSocketClient,
   createWebSocketServer,
   getUnixSocketPath,
   onUdsServeReady,
@@ -59,7 +58,7 @@ export const transports: Array<{
         },
         getClientTransport(id) {
           const clientTransport = new WebSocketClientTransport(
-            () => Promise.resolve(createLocalWebSocketClient(port)),
+            () => `ws://localhost:${port}`,
             id,
             opts?.client,
           );
