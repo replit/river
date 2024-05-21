@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { InterruptedStreamError, ReadStreamImpl } from '../router/streams';
+import {
+  InterruptedStreamError,
+  ReadStreamImpl,
+  WriteStreamImpl,
+} from '../router/streams';
 
 const noopCb = () => undefined;
 
@@ -332,5 +336,52 @@ describe('ReadStream unit', () => {
       );
       stream.triggerClose();
     });
+  });
+});
+
+describe('WriteStream unit', () => {
+  it('should write', async () => {
+    const writeCb = vi.fn();
+    const stream = new WriteStreamImpl<number>(writeCb, noopCb);
+    stream.write(1);
+    stream.write(2);
+
+    expect(writeCb).toHaveBeenNthCalledWith(1, 1);
+    expect(writeCb).toHaveBeenNthCalledWith(2, 2);
+  });
+
+  it('should close the stream', async () => {
+    const closeCb = vi.fn();
+    const stream = new WriteStreamImpl<number>(noopCb, closeCb);
+
+    expect(stream.isClosed()).toBeFalsy();
+
+    stream.close();
+    expect(closeCb).toHaveBeenCalled();
+    expect(stream.isClosed()).toBeTruthy();
+  });
+
+  it('should throw when writing after close', async () => {
+    const stream = new WriteStreamImpl<number>(noopCb, noopCb);
+    stream.close();
+    expect(() => stream.write(1)).toThrowError(Error);
+  });
+
+  it('should handle close requests', async () => {
+    const stream = new WriteStreamImpl<number>(noopCb, noopCb);
+
+    expect(stream.isCloseRequested()).toBeFalsy();
+
+    const closeRequestP = stream.waitForCloseRequest();
+    expect(
+      await Promise.race([
+        new Promise((resolve) => setTimeout(() => resolve('timeout'), 10)),
+        closeRequestP,
+      ]),
+    ).toEqual('timeout');
+
+    stream.triggerCloseRequest();
+    expect(stream.isCloseRequested()).toBeTruthy();
+    await expect(closeRequestP).resolves.toEqual(undefined);
   });
 });
