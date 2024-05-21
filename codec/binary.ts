@@ -6,7 +6,9 @@ import { Codec } from './types';
  * @type {Codec}
  */
 export const BinaryCodec: Codec = {
-  toBuffer: encode,
+  toBuffer(obj) {
+    return encode(obj, { ignoreUndefined: true });
+  },
   fromBuffer: (buff: Uint8Array) => {
     try {
       const res = decode(buff);

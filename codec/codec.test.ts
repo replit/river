@@ -13,8 +13,13 @@ describe.each(codecs)('codec -- $name', ({ codec }) => {
   });
 
   test('encodes null properly', () => {
-    const msg = { null: null };
+    const msg = { test: null };
     expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
+  });
+
+  test('skips optional fields', () => {
+    const msg = { test: undefined };
+    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual({});
   });
 
   test('deeply nested test', () => {
