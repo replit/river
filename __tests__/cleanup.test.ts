@@ -1,5 +1,5 @@
 import { assert, beforeEach, describe, expect, test } from 'vitest';
-import { iterNext } from '../util/testHelpers';
+import { getIteratorFromStream, iterNext } from '../util/testHelpers';
 import {
   SubscribableServiceSchema,
   TestServiceSchema,
@@ -166,25 +166,27 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const [input, output, close] = await client.test.echo.stream();
-      input.push({ msg: '1', ignore: false, end: undefined });
-      input.push({ msg: '2', ignore: false, end: true });
+      const [inputWriter, outputReader, close] =
+        await client.test.echo.stream();
+      inputWriter.write({ msg: '1', ignore: false, end: undefined });
+      inputWriter.write({ msg: '2', ignore: false, end: true });
 
-      const result1 = await iterNext(output);
+      const outputIterator = getIteratorFromStream(outputReader);
+      const result1 = await iterNext(outputIterator);
       assert(result1.ok);
       expect(result1.payload).toStrictEqual({ response: '1' });
 
       // ensure we only have one stream despite pushing multiple messages.
       await waitFor(() => expect(server.streams.size).toEqual(1));
-      input.end();
+      inputWriter.close();
       // ensure we no longer have any streams since the input was closed.
       await waitFor(() => expect(server.streams.size).toEqual(0));
 
-      const result2 = await iterNext(output);
+      const result2 = await iterNext(outputIterator);
       assert(result2.ok);
       expect(result2.payload).toStrictEqual({ response: '2' });
 
-      const result3 = await output.next();
+      const result3 = await outputIterator.next();
       assert(result3.done);
 
       close();
@@ -231,18 +233,20 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const [subscription, close] = await client.subscribable.value.subscribe(
+      const [outputReader, close] = await client.subscribable.value.subscribe(
         {},
       );
-      let result = await iterNext(subscription);
+      const outputIterator = getIteratorFromStream(outputReader);
+      let result = await iterNext(outputIterator);
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 0 });
       const add1 = await client.subscribable.add.rpc({ n: 1 });
       assert(add1.ok);
-      result = await iterNext(subscription);
+      result = await iterNext(outputIterator);
       assert(result.ok);
 
       close();
+      server;
       // end procedure
 
       // number of message handlers shouldn't increase after subscription ends
@@ -286,11 +290,11 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const [addStream, addResult] =
+      const [inputWriter, addResult] =
         await client.uploadable.addMultiple.upload();
-      addStream.push({ n: 1 });
-      addStream.push({ n: 2 });
-      addStream.end();
+      inputWriter.write({ n: 1 });
+      inputWriter.write({ n: 2 });
+      inputWriter.close();
 
       const result = await addResult;
       assert(result.ok);
@@ -332,10 +336,11 @@ describe.each(testMatrix())(
       });
 
       // start a stream
-      const [input, output] = await client.test.echo.stream();
-      input.push({ msg: '1', ignore: false });
+      const [inputWriter, outputReader] = await client.test.echo.stream();
+      inputWriter.write({ msg: '1', ignore: false });
 
-      const result1 = await iterNext(output);
+      const outputIterator = getIteratorFromStream(outputReader);
+      const result1 = await iterNext(outputIterator);
       assert(result1.ok);
       expect(result1.payload).toStrictEqual({ response: '1' });
 
@@ -353,8 +358,8 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
 
       // push on the old stream and make sure its not sent
-      input.push({ msg: '2', ignore: false });
-      const result2 = await iterNext(output);
+      expect(() => inputWriter.write({ msg: '2', ignore: false })).toThrow();
+      const result2 = await iterNext(outputIterator);
       assert(!result2.ok);
       await testFinishesCleanly({
         clientTransports: [clientTransport],

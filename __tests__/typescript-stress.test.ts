@@ -13,7 +13,7 @@ import {
   ResultUnwrapOk,
 } from '../router/result';
 import { TestServiceSchema } from './fixtures/services';
-import { iterNext } from '../util/testHelpers';
+import { getIteratorFromStream, iterNext } from '../util/testHelpers';
 import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,
@@ -268,7 +268,9 @@ describe('Output<> type', () => {
     // Then
     void client.test.stream
       .stream()
-      .then(([_in, output, _close]) => iterNext(output))
+      .then(([_in, outputReader, _close]) =>
+        iterNext(getIteratorFromStream(outputReader)),
+      )
       .then(acceptOutput);
     expect(client).toBeTruthy();
   });
@@ -284,7 +286,9 @@ describe('Output<> type', () => {
     // Then
     void client.test.subscription
       .subscribe({ n: 1 })
-      .then(([output, _close]) => iterNext(output))
+      .then(([outputReader, _close]) =>
+        iterNext(getIteratorFromStream(outputReader)),
+      )
       .then(acceptOutput);
     expect(client).toBeTruthy();
   });
