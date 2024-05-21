@@ -7,7 +7,6 @@ import {
 import http from 'node:http';
 import net from 'node:net';
 import {
-  createLocalWebSocketClient,
   createWebSocketServer,
   getUnixSocketPath,
   onUdsServeReady,
@@ -53,13 +52,13 @@ export const transports: Array<{
         simulatePhantomDisconnect() {
           for (const transport of transports) {
             for (const conn of transport.connections.values()) {
-              conn.ws.removeAllListeners('message');
+              conn.ws.onmessage = null;
             }
           }
         },
         getClientTransport(id) {
           const clientTransport = new WebSocketClientTransport(
-            () => Promise.resolve(createLocalWebSocketClient(port)),
+            () => `ws://localhost:${port}`,
             id,
             opts?.client,
           );
@@ -80,7 +79,7 @@ export const transports: Array<{
           for (const transport of transports) {
             if (transport.clientId !== 'SERVER') continue;
             for (const conn of transport.connections.values()) {
-              conn.ws.terminate();
+              conn.ws.rawInner.terminate();
             }
           }
 

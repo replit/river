@@ -3,7 +3,6 @@ import http from 'node:http';
 import { testFinishesCleanly, waitFor } from './fixtures/cleanup';
 import {
   createDummyTransportMessage,
-  createLocalWebSocketClient,
   createWebSocketServer,
   onWsServerReady,
 } from '../util/testHelpers';
@@ -19,7 +18,7 @@ import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
-import WebSocket from 'ws';
+import WebSocket, { ReadyState } from 'agnostic-ws';
 
 describe('should handle incompatabilities', async () => {
   const server = http.createServer();
@@ -33,7 +32,7 @@ describe('should handle incompatabilities', async () => {
 
   test('emits use after destroy events', async () => {
     const clientTransport = new WebSocketClientTransport(
-      () => Promise.resolve(createLocalWebSocketClient(port)),
+      () => `ws://localhost:${port}`,
       'client',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
@@ -105,10 +104,7 @@ describe('should handle incompatabilities', async () => {
     const maxAttempts = 10;
     wss.on('connection', serverWsConnHandler);
     const clientTransport = new WebSocketClientTransport(
-      () => {
-        const ws = createLocalWebSocketClient(port);
-        return Promise.resolve(ws);
-      },
+      () => `ws://localhost:${port}`,
       'client',
       { attemptBudgetCapacity: maxAttempts },
     );
@@ -146,13 +142,13 @@ describe('should handle incompatabilities', async () => {
       });
     });
 
-    const ws = createLocalWebSocketClient(port);
-    await new Promise((resolve) => ws.on('open', resolve));
-    ws.send('bad handshake');
+    const ws = new WebSocket(`ws://localhost:${port}`);
+    await new Promise((resolve) => (ws.onopen = resolve));
+    ws.send(Buffer.from('bad handshake'));
 
     // should never connect
     // ws should be closed
-    await waitFor(() => expect(ws.readyState).toBe(ws.CLOSED));
+    await waitFor(() => expect(ws.readyState).toBe(ReadyState.CLOSED));
     expect(serverTransport.connections.size).toBe(0);
     expect(spy).toHaveBeenCalledTimes(0);
     expect(errMock).toHaveBeenCalledTimes(1);
@@ -181,8 +177,8 @@ describe('should handle incompatabilities', async () => {
       });
     });
 
-    const ws = createLocalWebSocketClient(port);
-    await new Promise((resolve) => ws.on('open', resolve));
+    const ws = new WebSocket(`ws://localhost:${port}`);
+    await new Promise((resolve) => (ws.onopen = resolve));
     const requestMsg = handshakeRequestMessage('client', 'SERVER', 'sessionId');
     ws.send(NaiveJsonCodec.toBuffer(requestMsg));
 
@@ -233,8 +229,8 @@ describe('should handle incompatabilities', async () => {
       });
     });
 
-    const ws = createLocalWebSocketClient(port);
-    await new Promise((resolve) => ws.on('open', resolve));
+    const ws = new WebSocket(`ws://localhost:${port}`);
+    await new Promise((resolve) => (ws.onopen = resolve));
 
     const requestMsg = {
       id: nanoid(),
@@ -254,7 +250,7 @@ describe('should handle incompatabilities', async () => {
 
     // should never connect
     // ws should be closed
-    await waitFor(() => expect(ws.readyState).toBe(ws.CLOSED));
+    await waitFor(() => expect(ws.readyState).toBe(ReadyState.CLOSED));
     expect(serverTransport.connections.size).toBe(0);
     expect(spy).toHaveBeenCalledTimes(0);
     expect(errMock).toHaveBeenCalledTimes(1);

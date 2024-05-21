@@ -1,4 +1,4 @@
-import WebSocket from 'isomorphic-ws';
+import WebSocket, { CloseEvent, ErrorEvent } from 'agnostic-ws';
 import {
   ClientTransport,
   ProvidedClientTransportOptions,
@@ -8,6 +8,7 @@ import { log } from '../../../logging/log';
 import { WebSocketConnection } from './connection';
 
 type WebSocketResult = { ws: WebSocket } | { err: string };
+type UrlGetter = (to: TransportClientId) => Promise<string> | string;
 
 /**
  * A transport implementation that uses a WebSocket connection with automatic reconnection.
@@ -16,9 +17,9 @@ type WebSocketResult = { ws: WebSocket } | { err: string };
  */
 export class WebSocketClientTransport extends ClientTransport<WebSocketConnection> {
   /**
-   * A function that returns a Promise that resolves to a WebSocket instance.
+   * A function that returns a Promise that resolves to a websocket URL.
    */
-  wsGetter: (to: TransportClientId) => Promise<WebSocket>;
+  urlGetter: (to: TransportClientId) => Promise<string> | string;
 
   /**
    * Creates a new WebSocketClientTransport instance.
@@ -28,12 +29,12 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
    * @param providedOptions An optional object containing configuration options for the transport.
    */
   constructor(
-    wsGetter: () => Promise<WebSocket>,
+    urlGetter: UrlGetter,
     clientId: TransportClientId,
     providedOptions?: ProvidedClientTransportOptions,
   ) {
     super(clientId, providedOptions);
-    this.wsGetter = wsGetter;
+    this.urlGetter = urlGetter;
   }
 
   async createNewOutgoingConnection(to: string) {
@@ -44,14 +45,18 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
         connectedTo: to,
       });
 
-      this.wsGetter(to)
+      Promise.resolve(this.urlGetter(to))
+        .then((url) => new WebSocket(url))
         .then((ws) => {
-          if (ws.readyState === ws.OPEN) {
+          if (ws.readyState === WebSocket.OPEN) {
             resolve({ ws });
             return;
           }
 
-          if (ws.readyState === ws.CLOSING || ws.readyState === ws.CLOSED) {
+          if (
+            ws.readyState === WebSocket.CLOSING ||
+            ws.readyState === WebSocket.CLOSED
+          ) {
             resolve({ err: 'ws is closing or closed' });
             return;
           }
@@ -60,14 +65,14 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
             resolve({ ws });
           };
 
-          ws.onclose = (evt: WebSocket.CloseEvent) => {
+          ws.onclose = (evt: CloseEvent) => {
             resolve({ err: evt.reason });
           };
 
-          ws.onerror = (evt: WebSocket.ErrorEvent) => {
-            const err = evt.error as { code: string } | undefined;
+          ws.onerror = (evt: ErrorEvent) => {
+            const err = evt.error;
             resolve({
-              err: err?.code ?? 'unexpected disconnect',
+              err: `${err.name}: ${err.message}`,
             });
           };
         })

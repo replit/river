@@ -1,4 +1,4 @@
-import WebSocket from 'isomorphic-ws';
+import WebSocket from 'agnostic-ws';
 import { Connection } from '../../session';
 
 export class WebSocketConnection extends Connection {
@@ -23,11 +23,11 @@ export class WebSocketConnection extends Connection {
   }
 
   addErrorListener(cb: (err: Error) => void): void {
-    this.ws.onerror = (err) => cb(new Error(err.message));
+    this.ws.onerror = (err) => cb(err.error);
   }
 
   send(payload: Uint8Array) {
-    if (this.ws.readyState === this.ws.OPEN) {
+    if (this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(payload);
       return true;
     } else {

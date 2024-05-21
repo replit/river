@@ -3,7 +3,6 @@ import { test, onTestFinished, assert, expect } from 'vitest';
 import net from 'node:net';
 import http from 'node:http';
 import {
-  createLocalWebSocketClient,
   createWebSocketServer,
   getUnixSocketPath,
   onUdsServeReady,
@@ -71,7 +70,7 @@ test('ws <-> uds proxy works', async () => {
   const services = { test: TestServiceSchema };
   const server = createServer(serverTransport, services);
   const clientTransport = new WebSocketClientTransport(
-    () => Promise.resolve(createLocalWebSocketClient(port)),
+    () => `ws://localhost:${port}`,
     'ws',
     { codec: BinaryCodec },
   );
