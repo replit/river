@@ -12,6 +12,58 @@ channel = "stable-23_05"
 localPort = 3000
 externalPort = 80
 
+[[ports]]
+localPort = 24678
+externalPort = 3000
+
+[[ports]]
+localPort = 34165
+externalPort = 8081
+
+[[ports]]
+localPort = 34209
+externalPort = 8000
+
+[[ports]]
+localPort = 34389
+externalPort = 4200
+
+[[ports]]
+localPort = 36369
+externalPort = 3002
+
+[[ports]]
+localPort = 38123
+externalPort = 8099
+
+[[ports]]
+localPort = 38267
+externalPort = 8080
+
+[[ports]]
+localPort = 38863
+externalPort = 5173
+
+[[ports]]
+localPort = 39369
+externalPort = 6800
+
+[[ports]]
+localPort = 40797
+externalPort = 3001
+
+[[ports]]
+localPort = 42623
+externalPort = 9000
+
+[[ports]]
+localPort = 42707
+externalPort = 6000
+
+[[ports]]
+localPort = 42911
+externalPort = 8008
+
 [languages.eslint]
 pattern = "**{*.ts,*.js,*.tsx,*.jsx}"
 [languages.eslint.languageServer]
