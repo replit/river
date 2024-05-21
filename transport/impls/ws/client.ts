@@ -1,4 +1,4 @@
-import WebSocket from 'isomorphic-ws';
+import WebSocket, { CloseEvent, ErrorEvent } from 'agnostic-ws';
 import {
   ClientTransport,
   ProvidedClientTransportOptions,
@@ -46,12 +46,15 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
 
       this.wsGetter(to)
         .then((ws) => {
-          if (ws.readyState === ws.OPEN) {
+          if (ws.readyState === WebSocket.OPEN) {
             resolve({ ws });
             return;
           }
 
-          if (ws.readyState === ws.CLOSING || ws.readyState === ws.CLOSED) {
+          if (
+            ws.readyState === WebSocket.CLOSING ||
+            ws.readyState === WebSocket.CLOSED
+          ) {
             resolve({ err: 'ws is closing or closed' });
             return;
           }
@@ -60,14 +63,14 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
             resolve({ ws });
           };
 
-          ws.onclose = (evt: WebSocket.CloseEvent) => {
+          ws.onclose = (evt: CloseEvent) => {
             resolve({ err: evt.reason });
           };
 
-          ws.onerror = (evt: WebSocket.ErrorEvent) => {
-            const err = evt.error as { code: string } | undefined;
+          ws.onerror = (evt: ErrorEvent) => {
+            const err = evt.error;
             resolve({
-              err: err?.code ?? 'unexpected disconnect',
+              err: `${err.name}: ${err.message}`,
             });
           };
         })

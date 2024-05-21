@@ -62,7 +62,7 @@ Before proceeding, ensure you have TypeScript 5 installed and configured appropr
 3. If you plan on using WebSocket for the underlying transport, also install
 
    ```bash
-   npm i ws isomorphic-ws
+   npm i ws agnostic-ws
    ```
 
 ## Writing services
@@ -138,7 +138,7 @@ httpServer.listen(port);
 In another file for the client (to create a separate entrypoint),
 
 ```ts
-import WebSocket from 'isomorphic-ws';
+import WebSocket from 'agnostic-ws';
 import { WebSocketClientTransport } from '@replit/river/transport/ws/client';
 import { createClient } from '@replit/river';
 import type ServiceSurface from './server';

@@ -19,7 +19,7 @@ import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
-import WebSocket from 'ws';
+import WebSocket, { ReadyState } from 'agnostic-ws';
 
 describe('should handle incompatabilities', async () => {
   const server = http.createServer();
@@ -147,12 +147,12 @@ describe('should handle incompatabilities', async () => {
     });
 
     const ws = createLocalWebSocketClient(port);
-    await new Promise((resolve) => ws.on('open', resolve));
-    ws.send('bad handshake');
+    await new Promise((resolve) => (ws.onopen = resolve));
+    ws.send(Buffer.from('bad handshake'));
 
     // should never connect
     // ws should be closed
-    await waitFor(() => expect(ws.readyState).toBe(ws.CLOSED));
+    await waitFor(() => expect(ws.readyState).toBe(ReadyState.CLOSED));
     expect(serverTransport.connections.size).toBe(0);
     expect(spy).toHaveBeenCalledTimes(0);
     expect(errMock).toHaveBeenCalledTimes(1);
@@ -182,7 +182,7 @@ describe('should handle incompatabilities', async () => {
     });
 
     const ws = createLocalWebSocketClient(port);
-    await new Promise((resolve) => ws.on('open', resolve));
+    await new Promise((resolve) => (ws.onopen = resolve));
     const requestMsg = handshakeRequestMessage('client', 'SERVER', 'sessionId');
     ws.send(NaiveJsonCodec.toBuffer(requestMsg));
 
@@ -234,7 +234,7 @@ describe('should handle incompatabilities', async () => {
     });
 
     const ws = createLocalWebSocketClient(port);
-    await new Promise((resolve) => ws.on('open', resolve));
+    await new Promise((resolve) => (ws.onopen = resolve));
 
     const requestMsg = {
       id: nanoid(),
@@ -254,7 +254,7 @@ describe('should handle incompatabilities', async () => {
 
     // should never connect
     // ws should be closed
-    await waitFor(() => expect(ws.readyState).toBe(ws.CLOSED));
+    await waitFor(() => expect(ws.readyState).toBe(ReadyState.CLOSED));
     expect(serverTransport.connections.size).toBe(0);
     expect(spy).toHaveBeenCalledTimes(0);
     expect(errMock).toHaveBeenCalledTimes(1);

@@ -4,7 +4,7 @@ import {
   ProvidedServerTransportOptions,
 } from '../../transport';
 import { WebSocketServer } from 'ws';
-import { WebSocket } from 'isomorphic-ws';
+import WebSocket from 'agnostic-ws';
 import { WebSocketConnection } from './connection';
 
 export class WebSocketServerTransport extends ServerTransport<WebSocketConnection> {

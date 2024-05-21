@@ -53,7 +53,7 @@ export const transports: Array<{
         simulatePhantomDisconnect() {
           for (const transport of transports) {
             for (const conn of transport.connections.values()) {
-              conn.ws.removeAllListeners('message');
+              conn.ws.onmessage = null;
             }
           }
         },
@@ -80,7 +80,7 @@ export const transports: Array<{
           for (const transport of transports) {
             if (transport.clientId !== 'SERVER') continue;
             for (const conn of transport.connections.values()) {
-              conn.ws.terminate();
+              conn.ws.rawInner.terminate();
             }
           }
 

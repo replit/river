@@ -1,4 +1,4 @@
-import WebSocket from 'isomorphic-ws';
+import WebSocket from 'agnostic-ws';
 import { WebSocketServer } from 'ws';
 import http from 'node:http';
 import { pushable } from 'it-pushable';
