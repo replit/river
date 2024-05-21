@@ -91,10 +91,10 @@ describe.each(testMatrix())(
       });
 
       // start procedure
-      const [input, outputReader] = await client.test.echo.stream();
+      const [inputWriter, outputReader] = await client.test.echo.stream();
       const outputIterator = getIteratorFromStream(outputReader);
 
-      input.push({ msg: 'abc', ignore: false });
+      inputWriter.write({ msg: 'abc', ignore: false });
       const result = await iterNext(outputIterator);
       assert(result.ok);
 
@@ -235,10 +235,10 @@ describe.each(testMatrix())(
       });
 
       // start procedure
-      const [addStream, addResult] =
+      const [inputWriter, addResult] =
         await client.uploadable.addMultiple.upload();
-      addStream.push({ n: 1 });
-      addStream.push({ n: 2 });
+      inputWriter.write({ n: 1 });
+      inputWriter.write({ n: 2 });
       // end procedure
 
       // need to wait for connection to be established

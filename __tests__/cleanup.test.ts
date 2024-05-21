@@ -182,9 +182,10 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const [input, outputReader, close] = await client.test.echo.stream();
-      input.push({ msg: '1', ignore: false, end: undefined });
-      input.push({ msg: '2', ignore: false, end: true });
+      const [inputWriter, outputReader, close] =
+        await client.test.echo.stream();
+      inputWriter.write({ msg: '1', ignore: false, end: undefined });
+      inputWriter.write({ msg: '2', ignore: false, end: true });
 
       const outputIterator = getIteratorFromStream(outputReader);
       const result1 = await iterNext(outputIterator);
@@ -193,7 +194,7 @@ describe.each(testMatrix())(
 
       // ensure we only have one stream despite pushing multiple messages.
       await waitFor(() => expect(server.streams.size).toEqual(1));
-      input.end();
+      inputWriter.close();
       // ensure we no longer have any streams since the input was closed.
       await waitFor(() => expect(server.streams.size).toEqual(0));
 
@@ -316,11 +317,11 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const [addStream, addResult] =
+      const [inputWriter, addResult] =
         await client.uploadable.addMultiple.upload();
-      addStream.push({ n: 1 });
-      addStream.push({ n: 2 });
-      addStream.end();
+      inputWriter.write({ n: 1 });
+      inputWriter.write({ n: 2 });
+      inputWriter.close();
 
       const result = await addResult;
       assert(result.ok);
@@ -367,8 +368,8 @@ describe.each(testMatrix())(
       });
 
       // start a stream
-      const [input, outputReader] = await client.test.echo.stream();
-      input.push({ msg: '1', ignore: false });
+      const [inputWriter, outputReader] = await client.test.echo.stream();
+      inputWriter.write({ msg: '1', ignore: false });
 
       const outputIterator = getIteratorFromStream(outputReader);
       const result1 = await iterNext(outputIterator);
@@ -390,7 +391,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
 
       // push on the old stream and make sure its not sent
-      input.push({ msg: '2', ignore: false });
+      expect(() => inputWriter.write({ msg: '2', ignore: false })).toThrow();
       const result2 = await iterNext(outputIterator);
       assert(!result2.ok);
     });

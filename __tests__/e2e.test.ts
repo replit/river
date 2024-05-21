@@ -147,14 +147,15 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [input, outputReader, close] = await client.test.echo.stream();
+      const [inputWriter, outputReader, close] =
+        await client.test.echo.stream();
       const outputIterator = getIteratorFromStream(outputReader);
 
-      input.push({ msg: 'abc', ignore: false });
-      input.push({ msg: 'def', ignore: true });
-      input.push({ msg: 'ghi', ignore: false });
-      input.push({ msg: 'end', ignore: false, end: true });
-      input.end();
+      inputWriter.write({ msg: 'abc', ignore: false });
+      inputWriter.write({ msg: 'def', ignore: true });
+      inputWriter.write({ msg: 'ghi', ignore: false });
+      inputWriter.write({ msg: 'end', ignore: false, end: true });
+      inputWriter.close();
 
       const result1 = await iterNext(outputIterator);
       assert(result1.ok);
@@ -193,15 +194,15 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [input, outputReader, close] =
+      const [inputWriter, outputReader, close] =
         await client.test.echoWithPrefix.stream({
           prefix: 'test',
         });
       const outputIterator = getIteratorFromStream(outputReader);
-      input.push({ msg: 'abc', ignore: false });
-      input.push({ msg: 'def', ignore: true });
-      input.push({ msg: 'ghi', ignore: false });
-      input.end();
+      inputWriter.write({ msg: 'abc', ignore: false });
+      inputWriter.write({ msg: 'def', ignore: true });
+      inputWriter.write({ msg: 'ghi', ignore: false });
+      inputWriter.close();
 
       const result1 = await iterNext(outputIterator);
       assert(result1.ok);
@@ -235,19 +236,20 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [input, outputReader, close] = await client.fallible.echo.stream();
+      const [inputWriter, outputReader, close] =
+        await client.fallible.echo.stream();
       const outputIterator = getIteratorFromStream(outputReader);
-      input.push({ msg: 'abc', throwResult: false, throwError: false });
+      inputWriter.write({ msg: 'abc', throwResult: false, throwError: false });
       const result1 = await iterNext(outputIterator);
       assert(result1.ok);
       expect(result1.payload).toStrictEqual({ response: 'abc' });
 
-      input.push({ msg: 'def', throwResult: true, throwError: false });
+      inputWriter.write({ msg: 'def', throwResult: true, throwError: false });
       const result2 = await iterNext(outputIterator);
       assert(!result2.ok);
       expect(result2.payload.code).toStrictEqual(STREAM_ERROR);
 
-      input.push({ msg: 'ghi', throwResult: false, throwError: true });
+      inputWriter.write({ msg: 'ghi', throwResult: false, throwError: true });
       const result3 = await iterNext(outputIterator);
       assert(!result3.ok);
       expect(result3.payload).toStrictEqual({
@@ -325,11 +327,11 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [addStream, addResult] =
+      const [inputWriter, addResult] =
         await client.uploadable.addMultiple.upload();
-      addStream.push({ n: 1 });
-      addStream.push({ n: 2 });
-      addStream.end();
+      inputWriter.write({ n: 1 });
+      inputWriter.write({ n: 2 });
+      inputWriter.close();
       const result = await addResult;
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 3 });
@@ -356,13 +358,13 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [addStream, addResult] =
+      const [inputWriter, addResult] =
         await client.uploadable.addMultipleWithPrefix.upload({
           prefix: 'test',
         });
-      addStream.push({ n: 1 });
-      addStream.push({ n: 2 });
-      addStream.end();
+      inputWriter.write({ n: 1 });
+      inputWriter.write({ n: 2 });
+      inputWriter.close();
       const result = await addResult;
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 'test 3' });
@@ -473,19 +475,20 @@ describe.each(testMatrix())(
       const openStreams = [];
       for (let i = 0; i < CONCURRENCY; i++) {
         const streamHandle = await client.test.echo.stream();
-        const input = streamHandle[0];
-        input.push({ msg: `${i}-1`, ignore: false });
-        input.push({ msg: `${i}-2`, ignore: false });
+        const inputWriter = streamHandle[0];
+        inputWriter.write({ msg: `${i}-1`, ignore: false });
+        inputWriter.write({ msg: `${i}-2`, ignore: false });
         openStreams.push(streamHandle);
       }
 
       for (let i = 0; i < CONCURRENCY; i++) {
-        const output = openStreams[i][1];
-        const result1 = await iterNext(output);
+        const outputReader = openStreams[i][1];
+        const outputIterator = getIteratorFromStream(outputReader);
+        const result1 = await iterNext(outputIterator);
         assert(result1.ok);
         expect(result1.payload).toStrictEqual({ response: `${i}-1` });
 
-        const result2 = await iterNext(output);
+        const result2 = await iterNext(outputIterator);
         assert(result2.ok);
         expect(result2.payload).toStrictEqual({ response: `${i}-2` });
       }
