@@ -45,13 +45,7 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
         connectedTo: to,
       });
 
-      const urlMaybePromise = this.urlGetter(to);
-      const urlPromise =
-        urlMaybePromise instanceof Promise
-          ? urlMaybePromise
-          : Promise.resolve(urlMaybePromise);
-
-      urlPromise
+      Promise.resolve(this.urlGetter(to))
         .then((url) => new WebSocket(url))
         .then((ws) => {
           if (ws.readyState === WebSocket.OPEN) {

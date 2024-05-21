@@ -59,12 +59,6 @@ Before proceeding, ensure you have TypeScript 5 installed and configured appropr
    npm i @replit/river @sinclair/typebox
    ```
 
-3. If you plan on using WebSocket for the underlying transport, also install
-
-   ```bash
-   npm i ws agnostic-ws
-   ```
-
 ## Writing services
 
 ### Concepts
@@ -138,14 +132,12 @@ httpServer.listen(port);
 In another file for the client (to create a separate entrypoint),
 
 ```ts
-import WebSocket from 'agnostic-ws';
 import { WebSocketClientTransport } from '@replit/river/transport/ws/client';
 import { createClient } from '@replit/river';
 import type ServiceSurface from './server';
 
-const websocketUrl = `ws://localhost:3000`;
 const transport = new WebSocketClientTransport(
-  async () => new WebSocket(websocketUrl),
+  async () => `ws://localhost:3000`,
   'my-client-id',
 );
 
