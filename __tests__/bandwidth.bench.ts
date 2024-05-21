@@ -52,13 +52,13 @@ describe('bandwidth', async () => {
       { time: BENCH_DURATION },
     );
 
-    const [input, output] = await client.test.echo.stream();
+    const [input, reader] = await client.test.echo.stream();
     bench(
       `${name} -- stream`,
       async () => {
         input.push({ msg: nanoid(), ignore: false });
-        const result = await output.next();
-        assert(result.value.ok);
+        const result = await reader[Symbol.asyncIterator]().next();
+        assert(result.value?.ok);
       },
       { time: BENCH_DURATION },
     );

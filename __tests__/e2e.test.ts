@@ -7,7 +7,7 @@ import {
   test,
   vi,
 } from 'vitest';
-import { iterNext } from '../util/testHelpers';
+import { getIteratorFromStream, iterNext } from '../util/testHelpers';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import {
@@ -147,27 +147,29 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [input, output, close] = await client.test.echo.stream();
+      const [input, outputReader, close] = await client.test.echo.stream();
+      const outputIterator = getIteratorFromStream(outputReader);
+
       input.push({ msg: 'abc', ignore: false });
       input.push({ msg: 'def', ignore: true });
       input.push({ msg: 'ghi', ignore: false });
       input.push({ msg: 'end', ignore: false, end: true });
       input.end();
 
-      const result1 = await iterNext(output);
+      const result1 = await iterNext(outputIterator);
       assert(result1.ok);
       expect(result1.payload).toStrictEqual({ response: 'abc' });
 
-      const result2 = await iterNext(output);
+      const result2 = await iterNext(outputIterator);
       assert(result2.ok);
       expect(result2.payload).toStrictEqual({ response: 'ghi' });
 
-      const result3 = await iterNext(output);
+      const result3 = await iterNext(outputIterator);
       assert(result3.ok);
       expect(result3.payload).toStrictEqual({ response: 'end' });
 
       // after the server stream is ended, the client stream should be ended too
-      const result4 = await output.next();
+      const result4 = await outputIterator.next();
       assert(result4.done);
       close();
     });
@@ -191,19 +193,21 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [input, output, close] = await client.test.echoWithPrefix.stream({
-        prefix: 'test',
-      });
+      const [input, outputReader, close] =
+        await client.test.echoWithPrefix.stream({
+          prefix: 'test',
+        });
+      const outputIterator = getIteratorFromStream(outputReader);
       input.push({ msg: 'abc', ignore: false });
       input.push({ msg: 'def', ignore: true });
       input.push({ msg: 'ghi', ignore: false });
       input.end();
 
-      const result1 = await iterNext(output);
+      const result1 = await iterNext(outputIterator);
       assert(result1.ok);
       expect(result1.payload).toStrictEqual({ response: 'test abc' });
 
-      const result2 = await iterNext(output);
+      const result2 = await iterNext(outputIterator);
       assert(result2.ok);
       expect(result2.payload).toStrictEqual({ response: 'test ghi' });
 
@@ -231,19 +235,20 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [input, output, close] = await client.fallible.echo.stream();
+      const [input, outputReader, close] = await client.fallible.echo.stream();
+      const outputIterator = getIteratorFromStream(outputReader);
       input.push({ msg: 'abc', throwResult: false, throwError: false });
-      const result1 = await iterNext(output);
+      const result1 = await iterNext(outputIterator);
       assert(result1.ok);
       expect(result1.payload).toStrictEqual({ response: 'abc' });
 
       input.push({ msg: 'def', throwResult: true, throwError: false });
-      const result2 = await iterNext(output);
+      const result2 = await iterNext(outputIterator);
       assert(!result2.ok);
       expect(result2.payload.code).toStrictEqual(STREAM_ERROR);
 
       input.push({ msg: 'ghi', throwResult: false, throwError: true });
-      const result3 = await iterNext(output);
+      const result3 = await iterNext(outputIterator);
       assert(!result3.ok);
       expect(result3.payload).toStrictEqual({
         code: UNCAUGHT_ERROR,
@@ -274,24 +279,25 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [subscription, close] = await client.subscribable.value.subscribe(
+      const [outputReader, close] = await client.subscribable.value.subscribe(
         {},
       );
-      let result = await iterNext(subscription);
+      const outputIterator = getIteratorFromStream(outputReader);
+      let result = await iterNext(outputIterator);
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 0 });
 
       const add1 = await client.subscribable.add.rpc({ n: 1 });
       assert(add1.ok);
 
-      result = await iterNext(subscription);
+      result = await iterNext(outputIterator);
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 1 });
 
       const add2 = await client.subscribable.add.rpc({ n: 3 });
       assert(add2.ok);
 
-      result = await iterNext(subscription);
+      result = await iterNext(outputIterator);
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 4 });
 
