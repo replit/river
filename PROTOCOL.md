@@ -239,6 +239,11 @@ All procedure types (`rpc`, `stream`, `upload`, `subscription`) are powered by b
 
 Writers send messages that are recieved by the other side's reader. ONLY writers can end streams. Readers can send a signal to the writer that they are no longer interested in the stream, but the writer can choose to ignore this signal and continue sending messages.
 
+Streams can be in a half-closed state. This happens when one party sends a close signal indicating that it will no longer send
+any more data, but it can still receive data from the other side. In terms of readers and writers, the closing party's writer is
+closed but its reader is still open, and on the other side the reader is closed but the writer is open. This is useful when,
+for example, the client has finished sending its data but is still expecting a response from the server.
+
 Recommendation for API:
 
 - RPC:
