@@ -333,9 +333,10 @@ export abstract class Transport<ConnType extends Connection> {
     if (this.state !== 'open') return;
     const session = this.sessions.get(msg.from);
     if (!session) {
-      log?.error(`(invariant violation) no existing session for ${msg.from}`, {
+      log?.error(`no existing session for ${msg.from}`, {
         clientId: this.clientId,
         fullTransportMessage: msg,
+        tags: ['invariant-violation'],
       });
       return;
     }
@@ -358,6 +359,7 @@ export abstract class Transport<ConnType extends Connection> {
         log?.error(`${errMsg}, marking connection as dead`, {
           clientId: this.clientId,
           fullTransportMessage: msg,
+          tags: ['invariant-violation'],
         });
         this.protocolError(ProtocolError.MessageOrderingViolated, errMsg);
         session.close();
@@ -418,6 +420,7 @@ export abstract class Transport<ConnType extends Connection> {
       log?.error(err, {
         clientId: this.clientId,
         partialTransportMessage: msg,
+        tags: ['invariant-violation'],
       });
       this.protocolError(ProtocolError.UseAfterDestroy, err);
       return undefined;
@@ -828,6 +831,7 @@ export abstract class ClientTransport<
         log?.error(`handshake metadata did not match schema`, {
           clientId: this.clientId,
           connectedTo: to,
+          tags: ['invariant-violation'],
         });
         this.protocolError(
           ProtocolError.HandshakeFailed,
@@ -1168,6 +1172,7 @@ export abstract class ServerTransport<
             log?.error(`failed to parse handshake metadata`, {
               clientId: this.clientId,
               connId: conn.debugId,
+              tags: ['invariant-violation'],
             });
             this.protocolError(ProtocolError.HandshakeFailed, reason);
             this.deleteSession(session);

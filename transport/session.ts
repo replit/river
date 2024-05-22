@@ -271,18 +271,20 @@ export class Session<ConnType extends Connection> {
           ...this.loggingMetadata,
           fullTransportMessage: msg,
           connId: conn.debugId,
+          tags: ['invariant-violation'],
         });
-        throw new Error(errMsg);
+        conn.close();
+        return;
       }
     }
   }
 
   updateBookkeeping(ack: number, seq: number) {
     if (seq + 1 < this.ack) {
-      log?.error(
-        `received stale seq ${seq} + 1 < ${this.ack}`,
-        this.loggingMetadata,
-      );
+      log?.error(`received stale seq ${seq} + 1 < ${this.ack}`, {
+        ...this.loggingMetadata,
+        tags: ['invariant-violation'],
+      });
       return;
     }
 
