@@ -1119,7 +1119,7 @@ describe.each(testMatrix())(
       ) => {
         if (
           evt.type === ProtocolError.HandshakeFailed &&
-          evt.message.includes('rejected by server')
+          evt.message.includes('rejected by handshake handler')
         ) {
           serverRejectedConnection();
         }
@@ -1218,7 +1218,7 @@ describe.each(testMatrix())(
       ) => {
         if (
           evt.type === ProtocolError.HandshakeFailed &&
-          evt.message.includes('rejected by server')
+          evt.message.includes('rejected by handshake handler')
         ) {
           serverRejectedConnection();
         }

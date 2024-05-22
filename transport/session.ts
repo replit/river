@@ -16,6 +16,7 @@ import {
   TelemetryInfo,
   createSessionTelemetryInfo,
 } from '../tracing';
+import { SpanStatusCode } from '@opentelemetry/api';
 
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvxyz', 6);
 export const unsafeId = () => nanoid();
@@ -239,6 +240,7 @@ export class Session<ConnType extends Connection> {
           `closing connection to ${this.to} due to inactivity (missed ${misses} heartbeats which is ${missDuration}ms)`,
           this.loggingMetadata,
         );
+        this.telemetry.span.addEvent('closing connection due to inactivity');
         this.closeStaleConnection();
       }
       return;
@@ -276,6 +278,11 @@ export class Session<ConnType extends Connection> {
         // this should never happen unless the transport has an
         // incorrect implementation of `createNewOutgoingConnection`
         const errMsg = `failed to send buffered message to ${this.to} (sus, this is a fresh connection)`;
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: errMsg,
+        });
+
         log?.error(errMsg, {
           ...this.loggingMetadata,
           fullTransportMessage: msg,

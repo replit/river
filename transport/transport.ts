@@ -249,7 +249,7 @@ export abstract class Transport<ConnType extends Connection> {
       sessionId !== undefined &&
       session.advertisedSessionId !== sessionId
     ) {
-      log?.warn(
+      log?.info(
         `session for ${to} already exists but has a different session id (expected: ${session.advertisedSessionId}, got: ${sessionId}), creating a new one`,
         session.loggingMetadata,
       );
@@ -300,7 +300,10 @@ export abstract class Transport<ConnType extends Connection> {
     });
 
     session.connection = undefined;
-    session.beginGrace(() => this.deleteSession(session));
+    session.beginGrace(() => {
+      session.telemetry.span.addEvent('session grace period expired');
+      this.deleteSession(session);
+    });
   }
 
   /**
@@ -367,6 +370,10 @@ export abstract class Transport<ConnType extends Connection> {
           tags: ['invariant-violation'],
         });
         this.protocolError(ProtocolError.MessageOrderingViolated, errMsg);
+        session.telemetry.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'message order violated',
+        });
         session.close();
       }
 
@@ -550,6 +557,10 @@ export abstract class ClientTransport<
       conn.addDataListener((data) => {
         const parsed = this.parseMsg(data);
         if (!parsed) {
+          conn.telemetry?.span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: 'message parse failure',
+          });
           conn.close();
           return;
         }
@@ -574,6 +585,10 @@ export abstract class ClientTransport<
       }
     });
     conn.addErrorListener((err) => {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'connection error',
+      });
       log?.warn(`error in connection to ${to}: ${coerceErrorString(err)}`, {
         ...session?.loggingMetadata,
         clientId: this.clientId,
@@ -588,6 +603,10 @@ export abstract class ClientTransport<
   ): Session<ConnType> | false {
     const parsed = this.parseMsg(data);
     if (!parsed) {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'non-transport message',
+      });
       this.protocolError(
         ProtocolError.HandshakeFailed,
         'received non-transport message',
@@ -596,6 +615,10 @@ export abstract class ClientTransport<
     }
 
     if (!Value.Check(ControlMessageHandshakeResponseSchema, parsed.payload)) {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'invalid handshake response',
+      });
       log?.warn(`received invalid handshake resp`, {
         clientId: this.clientId,
         connectedTo: parsed.from,
@@ -609,7 +632,11 @@ export abstract class ClientTransport<
     }
 
     if (!parsed.payload.status.ok) {
-      log?.warn(`received invalid handshake resp`, {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'handshake rejected',
+      });
+      log?.warn(`received handshake rejection`, {
         clientId: this.clientId,
         connectedTo: parsed.from,
         fullTransportMessage: parsed,
@@ -783,6 +810,10 @@ export abstract class ClientTransport<
           ProtocolError.HandshakeFailed,
           'handshake metadata did not match schema',
         );
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'handshake meta mismatch',
+        });
         return false;
       }
     }
@@ -854,6 +885,10 @@ export abstract class ServerTransport<
             connId: conn.id,
           },
         );
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'handshake timeout',
+        });
         conn.close();
       }
     }, this.options.sessionDisconnectGraceMs);
@@ -882,7 +917,6 @@ export abstract class ServerTransport<
 
           // when we are done handshake sequence,
           // remove handshake listener and use the normal message listener
-
           const dataHandler = (data: Uint8Array) => {
             const parsed = this.parseMsg(data);
             if (!parsed) {
@@ -893,14 +927,13 @@ export abstract class ServerTransport<
             this.handleMsg(parsed);
           };
 
-          conn.removeDataListener(handshakeHandler);
-          conn.addDataListener(dataHandler);
-
           // process any data we missed
           for (const data of buffer) {
             dataHandler(data);
           }
 
+          conn.removeDataListener(handshakeHandler);
+          conn.addDataListener(dataHandler);
           buffer.length = 0;
         },
       );
@@ -917,6 +950,10 @@ export abstract class ServerTransport<
     });
 
     conn.addErrorListener((err) => {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'connection error',
+      });
       if (!session) return;
       log?.warn(
         `connection to ${client()} got an error: ${coerceErrorString(err)}`,
@@ -931,6 +968,10 @@ export abstract class ServerTransport<
   ): Promise<Session<ConnType> | false> {
     const parsed = this.parseMsg(data);
     if (!parsed) {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'non-transport message',
+      });
       this.protocolError(
         ProtocolError.HandshakeFailed,
         'received non-transport message',
@@ -939,6 +980,10 @@ export abstract class ServerTransport<
     }
 
     if (!Value.Check(ControlMessageHandshakeRequestSchema, parsed.payload)) {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'invalid handshake request',
+      });
       const reason = 'received invalid handshake msg';
       const responseMsg = handshakeResponseMessage(this.clientId, parsed.from, {
         ok: false,
@@ -946,13 +991,11 @@ export abstract class ServerTransport<
       });
       conn.send(this.codec.toBuffer(responseMsg));
       // note: do _not_ log the payload, it may contain secrets
-      const logData =
-        typeof parsed.payload === 'object'
-          ? { ...parsed, payload: { ...parsed.payload, metadata: 'redacted' } }
-          : { ...parsed };
-      log?.warn(`${reason}: ${JSON.stringify(logData)}`, {
+      const logData = { ...(parsed.payload ?? {}), metadata: 'redacted' };
+      log?.warn(reason, {
         clientId: this.clientId,
         connId: conn.id,
+        partialTransportMessage: { ...parsed, payload: logData },
       });
       this.protocolError(
         ProtocolError.HandshakeFailed,
@@ -964,6 +1007,11 @@ export abstract class ServerTransport<
     // double check protocol version here
     const gotVersion = parsed.payload.protocolVersion;
     if (gotVersion !== PROTOCOL_VERSION) {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'incorrect protocol version',
+      });
+
       const reason = `incorrect version (got: ${gotVersion} wanted ${PROTOCOL_VERSION})`;
       const responseMsg = handshakeResponseMessage(this.clientId, parsed.from, {
         ok: false,
@@ -995,6 +1043,10 @@ export abstract class ServerTransport<
           parsed.payload.metadata,
         )
       ) {
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'malformed handshake meta',
+        });
         const reason = 'received malformed handshake metadata';
         const responseMsg = handshakeResponseMessage(
           this.clientId,
@@ -1020,7 +1072,11 @@ export abstract class ServerTransport<
 
       // handler rejected the connection
       if (parsedMetadata === false) {
-        const reason = 'rejected by server';
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'rejected by handshake handler',
+        });
+        const reason = 'rejected by handshake handler';
         const responseMsg = handshakeResponseMessage(
           this.clientId,
           parsed.from,
@@ -1038,6 +1094,10 @@ export abstract class ServerTransport<
 
       // check that the parsed metadata is the correct shape
       if (!Value.Check(this.options.handshake.parsedSchema, parsedMetadata)) {
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'malformed handshake meta',
+        });
         const reason = 'failed to parse handshake metadata';
         const responseMsg = handshakeResponseMessage(
           this.clientId,
