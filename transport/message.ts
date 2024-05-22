@@ -130,12 +130,6 @@ export const TransportMessageSchema = <T extends TSchema>(t: T) =>
     procedureName: Type.Optional(Type.String()),
     streamId: Type.String(),
     controlFlags: Type.Integer(),
-    tracing: Type.Optional(
-      Type.Object({
-        traceparent: Type.String(),
-        tracestate: Type.String(),
-      }),
-    ),
     payload: t,
   });
 
@@ -219,7 +213,6 @@ export interface TransportMessage<Payload = unknown> {
   procedureName?: string;
   streamId: string;
   controlFlags: number;
-  tracing?: { traceparent: string; tracestate: string };
   payload: Payload;
 }
 
@@ -233,7 +226,6 @@ export function handshakeRequestMessage(
   to: TransportClientId,
   sessionId: string,
   metadata?: HandshakeRequestMetadata,
-  tracing?: { traceparent: string; tracestate: string },
 ): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {
   return {
     id: nanoid(),
@@ -243,7 +235,6 @@ export function handshakeRequestMessage(
     ack: 0,
     streamId: nanoid(),
     controlFlags: 0,
-    tracing,
     payload: {
       type: 'HANDSHAKE_REQ',
       protocolVersion: PROTOCOL_VERSION,
