@@ -18,6 +18,8 @@ export type Logger = {
   [key in LoggingLevel]: (msg: string, metadata?: MessageMetadata) => void;
 };
 
+export type Tags = 'invariant-violation';
+
 export type MessageMetadata = Record<string, unknown> &
   Partial<{
     protocolVersion: string;
@@ -27,6 +29,7 @@ export type MessageMetadata = Record<string, unknown> &
     connId: string;
     fullTransportMessage: OpaqueTransportMessage;
     partialTransportMessage: Partial<PartialTransportMessage>;
+    tags: Array<Tags>;
   }>;
 
 class BaseLogger implements Logger {

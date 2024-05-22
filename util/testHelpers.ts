@@ -2,6 +2,7 @@ import { WebSocketServer } from 'ws';
 import http from 'node:http';
 import { pushable } from 'it-pushable';
 import {
+  Err,
   PayloadType,
   Procedure,
   Result,
@@ -119,13 +120,7 @@ export async function waitForMessage(
 
 function catchProcError(err: unknown) {
   const errorMsg = coerceErrorString(err);
-  return {
-    ok: false,
-    payload: {
-      code: UNCAUGHT_ERROR,
-      message: errorMsg,
-    },
-  };
+  return Err({ code: UNCAUGHT_ERROR, message: errorMsg });
 }
 
 export const testingSessionOptions: SessionOptions = defaultTransportOptions;

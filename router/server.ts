@@ -168,7 +168,11 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     if (!isStreamOpen(message.controlFlags)) {
       log?.error(
         `can't create a new procedure stream from a message that doesn't have the stream open bit set`,
-        { clientId: this.transport.clientId, fullTransportMessage: message },
+        {
+          clientId: this.transport.clientId,
+          fullTransportMessage: message,
+          tags: ['invariant-violation'],
+        },
       );
       return;
     }
@@ -283,10 +287,10 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
 
     // by this point, our sessions should always have their handshake metadata
     if (session.metadata === undefined) {
-      log?.error(
-        `(invariant violation) session doesn't have handshake metadata`,
-        session.loggingMetadata,
-      );
+      log?.error(`session doesn't have handshake metadata`, {
+        ...session.loggingMetadata,
+        tags: ['invariant-violation'],
+      });
       return;
     }
 
@@ -620,6 +624,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       const err = `no context found for ${serviceName}`;
       log?.error(err, {
         clientId: this.transport.clientId,
+        tags: ['invariant-violation'],
       });
       throw new Error(err);
     }
