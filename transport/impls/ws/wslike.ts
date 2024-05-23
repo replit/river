@@ -1,5 +1,3 @@
-import NodeWebSocket from 'ws';
-
 interface WsEvent extends Event {
   type: string;
   // we don't care about the target
@@ -63,14 +61,3 @@ export type WsLike = Nullable<
   WsLikeWithHandlers,
   'onclose' | 'onmessage' | 'onopen' | 'onerror'
 >;
-
-export function acceptsBothWs(
-  ws: NodeWebSocket | globalThis.WebSocket,
-): WsLike {
-  return ws;
-}
-
-export function takesWsLike(ws: WsLike): void {
-  ws.send('hello');
-  ws.onclose;
-}
