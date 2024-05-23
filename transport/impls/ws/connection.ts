@@ -2,8 +2,8 @@ import { Connection } from '../../session';
 import { WsLike } from './wslike';
 
 export class WebSocketConnection extends Connection {
-  errorcb: null | ((err: Error) => void) = null;
-  closecb: null | (() => void) = null;
+  errorCb: null | ((err: Error) => void) = null;
+  closeCb: null | (() => void) = null;
 
   ws: WsLike;
 
@@ -20,8 +20,8 @@ export class WebSocketConnection extends Connection {
       didError = true;
     };
     this.ws.onclose = ({ code, reason }) => {
-      if (didError && this.errorcb) {
-        this.errorcb(
+      if (didError && this.errorCb) {
+        this.errorCb(
           new Error(
             `websocket closed with code and reason: ${code} - ${reason}`,
           ),
@@ -30,8 +30,8 @@ export class WebSocketConnection extends Connection {
         return;
       }
 
-      if (this.closecb) {
-        this.closecb();
+      if (this.closeCb) {
+        this.closeCb();
       }
     };
   }
@@ -45,11 +45,11 @@ export class WebSocketConnection extends Connection {
   }
 
   addCloseListener(cb: () => void): void {
-    this.closecb = cb;
+    this.closeCb = cb;
   }
 
   addErrorListener(cb: (err: Error) => void): void {
-    this.errorcb = cb;
+    this.errorCb = cb;
   }
 
   send(payload: Uint8Array) {
