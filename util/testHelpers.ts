@@ -1,4 +1,4 @@
-import { WebSocketServer } from 'ws';
+import NodeWs, { WebSocketServer } from 'ws';
 import http from 'node:http';
 import { pushable } from 'it-pushable';
 import {
@@ -22,6 +22,23 @@ import {
 import { coerceErrorString } from './stringify';
 import { Connection, Session, SessionOptions } from '../transport/session';
 import { Transport, defaultTransportOptions } from '../transport/transport';
+import { WSLike } from '../transport/impls/ws/wslike';
+
+/**
+ * Creates a WebSocket client that connects to a local server at the specified port.
+ * This should only be used for testing.
+ * @param port - The port number to connect to.
+ * @returns A Promise that resolves to a WebSocket instance.
+ */
+export function createLocalWebSocketClient(
+  port: number,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): WSLike<any, any, any, any, any> {
+  const sock = new NodeWs(`ws://localhost:${port}`);
+  sock.binaryType = 'arraybuffer';
+
+  return sock;
+}
 
 /**
  * Creates a WebSocket server instance using the provided HTTP server.

@@ -6,6 +6,7 @@ import {
   waitForMessage,
   createDummyTransportMessage,
   payloadToTransportMessage,
+  createLocalWebSocketClient,
 } from '../../../util/testHelpers';
 import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
@@ -14,7 +15,7 @@ import {
   testFinishesCleanly,
 } from '../../../__tests__/fixtures/cleanup';
 import { PartialTransportMessage } from '../../message';
-import WebSocket, { ReadyState } from 'agnostic-ws';
+import type NodeWs from 'ws';
 
 describe('sending and receiving across websockets works', async () => {
   const server = http.createServer();
@@ -28,7 +29,7 @@ describe('sending and receiving across websockets works', async () => {
 
   test('basic send/receive', async () => {
     const clientTransport = new WebSocketClientTransport(
-      () => `ws://localhost:${port}`,
+      () => Promise.resolve(createLocalWebSocketClient(port)),
       'client',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
@@ -59,7 +60,7 @@ describe('sending and receiving across websockets works', async () => {
 
     const initClient = async (id: string) => {
       const client = new WebSocketClientTransport(
-        () => `ws://localhost:${port}`,
+        () => Promise.resolve(createLocalWebSocketClient(port)),
         id,
       );
 
@@ -118,7 +119,7 @@ describe('network edge cases', async () => {
     });
 
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const ws = new WebSocket(`ws://localhost:${port}`);
+    const ws = createLocalWebSocketClient(port);
 
     // wait for ws to be open
     await new Promise((resolve) => (ws.onopen = resolve));
@@ -133,12 +134,12 @@ describe('network edge cases', async () => {
     // the connection should have been cleaned up
     expect(serverTransport.connections.size).toBe(0);
     expect(serverTransport.sessions.size).toBe(0);
-    expect(ws.readyState).toBe(ReadyState.CLOSED);
+    expect(ws.readyState).toBe(ws.CLOSED);
   });
 
   test('ws connection is recreated after unclean disconnect', async () => {
     const clientTransport = new WebSocketClientTransport(
-      () => `ws://localhost:${port}`,
+      () => Promise.resolve(createLocalWebSocketClient(port)),
       'client',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
@@ -159,8 +160,8 @@ describe('network edge cases', async () => {
     ).resolves.toStrictEqual(msg1.payload);
 
     // unclean disconnect
-    clientTransport.sessions.forEach(
-      (session) => session.connection?.ws.rawInner.terminate(),
+    clientTransport.sessions.forEach((session) =>
+      (session.connection?.ws as NodeWs).terminate(),
     );
 
     // by this point the client should have reconnected

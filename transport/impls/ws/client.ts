@@ -1,4 +1,3 @@
-import WebSocket, { CloseEvent, ErrorEvent } from 'agnostic-ws';
 import {
   ClientTransport,
   ProvidedClientTransportOptions,
@@ -6,20 +5,42 @@ import {
 import { TransportClientId } from '../../message';
 import { log } from '../../../logging/log';
 import { WebSocketConnection } from './connection';
-
-type WebSocketResult = { ws: WebSocket } | { err: string };
-type UrlGetter = (to: TransportClientId) => Promise<string> | string;
+import { WSLike } from './wslike';
 
 /**
  * A transport implementation that uses a WebSocket connection with automatic reconnection.
  * @class
  * @extends Transport
  */
-export class WebSocketClientTransport extends ClientTransport<WebSocketConnection> {
+export class WebSocketClientTransport<
+  CloseEvent extends { code: number; reason: string; wasClean: boolean } = {
+    code: number;
+    reason: string;
+    wasClean: boolean;
+  },
+  MessageEvent extends { data: unknown } = { data: unknown },
+  ErrorEvent extends object = object,
+  OpenEvent extends object = object,
+  BinaryType extends string = string,
+> extends ClientTransport<
+  WebSocketConnection<
+    CloseEvent,
+    MessageEvent,
+    ErrorEvent,
+    OpenEvent,
+    BinaryType
+  >
+> {
   /**
    * A function that returns a Promise that resolves to a websocket URL.
    */
-  urlGetter: (to: TransportClientId) => Promise<string> | string;
+  wsGetter: (
+    to: TransportClientId,
+  ) =>
+    | Promise<
+        WSLike<CloseEvent, MessageEvent, ErrorEvent, OpenEvent, BinaryType>
+      >
+    | WSLike<CloseEvent, MessageEvent, ErrorEvent, OpenEvent, BinaryType>;
 
   /**
    * Creates a new WebSocketClientTransport instance.
@@ -29,70 +50,55 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
    * @param providedOptions An optional object containing configuration options for the transport.
    */
   constructor(
-    urlGetter: UrlGetter,
+    wsGetter: (
+      to: TransportClientId,
+    ) =>
+      | Promise<
+          WSLike<CloseEvent, MessageEvent, ErrorEvent, OpenEvent, BinaryType>
+        >
+      | WSLike<CloseEvent, MessageEvent, ErrorEvent, OpenEvent, BinaryType>,
     clientId: TransportClientId,
     providedOptions?: ProvidedClientTransportOptions,
   ) {
     super(clientId, providedOptions);
-    this.urlGetter = urlGetter;
+    this.wsGetter = wsGetter;
   }
 
   async createNewOutgoingConnection(to: string) {
-    // get a promise to an actual websocket that's ready
-    const wsRes = await new Promise<WebSocketResult>((resolve) => {
-      log?.info(`establishing a new websocket to ${to}`, {
-        clientId: this.clientId,
-        connectedTo: to,
-      });
-
-      Promise.resolve(this.urlGetter(to))
-        .then((url) => new WebSocket(url))
-        .then((ws) => {
-          if (ws.readyState === WebSocket.OPEN) {
-            resolve({ ws });
-            return;
-          }
-
-          if (
-            ws.readyState === WebSocket.CLOSING ||
-            ws.readyState === WebSocket.CLOSED
-          ) {
-            resolve({ err: 'ws is closing or closed' });
-            return;
-          }
-
-          ws.onopen = () => {
-            resolve({ ws });
-          };
-
-          ws.onclose = (evt: CloseEvent) => {
-            resolve({ err: evt.reason });
-          };
-
-          ws.onerror = (evt: ErrorEvent) => {
-            const err = evt.error;
-            resolve({
-              err: `${err.name}: ${err.message}`,
-            });
-          };
-        })
-        .catch((e) => {
-          const reason = e instanceof Error ? e.message : 'unknown reason';
-          resolve({ err: `couldn't get a new websocket: ${reason}` });
-        });
+    log?.info(`establishing a new websocket to ${to}`, {
+      clientId: this.clientId,
+      connectedTo: to,
     });
 
-    if ('ws' in wsRes) {
-      const conn = new WebSocketConnection(wsRes.ws);
-      log?.info(`raw websocket to ${to} ok, starting handshake`, {
-        clientId: this.clientId,
-        connectedTo: to,
-      });
+    const ws = await this.wsGetter(to);
 
-      this.handleConnection(conn, to);
-      return conn;
-    } else {
-      throw new Error(wsRes.err);
-    }
+    await new Promise<void>((resolve, reject) => {
+      if (ws.readyState === ws.OPEN) {
+        resolve();
+        return;
+      }
+
+      if (ws.readyState === ws.CLOSING || ws.readyState === ws.CLOSED) {
+        reject(new Error('ws is closing or closed'));
+        return;
+      }
+
+      ws.onopen = () => {
+        resolve();
+      };
+
+      ws.onclose = (evt) => {
+        reject(new Error(evt.reason));
+      };
+    });
+
+    const conn = new WebSocketConnection(ws);
+    log?.info(`raw websocket to ${to} ok, starting handshake`, {
+      clientId: this.clientId,
+      connectedTo: to,
+    });
+
+    this.handleConnection(conn, to);
+    return conn;
   }
 }

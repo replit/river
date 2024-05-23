@@ -1,4 +1,4 @@
-run = "npm run test:ui"
+run = "npm run test"
 modules = ["nodejs-20:v8-20230920-bd784b9"]
 hidden = [".config", "package-lock.json"]
 
@@ -11,6 +11,10 @@ channel = "stable-23_05"
 [[ports]]
 localPort = 3000
 externalPort = 80
+
+[[ports]]
+localPort = 24678
+externalPort = 3000
 
 [languages.eslint]
 pattern = "**{*.ts,*.js,*.tsx,*.jsx}"
