@@ -1,13 +1,6 @@
 import { Codec } from '../codec/types';
 import { Value } from '@sinclair/typebox/value';
 import {
-  context,
-  propagation,
-  type Span,
-  SpanKind,
-  SpanStatusCode,
-} from '@opentelemetry/api';
-import {
   OpaqueTransportMessage,
   OpaqueTransportMessageSchema,
   TransportClientId,
@@ -34,10 +27,15 @@ import {
 } from './events';
 import { Connection, Session, SessionOptions } from './session';
 import { Static } from '@sinclair/typebox';
-import tracer from '../tracing';
 import { coerceErrorString } from '../util/stringify';
 import { ConnectionRetryOptions, LeakyBucketRateLimit } from './rateLimit';
 import { NaiveJsonCodec } from '../codec';
+import tracer, {
+  PropagationContext,
+  createConnectionTelemetryInfo,
+  getPropagationContext,
+} from '../tracing';
+import { SpanStatusCode } from '@opentelemetry/api';
 
 /**
  * Represents the possible states of a transport.
@@ -46,8 +44,6 @@ import { NaiveJsonCodec } from '../codec';
  * @property {'destroyed'} destroyed - The transport is permanently destroyed and cannot be reopened.
  */
 export type TransportStatus = 'open' | 'closed' | 'destroyed';
-
-// -- base transport options
 
 type TransportOptions = SessionOptions;
 
@@ -59,8 +55,6 @@ export const defaultTransportOptions: TransportOptions = {
   sessionDisconnectGraceMs: 5_000,
   codec: NaiveJsonCodec,
 };
-
-// -- client transport options
 
 type ClientTransportOptions = TransportOptions &
   ConnectionRetryOptions & { handshake?: ClientHandshakeOptions };
@@ -79,8 +73,6 @@ const defaultClientTransportOptions: ClientTransportOptions = {
   ...defaultTransportOptions,
   ...defaultConnectionRetryOptions,
 };
-
-// -- server transport options
 
 type ServerTransportOptions = TransportOptions & {
   handshake?: ServerHandshakeOptions;
@@ -212,18 +204,28 @@ export abstract class Transport<ConnType extends Connection> {
       conn,
     });
 
+    conn.telemetry = createConnectionTelemetryInfo(
+      conn,
+      session.telemetry.span,
+    );
+
     if (isReconnect) {
       session.replaceWithNewConnection(conn);
       log?.info(`reconnected to ${connectedTo}`, session.loggingMetadata);
     }
   }
 
-  protected createSession(to: TransportClientId, conn?: ConnType) {
+  protected createSession(
+    to: TransportClientId,
+    conn?: ConnType,
+    propagationCtx?: PropagationContext,
+  ) {
     const session = new Session<ConnType>(
       conn,
       this.clientId,
       to,
       this.options,
+      propagationCtx,
     );
     this.sessions.set(session.to, session);
     this.eventDispatcher.dispatchEvent('sessionStatus', {
@@ -237,6 +239,7 @@ export abstract class Transport<ConnType extends Connection> {
     to: TransportClientId,
     conn?: ConnType,
     sessionId?: string,
+    propagationCtx?: PropagationContext,
   ) {
     let session = this.sessions.get(to);
     let isReconnect = session !== undefined;
@@ -246,7 +249,7 @@ export abstract class Transport<ConnType extends Connection> {
       sessionId !== undefined &&
       session.advertisedSessionId !== sessionId
     ) {
-      log?.warn(
+      log?.info(
         `session for ${to} already exists but has a different session id (expected: ${session.advertisedSessionId}, got: ${sessionId}), creating a new one`,
         session.loggingMetadata,
       );
@@ -256,7 +259,7 @@ export abstract class Transport<ConnType extends Connection> {
     }
 
     if (!session) {
-      session = this.createSession(to, conn);
+      session = this.createSession(to, conn, propagationCtx);
       log?.info(
         `no session for ${to}, created a new one`,
         session.loggingMetadata,
@@ -272,6 +275,7 @@ export abstract class Transport<ConnType extends Connection> {
 
   protected deleteSession(session: Session<ConnType>) {
     session.close();
+    session.telemetry.span.end();
     this.sessions.delete(session.to);
     log?.info(
       `session ${session.id} disconnect from ${session.to}`,
@@ -289,13 +293,17 @@ export abstract class Transport<ConnType extends Connection> {
    * @param connectedTo The peer we are connected to.
    */
   protected onDisconnect(conn: ConnType, session: Session<ConnType>) {
+    conn.telemetry?.span.end();
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'disconnect',
       conn,
     });
 
     session.connection = undefined;
-    session.beginGrace(() => this.deleteSession(session));
+    session.beginGrace(() => {
+      session.telemetry.span.addEvent('session grace period expired');
+      this.deleteSession(session);
+    });
   }
 
   /**
@@ -362,6 +370,10 @@ export abstract class Transport<ConnType extends Connection> {
           tags: ['invariant-violation'],
         });
         this.protocolError(ProtocolError.MessageOrderingViolated, errMsg);
+        session.telemetry.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'message order violated',
+        });
         session.close();
       }
 
@@ -523,7 +535,7 @@ export abstract class ClientTransport<
       if (!session) {
         log?.warn(
           `connection to ${to} timed out waiting for handshake, closing`,
-          { clientId: this.clientId, connectedTo: to, connId: conn.debugId },
+          { clientId: this.clientId, connectedTo: to, connId: conn.id },
         );
         conn.close();
       }
@@ -545,6 +557,10 @@ export abstract class ClientTransport<
       conn.addDataListener((data) => {
         const parsed = this.parseMsg(data);
         if (!parsed) {
+          conn.telemetry?.span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: 'message parse failure',
+          });
           conn.close();
           return;
         }
@@ -569,6 +585,10 @@ export abstract class ClientTransport<
       }
     });
     conn.addErrorListener((err) => {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'connection error',
+      });
       log?.warn(`error in connection to ${to}: ${coerceErrorString(err)}`, {
         ...session?.loggingMetadata,
         clientId: this.clientId,
@@ -583,6 +603,10 @@ export abstract class ClientTransport<
   ): Session<ConnType> | false {
     const parsed = this.parseMsg(data);
     if (!parsed) {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'non-transport message',
+      });
       this.protocolError(
         ProtocolError.HandshakeFailed,
         'received non-transport message',
@@ -591,6 +615,10 @@ export abstract class ClientTransport<
     }
 
     if (!Value.Check(ControlMessageHandshakeResponseSchema, parsed.payload)) {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'invalid handshake response',
+      });
       log?.warn(`received invalid handshake resp`, {
         clientId: this.clientId,
         connectedTo: parsed.from,
@@ -604,7 +632,11 @@ export abstract class ClientTransport<
     }
 
     if (!parsed.payload.status.ok) {
-      log?.warn(`received invalid handshake resp`, {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'handshake rejected',
+      });
+      log?.warn(`received handshake rejection`, {
         clientId: this.clientId,
         connectedTo: parsed.from,
         fullTransportMessage: parsed,
@@ -654,163 +686,106 @@ export abstract class ClientTransport<
    * @param to The client ID of the node to connect to.
    */
   async connect(to: TransportClientId): Promise<void> {
-    return tracer.startActiveSpan(
-      'connect',
-      {
-        attributes: {
-          component: 'river',
-          'span.kind': 'client',
-        },
-        kind: SpanKind.CLIENT,
-      },
-      async (span: Span) => {
-        try {
-          await this.connectAttempt(to);
-        } catch (e: unknown) {
-          if (e instanceof Error) {
-            span.recordException(e);
-          } else {
-            span.recordException(coerceErrorString(e));
-          }
-          span.setStatus({ code: SpanStatusCode.ERROR });
-        } finally {
-          span.end();
-        }
-      },
-    );
-  }
+    const canProceedWithConnection = () => this.state === 'open';
+    if (!canProceedWithConnection()) {
+      log?.info(
+        `transport state is no longer open, cancelling attempt to connect to ${to}`,
+        { clientId: this.clientId, connectedTo: to },
+      );
+      return;
+    }
 
-  private async connectAttempt(
-    to: TransportClientId,
-    attempt = 0,
-  ): Promise<void> {
-    const retry = await tracer.startActiveSpan(
-      'connect',
-      {
-        attributes: {
-          component: 'river',
-          'river.attempt': attempt,
-          'span.kind': 'client',
-        },
-        kind: SpanKind.CLIENT,
-      },
-      async (span: Span) => {
+    let reconnectPromise = this.inflightConnectionPromises.get(to);
+    if (!reconnectPromise) {
+      // check budget
+      const budgetConsumed = this.retryBudget.getBudgetConsumed(to);
+      if (!this.retryBudget.hasBudget(to)) {
+        const errMsg = `tried to connect to ${to} but retry budget exceeded (more than ${budgetConsumed} attempts in the last ${this.retryBudget.totalBudgetRestoreTime}ms)`;
+        log?.warn(errMsg, { clientId: this.clientId, connectedTo: to });
+        this.protocolError(ProtocolError.RetriesExceeded, errMsg);
+        return;
+      }
+
+      let sleep = Promise.resolve();
+      const backoffMs = this.retryBudget.getBackoffMs(to);
+      if (backoffMs > 0) {
+        sleep = new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
+
+      log?.info(`attempting connection to ${to} (${backoffMs}ms backoff)`, {
+        clientId: this.clientId,
+        connectedTo: to,
+      });
+      this.retryBudget.consumeBudget(to);
+      reconnectPromise = tracer.startActiveSpan('connect', async (span) => {
         try {
-          const canProceedWithConnection = () => this.state === 'open';
+          span.addEvent('backoff', { backoffMs });
+          await sleep;
+          if (!canProceedWithConnection()) {
+            throw new Error('transport state is no longer open');
+          }
+
+          span.addEvent('connecting');
+          const conn = await this.createNewOutgoingConnection(to);
           if (!canProceedWithConnection()) {
             log?.info(
-              `transport state is no longer open, cancelling attempt to connect to ${to}`,
-              { clientId: this.clientId, connectedTo: to },
-            );
-            return false;
-          }
-
-          let reconnectPromise = this.inflightConnectionPromises.get(to);
-          if (!reconnectPromise) {
-            // check budget
-            const budgetConsumed = this.retryBudget.getBudgetConsumed(to);
-            if (!this.retryBudget.hasBudget(to)) {
-              const errMsg = `tried to connect to ${to} but retry budget exceeded (more than ${budgetConsumed} attempts in the last ${this.retryBudget.totalBudgetRestoreTime}ms)`;
-              log?.warn(errMsg, { clientId: this.clientId, connectedTo: to });
-              this.protocolError(ProtocolError.RetriesExceeded, errMsg);
-              return false;
-            }
-
-            let sleep = Promise.resolve();
-            const backoffMs = this.retryBudget.getBackoffMs(to);
-            if (backoffMs > 0) {
-              sleep = new Promise((resolve) => setTimeout(resolve, backoffMs));
-            }
-
-            log?.info(
-              `attempting connection to ${to} (${backoffMs}ms backoff)`,
+              `transport state is no longer open, closing pre-handshake connection to ${to}`,
               {
                 clientId: this.clientId,
                 connectedTo: to,
+                connId: conn.id,
               },
             );
-            this.retryBudget.consumeBudget(to);
-            reconnectPromise = sleep
-              .then(() => {
-                if (!canProceedWithConnection()) {
-                  throw new Error('transport state is no longer open');
-                }
-              })
-              .then(() => this.createNewOutgoingConnection(to))
-              .then((conn) => {
-                if (!canProceedWithConnection()) {
-                  log?.info(
-                    `transport state is no longer open, closing pre-handshake connection to ${to}`,
-                    {
-                      clientId: this.clientId,
-                      connectedTo: to,
-                      connId: conn.debugId,
-                    },
-                  );
-                  conn.close();
-                  throw new Error('transport state is no longer open');
-                }
-
-                // only send handshake once per attempt
-                return this.sendHandshake(to, conn).then((ok) => {
-                  if (!ok) {
-                    conn.close();
-                    throw new Error('failed to send handshake');
-                  }
-
-                  return conn;
-                });
-              });
-
-            this.inflightConnectionPromises.set(to, reconnectPromise);
-          } else {
-            log?.info(
-              `attempting connection to ${to} (reusing previous attempt)`,
-              {
-                clientId: this.clientId,
-                connectedTo: to,
-              },
-            );
+            conn.close();
+            throw new Error('transport state is no longer open');
           }
 
-          try {
-            await reconnectPromise;
-          } catch (error: unknown) {
-            this.inflightConnectionPromises.delete(to);
-            const errStr = coerceErrorString(error);
+          span.addEvent('sending handshake');
+          const ok = await this.sendHandshake(to, conn);
+          if (!ok) {
+            conn.close();
+            throw new Error('failed to send handshake');
+          }
 
-            if (
-              !this.reconnectOnConnectionDrop ||
-              !canProceedWithConnection()
-            ) {
-              log?.warn(`connection to ${to} failed (${errStr})`, {
-                clientId: this.clientId,
-                connectedTo: to,
-              });
-            } else {
-              log?.warn(`connection to ${to} failed (${errStr}), retrying`, {
-                clientId: this.clientId,
-                connectedTo: to,
-              });
-              return true;
-            }
-          }
-        } catch (e: unknown) {
-          if (e instanceof Error) {
-            span.recordException(e);
-          } else {
-            span.recordException(coerceErrorString(e));
-          }
+          return conn;
+        } catch (err) {
+          // rethrow the error so that the promise is rejected
+          // as it was before we wrapped it in a span
+          const errStr = coerceErrorString(err);
+          span.recordException(errStr);
           span.setStatus({ code: SpanStatusCode.ERROR });
+          throw err;
         } finally {
           span.end();
         }
+      });
 
-        return false;
-      },
-    );
-    if (retry) {
-      return this.connectAttempt(to, attempt + 1);
+      this.inflightConnectionPromises.set(to, reconnectPromise);
+    } else {
+      log?.info(`attempting connection to ${to} (reusing previous attempt)`, {
+        clientId: this.clientId,
+        connectedTo: to,
+      });
+    }
+
+    try {
+      await reconnectPromise;
+    } catch (error: unknown) {
+      this.inflightConnectionPromises.delete(to);
+      const errStr = coerceErrorString(error);
+
+      if (!this.reconnectOnConnectionDrop || !canProceedWithConnection()) {
+        log?.warn(`connection to ${to} failed (${errStr})`, {
+          clientId: this.clientId,
+          connectedTo: to,
+        });
+      } else {
+        log?.warn(`connection to ${to} failed (${errStr}), retrying`, {
+          clientId: this.clientId,
+          connectedTo: to,
+        });
+        return this.connect(to);
+      }
     }
   }
 
@@ -820,8 +795,6 @@ export abstract class ClientTransport<
   }
 
   protected async sendHandshake(to: TransportClientId, conn: ConnType) {
-    const tracing = { traceparent: '', tracestate: '' };
-    propagation.inject(context.active(), tracing);
     let metadata: HandshakeRequestMetadata | undefined;
 
     if (this.options.handshake) {
@@ -837,6 +810,10 @@ export abstract class ClientTransport<
           ProtocolError.HandshakeFailed,
           'handshake metadata did not match schema',
         );
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'handshake meta mismatch',
+        });
         return false;
       }
     }
@@ -847,7 +824,7 @@ export abstract class ClientTransport<
       to,
       session.id,
       metadata,
-      tracing,
+      getPropagationContext(session.telemetry.ctx),
     );
     log?.debug(`sending handshake request to ${to}`, {
       clientId: this.clientId,
@@ -887,121 +864,102 @@ export abstract class ServerTransport<
   }
 
   protected handleConnection(conn: ConnType) {
-    tracer.startActiveSpan(
-      'handleConnection',
-      {
-        attributes: {
-          component: 'river',
-          'span.kind': 'server',
-        },
-        kind: SpanKind.SERVER,
-      },
-      (span: Span) => {
-        if (this.state !== 'open') return;
+    if (this.state !== 'open') return;
 
-        log?.info(`new incoming connection`, {
-          clientId: this.clientId,
-          connId: conn.debugId,
+    log?.info(`new incoming connection`, {
+      clientId: this.clientId,
+      connId: conn.id,
+    });
+
+    let session: Session<ConnType> | undefined = undefined;
+    const client = () => session?.to ?? 'unknown';
+
+    // kill the conn after the grace period if we haven't received a handshake
+    const handshakeTimeout = setTimeout(() => {
+      if (!session) {
+        log?.warn(
+          `connection to ${client()} timed out waiting for handshake, closing`,
+          {
+            clientId: this.clientId,
+            connectedTo: client(),
+            connId: conn.id,
+          },
+        );
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'handshake timeout',
         });
+        conn.close();
+      }
+    }, this.options.sessionDisconnectGraceMs);
 
-        let session: Session<ConnType> | undefined = undefined;
-        const client = () => session?.to ?? 'unknown';
+    const buffer: Array<Uint8Array> = [];
+    let receivedHandshakeMessage = false;
 
-        // kill the conn after the grace period if we haven't received a handshake
-        const handshakeTimeout = setTimeout(() => {
-          if (!session) {
-            log?.warn(
-              `connection to ${client()} timed out waiting for handshake, closing`,
-              {
-                clientId: this.clientId,
-                connectedTo: client(),
-                connId: conn.debugId,
-              },
-            );
-            span.setStatus({ code: SpanStatusCode.ERROR });
-            span.end();
+    const handshakeHandler = (data: Uint8Array) => {
+      // if we've already received, just buffer the data
+      if (receivedHandshakeMessage) {
+        buffer.push(data);
+        return;
+      }
+
+      receivedHandshakeMessage = true;
+      clearTimeout(handshakeTimeout);
+
+      void this.receiveHandshakeRequestMessage(data, conn).then(
+        (maybeSession) => {
+          if (!maybeSession) {
             conn.close();
-          }
-        }, this.options.sessionDisconnectGraceMs);
-
-        const buffer: Array<Uint8Array> = [];
-        let receivedHandshakeMessage = false;
-
-        const handshakeHandler = (data: Uint8Array) => {
-          // if we've already received, just buffer the data
-          if (receivedHandshakeMessage) {
-            buffer.push(data);
             return;
           }
 
-          receivedHandshakeMessage = true;
-          clearTimeout(handshakeTimeout);
+          session = maybeSession;
 
-          void this.receiveHandshakeRequestMessage(data, conn).then(
-            (maybeSession) => {
-              if (!maybeSession) {
-                span.setStatus({ code: SpanStatusCode.ERROR });
-                span.end();
-                conn.close();
+          // when we are done handshake sequence,
+          // remove handshake listener and use the normal message listener
+          const dataHandler = (data: Uint8Array) => {
+            const parsed = this.parseMsg(data);
+            if (!parsed) {
+              conn.close();
+              return;
+            }
 
-                return;
-              }
+            this.handleMsg(parsed);
+          };
 
-              session = maybeSession;
-
-              // when we are done handshake sequence,
-              // remove handshake listener and use the normal message listener
-
-              const dataHandler = (data: Uint8Array) => {
-                const parsed = this.parseMsg(data);
-                if (!parsed) {
-                  conn.close();
-                  return;
-                }
-
-                this.handleMsg(parsed);
-              };
-
-              conn.removeDataListener(handshakeHandler);
-              conn.addDataListener(dataHandler);
-
-              // process any data we missed
-              for (const data of buffer) {
-                dataHandler(data);
-              }
-
-              buffer.length = 0;
-            },
-          );
-        };
-
-        conn.addDataListener(handshakeHandler);
-        conn.addCloseListener(() => {
-          if (session) {
-            log?.info(`connection to ${client()} disconnected`, {
-              clientId: this.clientId,
-              connId: conn.debugId,
-            });
-            this.onDisconnect(conn, session);
+          // process any data we missed
+          for (const data of buffer) {
+            dataHandler(data);
           }
-          span.setStatus({ code: SpanStatusCode.OK });
-          span.end();
-        });
 
-        conn.addErrorListener((err) => {
-          if (session) {
-            log?.warn(
-              `connection to ${client()} got an error: ${coerceErrorString(
-                err,
-              )}`,
-              { clientId: this.clientId, connId: conn.debugId },
-            );
-          }
-          span.setStatus({ code: SpanStatusCode.ERROR });
-          span.end();
-        });
-      },
-    );
+          conn.removeDataListener(handshakeHandler);
+          conn.addDataListener(dataHandler);
+          buffer.length = 0;
+        },
+      );
+    };
+
+    conn.addDataListener(handshakeHandler);
+    conn.addCloseListener(() => {
+      if (!session) return;
+      log?.info(`connection to ${client()} disconnected`, {
+        clientId: this.clientId,
+        connId: conn.id,
+      });
+      this.onDisconnect(conn, session);
+    });
+
+    conn.addErrorListener((err) => {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'connection error',
+      });
+      if (!session) return;
+      log?.warn(
+        `connection to ${client()} got an error: ${coerceErrorString(err)}`,
+        { clientId: this.clientId, connId: conn.id },
+      );
+    });
   }
 
   async receiveHandshakeRequestMessage(
@@ -1010,6 +968,10 @@ export abstract class ServerTransport<
   ): Promise<Session<ConnType> | false> {
     const parsed = this.parseMsg(data);
     if (!parsed) {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'non-transport message',
+      });
       this.protocolError(
         ProtocolError.HandshakeFailed,
         'received non-transport message',
@@ -1017,195 +979,159 @@ export abstract class ServerTransport<
       return false;
     }
 
-    let activeContext = context.active();
-    if (parsed.tracing) {
-      activeContext = propagation.extract(activeContext, parsed.tracing);
+    if (!Value.Check(ControlMessageHandshakeRequestSchema, parsed.payload)) {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'invalid handshake request',
+      });
+      const reason = 'received invalid handshake msg';
+      const responseMsg = handshakeResponseMessage(this.clientId, parsed.from, {
+        ok: false,
+        reason,
+      });
+      conn.send(this.codec.toBuffer(responseMsg));
+      // note: do _not_ log the payload, it may contain secrets
+      const logData = { ...(parsed.payload ?? {}), metadata: 'redacted' };
+      log?.warn(reason, {
+        clientId: this.clientId,
+        connId: conn.id,
+        partialTransportMessage: { ...parsed, payload: logData },
+      });
+      this.protocolError(
+        ProtocolError.HandshakeFailed,
+        'invalid handshake request',
+      );
+      return false;
     }
-    return tracer.startActiveSpan(
-      'receiveHandshakeRequestMessage',
-      {
-        attributes: {
-          component: 'river',
-          'span.kind': 'server',
-        },
-        kind: SpanKind.SERVER,
-      },
-      activeContext,
-      async (span: Span): Promise<Session<ConnType> | false> => {
-        if (
-          !Value.Check(ControlMessageHandshakeRequestSchema, parsed.payload)
-        ) {
-          const reason = 'received invalid handshake msg';
-          const responseMsg = handshakeResponseMessage(
-            this.clientId,
-            parsed.from,
-            {
-              ok: false,
-              reason,
-            },
-          );
-          conn.send(this.codec.toBuffer(responseMsg));
-          // note: do _not_ log the payload, it may contain secrets
-          const logData =
-            typeof parsed.payload === 'object'
-              ? {
-                  ...parsed,
-                  payload: { ...parsed.payload, metadata: 'redacted' },
-                }
-              : { ...parsed };
-          log?.warn(`${reason}: ${JSON.stringify(logData)}`, {
-            clientId: this.clientId,
-            connId: conn.debugId,
-          });
-          this.protocolError(
-            ProtocolError.HandshakeFailed,
-            'invalid handshake request',
-          );
-          span.setStatus({ code: SpanStatusCode.ERROR });
-          span.end();
 
-          return false;
-        }
+    // double check protocol version here
+    const gotVersion = parsed.payload.protocolVersion;
+    if (gotVersion !== PROTOCOL_VERSION) {
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'incorrect protocol version',
+      });
 
-        // double check protocol version here
-        const gotVersion = parsed.payload.protocolVersion;
-        if (gotVersion !== PROTOCOL_VERSION) {
-          const reason = `incorrect version (got: ${gotVersion} wanted ${PROTOCOL_VERSION})`;
-          const responseMsg = handshakeResponseMessage(
-            this.clientId,
-            parsed.from,
-            {
-              ok: false,
-              reason,
-            },
-          );
-          conn.send(this.codec.toBuffer(responseMsg));
-          log?.warn(
-            `received handshake msg with incompatible protocol version (got: ${gotVersion}, expected: ${PROTOCOL_VERSION})`,
-            { clientId: this.clientId, connId: conn.debugId },
-          );
-          this.protocolError(ProtocolError.HandshakeFailed, reason);
-          span.setStatus({ code: SpanStatusCode.ERROR });
-          span.end();
+      const reason = `incorrect version (got: ${gotVersion} wanted ${PROTOCOL_VERSION})`;
+      const responseMsg = handshakeResponseMessage(this.clientId, parsed.from, {
+        ok: false,
+        reason,
+      });
+      conn.send(this.codec.toBuffer(responseMsg));
+      log?.warn(
+        `received handshake msg with incompatible protocol version (got: ${gotVersion}, expected: ${PROTOCOL_VERSION})`,
+        { clientId: this.clientId, connId: conn.id },
+      );
+      this.protocolError(ProtocolError.HandshakeFailed, reason);
+      return false;
+    }
 
-          return false;
-        }
+    const { session, isReconnect } = this.getOrCreateSession(
+      parsed.from,
+      conn,
+      parsed.payload.sessionId,
+      parsed.tracing,
+    );
 
-        const { session, isReconnect } = this.getOrCreateSession(
-          parsed.from,
-          conn,
-          parsed.payload.sessionId,
-        );
+    let handshakeMetadata: HandshakeRequestMetadata | undefined;
 
-        let handshakeMetadata: HandshakeRequestMetadata | undefined;
-
-        if (this.options.handshake) {
-          // check that the metadata that was sent is the correct shape
-          if (
-            !Value.Check(
-              this.options.handshake.requestSchema,
-              parsed.payload.metadata,
-            )
-          ) {
-            const reason = 'received malformed handshake metadata';
-            const responseMsg = handshakeResponseMessage(
-              this.clientId,
-              parsed.from,
-              { ok: false, reason },
-            );
-            conn.send(this.codec.toBuffer(responseMsg));
-            // note: do _not_ log the metadata, it may contain secrets
-            log?.warn(
-              `received malformed handshake metadata from ${parsed.from}`,
-              {
-                clientId: this.clientId,
-                connId: conn.debugId,
-              },
-            );
-            this.protocolError(ProtocolError.HandshakeFailed, reason);
-            this.deleteSession(session);
-            span.setStatus({ code: SpanStatusCode.ERROR });
-            span.end();
-
-            return false;
-          }
-
-          const parsedMetadata = await this.options.handshake.parse(
-            parsed.payload.metadata as HandshakeRequestMetadata,
-            session,
-            isReconnect,
-          );
-
-          // handler rejected the connection
-          if (parsedMetadata === false) {
-            const reason = 'rejected by server';
-            const responseMsg = handshakeResponseMessage(
-              this.clientId,
-              parsed.from,
-              { ok: false, reason },
-            );
-            conn.send(this.codec.toBuffer(responseMsg));
-            log?.warn(`rejected handshake from ${parsed.from}`, {
-              clientId: this.clientId,
-              connId: conn.debugId,
-            });
-            this.protocolError(ProtocolError.HandshakeFailed, reason);
-            this.deleteSession(session);
-            span.setStatus({ code: SpanStatusCode.ERROR });
-            span.end();
-
-            return false;
-          }
-
-          // check that the parsed metadata is the correct shape
-          if (
-            !Value.Check(this.options.handshake.parsedSchema, parsedMetadata)
-          ) {
-            const reason = 'failed to parse handshake metadata';
-            const responseMsg = handshakeResponseMessage(
-              this.clientId,
-              parsed.from,
-              { ok: false, reason },
-            );
-            conn.send(this.codec.toBuffer(responseMsg));
-            // note: do _not_ log the metadata, it may contain secrets
-            log?.error(`failed to parse handshake metadata`, {
-              clientId: this.clientId,
-              connId: conn.debugId,
-              tags: ['invariant-violation'],
-            });
-            this.protocolError(ProtocolError.HandshakeFailed, reason);
-            this.deleteSession(session);
-            span.setStatus({ code: SpanStatusCode.ERROR });
-            span.end();
-
-            return false;
-          }
-
-          handshakeMetadata = parsedMetadata;
-        }
-
-        handshakeMetadata ??= {} as HandshakeRequestMetadata;
-        session.metadata = handshakeMetadata;
-
-        log?.debug(
-          `handshake from ${parsed.from} ok, responding with handshake success`,
-          { clientId: this.clientId, connId: conn.debugId },
-        );
+    if (this.options.handshake) {
+      // check that the metadata that was sent is the correct shape
+      if (
+        !Value.Check(
+          this.options.handshake.requestSchema,
+          parsed.payload.metadata,
+        )
+      ) {
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'malformed handshake meta',
+        });
+        const reason = 'received malformed handshake metadata';
         const responseMsg = handshakeResponseMessage(
           this.clientId,
           parsed.from,
-          {
-            ok: true,
-            sessionId: session.id,
-          },
+          { ok: false, reason },
         );
         conn.send(this.codec.toBuffer(responseMsg));
-        this.onConnect(conn, parsed.from, session, isReconnect);
-        span.end();
+        // note: do _not_ log the metadata, it may contain secrets
+        log?.warn(`received malformed handshake metadata from ${parsed.from}`, {
+          clientId: this.clientId,
+          connId: conn.id,
+        });
+        this.protocolError(ProtocolError.HandshakeFailed, reason);
+        this.deleteSession(session);
+        return false;
+      }
 
-        return session;
-      },
+      const parsedMetadata = await this.options.handshake.parse(
+        parsed.payload.metadata as HandshakeRequestMetadata,
+        session,
+        isReconnect,
+      );
+
+      // handler rejected the connection
+      if (parsedMetadata === false) {
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'rejected by handshake handler',
+        });
+        const reason = 'rejected by handshake handler';
+        const responseMsg = handshakeResponseMessage(
+          this.clientId,
+          parsed.from,
+          { ok: false, reason },
+        );
+        conn.send(this.codec.toBuffer(responseMsg));
+        log?.warn(`rejected handshake from ${parsed.from}`, {
+          clientId: this.clientId,
+          connId: conn.id,
+        });
+        this.protocolError(ProtocolError.HandshakeFailed, reason);
+        this.deleteSession(session);
+        return false;
+      }
+
+      // check that the parsed metadata is the correct shape
+      if (!Value.Check(this.options.handshake.parsedSchema, parsedMetadata)) {
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'malformed handshake meta',
+        });
+        const reason = 'failed to parse handshake metadata';
+        const responseMsg = handshakeResponseMessage(
+          this.clientId,
+          parsed.from,
+          { ok: false, reason },
+        );
+        conn.send(this.codec.toBuffer(responseMsg));
+        // note: do _not_ log the metadata, it may contain secrets
+        log?.error(`failed to parse handshake metadata`, {
+          clientId: this.clientId,
+          connId: conn.id,
+        });
+        this.protocolError(ProtocolError.HandshakeFailed, reason);
+        this.deleteSession(session);
+        return false;
+      }
+
+      handshakeMetadata = parsedMetadata;
+    }
+
+    handshakeMetadata ??= {} as HandshakeRequestMetadata;
+    session.metadata = handshakeMetadata;
+
+    log?.debug(
+      `handshake from ${parsed.from} ok, responding with handshake success`,
+      { clientId: this.clientId, connId: conn.id },
     );
+    const responseMsg = handshakeResponseMessage(this.clientId, parsed.from, {
+      ok: true,
+      sessionId: session.id,
+    });
+    conn.send(this.codec.toBuffer(responseMsg));
+    this.onConnect(conn, parsed.from, session, isReconnect);
+
+    return session;
   }
 }

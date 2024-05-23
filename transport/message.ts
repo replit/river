@@ -1,6 +1,7 @@
 import { Type, TSchema, Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import { Connection, Session } from './session';
+import { PropagationContext } from '../tracing';
 
 /**
  * Control flags for transport messages.
@@ -219,7 +220,7 @@ export interface TransportMessage<Payload = unknown> {
   procedureName?: string;
   streamId: string;
   controlFlags: number;
-  tracing?: { traceparent: string; tracestate: string };
+  tracing?: PropagationContext;
   payload: Payload;
 }
 
@@ -233,7 +234,7 @@ export function handshakeRequestMessage(
   to: TransportClientId,
   sessionId: string,
   metadata?: HandshakeRequestMetadata,
-  tracing?: { traceparent: string; tracestate: string },
+  tracing?: PropagationContext,
 ): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {
   return {
     id: nanoid(),

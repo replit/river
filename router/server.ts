@@ -1,10 +1,3 @@
-import {
-  context,
-  propagation,
-  type Span,
-  SpanKind,
-  SpanStatusCode,
-} from '@opentelemetry/api';
 import { Static } from '@sinclair/typebox';
 import { ServerTransport } from '../transport/transport';
 import { AnyProcedure, PayloadType } from './procedures';
@@ -29,7 +22,6 @@ import {
   ServiceContextWithTransportInfo,
 } from './context';
 import { log } from '../logging/log';
-import tracer from '../tracing';
 import { Value } from '@sinclair/typebox/value';
 import {
   Err,
@@ -41,6 +33,8 @@ import {
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { coerceErrorString } from '../util/stringify';
+import { Span, SpanStatusCode } from '@opentelemetry/api';
+import { createHandlerSpan } from '../tracing';
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -193,11 +187,6 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       return;
     }
 
-    let activeContext = context.active();
-    if (message.tracing) {
-      activeContext = propagation.extract(activeContext, message.tracing);
-    }
-
     const service = this.services[message.serviceName];
     const serviceContext = this.getContext(service, message.serviceName);
     if (!(message.procedureName in service.procedures)) {
@@ -270,13 +259,9 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
         `procedure ${message.serviceName}.${message.procedureName} threw an uncaught error: ${errorMsg}`,
         session.loggingMetadata,
       );
-      if (err instanceof Error) {
-        span.recordException(err);
-      } else {
-        span.recordException(errorMsg);
-      }
-      span.setStatus({ code: SpanStatusCode.ERROR });
 
+      span.recordException(err instanceof Error ? err : new Error(errorMsg));
+      span.setStatus({ code: SpanStatusCode.ERROR });
       outgoing.push(
         Err({
           code: UNCAUGHT_ERROR,
@@ -309,33 +294,50 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
 
     switch (procedure.type) {
       case 'rpc':
-        inputHandler = (async () => {
-          const inputMessage = await incoming.next();
-          if (inputMessage.done) {
-            return;
-          }
+        inputHandler = createHandlerSpan(
+          procedure.type,
+          message,
+          async (span) => {
+            const inputMessage = await incoming.next();
+            if (inputMessage.done) {
+              return;
+            }
+            try {
+              const outputMessage = await procedure.handler(
+                serviceContextWithTransportInfo,
+                inputMessage.value,
+              );
+              outgoing.push(outputMessage);
+            } catch (err) {
+              errorHandler(err, span);
+            } finally {
+              span.end();
+            }
+          },
+        );
+        break;
+      case 'stream':
+        if (procHasInitMessage) {
+          inputHandler = createHandlerSpan(
+            procedure.type,
+            message,
+            async (span) => {
+              const initMessage = await incoming.next();
+              if (initMessage.done) {
+                return;
+              }
 
-          await tracer.startActiveSpan(
-            `${message.serviceName}.${message.procedureName}`,
-            {
-              attributes: {
-                component: 'river',
-                'river.method.kind': 'rpc',
-                'river.method.service': message.serviceName,
-                'river.method.name': message.procedureName,
-                'river.streamId': message.streamId,
-                'span.kind': 'server',
-              },
-              kind: SpanKind.SERVER,
-            },
-            activeContext,
-            async (span: Span) => {
               try {
-                const outputMessage = await procedure.handler(
+                const dispose = await procedure.handler(
                   serviceContextWithTransportInfo,
-                  inputMessage.value,
+                  initMessage.value,
+                  incoming,
+                  outgoing,
                 );
-                outgoing.push(outputMessage);
+
+                if (dispose) {
+                  disposables.push(dispose);
+                }
               } catch (err) {
                 errorHandler(err, span);
               } finally {
@@ -343,87 +345,23 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
               }
             },
           );
-        })();
-        break;
-      case 'stream':
-        if (procHasInitMessage) {
-          inputHandler = (async () => {
-            const initMessage = await incoming.next();
-            if (initMessage.done) {
-              return;
-            }
-
-            await tracer.startActiveSpan(
-              `${message.serviceName}.${message.procedureName}`,
-              {
-                attributes: {
-                  component: 'river',
-                  'river.method.kind': 'stream-with-init',
-                  'river.method.service': message.serviceName,
-                  'river.method.name': message.procedureName,
-                  'river.streamId': message.streamId,
-                  'span.kind': 'server',
-                },
-                kind: SpanKind.SERVER,
-              },
-              activeContext,
-              async (span: Span) => {
-                try {
-                  const dispose = await procedure.handler(
-                    serviceContextWithTransportInfo,
-                    initMessage.value,
-                    incoming,
-                    outgoing,
-                  );
-
-                  if (dispose) {
-                    disposables.push(() => {
-                      dispose();
-                      span.end();
-                    });
-                  } else {
-                    span.end();
-                  }
-                } catch (err) {
-                  errorHandler(err, span);
-                  span.end();
-                }
-              },
-            );
-          })();
         } else {
-          inputHandler = tracer.startActiveSpan(
-            `${message.serviceName}.${message.procedureName}`,
-            {
-              attributes: {
-                component: 'river',
-                'river.method.kind': 'stream',
-                'river.method.service': message.serviceName,
-                'river.method.name': message.procedureName,
-                'river.streamId': message.streamId,
-                'span.kind': 'server',
-              },
-              kind: SpanKind.SERVER,
-            },
-            activeContext,
-            async (span: Span) => {
+          inputHandler = createHandlerSpan(
+            procedure.type,
+            message,
+            async (span) => {
               try {
                 const dispose = await procedure.handler(
                   serviceContextWithTransportInfo,
                   incoming,
                   outgoing,
                 );
-
                 if (dispose) {
-                  disposables.push(() => {
-                    dispose();
-                    span.end();
-                  });
-                } else {
-                  span.end();
+                  disposables.push(dispose);
                 }
               } catch (err) {
                 errorHandler(err, span);
+              } finally {
                 span.end();
               }
             },
@@ -431,106 +369,65 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
         }
         break;
       case 'subscription':
-        inputHandler = (async () => {
-          const inputMessage = await incoming.next();
-          if (inputMessage.done) {
-            return;
-          }
+        inputHandler = createHandlerSpan(
+          procedure.type,
+          message,
+          async (span) => {
+            const inputMessage = await incoming.next();
+            if (inputMessage.done) {
+              return;
+            }
 
-          await tracer.startActiveSpan(
-            `${message.serviceName}.${message.procedureName}`,
-            {
-              attributes: {
-                component: 'river',
-                'river.method.kind': 'subscription',
-                'river.method.service': message.serviceName,
-                'river.method.name': message.procedureName,
-                'river.streamId': message.streamId,
-                'span.kind': 'server',
-              },
-              kind: SpanKind.SERVER,
-            },
-            activeContext,
-            async (span: Span) => {
+            try {
+              const dispose = await procedure.handler(
+                serviceContextWithTransportInfo,
+                inputMessage.value,
+                outgoing,
+              );
+
+              if (dispose) {
+                disposables.push(dispose);
+              }
+            } catch (err) {
+              errorHandler(err, span);
+            } finally {
+              span.end();
+            }
+          },
+        );
+        break;
+      case 'upload':
+        if (procHasInitMessage) {
+          inputHandler = createHandlerSpan(
+            procedure.type,
+            message,
+            async (span) => {
+              const initMessage = await incoming.next();
+              if (initMessage.done) {
+                return;
+              }
               try {
-                const dispose = await procedure.handler(
+                const outputMessage = await procedure.handler(
                   serviceContextWithTransportInfo,
-                  inputMessage.value,
-                  outgoing,
+                  initMessage.value,
+                  incoming,
                 );
 
-                if (dispose) {
-                  disposables.push(() => {
-                    dispose();
-                    span.end();
-                  });
-                } else {
-                  span.end();
+                if (!this.disconnectedSessions.has(message.from)) {
+                  outgoing.push(outputMessage);
                 }
               } catch (err) {
                 errorHandler(err, span);
+              } finally {
                 span.end();
               }
             },
           );
-        })();
-        break;
-      case 'upload':
-        if (procHasInitMessage) {
-          inputHandler = (async () => {
-            const initMessage = await incoming.next();
-            if (initMessage.done) {
-              return;
-            }
-            await tracer.startActiveSpan(
-              `${message.serviceName}.${message.procedureName}`,
-              {
-                attributes: {
-                  component: 'river',
-                  'river.method.kind': 'upload-with-init',
-                  'river.method.service': message.serviceName,
-                  'river.method.name': message.procedureName,
-                  'river.streamId': message.streamId,
-                  'span.kind': 'server',
-                },
-                kind: SpanKind.SERVER,
-              },
-              activeContext,
-              async (span: Span) => {
-                try {
-                  const outputMessage = await procedure.handler(
-                    serviceContextWithTransportInfo,
-                    initMessage.value,
-                    incoming,
-                  );
-
-                  if (!this.disconnectedSessions.has(message.from)) {
-                    outgoing.push(outputMessage);
-                  }
-                } catch (err) {
-                  errorHandler(err, span);
-                } finally {
-                  span.end();
-                }
-              },
-            );
-          })();
         } else {
-          inputHandler = tracer.startActiveSpan(
-            `${message.serviceName}.${message.procedureName}`,
-            {
-              attributes: {
-                component: 'river',
-                'river.method.kind': 'upload',
-                'river.method.service': message.serviceName,
-                'river.method.name': message.procedureName,
-                'river.streamId': message.streamId,
-                'span.kind': 'server',
-              },
-              kind: SpanKind.SERVER,
-            },
-            activeContext,
-            async (span: Span) => {
+          inputHandler = createHandlerSpan(
+            procedure.type,
+            message,
+            async (span) => {
               try {
                 const outputMessage = await procedure.handler(
                   serviceContextWithTransportInfo,
@@ -548,6 +445,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
             },
           );
         }
+
         break;
       default:
         // procedure is inferred to be never here as this is not a valid procedure type

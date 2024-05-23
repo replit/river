@@ -1,10 +1,3 @@
-import {
-  context,
-  propagation,
-  type Span,
-  SpanKind,
-  SpanStatusCode,
-} from '@opentelemetry/api';
 import { ClientTransport } from '../transport/transport';
 import {
   AnyService,
@@ -32,7 +25,7 @@ import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { log } from '../logging/log';
-import tracer from '../tracing';
+import { createProcTelemetryInfo, getPropagationContext } from '../tracing';
 
 // helper to make next, yield, and return all the same type
 export type AsyncIter<T> = AsyncGenerator<T, T>;
@@ -263,75 +256,53 @@ function handleRpc(
   procedureName: string,
 ) {
   const streamId = nanoid();
-  return tracer.startActiveSpan(
-    `${serviceName}.${procedureName}`,
-    {
-      attributes: {
-        component: 'river',
-        'river.method.kind': 'rpc',
-        'river.method.service': serviceName,
-        'river.method.name': procedureName,
-        'river.streamId': streamId,
-        'span.kind': 'client',
-      },
-      kind: SpanKind.CLIENT,
-    },
-    (span: Span) => {
-      const tracing = { traceparent: '', tracestate: '' };
-      propagation.inject(context.active(), tracing);
-      transport.send(serverId, {
-        streamId,
-        serviceName,
-        procedureName,
-        tracing,
-        payload: input,
-        controlFlags: ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit,
-      });
-
-      const responsePromise = new Promise((resolve) => {
-        // on disconnect, set a timer to return an error
-        // on (re)connect, clear the timer
-        const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
-          span.setStatus({ code: SpanStatusCode.ERROR });
-          cleanup();
-          resolve(
-            Err({
-              code: UNEXPECTED_DISCONNECT,
-              message: `${serverId} unexpectedly disconnected`,
-            }),
-          );
-        });
-
-        function cleanup() {
-          transport.removeEventListener('message', onMessage);
-          transport.removeEventListener('sessionStatus', onSessionStatus);
-          span.end();
-        }
-
-        function onMessage(msg: OpaqueTransportMessage) {
-          if (msg.streamId !== streamId) return;
-          if (msg.to !== transport.clientId) return;
-
-          // cleanup and resolve as soon as we get a message
-          if (
-            msg.payload &&
-            typeof msg.payload === 'object' &&
-            'ok' in msg.payload
-          ) {
-            span.setStatus({
-              code: msg.payload.ok ? SpanStatusCode.OK : SpanStatusCode.ERROR,
-            });
-          }
-          cleanup();
-          resolve(msg.payload);
-        }
-
-        transport.addEventListener('message', onMessage);
-        transport.addEventListener('sessionStatus', onSessionStatus);
-      });
-      return responsePromise;
-    },
+  const { span, ctx } = createProcTelemetryInfo(
+    'rpc',
+    serviceName,
+    procedureName,
+    streamId,
   );
+  transport.send(serverId, {
+    streamId,
+    serviceName,
+    procedureName,
+    payload: input,
+    tracing: getPropagationContext(ctx),
+    controlFlags: ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit,
+  });
+
+  const responsePromise = new Promise((resolve) => {
+    // on disconnect, set a timer to return an error
+    // on (re)connect, clear the timer
+    const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
+      cleanup();
+      resolve(
+        Err({
+          code: UNEXPECTED_DISCONNECT,
+          message: `${serverId} unexpectedly disconnected`,
+        }),
+      );
+    });
+
+    function cleanup() {
+      transport.removeEventListener('message', onMessage);
+      transport.removeEventListener('sessionStatus', onSessionStatus);
+      span.end();
+    }
+
+    function onMessage(msg: OpaqueTransportMessage) {
+      if (msg.streamId !== streamId) return;
+      if (msg.to !== transport.clientId) return;
+
+      // cleanup and resolve as soon as we get a message
+      cleanup();
+      resolve(msg.payload);
+    }
+
+    transport.addEventListener('message', onMessage);
+    transport.addEventListener('sessionStatus', onSessionStatus);
+  });
+  return responsePromise;
 }
 
 function handleStream(
@@ -342,107 +313,93 @@ function handleStream(
   procedureName: string,
 ) {
   const streamId = nanoid();
-  return tracer.startActiveSpan(
-    `${serviceName}.${procedureName}`,
-    {
-      attributes: {
-        component: 'river',
-        'river.method.kind': init ? 'stream-with-init' : 'stream',
-        'river.method.service': serviceName,
-        'river.method.name': procedureName,
-        'river.streamId': streamId,
-        'span.kind': 'client',
-      },
-      kind: SpanKind.CLIENT,
-    },
-    (span: Span) => {
-      const tracing = { traceparent: '', tracestate: '' };
-      propagation.inject(context.active(), tracing);
-      const inputStream = pushable({ objectMode: true });
-      const outputStream = pushable({ objectMode: true });
-      let firstMessage = true;
-      let healthyClose = true;
+  const { span, ctx } = createProcTelemetryInfo(
+    'stream',
+    serviceName,
+    procedureName,
+    streamId,
+  );
+  const inputStream = pushable({ objectMode: true });
+  const outputStream = pushable({ objectMode: true });
+  let firstMessage = true;
+  let healthyClose = true;
 
-      if (init) {
-        transport.send(serverId, {
-          streamId,
-          serviceName,
-          procedureName,
-          tracing,
-          payload: init,
-          controlFlags: ControlFlags.StreamOpenBit,
-        });
+  if (init) {
+    transport.send(serverId, {
+      streamId,
+      serviceName,
+      procedureName,
+      payload: init,
+      tracing: getPropagationContext(ctx),
+      controlFlags: ControlFlags.StreamOpenBit,
+    });
 
+    firstMessage = false;
+  }
+
+  // input -> transport
+  // this gets cleaned up on inputStream.end() which is called by closeHandler
+  const pipeInputToTransport = async () => {
+    for await (const rawIn of inputStream) {
+      const m: PartialTransportMessage = {
+        streamId,
+        payload: rawIn,
+        controlFlags: 0,
+      };
+
+      if (firstMessage) {
+        m.serviceName = serviceName;
+        m.procedureName = procedureName;
+        m.tracing = getPropagationContext(ctx);
+        m.controlFlags |= ControlFlags.StreamOpenBit;
         firstMessage = false;
       }
 
-      // input -> transport
-      // this gets cleaned up on inputStream.end() which is called by closeHandler
-      const pipeInputToTransport = async () => {
-        for await (const rawIn of inputStream) {
-          const m: PartialTransportMessage = {
-            streamId,
-            payload: rawIn,
-            controlFlags: 0,
-          };
+      transport.send(serverId, m);
+    }
 
-          if (firstMessage) {
-            m.serviceName = serviceName;
-            m.procedureName = procedureName;
-            m.tracing = tracing;
-            m.controlFlags |= ControlFlags.StreamOpenBit;
-            firstMessage = false;
-          }
+    // after ending input stream, send a close message to the server
+    if (!healthyClose) return;
+    transport.sendCloseStream(serverId, streamId);
+  };
 
-          transport.send(serverId, m);
-        }
+  void pipeInputToTransport();
 
-        // after ending input stream, send a close message to the server
-        if (!healthyClose) return;
-        transport.sendCloseStream(serverId, streamId);
-        span.setStatus({ code: SpanStatusCode.OK });
-      };
+  // transport -> output
+  function onMessage(msg: OpaqueTransportMessage) {
+    if (msg.streamId !== streamId) return;
+    if (msg.to !== transport.clientId) return;
 
-      void pipeInputToTransport();
+    if (isStreamClose(msg.controlFlags)) {
+      cleanup();
+    } else {
+      outputStream.push(msg.payload);
+    }
+  }
 
-      // transport -> output
-      function onMessage(msg: OpaqueTransportMessage) {
-        if (msg.streamId !== streamId) return;
-        if (msg.to !== transport.clientId) return;
+  function cleanup() {
+    inputStream.end();
+    outputStream.end();
+    transport.removeEventListener('message', onMessage);
+    transport.removeEventListener('sessionStatus', onSessionStatus);
+    span.end();
+  }
 
-        if (isStreamClose(msg.controlFlags)) {
-          cleanup();
-        } else {
-          outputStream.push(msg.payload);
-        }
-      }
+  // close stream after disconnect + grace period elapses
+  const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
+    outputStream.push(
+      Err({
+        code: UNEXPECTED_DISCONNECT,
+        message: `${serverId} unexpectedly disconnected`,
+      }),
+    );
+    healthyClose = false;
+    cleanup();
+  });
 
-      function cleanup() {
-        inputStream.end();
-        outputStream.end();
-        transport.removeEventListener('message', onMessage);
-        transport.removeEventListener('sessionStatus', onSessionStatus);
-        span.end();
-      }
-
-      // close stream after disconnect + grace period elapses
-      const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
-        outputStream.push(
-          Err({
-            code: UNEXPECTED_DISCONNECT,
-            message: `${serverId} unexpectedly disconnected`,
-          }),
-        );
-        healthyClose = false;
-        span.setStatus({ code: SpanStatusCode.ERROR });
-        cleanup();
-      });
-
-      transport.addEventListener('message', onMessage);
-      transport.addEventListener('sessionStatus', onSessionStatus);
-      return [inputStream, outputStream, cleanup];
-    },
-  );
+  transport.addEventListener('message', onMessage);
+  transport.addEventListener('sessionStatus', onSessionStatus);
+  return [inputStream, outputStream, cleanup];
 }
 
 function handleSubscribe(
@@ -453,77 +410,65 @@ function handleSubscribe(
   procedureName: string,
 ) {
   const streamId = nanoid();
-  return tracer.startActiveSpan(
-    `${serviceName}.${procedureName}`,
-    {
-      attributes: {
-        component: 'river',
-        'river.method.kind': 'subscribe',
-        'river.method.service': serviceName,
-        'river.method.name': procedureName,
-        'river.streamId': streamId,
-        'span.kind': 'client',
-      },
-      kind: SpanKind.CLIENT,
-    },
-    (span: Span) => {
-      const tracing = { traceparent: '', tracestate: '' };
-      propagation.inject(context.active(), tracing);
-      transport.send(serverId, {
-        streamId,
-        serviceName,
-        procedureName,
-        tracing,
-        payload: input,
-        controlFlags: ControlFlags.StreamOpenBit,
-      });
-
-      let healthyClose = true;
-
-      // transport -> output
-      const outputStream = pushable({ objectMode: true });
-      function onMessage(msg: OpaqueTransportMessage) {
-        if (msg.streamId !== streamId) return;
-        if (msg.to !== transport.clientId) return;
-
-        if (isStreamClose(msg.controlFlags)) {
-          cleanup();
-        } else {
-          outputStream.push(msg.payload);
-        }
-      }
-
-      function cleanup() {
-        outputStream.end();
-        transport.removeEventListener('message', onMessage);
-        transport.removeEventListener('sessionStatus', onSessionStatus);
-        span.end();
-      }
-
-      const closeHandler = () => {
-        cleanup();
-        if (!healthyClose) return;
-        transport.sendCloseStream(serverId, streamId);
-      };
-
-      // close stream after disconnect + grace period elapses
-      const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
-        outputStream.push(
-          Err({
-            code: UNEXPECTED_DISCONNECT,
-            message: `${serverId} unexpectedly disconnected`,
-          }),
-        );
-        healthyClose = false;
-        span.setStatus({ code: SpanStatusCode.ERROR });
-        cleanup();
-      });
-
-      transport.addEventListener('message', onMessage);
-      transport.addEventListener('sessionStatus', onSessionStatus);
-      return [outputStream, closeHandler];
-    },
+  const { span, ctx } = createProcTelemetryInfo(
+    'subscription',
+    serviceName,
+    procedureName,
+    streamId,
   );
+
+  transport.send(serverId, {
+    streamId,
+    serviceName,
+    procedureName,
+    payload: input,
+    tracing: getPropagationContext(ctx),
+    controlFlags: ControlFlags.StreamOpenBit,
+  });
+
+  let healthyClose = true;
+
+  // transport -> output
+  const outputStream = pushable({ objectMode: true });
+  function onMessage(msg: OpaqueTransportMessage) {
+    if (msg.streamId !== streamId) return;
+    if (msg.to !== transport.clientId) return;
+
+    if (isStreamClose(msg.controlFlags)) {
+      cleanup();
+    } else {
+      outputStream.push(msg.payload);
+    }
+  }
+
+  function cleanup() {
+    outputStream.end();
+    transport.removeEventListener('message', onMessage);
+    transport.removeEventListener('sessionStatus', onSessionStatus);
+    span.end();
+  }
+
+  const closeHandler = () => {
+    cleanup();
+    if (!healthyClose) return;
+    transport.sendCloseStream(serverId, streamId);
+  };
+
+  // close stream after disconnect + grace period elapses
+  const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
+    outputStream.push(
+      Err({
+        code: UNEXPECTED_DISCONNECT,
+        message: `${serverId} unexpectedly disconnected`,
+      }),
+    );
+    healthyClose = false;
+    cleanup();
+  });
+
+  transport.addEventListener('message', onMessage);
+  transport.addEventListener('sessionStatus', onSessionStatus);
+  return [outputStream, closeHandler];
 }
 
 function handleUpload(
@@ -534,111 +479,89 @@ function handleUpload(
   procedureName: string,
 ) {
   const streamId = nanoid();
-  return tracer.startActiveSpan(
-    `${serviceName}.${procedureName}`,
-    {
-      attributes: {
-        component: 'river',
-        'river.method.kind': init ? 'upload-with-init' : 'upload',
-        'river.method.service': serviceName,
-        'river.method.name': procedureName,
-        'river.streamId': streamId,
-        'span.kind': 'client',
-      },
-      kind: SpanKind.CLIENT,
-    },
-    (span: Span) => {
-      const tracing = { traceparent: '', tracestate: '' };
-      propagation.inject(context.active(), tracing);
-      const inputStream = pushable({ objectMode: true });
-      let firstMessage = true;
-      let healthyClose = true;
+  const { span, ctx } = createProcTelemetryInfo(
+    'upload',
+    serviceName,
+    procedureName,
+    streamId,
+  );
+  const inputStream = pushable({ objectMode: true });
+  let firstMessage = true;
+  let healthyClose = true;
 
-      if (init) {
-        transport.send(serverId, {
-          streamId,
-          serviceName,
-          procedureName,
-          tracing,
-          payload: init,
-          controlFlags: ControlFlags.StreamOpenBit,
-        });
+  if (init) {
+    transport.send(serverId, {
+      streamId,
+      serviceName,
+      procedureName,
+      payload: init,
+      tracing: getPropagationContext(ctx),
+      controlFlags: ControlFlags.StreamOpenBit,
+    });
 
+    firstMessage = false;
+  }
+
+  // input -> transport
+  // this gets cleaned up on inputStream.end(), which the caller should call.
+  const pipeInputToTransport = async () => {
+    for await (const rawIn of inputStream) {
+      const m: PartialTransportMessage = {
+        streamId,
+        payload: rawIn,
+        controlFlags: 0,
+      };
+
+      if (firstMessage) {
+        m.serviceName = serviceName;
+        m.procedureName = procedureName;
+        m.tracing = getPropagationContext(ctx);
+        m.controlFlags |= ControlFlags.StreamOpenBit;
         firstMessage = false;
       }
 
-      // input -> transport
-      // this gets cleaned up on inputStream.end(), which the caller should call.
-      const pipeInputToTransport = async () => {
-        for await (const rawIn of inputStream) {
-          const m: PartialTransportMessage = {
-            streamId,
-            payload: rawIn,
-            controlFlags: 0,
-          };
+      transport.send(serverId, m);
+    }
 
-          if (firstMessage) {
-            m.serviceName = serviceName;
-            m.procedureName = procedureName;
-            m.tracing = tracing;
-            m.controlFlags |= ControlFlags.StreamOpenBit;
-            firstMessage = false;
-          }
+    // after ending input stream, send a close message to the server
+    if (!healthyClose) return;
+    transport.sendCloseStream(serverId, streamId);
+  };
 
-          transport.send(serverId, m);
-        }
+  void pipeInputToTransport();
 
-        // after ending input stream, send a close message to the server
-        if (!healthyClose) return;
-        transport.sendCloseStream(serverId, streamId);
-      };
+  const responsePromise = new Promise((resolve) => {
+    // on disconnect, set a timer to return an error
+    // on (re)connect, clear the timer
+    const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
+      healthyClose = false;
+      cleanup();
+      resolve(
+        Err({
+          code: UNEXPECTED_DISCONNECT,
+          message: `${serverId} unexpectedly disconnected`,
+        }),
+      );
+    });
 
-      void pipeInputToTransport();
+    function cleanup() {
+      inputStream.end();
+      transport.removeEventListener('message', onMessage);
+      transport.removeEventListener('sessionStatus', onSessionStatus);
+      span.end();
+    }
 
-      const responsePromise = new Promise((resolve) => {
-        // on disconnect, set a timer to return an error
-        // on (re)connect, clear the timer
-        const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
-          healthyClose = false;
-          span.setStatus({ code: SpanStatusCode.ERROR });
-          cleanup();
-          resolve(
-            Err({
-              code: UNEXPECTED_DISCONNECT,
-              message: `${serverId} unexpectedly disconnected`,
-            }),
-          );
-        });
+    function onMessage(msg: OpaqueTransportMessage) {
+      if (msg.streamId !== streamId) return;
+      if (msg.to !== transport.clientId) return;
 
-        function cleanup() {
-          inputStream.end();
-          transport.removeEventListener('message', onMessage);
-          transport.removeEventListener('sessionStatus', onSessionStatus);
-          span.end();
-        }
+      // cleanup and resolve as soon as we get a message
+      cleanup();
+      resolve(msg.payload);
+    }
 
-        function onMessage(msg: OpaqueTransportMessage) {
-          if (msg.streamId !== streamId) return;
-          if (msg.to !== transport.clientId) return;
-
-          // cleanup and resolve as soon as we get a message
-          if (
-            msg.payload &&
-            typeof msg.payload === 'object' &&
-            'ok' in msg.payload
-          ) {
-            span.setStatus({
-              code: msg.payload.ok ? SpanStatusCode.OK : SpanStatusCode.ERROR,
-            });
-          }
-          cleanup();
-          resolve(msg.payload);
-        }
-
-        transport.addEventListener('message', onMessage);
-        transport.addEventListener('sessionStatus', onSessionStatus);
-      });
-      return [inputStream, responsePromise];
-    },
-  );
+    transport.addEventListener('message', onMessage);
+    transport.addEventListener('sessionStatus', onSessionStatus);
+  });
+  return [inputStream, responsePromise];
 }
