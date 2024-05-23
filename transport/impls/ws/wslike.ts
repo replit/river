@@ -2,8 +2,8 @@
  * A websocket-like interface that has all we need, this matches
  * "lib.dom.d.ts" and npm's "ws" websocket interfaces.
  *
- * This makes things a little weird within the ws module but it's
- * the only way to avoid casting and type errors.
+ * This makes things a little ugly with generics within the ws transport module but
+ * it's the only way to avoid casting and type errors.
  */
 export interface WSLike<
   CloseEvent extends { code: number; reason: string; wasClean: boolean } = {
