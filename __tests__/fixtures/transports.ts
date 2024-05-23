@@ -7,6 +7,7 @@ import {
 import http from 'node:http';
 import net from 'node:net';
 import {
+  createLocalWebSocketClient,
   createWebSocketServer,
   getUnixSocketPath,
   onUdsServeReady,
@@ -20,6 +21,7 @@ import {
 } from '../../transport/transport';
 import { WebSocketClientTransport } from '../../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../../transport/impls/ws/server';
+import NodeWs from 'ws';
 
 export type ValidTransports = 'ws' | 'unix sockets';
 
@@ -58,7 +60,7 @@ export const transports: Array<{
         },
         getClientTransport(id) {
           const clientTransport = new WebSocketClientTransport(
-            () => `ws://localhost:${port}`,
+            () => Promise.resolve(createLocalWebSocketClient(port)),
             id,
             opts?.client,
           );
@@ -79,7 +81,7 @@ export const transports: Array<{
           for (const transport of transports) {
             if (transport.clientId !== 'SERVER') continue;
             for (const conn of transport.connections.values()) {
-              conn.ws.rawInner.terminate();
+              (conn.ws as NodeWs).terminate();
             }
           }
 

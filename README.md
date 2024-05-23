@@ -137,7 +137,7 @@ import { createClient } from '@replit/river';
 import type ServiceSurface from './server';
 
 const transport = new WebSocketClientTransport(
-  async () => `ws://localhost:3000`,
+  async () => new WebSocket('ws://localhost:3000'),
   'my-client-id',
 );
 
