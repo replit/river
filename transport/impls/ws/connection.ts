@@ -1,28 +1,16 @@
 import { Connection } from '../../session';
-import { WSLike } from './wslike';
+import { WsLike } from './wslike';
 
-export class WebSocketConnection<
-  CloseEvent extends { code: number; reason: string; wasClean: boolean } = {
-    code: number;
-    reason: string;
-    wasClean: boolean;
-  },
-  MessageEvent extends { data: unknown } = { data: unknown },
-  ErrorEvent extends object = object,
-  OpenEvent extends object = object,
-  BinaryType extends string = string,
-> extends Connection {
+export class WebSocketConnection extends Connection {
   errorcb: null | ((err: Error) => void) = null;
   closecb: null | (() => void) = null;
 
-  ws: WSLike<CloseEvent, MessageEvent, ErrorEvent, OpenEvent, BinaryType>;
+  ws: WsLike;
 
-  constructor(
-    ws: WSLike<CloseEvent, MessageEvent, ErrorEvent, OpenEvent, BinaryType>,
-  ) {
+  constructor(ws: WsLike) {
     super();
     this.ws = ws;
-    this.ws.binaryType = 'arraybuffer' as BinaryType;
+    this.ws.binaryType = 'arraybuffer';
 
     // Websockets are kinda shitty, they emit error events with no
     // information other than it errored, so we have to do some extra

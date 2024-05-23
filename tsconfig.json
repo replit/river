@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "esnext",
     "module": "esnext",
-    "lib": [],
+    "lib": ["dom"],
     "declaration": true,
     "declarationDir": "dist",
     "declarationMap": true,

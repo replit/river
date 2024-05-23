@@ -19,7 +19,7 @@ import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
-import { WSLike } from '../transport/impls/ws/wslike';
+import { WsLike } from '../transport/impls/ws/wslike';
 
 describe('should handle incompatabilities', async () => {
   const server = http.createServer();
@@ -97,7 +97,7 @@ describe('should handle incompatabilities', async () => {
 
   test('repeated connections that close instantly still triggers backoff', async () => {
     let conns = 0;
-    const serverWsConnHandler = (ws: WSLike) => {
+    const serverWsConnHandler = (ws: WsLike) => {
       conns += 1;
       ws.close();
     };

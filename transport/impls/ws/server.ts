@@ -5,7 +5,7 @@ import {
 } from '../../transport';
 import { WebSocketServer } from 'ws';
 import { WebSocketConnection } from './connection';
-import { WSLike } from './wslike';
+import { WsLike } from './wslike';
 
 export class WebSocketServerTransport extends ServerTransport<WebSocketConnection> {
   wss: WebSocketServer;
@@ -20,7 +20,7 @@ export class WebSocketServerTransport extends ServerTransport<WebSocketConnectio
     this.wss.on('connection', this.connectionHandler);
   }
 
-  connectionHandler = (ws: WSLike) => {
+  connectionHandler = (ws: WsLike) => {
     const conn = new WebSocketConnection(ws);
     this.handleConnection(conn);
   };

@@ -5,42 +5,18 @@ import {
 import { TransportClientId } from '../../message';
 import { log } from '../../../logging/log';
 import { WebSocketConnection } from './connection';
-import { WSLike } from './wslike';
+import { WsLike } from './wslike';
 
 /**
  * A transport implementation that uses a WebSocket connection with automatic reconnection.
  * @class
  * @extends Transport
  */
-export class WebSocketClientTransport<
-  CloseEvent extends { code: number; reason: string; wasClean: boolean } = {
-    code: number;
-    reason: string;
-    wasClean: boolean;
-  },
-  MessageEvent extends { data: unknown } = { data: unknown },
-  ErrorEvent extends object = object,
-  OpenEvent extends object = object,
-  BinaryType extends string = string,
-> extends ClientTransport<
-  WebSocketConnection<
-    CloseEvent,
-    MessageEvent,
-    ErrorEvent,
-    OpenEvent,
-    BinaryType
-  >
-> {
+export class WebSocketClientTransport extends ClientTransport<WebSocketConnection> {
   /**
    * A function that returns a Promise that resolves to a websocket URL.
    */
-  wsGetter: (
-    to: TransportClientId,
-  ) =>
-    | Promise<
-        WSLike<CloseEvent, MessageEvent, ErrorEvent, OpenEvent, BinaryType>
-      >
-    | WSLike<CloseEvent, MessageEvent, ErrorEvent, OpenEvent, BinaryType>;
+  wsGetter: (to: TransportClientId) => Promise<WsLike> | WsLike;
 
   /**
    * Creates a new WebSocketClientTransport instance.
@@ -50,13 +26,7 @@ export class WebSocketClientTransport<
    * @param providedOptions An optional object containing configuration options for the transport.
    */
   constructor(
-    wsGetter: (
-      to: TransportClientId,
-    ) =>
-      | Promise<
-          WSLike<CloseEvent, MessageEvent, ErrorEvent, OpenEvent, BinaryType>
-        >
-      | WSLike<CloseEvent, MessageEvent, ErrorEvent, OpenEvent, BinaryType>,
+    wsGetter: (to: TransportClientId) => Promise<WsLike> | WsLike,
     clientId: TransportClientId,
     providedOptions?: ProvidedClientTransportOptions,
   ) {
