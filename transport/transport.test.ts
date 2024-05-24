@@ -20,9 +20,13 @@ import {
   waitFor,
 } from '../__tests__/fixtures/cleanup';
 import { testMatrix } from '../__tests__/fixtures/matrix';
-import { PartialTransportMessage } from './message';
+import {
+  ClientHandshakeOptions,
+  PartialTransportMessage,
+  ServerHandshakeOptions,
+} from './message';
 import { TestTransportOptions } from '../__tests__/fixtures/transports';
-import { Type } from '@sinclair/typebox';
+import { TSchema, Type } from '@sinclair/typebox';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
@@ -742,42 +746,43 @@ describe.each(testMatrix())(
 describe.each(testMatrix())(
   'transport handshake tests ($transport.name transport, $codec.name codec)',
   ({ transport, codec }) => {
+    const getTestTransportOptions = (
+      clientScehma: TSchema,
+      serverSchema: TSchema,
+      construct: ClientHandshakeOptions<TSchema>['construct'],
+      validate: ServerHandshakeOptions<TSchema>['validate'],
+    ): TestTransportOptions => ({
+      client: {
+        codec: codec.codec,
+      },
+      server: {
+        codec: codec.codec,
+      },
+      customHandshake: {
+        client: {
+          schema: clientScehma,
+          construct,
+        },
+        server: {
+          schema: serverSchema,
+          validate,
+        },
+      },
+    });
+
     test('handshakes and stores parsed metadata in session', async () => {
-      const requestSchema = Type.Object({
+      const schema = Type.Object({
         kept: Type.String(),
         discarded: Type.String(),
       });
-
-      const parsedSchema = Type.Object({
-        kept: Type.String(),
-      });
-
       const get = vi.fn(async () => ({ kept: 'kept', discarded: 'discarded' }));
-
       const parse = vi.fn(async (metadata: unknown) => ({
         // @ts-expect-error - we haven't extended the global type here
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         kept: metadata.kept,
       }));
 
-      const opts: TestTransportOptions = {
-        client: {
-          codec: codec.codec,
-          handshake: {
-            schema: requestSchema,
-            get,
-          },
-        },
-        server: {
-          codec: codec.codec,
-          handshake: {
-            requestSchema,
-            parsedSchema,
-            parse,
-          },
-        },
-      };
-
+      const opts = getTestTransportOptions(schema, schema, get, parse);
       const { getClientTransport, getServerTransport, cleanup } =
         await transport.setup(opts);
       onTestFinished(cleanup);
@@ -793,45 +798,26 @@ describe.each(testMatrix())(
 
       const session = serverTransport.sessions.get(clientTransport.clientId);
       assert(session);
-      expect(session.metadata).toEqual({ kept: 'kept' });
+      expect(serverTransport.sessionHandshakeMetadata.get(session)).toEqual({
+        kept: 'kept',
+      });
+
+      expect(clientTransport.connections.size).toBe(1);
+      expect(serverTransport.connections.size).toBe(1);
     });
 
-    test('client checks request schema', async () => {
-      const requestSchema = Type.Object({
+    test('client checks request schema on construction', async () => {
+      const schema = Type.Object({
         foo: Type.String(),
       });
-
-      const parsedSchema = Type.Object({
-        foo: Type.String(),
-      });
-
-      // wrong
       const get = vi.fn(async () => ({ foo: false }));
-
       const parse = vi.fn(async (metadata: unknown) => ({
         // @ts-expect-error - we haven't extended the global type here
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         foo: metadata.foo,
       }));
 
-      const opts: TestTransportOptions = {
-        client: {
-          codec: codec.codec,
-          handshake: {
-            schema: requestSchema,
-            get,
-          },
-        },
-        server: {
-          codec: codec.codec,
-          handshake: {
-            requestSchema,
-            parsedSchema,
-            parse,
-          },
-        },
-      };
-
+      const opts = getTestTransportOptions(schema, schema, get, parse);
       const { getClientTransport, getServerTransport, cleanup } =
         await transport.setup(opts);
       onTestFinished(cleanup);
@@ -840,35 +826,12 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
 
       const clientHandshakeFailed = vi.fn();
-      const clientHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === ProtocolError.HandshakeFailed) {
-          clientHandshakeFailed();
-        }
-      };
-      clientTransport.addEventListener(
-        'protocolError',
-        clientHandshakeFailedHandler,
-      );
-
-      const serverHandshakeFailed = vi.fn();
-      const serverHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === ProtocolError.HandshakeFailed) {
-          serverHandshakeFailed();
-        }
-      };
-      serverTransport.addEventListener(
-        'protocolError',
-        serverHandshakeFailedHandler,
-      );
+      clientTransport.addEventListener('protocolError', clientHandshakeFailed);
 
       onTestFinished(async () => {
         clientTransport.removeEventListener(
           'protocolError',
-          clientHandshakeFailedHandler,
-        );
-        serverTransport.removeEventListener(
-          'protocolError',
-          serverHandshakeFailedHandler,
+          clientHandshakeFailed,
         );
 
         await testFinishesCleanly({
@@ -880,51 +843,40 @@ describe.each(testMatrix())(
       await waitFor(() => {
         expect(get).toHaveBeenCalledTimes(1);
         expect(clientHandshakeFailed).toHaveBeenCalledTimes(1);
+        expect(clientHandshakeFailed).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: ProtocolError.HandshakeFailed,
+          }),
+        );
         // should never get to the server
         expect(parse).toHaveBeenCalledTimes(0);
-        expect(serverHandshakeFailed).toHaveBeenCalledTimes(0);
       });
+
+      expect(clientTransport.connections.size).toBe(0);
+      expect(serverTransport.connections.size).toBe(0);
     });
 
-    test('server checks request schema', async () => {
-      const requestSchemaClient = Type.Object({
+    test('server checks request schema on receive', async () => {
+      const clientRequestSchema = Type.Object({
+        foo: Type.Number(),
+      });
+      const serverRequestSchema = Type.Object({
         foo: Type.Boolean(),
       });
 
-      const requestSchemaServer = Type.Object({
-        foo: Type.String(),
-      });
-
-      const parsedSchema = Type.Object({
-        foo: Type.String(),
-      });
-
-      // correct on client, wrong on server
-      const get = vi.fn(async () => ({ foo: false }));
-
+      const get = vi.fn(async () => ({ foo: 123 }));
       const parse = vi.fn(async (metadata: unknown) => ({
         // @ts-expect-error - we haven't extended the global type here
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         foo: metadata.foo,
       }));
 
-      const opts: TestTransportOptions = {
-        client: {
-          codec: codec.codec,
-          handshake: {
-            schema: requestSchemaClient,
-            get,
-          },
-        },
-        server: {
-          codec: codec.codec,
-          handshake: {
-            requestSchema: requestSchemaServer,
-            parsedSchema,
-            parse,
-          },
-        },
-      };
+      const opts = getTestTransportOptions(
+        clientRequestSchema,
+        serverRequestSchema,
+        get,
+        parse,
+      );
 
       const { getClientTransport, getServerTransport, cleanup } =
         await transport.setup(opts);
@@ -932,37 +884,19 @@ describe.each(testMatrix())(
 
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-
       const clientHandshakeFailed = vi.fn();
-      const clientHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === ProtocolError.HandshakeFailed) {
-          clientHandshakeFailed();
-        }
-      };
-      clientTransport.addEventListener(
-        'protocolError',
-        clientHandshakeFailedHandler,
-      );
-
+      clientTransport.addEventListener('protocolError', clientHandshakeFailed);
       const serverHandshakeFailed = vi.fn();
-      const serverHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === ProtocolError.HandshakeFailed) {
-          serverHandshakeFailed();
-        }
-      };
-      serverTransport.addEventListener(
-        'protocolError',
-        serverHandshakeFailedHandler,
-      );
+      serverTransport.addEventListener('protocolError', serverHandshakeFailed);
 
       onTestFinished(async () => {
         clientTransport.removeEventListener(
           'protocolError',
-          clientHandshakeFailedHandler,
+          clientHandshakeFailed,
         );
         serverTransport.removeEventListener(
           'protocolError',
-          serverHandshakeFailedHandler,
+          serverHandshakeFailed,
         );
 
         await testFinishesCleanly({
@@ -974,126 +908,29 @@ describe.each(testMatrix())(
       await waitFor(() => {
         expect(get).toHaveBeenCalledTimes(1);
         expect(clientHandshakeFailed).toHaveBeenCalledTimes(1);
+        expect(clientHandshakeFailed).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: ProtocolError.HandshakeFailed,
+          }),
+        );
         expect(parse).toHaveBeenCalledTimes(0);
         expect(serverHandshakeFailed).toHaveBeenCalledTimes(1);
-      });
-    });
-
-    test('server checks parse schema', async () => {
-      const requestSchema = Type.Object({
-        foo: Type.String(),
-      });
-
-      const parsedSchema = Type.Object({
-        foo: Type.String(),
-      });
-
-      const get = vi.fn(async () => ({ foo: 'foo' }));
-
-      // wrong
-      const parse = vi.fn(async () => ({ foo: false }));
-
-      const opts: TestTransportOptions = {
-        client: {
-          codec: codec.codec,
-          handshake: {
-            schema: requestSchema,
-            get,
-          },
-        },
-        server: {
-          codec: codec.codec,
-          handshake: {
-            requestSchema,
-            parsedSchema,
-            parse,
-          },
-        },
-      };
-
-      const { getClientTransport, getServerTransport, cleanup } =
-        await transport.setup(opts);
-      onTestFinished(cleanup);
-
-      const clientTransport = getClientTransport('client');
-      const serverTransport = getServerTransport();
-
-      const clientHandshakeFailed = vi.fn();
-      const clientHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === ProtocolError.HandshakeFailed) {
-          clientHandshakeFailed();
-        }
-      };
-      clientTransport.addEventListener(
-        'protocolError',
-        clientHandshakeFailedHandler,
-      );
-
-      const serverHandshakeFailed = vi.fn();
-      const serverHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === ProtocolError.HandshakeFailed) {
-          serverHandshakeFailed();
-        }
-      };
-      serverTransport.addEventListener(
-        'protocolError',
-        serverHandshakeFailedHandler,
-      );
-
-      onTestFinished(async () => {
-        clientTransport.removeEventListener(
-          'protocolError',
-          clientHandshakeFailedHandler,
+        expect(serverHandshakeFailed).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: ProtocolError.HandshakeFailed,
+          }),
         );
-        serverTransport.removeEventListener(
-          'protocolError',
-          serverHandshakeFailedHandler,
-        );
-
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
-      });
-
-      await waitFor(() => {
-        expect(get).toHaveBeenCalledTimes(1);
-        expect(clientHandshakeFailed).toHaveBeenCalledTimes(1);
-        expect(parse).toHaveBeenCalledTimes(1);
-        expect(serverHandshakeFailed).toHaveBeenCalledTimes(1);
       });
     });
 
     test('parse can reject connection', async () => {
-      const requestSchema = Type.Object({
-        foo: Type.String(),
-      });
-
-      const parsedSchema = Type.Object({
+      const schema = Type.Object({
         foo: Type.String(),
       });
 
       const get = vi.fn(async () => ({ foo: 'foo' }));
-
       const parse = vi.fn(async () => false);
-
-      const opts: TestTransportOptions = {
-        client: {
-          codec: codec.codec,
-          handshake: {
-            schema: requestSchema,
-            get,
-          },
-        },
-        server: {
-          codec: codec.codec,
-          handshake: {
-            requestSchema,
-            parsedSchema,
-            parse,
-          },
-        },
-      };
+      const opts = getTestTransportOptions(schema, schema, get, parse);
 
       const { getClientTransport, getServerTransport, cleanup } =
         await transport.setup(opts);
@@ -1103,40 +940,21 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
 
       const clientHandshakeFailed = vi.fn();
-      const clientHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === ProtocolError.HandshakeFailed) {
-          clientHandshakeFailed();
-        }
-      };
-      clientTransport.addEventListener(
-        'protocolError',
-        clientHandshakeFailedHandler,
-      );
-
+      clientTransport.addEventListener('protocolError', clientHandshakeFailed);
       const serverRejectedConnection = vi.fn();
-      const serverRejectedConnectionHandler = (
-        evt: EventMap['protocolError'],
-      ) => {
-        if (
-          evt.type === ProtocolError.HandshakeFailed &&
-          evt.message.includes('rejected by handshake handler')
-        ) {
-          serverRejectedConnection();
-        }
-      };
       serverTransport.addEventListener(
         'protocolError',
-        serverRejectedConnectionHandler,
+        serverRejectedConnection,
       );
 
       onTestFinished(async () => {
         clientTransport.removeEventListener(
           'protocolError',
-          clientHandshakeFailedHandler,
+          clientHandshakeFailed,
         );
         serverTransport.removeEventListener(
           'protocolError',
-          serverRejectedConnectionHandler,
+          serverRejectedConnection,
         );
 
         await testFinishesCleanly({
@@ -1148,116 +966,16 @@ describe.each(testMatrix())(
       await waitFor(() => {
         expect(get).toHaveBeenCalledTimes(1);
         expect(clientHandshakeFailed).toHaveBeenCalledTimes(1);
+        expect(clientHandshakeFailed).toHaveBeenCalledWith({
+          type: ProtocolError.HandshakeFailed,
+          message: 'rejected by handshake handler',
+        });
         expect(parse).toHaveBeenCalledTimes(1);
         expect(serverRejectedConnection).toHaveBeenCalledTimes(1);
-      });
-    });
-
-    test('parse can reject reconnect', async () => {
-      const requestSchema = Type.Object({
-        foo: Type.String(),
-      });
-
-      const parsedSchema = Type.Object({
-        foo: Type.String(),
-      });
-
-      const get = vi.fn(async () => ({ foo: 'foo' }));
-
-      const parse = vi.fn(
-        async (metadata: unknown, _session: unknown, isReconnect: boolean) => {
-          if (isReconnect) {
-            return false;
-          }
-
-          // @ts-expect-error - we haven't extended the global type here
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          return { foo: metadata.foo };
-        },
-      );
-
-      const opts: TestTransportOptions = {
-        client: {
-          codec: codec.codec,
-          handshake: {
-            schema: requestSchema,
-            get,
-          },
-        },
-        server: {
-          codec: codec.codec,
-          handshake: {
-            requestSchema,
-            parsedSchema,
-            parse,
-          },
-        },
-      };
-
-      const { getClientTransport, getServerTransport, cleanup } =
-        await transport.setup(opts);
-      onTestFinished(cleanup);
-
-      const clientTransport = getClientTransport('client');
-      const serverTransport = getServerTransport();
-
-      const clientHandshakeFailed = vi.fn();
-      const clientHandshakeFailedHandler = (evt: EventMap['protocolError']) => {
-        if (evt.type === ProtocolError.HandshakeFailed) {
-          clientHandshakeFailed();
-        }
-      };
-      clientTransport.addEventListener(
-        'protocolError',
-        clientHandshakeFailedHandler,
-      );
-
-      const serverRejectedConnection = vi.fn();
-      const serverRejectedConnectionHandler = (
-        evt: EventMap['protocolError'],
-      ) => {
-        if (
-          evt.type === ProtocolError.HandshakeFailed &&
-          evt.message.includes('rejected by handshake handler')
-        ) {
-          serverRejectedConnection();
-        }
-      };
-      serverTransport.addEventListener(
-        'protocolError',
-        serverRejectedConnectionHandler,
-      );
-
-      onTestFinished(async () => {
-        clientTransport.removeEventListener(
-          'protocolError',
-          clientHandshakeFailedHandler,
-        );
-        serverTransport.removeEventListener(
-          'protocolError',
-          serverRejectedConnectionHandler,
-        );
-
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
+        expect(serverRejectedConnection).toHaveBeenCalledWith({
+          type: ProtocolError.HandshakeFailed,
+          message: 'rejected by handshake handler',
         });
-      });
-
-      // should connect
-      await waitFor(() => {
-        expect(clientHandshakeFailed).toHaveBeenCalledTimes(0);
-        expect(serverRejectedConnection).toHaveBeenCalledTimes(0);
-        expect(clientTransport.connections.size).toBe(1);
-        expect(serverTransport.connections.size).toBe(1);
-      });
-
-      // reconnect, should fail
-      clientTransport.reconnectOnConnectionDrop = true;
-      clientTransport.connections.forEach((conn) => conn.close());
-      await waitFor(() => {
-        expect(clientHandshakeFailed).toHaveBeenCalledTimes(1);
-        expect(serverRejectedConnection).toHaveBeenCalledTimes(1);
       });
     });
   },

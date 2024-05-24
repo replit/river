@@ -159,7 +159,8 @@ function dummyCtx<State>(
     to: session.to,
     from: session.from,
     streamId: nanoid(),
-    session: session as ServiceContextWithTransportInfo<State>['session'],
+    session,
+    metadata: {},
   };
 }
 

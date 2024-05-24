@@ -18,7 +18,7 @@ export type {
   PayloadType,
   ProcedureMap,
   ProcedureResult,
-  RPCProcedure,
+  RpcProcedure as RPCProcedure,
   UploadProcedure,
   SubscriptionProcedure,
   StreamProcedure,

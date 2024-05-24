@@ -15,7 +15,6 @@ import {
   PROTOCOL_VERSION,
   ClientHandshakeOptions,
   ServerHandshakeOptions,
-  HandshakeRequestMetadata,
 } from './message';
 import { log } from '../logging/log';
 import {
@@ -26,7 +25,7 @@ import {
   ProtocolErrorType,
 } from './events';
 import { Connection, Session, SessionOptions } from './session';
-import { Static } from '@sinclair/typebox';
+import { Static, TSchema } from '@sinclair/typebox';
 import { coerceErrorString } from '../util/stringify';
 import { ConnectionRetryOptions, LeakyBucketRateLimit } from './rateLimit';
 import { NaiveJsonCodec } from '../codec';
@@ -36,6 +35,7 @@ import tracer, {
   getPropagationContext,
 } from '../tracing';
 import { SpanStatusCode } from '@opentelemetry/api';
+import { ParsedMetadata } from '../router/context';
 
 /**
  * Represents the possible states of a transport.
@@ -56,8 +56,7 @@ export const defaultTransportOptions: TransportOptions = {
   codec: NaiveJsonCodec,
 };
 
-type ClientTransportOptions = TransportOptions &
-  ConnectionRetryOptions & { handshake?: ClientHandshakeOptions };
+type ClientTransportOptions = TransportOptions & ConnectionRetryOptions;
 
 export type ProvidedClientTransportOptions = Partial<ClientTransportOptions>;
 
@@ -74,9 +73,7 @@ const defaultClientTransportOptions: ClientTransportOptions = {
   ...defaultConnectionRetryOptions,
 };
 
-type ServerTransportOptions = TransportOptions & {
-  handshake?: ServerHandshakeOptions;
-};
+type ServerTransportOptions = TransportOptions;
 
 export type ProvidedServerTransportOptions = Partial<ServerTransportOptions>;
 
@@ -493,6 +490,7 @@ export abstract class Transport<ConnType extends Connection> {
 
 export abstract class ClientTransport<
   ConnType extends Connection,
+  HandshakeMetadata extends TSchema = TSchema,
 > extends Transport<ConnType> {
   /**
    * The options for this transport.
@@ -513,6 +511,11 @@ export abstract class ClientTransport<
    */
   reconnectOnConnectionDrop = true;
 
+  /**
+   * Optional handshake options for this client.
+   */
+  handshakeExtensions?: ClientHandshakeOptions<HandshakeMetadata>;
+
   constructor(
     clientId: TransportClientId,
     providedOptions?: ProvidedClientTransportOptions,
@@ -524,6 +527,10 @@ export abstract class ClientTransport<
     };
     this.inflightConnectionPromises = new Map();
     this.retryBudget = new LeakyBucketRateLimit(this.options);
+  }
+
+  extendHandshake(options: ClientHandshakeOptions<HandshakeMetadata>) {
+    this.handshakeExtensions = options;
   }
 
   protected handleConnection(conn: ConnType, to: TransportClientId): void {
@@ -795,13 +802,12 @@ export abstract class ClientTransport<
   }
 
   protected async sendHandshake(to: TransportClientId, conn: ConnType) {
-    let metadata: HandshakeRequestMetadata | undefined;
+    let metadata: Static<HandshakeMetadata> | undefined;
 
-    if (this.options.handshake) {
-      metadata = await this.options.handshake.get();
-
-      if (!Value.Check(this.options.handshake.schema, metadata)) {
-        log?.error(`handshake metadata did not match schema`, {
+    if (this.handshakeExtensions) {
+      metadata = await this.handshakeExtensions.construct();
+      if (!Value.Check(this.handshakeExtensions.schema, metadata)) {
+        log?.error(`constructed handshake metadata did not match schema`, {
           clientId: this.clientId,
           connectedTo: to,
           tags: ['invariant-violation'],
@@ -842,11 +848,22 @@ export abstract class ClientTransport<
 
 export abstract class ServerTransport<
   ConnType extends Connection,
+  CustomMetadataSchema extends TSchema = TSchema,
 > extends Transport<ConnType> {
   /**
    * The options for this transport.
    */
   protected options: ServerTransportOptions;
+
+  /**
+   * Optional handshake options for the server.
+   */
+  handshakeExtensions?: ServerHandshakeOptions<CustomMetadataSchema>;
+
+  /**
+   * A map of session handshake data for each session.
+   */
+  sessionHandshakeMetadata: WeakMap<Session<ConnType>, ParsedMetadata>;
 
   constructor(
     clientId: TransportClientId,
@@ -857,10 +874,15 @@ export abstract class ServerTransport<
       ...defaultServerTransportOptions,
       ...providedOptions,
     };
+    this.sessionHandshakeMetadata = new WeakMap();
     log?.info(`initiated server transport`, {
       clientId: this.clientId,
       protocolVersion: PROTOCOL_VERSION,
     });
+  }
+
+  extendHandshake(options: ServerHandshakeOptions<CustomMetadataSchema>) {
+    this.handshakeExtensions = options;
   }
 
   protected handleConnection(conn: ConnType) {
@@ -962,6 +984,69 @@ export abstract class ServerTransport<
     });
   }
 
+  private async validateHandshakeMetadata(
+    conn: ConnType,
+    session: Session<ConnType>,
+    isReconnect: boolean,
+    rawMetadata: Static<
+      typeof ControlMessageHandshakeRequestSchema
+    >['metadata'],
+    from: TransportClientId,
+  ): Promise<boolean> {
+    let parsedMetadata: ParsedMetadata = {};
+    if (this.handshakeExtensions) {
+      // check that the metadata that was sent is the correct shape
+      if (!Value.Check(this.handshakeExtensions.schema, rawMetadata)) {
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'malformed handshake meta',
+        });
+        const reason = 'received malformed handshake metadata';
+        const responseMsg = handshakeResponseMessage(this.clientId, from, {
+          ok: false,
+          reason,
+        });
+        conn.send(this.codec.toBuffer(responseMsg));
+        // note: do _not_ log the metadata, it may contain secrets
+        log?.warn(`received malformed handshake metadata from ${from}`, {
+          clientId: this.clientId,
+          connId: conn.id,
+        });
+        this.protocolError(ProtocolError.HandshakeFailed, reason);
+        return false;
+      }
+
+      parsedMetadata = await this.handshakeExtensions.validate(
+        rawMetadata,
+        session,
+        isReconnect,
+      );
+
+      // handler rejected the connection
+      if (parsedMetadata === false) {
+        const reason = 'rejected by handshake handler';
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: reason,
+        });
+        const responseMsg = handshakeResponseMessage(this.clientId, from, {
+          ok: false,
+          reason,
+        });
+        conn.send(this.codec.toBuffer(responseMsg));
+        log?.warn(`rejected handshake from ${from}`, {
+          clientId: this.clientId,
+          connId: conn.id,
+        });
+        this.protocolError(ProtocolError.HandshakeFailed, reason);
+        return false;
+      }
+    }
+
+    this.sessionHandshakeMetadata.set(session, parsedMetadata);
+    return true;
+  }
+
   async receiveHandshakeRequestMessage(
     data: Uint8Array,
     conn: ConnType,
@@ -1033,93 +1118,17 @@ export abstract class ServerTransport<
       parsed.tracing,
     );
 
-    let handshakeMetadata: HandshakeRequestMetadata | undefined;
+    const validMetadata = await this.validateHandshakeMetadata(
+      conn,
+      session,
+      isReconnect,
+      parsed.payload.metadata,
+      parsed.from,
+    );
 
-    if (this.options.handshake) {
-      // check that the metadata that was sent is the correct shape
-      if (
-        !Value.Check(
-          this.options.handshake.requestSchema,
-          parsed.payload.metadata,
-        )
-      ) {
-        conn.telemetry?.span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: 'malformed handshake meta',
-        });
-        const reason = 'received malformed handshake metadata';
-        const responseMsg = handshakeResponseMessage(
-          this.clientId,
-          parsed.from,
-          { ok: false, reason },
-        );
-        conn.send(this.codec.toBuffer(responseMsg));
-        // note: do _not_ log the metadata, it may contain secrets
-        log?.warn(`received malformed handshake metadata from ${parsed.from}`, {
-          clientId: this.clientId,
-          connId: conn.id,
-        });
-        this.protocolError(ProtocolError.HandshakeFailed, reason);
-        this.deleteSession(session);
-        return false;
-      }
-
-      const parsedMetadata = await this.options.handshake.parse(
-        parsed.payload.metadata as HandshakeRequestMetadata,
-        session,
-        isReconnect,
-      );
-
-      // handler rejected the connection
-      if (parsedMetadata === false) {
-        conn.telemetry?.span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: 'rejected by handshake handler',
-        });
-        const reason = 'rejected by handshake handler';
-        const responseMsg = handshakeResponseMessage(
-          this.clientId,
-          parsed.from,
-          { ok: false, reason },
-        );
-        conn.send(this.codec.toBuffer(responseMsg));
-        log?.warn(`rejected handshake from ${parsed.from}`, {
-          clientId: this.clientId,
-          connId: conn.id,
-        });
-        this.protocolError(ProtocolError.HandshakeFailed, reason);
-        this.deleteSession(session);
-        return false;
-      }
-
-      // check that the parsed metadata is the correct shape
-      if (!Value.Check(this.options.handshake.parsedSchema, parsedMetadata)) {
-        conn.telemetry?.span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: 'malformed handshake meta',
-        });
-        const reason = 'failed to parse handshake metadata';
-        const responseMsg = handshakeResponseMessage(
-          this.clientId,
-          parsed.from,
-          { ok: false, reason },
-        );
-        conn.send(this.codec.toBuffer(responseMsg));
-        // note: do _not_ log the metadata, it may contain secrets
-        log?.error(`failed to parse handshake metadata`, {
-          clientId: this.clientId,
-          connId: conn.id,
-        });
-        this.protocolError(ProtocolError.HandshakeFailed, reason);
-        this.deleteSession(session);
-        return false;
-      }
-
-      handshakeMetadata = parsedMetadata;
+    if (!validMetadata) {
+      return false;
     }
-
-    handshakeMetadata ??= {} as HandshakeRequestMetadata;
-    session.metadata = handshakeMetadata;
 
     log?.debug(
       `handshake from ${parsed.from} ok, responding with handshake success`,

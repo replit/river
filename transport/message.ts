@@ -2,6 +2,7 @@ import { Type, TSchema, Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import { Connection, Session } from './session';
 import { PropagationContext } from '../tracing';
+import { ParsedMetadata } from '../router/context';
 
 /**
  * Control flags for transport messages.
@@ -16,82 +17,25 @@ export const enum ControlFlags {
   StreamClosedBit = 0b0100,
 }
 
-/**
- * Metadata associated with a handshake request, as sent by the client.
- *
- * You should use declaration merging to extend this interface
- * with whatever you need. For example, if you need to store an
- * identifier for the client, you could do:
- * ```
- * declare module '@replit/river' {
- *   interface HandshakeMetadataClient {
- *     id: string;
- *   }
- * }
- * ```
- */
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface HandshakeRequestMetadata {}
-
-/**
- * Metadata associated with a handshake response, after the server
- * has processed the data in {@link HandshakeRequestMetadata}. This
- * is a separate interface for multiple reasons, but one of the main
- * ones is that the server should remove any sensitive data from the
- * client's request metadata before storing it in the session, that
- * way no secrets are persisted in memory.
- *
- * You should use declaration merging to extend this interface
- * with whatever you need. For example, if you need to store an
- * identifier for the client, you could do:
- * ```
- * declare module '@replit/river' {
- *   interface HandshakeMetadataServer {
- *     id: string;
- *   }
- * }
- * ```
- */
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface ParsedHandshakeMetadata {}
-
-/**
- * Options for extending the client handshake process.
- */
-export interface ClientHandshakeOptions {
+export interface ClientHandshakeOptions<MetadataSchema extends TSchema> {
   /**
    * Schema for the metadata that the client sends to the server
    * during the handshake.
-   *
-   * Needs to match {@link HandshakeRequestMetadata}.
    */
-  schema: TSchema;
+  schema: MetadataSchema;
 
   /**
    * Gets the {@link HandshakeRequestMetadata} to send to the server.
    */
-  get: () => HandshakeRequestMetadata | Promise<HandshakeRequestMetadata>;
+  construct: () => Static<MetadataSchema> | Promise<Static<MetadataSchema>>;
 }
 
-/**
- * Options for extending the server handshake process.
- */
-export interface ServerHandshakeOptions {
+export interface ServerHandshakeOptions<MetadataSchema extends TSchema> {
   /**
    * Schema for the metadata that the server receives from the client
    * during the handshake.
-   *
-   * Needs to match {@link HandshakeRequestMetadata}.
    */
-  requestSchema: TSchema;
-
-  /**
-   * Schema for the transformed metadata that is then associated with the
-   * client's session.
-   *
-   * Needs to match {@link ParsedHandshakeMetadata}.
-   */
-  parsedSchema: TSchema;
+  schema: MetadataSchema;
 
   /**
    * Parses the {@link HandshakeRequestMetadata} sent by the client, transforming
@@ -104,14 +48,11 @@ export interface ServerHandshakeOptions {
    * @param isReconnect - Whether the client is reconnecting to the session,
    *                      or if this is a new session.
    */
-  parse: (
-    metadata: HandshakeRequestMetadata,
+  validate: (
+    metadata: Static<MetadataSchema>,
     session: Session<Connection>,
     isReconnect: boolean,
-  ) =>
-    | false
-    | ParsedHandshakeMetadata
-    | Promise<false | ParsedHandshakeMetadata>;
+  ) => false | ParsedMetadata | Promise<false | ParsedMetadata>;
 }
 
 /**
@@ -233,7 +174,7 @@ export function handshakeRequestMessage(
   from: TransportClientId,
   to: TransportClientId,
   sessionId: string,
-  metadata?: HandshakeRequestMetadata,
+  metadata?: unknown,
   tracing?: PropagationContext,
 ): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {
   return {

@@ -50,7 +50,7 @@ export type ProcedureResult<
  * @template O - The TypeBox schema of the output object.
  * @template E - The TypeBox schema of the error object.
  */
-export interface RPCProcedure<
+export interface RpcProcedure<
   State,
   I extends PayloadType,
   O extends PayloadType,
@@ -181,7 +181,7 @@ export type StreamProcedure<
 
 /**
  * Defines a Procedure type that can be a:
- * - {@link RPCProcedure} for a single message in both directions (1:1)
+ * - {@link RpcProcedure} for a single message in both directions (1:1)
  * - {@link UploadProcedure} for a client-stream (potentially preceded by an
  *   initialization message)
  * - {@link SubscriptionProcedure} for a single message from client, stream from server (1:n)
@@ -207,7 +207,7 @@ export type Procedure<
   ? Ty extends 'upload' ? UploadProcedure<State, I, O, E, Init>
   : Ty extends 'stream' ? StreamProcedure<State, I, O, E, Init>
   : never
-  : Ty extends 'rpc' ? RPCProcedure<State, I, O, E>
+  : Ty extends 'rpc' ? RpcProcedure<State, I, O, E>
   : Ty extends 'upload' ? UploadProcedure<State, I, O, E>
   : Ty extends 'subscription' ? SubscriptionProcedure<State, I, O, E>
   : Ty extends 'stream' ? StreamProcedure<State, I, O, E>
@@ -242,7 +242,7 @@ export type ProcedureMap<State = object> = Record<string, AnyProcedure<State>>;
 // is not recognized as optional, for some reason
 
 /**
- * Creates an {@link RPCProcedure}.
+ * Creates an {@link RpcProcedure}.
  */
 // signature: default errors
 function rpc<State, I extends PayloadType, O extends PayloadType>(def: {
@@ -250,8 +250,8 @@ function rpc<State, I extends PayloadType, O extends PayloadType>(def: {
   output: O;
   errors?: never;
   description?: string;
-  handler: RPCProcedure<State, I, O, TNever>['handler'];
-}): Branded<RPCProcedure<State, I, O, TNever>>;
+  handler: RpcProcedure<State, I, O, TNever>['handler'];
+}): Branded<RpcProcedure<State, I, O, TNever>>;
 
 // signature: explicit errors
 function rpc<
@@ -264,8 +264,8 @@ function rpc<
   output: O;
   errors: E;
   description?: string;
-  handler: RPCProcedure<State, I, O, E>['handler'];
-}): Branded<RPCProcedure<State, I, O, E>>;
+  handler: RpcProcedure<State, I, O, E>['handler'];
+}): Branded<RpcProcedure<State, I, O, E>>;
 
 // implementation
 function rpc({
@@ -279,7 +279,7 @@ function rpc({
   output: PayloadType;
   errors?: RiverError;
   description?: string;
-  handler: RPCProcedure<
+  handler: RpcProcedure<
     object,
     PayloadType,
     PayloadType,

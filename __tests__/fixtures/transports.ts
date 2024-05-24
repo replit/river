@@ -1,6 +1,8 @@
 import {
+  ClientHandshakeOptions,
   ClientTransport,
   Connection,
+  ServerHandshakeOptions,
   ServerTransport,
   TransportClientId,
 } from '../../transport';
@@ -22,12 +24,17 @@ import {
 import { WebSocketClientTransport } from '../../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../../transport/impls/ws/server';
 import NodeWs from 'ws';
+import { TSchema } from '@sinclair/typebox';
 
 export type ValidTransports = 'ws' | 'unix sockets';
 
 export interface TestTransportOptions {
   client?: ProvidedClientTransportOptions;
   server?: ProvidedServerTransportOptions;
+  customHandshake?: {
+    client: ClientHandshakeOptions<TSchema>;
+    server: ServerHandshakeOptions<TSchema>;
+  };
 }
 
 export const transports: Array<{
@@ -64,6 +71,11 @@ export const transports: Array<{
             id,
             opts?.client,
           );
+
+          if (opts?.customHandshake) {
+            clientTransport.extendHandshake(opts.customHandshake.client);
+          }
+
           void clientTransport.connect('SERVER');
           transports.push(clientTransport);
           return clientTransport;
@@ -74,6 +86,11 @@ export const transports: Array<{
             'SERVER',
             opts?.server,
           );
+
+          if (opts?.customHandshake) {
+            serverTransport.extendHandshake(opts.customHandshake.server);
+          }
+
           transports.push(serverTransport);
           return serverTransport;
         },
@@ -125,6 +142,11 @@ export const transports: Array<{
             id,
             opts?.client,
           );
+
+          if (opts?.customHandshake) {
+            clientTransport.extendHandshake(opts.customHandshake.client);
+          }
+
           void clientTransport.connect('SERVER');
           transports.push(clientTransport);
           return clientTransport;
@@ -135,6 +157,11 @@ export const transports: Array<{
             'SERVER',
             opts?.server,
           );
+
+          if (opts?.customHandshake) {
+            serverTransport.extendHandshake(opts.customHandshake.server);
+          }
+
           transports.push(serverTransport);
           return serverTransport;
         },

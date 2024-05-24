@@ -659,33 +659,28 @@ describe.each(testMatrix())(
 );
 
 describe.each(testMatrix())(
-  'client <-> server with handshake tests ($transport.name transport, $codec.name codec)',
+  'client <-> server with custom handshake tests ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const requestSchema = Type.Object({
       data: Type.String(),
-    });
-
-    const parsedSchema = Type.Object({
-      data: Type.String(),
-      extra: Type.Number(),
     });
 
     const { getClientTransport, getServerTransport, cleanup } =
       await transport.setup({
         client: {
           codec: codec.codec,
-          handshake: {
-            schema: requestSchema,
-            get: () => ({ data: 'foobar' }),
-          },
         },
-
         server: {
           codec: codec.codec,
-          handshake: {
-            requestSchema,
-            parsedSchema,
-            parse: (metadata) => {
+        },
+        customHandshake: {
+          client: {
+            schema: requestSchema,
+            construct: () => ({ data: 'foobar' }),
+          },
+          server: {
+            schema: requestSchema,
+            validate: (metadata) => {
               return {
                 // @ts-expect-error we haven't extended the interface
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -696,7 +691,6 @@ describe.each(testMatrix())(
           },
         },
       });
-
     afterAll(cleanup);
 
     test('procedure can use metadata', async () => {
@@ -712,10 +706,9 @@ describe.each(testMatrix())(
               extra: Type.Number(),
             }),
             handler: async (ctx) => {
-              // we haven't extended the interface, so we need to suppress the error
-              // with a cast
+              // we haven't extended the interface
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              return Ok({ ...ctx.session.metadata } as any);
+              return Ok({ ...ctx.metadata } as { data: string; extra: number });
             },
           }),
         }),

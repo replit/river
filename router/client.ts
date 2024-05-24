@@ -18,8 +18,9 @@ import {
   TransportClientId,
   isStreamClose,
   PartialTransportMessage,
+  ClientHandshakeOptions,
 } from '../transport/message';
-import { Static } from '@sinclair/typebox';
+import { Static, TSchema } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
@@ -189,13 +190,24 @@ const defaultClientOptions: ClientOptions = {
  *
  * @template Srv - The type of the server.
  * @param {Transport} transport - The transport to use for communication.
+ * @param {TransportClientId} serverId - The ID of the server to connect to.
+ * @param {Partial<ClientOptions>} providedClientOptions - The options for the client.
  * @returns The client for the server.
  */
-export const createClient = <ServiceSchemaMap extends AnyServiceSchemaMap>(
-  transport: ClientTransport<Connection>,
+export function createClient<
+  ServiceSchemaMap extends AnyServiceSchemaMap,
+  MetadataSchema extends TSchema = TSchema,
+>(
+  transport: ClientTransport<Connection, MetadataSchema>,
   serverId: TransportClientId,
-  providedClientOptions: Partial<ClientOptions> = {},
-): Client<ServiceSchemaMap> => {
+  providedClientOptions: Partial<
+    ClientOptions & { handshakeOptions: ClientHandshakeOptions<MetadataSchema> }
+  > = {},
+): Client<ServiceSchemaMap> {
+  if (providedClientOptions.handshakeOptions) {
+    transport.extendHandshake(providedClientOptions.handshakeOptions);
+  }
+
   const options = { ...defaultClientOptions, ...providedClientOptions };
   if (options.eagerlyConnect) {
     void transport.connect(serverId);
@@ -235,7 +247,7 @@ export const createClient = <ServiceSchemaMap extends AnyServiceSchemaMap>(
       throw new Error(`invalid river call, unknown procedure type ${procType}`);
     }
   }, []) as Client<ServiceSchemaMap>;
-};
+}
 
 function createSessionDisconnectHandler(
   from: TransportClientId,
