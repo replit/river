@@ -31,22 +31,25 @@ export type ValidTransports = 'ws' | 'unix sockets';
 export interface TestTransportOptions {
   client?: ProvidedClientTransportOptions;
   server?: ProvidedServerTransportOptions;
-  customHandshake?: {
-    client: ClientHandshakeOptions<TSchema>;
-    server: ServerHandshakeOptions<TSchema>;
-  };
 }
 
-export const transports: Array<{
+export interface TransportMatrixEntry {
   name: ValidTransports;
   setup: (opts?: TestTransportOptions) => Promise<{
-    getClientTransport: (id: TransportClientId) => ClientTransport<Connection>;
-    getServerTransport: () => ServerTransport<Connection>;
+    getClientTransport: (
+      id: TransportClientId,
+      handshakeOptions?: ClientHandshakeOptions<TSchema>,
+    ) => ClientTransport<Connection>;
+    getServerTransport: (
+      handshakeOptions?: ServerHandshakeOptions<TSchema>,
+    ) => ServerTransport<Connection>;
     simulatePhantomDisconnect: () => void;
     restartServer: () => Promise<void>;
     cleanup: () => Promise<void> | void;
   }>;
-}> = [
+}
+
+export const transports: Array<TransportMatrixEntry> = [
   {
     name: 'ws',
     setup: async (opts) => {
@@ -65,30 +68,31 @@ export const transports: Array<{
             }
           }
         },
-        getClientTransport(id) {
+        getClientTransport(id, handshakeOptions) {
           const clientTransport = new WebSocketClientTransport(
             () => Promise.resolve(createLocalWebSocketClient(port)),
             id,
             opts?.client,
           );
 
-          if (opts?.customHandshake) {
-            clientTransport.extendHandshake(opts.customHandshake.client);
+          if (handshakeOptions) {
+            clientTransport.extendHandshake(handshakeOptions);
           }
 
           void clientTransport.connect('SERVER');
+
           transports.push(clientTransport);
           return clientTransport;
         },
-        getServerTransport() {
+        getServerTransport(handshakeOptions) {
           const serverTransport = new WebSocketServerTransport(
             wss,
             'SERVER',
             opts?.server,
           );
 
-          if (opts?.customHandshake) {
-            serverTransport.extendHandshake(opts.customHandshake.server);
+          if (handshakeOptions) {
+            serverTransport.extendHandshake(handshakeOptions);
           }
 
           transports.push(serverTransport);
@@ -111,7 +115,7 @@ export const transports: Array<{
           });
           wss = createWebSocketServer(server);
         },
-        cleanup: () => {
+        cleanup: async () => {
           wss.close();
           server.close();
         },
@@ -136,30 +140,30 @@ export const transports: Array<{
             }
           }
         },
-        getClientTransport(id) {
+        getClientTransport(id, handshakeOptions) {
           const clientTransport = new UnixDomainSocketClientTransport(
             socketPath,
             id,
             opts?.client,
           );
 
-          if (opts?.customHandshake) {
-            clientTransport.extendHandshake(opts.customHandshake.client);
+          if (handshakeOptions) {
+            clientTransport.extendHandshake(handshakeOptions);
           }
 
           void clientTransport.connect('SERVER');
           transports.push(clientTransport);
           return clientTransport;
         },
-        getServerTransport() {
+        getServerTransport(handshakeOptions) {
           const serverTransport = new UnixDomainSocketServerTransport(
             server,
             'SERVER',
             opts?.server,
           );
 
-          if (opts?.customHandshake) {
-            serverTransport.extendHandshake(opts.customHandshake.server);
+          if (handshakeOptions) {
+            serverTransport.extendHandshake(handshakeOptions);
           }
 
           transports.push(serverTransport);
@@ -173,13 +177,11 @@ export const transports: Array<{
             }
           }
 
-          await new Promise<void>((resolve) => {
-            server.close(() => resolve());
-          });
+          await new Promise((resolve) => server.close(resolve));
           server = net.createServer();
           await onUdsServeReady(server, socketPath);
         },
-        cleanup: () => {
+        cleanup: async () => {
           server.close();
         },
       };

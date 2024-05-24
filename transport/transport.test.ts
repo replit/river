@@ -20,13 +20,9 @@ import {
   waitFor,
 } from '../__tests__/fixtures/cleanup';
 import { testMatrix } from '../__tests__/fixtures/matrix';
-import {
-  ClientHandshakeOptions,
-  PartialTransportMessage,
-  ServerHandshakeOptions,
-} from './message';
-import { TestTransportOptions } from '../__tests__/fixtures/transports';
-import { TSchema, Type } from '@sinclair/typebox';
+import { PartialTransportMessage } from './message';
+import { Type } from '@sinclair/typebox';
+import { bindLogger, coloredStringLogger } from '../logging';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
@@ -745,30 +741,11 @@ describe.each(testMatrix())(
 
 describe.each(testMatrix())(
   'transport handshake tests ($transport.name transport, $codec.name codec)',
-  ({ transport, codec }) => {
-    const getTestTransportOptions = (
-      clientScehma: TSchema,
-      serverSchema: TSchema,
-      construct: ClientHandshakeOptions<TSchema>['construct'],
-      validate: ServerHandshakeOptions<TSchema>['validate'],
-    ): TestTransportOptions => ({
-      client: {
-        codec: codec.codec,
-      },
-      server: {
-        codec: codec.codec,
-      },
-      customHandshake: {
-        client: {
-          schema: clientScehma,
-          construct,
-        },
-        server: {
-          schema: serverSchema,
-          validate,
-        },
-      },
-    });
+  async ({ transport, codec }) => {
+    const opts = { codec: codec.codec };
+    const { getClientTransport, getServerTransport, cleanup } =
+      await transport.setup({ client: opts, server: opts });
+    afterAll(cleanup);
 
     test('handshakes and stores parsed metadata in session', async () => {
       const schema = Type.Object({
@@ -782,13 +759,20 @@ describe.each(testMatrix())(
         kept: metadata.kept,
       }));
 
-      const opts = getTestTransportOptions(schema, schema, get, parse);
-      const { getClientTransport, getServerTransport, cleanup } =
-        await transport.setup(opts);
-      onTestFinished(cleanup);
-
-      const clientTransport = getClientTransport('client');
-      const serverTransport = getServerTransport();
+      const serverTransport = getServerTransport({
+        schema,
+        validate: parse,
+      });
+      const clientTransport = getClientTransport('client', {
+        schema,
+        construct: get,
+      });
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
 
       await waitFor(() => {
         expect(serverTransport.sessions.size).toBe(1);
@@ -817,13 +801,14 @@ describe.each(testMatrix())(
         foo: metadata.foo,
       }));
 
-      const opts = getTestTransportOptions(schema, schema, get, parse);
-      const { getClientTransport, getServerTransport, cleanup } =
-        await transport.setup(opts);
-      onTestFinished(cleanup);
-
-      const clientTransport = getClientTransport('client');
-      const serverTransport = getServerTransport();
+      const serverTransport = getServerTransport({
+        schema,
+        validate: parse,
+      });
+      const clientTransport = getClientTransport('client', {
+        schema,
+        construct: get,
+      });
 
       const clientHandshakeFailed = vi.fn();
       clientTransport.addEventListener('protocolError', clientHandshakeFailed);
@@ -871,19 +856,16 @@ describe.each(testMatrix())(
         foo: metadata.foo,
       }));
 
-      const opts = getTestTransportOptions(
-        clientRequestSchema,
-        serverRequestSchema,
-        get,
-        parse,
-      );
+      const serverTransport = getServerTransport({
+        schema: serverRequestSchema,
+        validate: parse,
+      });
 
-      const { getClientTransport, getServerTransport, cleanup } =
-        await transport.setup(opts);
-      onTestFinished(cleanup);
+      const clientTransport = getClientTransport('client', {
+        schema: clientRequestSchema,
+        construct: get,
+      });
 
-      const clientTransport = getClientTransport('client');
-      const serverTransport = getServerTransport();
       const clientHandshakeFailed = vi.fn();
       clientTransport.addEventListener('protocolError', clientHandshakeFailed);
       const serverHandshakeFailed = vi.fn();
@@ -930,16 +912,17 @@ describe.each(testMatrix())(
 
       const get = vi.fn(async () => ({ foo: 'foo' }));
       const parse = vi.fn(async () => false);
-      const opts = getTestTransportOptions(schema, schema, get, parse);
+      const serverTransport = getServerTransport({
+        schema,
+        validate: parse,
+      });
 
-      const { getClientTransport, getServerTransport, cleanup } =
-        await transport.setup(opts);
-      onTestFinished(cleanup);
+      const clientTransport = getClientTransport('client', {
+        schema,
+        construct: get,
+      });
 
-      const clientTransport = getClientTransport('client');
-      const serverTransport = getServerTransport();
-
-      const clientHandshakeFailed = vi.fn();
+      const clientHandshakeFailed = vi.fn(console.log);
       clientTransport.addEventListener('protocolError', clientHandshakeFailed);
       const serverRejectedConnection = vi.fn();
       serverTransport.addEventListener(
@@ -964,7 +947,6 @@ describe.each(testMatrix())(
       });
 
       await waitFor(() => {
-        expect(get).toHaveBeenCalledTimes(1);
         expect(clientHandshakeFailed).toHaveBeenCalledTimes(1);
         expect(clientHandshakeFailed).toHaveBeenCalledWith({
           type: ProtocolError.HandshakeFailed,

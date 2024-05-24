@@ -986,16 +986,16 @@ export abstract class ServerTransport<
 
   private async validateHandshakeMetadata(
     conn: ConnType,
-    session: Session<ConnType>,
-    isReconnect: boolean,
+    session: Session<ConnType> | undefined,
     rawMetadata: Static<
       typeof ControlMessageHandshakeRequestSchema
     >['metadata'],
     from: TransportClientId,
-  ): Promise<boolean> {
+  ): Promise<ParsedMetadata | false> {
     let parsedMetadata: ParsedMetadata = {};
     if (this.handshakeExtensions) {
       // check that the metadata that was sent is the correct shape
+      console.log(rawMetadata)
       if (!Value.Check(this.handshakeExtensions.schema, rawMetadata)) {
         conn.telemetry?.span.setStatus({
           code: SpanStatusCode.ERROR,
@@ -1019,7 +1019,6 @@ export abstract class ServerTransport<
       parsedMetadata = await this.handshakeExtensions.validate(
         rawMetadata,
         session,
-        isReconnect,
       );
 
       // handler rejected the connection
@@ -1043,8 +1042,7 @@ export abstract class ServerTransport<
       }
     }
 
-    this.sessionHandshakeMetadata.set(session, parsedMetadata);
-    return true;
+    return parsedMetadata;
   }
 
   async receiveHandshakeRequestMessage(
@@ -1111,6 +1109,18 @@ export abstract class ServerTransport<
       return false;
     }
 
+    const oldSession = this.sessions.get(parsed.from);
+    const parsedMetadata = await this.validateHandshakeMetadata(
+      conn,
+      oldSession,
+      parsed.payload.metadata,
+      parsed.from,
+    );
+
+    if (parsedMetadata === false) {
+      return false;
+    }
+
     const { session, isReconnect } = this.getOrCreateSession(
       parsed.from,
       conn,
@@ -1118,17 +1128,7 @@ export abstract class ServerTransport<
       parsed.tracing,
     );
 
-    const validMetadata = await this.validateHandshakeMetadata(
-      conn,
-      session,
-      isReconnect,
-      parsed.payload.metadata,
-      parsed.from,
-    );
-
-    if (!validMetadata) {
-      return false;
-    }
+    this.sessionHandshakeMetadata.set(session, parsedMetadata);
 
     log?.debug(
       `handshake from ${parsed.from} ok, responding with handshake success`,

@@ -50,8 +50,7 @@ export interface ServerHandshakeOptions<MetadataSchema extends TSchema> {
    */
   validate: (
     metadata: Static<MetadataSchema>,
-    session: Session<Connection>,
-    isReconnect: boolean,
+    session?: Session<Connection>,
   ) => false | ParsedMetadata | Promise<false | ParsedMetadata>;
 }
 

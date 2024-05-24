@@ -1,4 +1,4 @@
-import { Type, TUnion } from '@sinclair/typebox';
+import { Type, TUnion, TSchema } from '@sinclair/typebox';
 import { RiverError, RiverUncaughtSchema } from './result';
 import {
   Branded,
@@ -150,17 +150,31 @@ export interface SerializedServiceSchema {
   >;
 }
 
-export type SerializedServerSchema = Record<string, SerializedServiceSchema>;
+export interface SerializedServerSchema {
+  handshakeSchema?: TSchema;
+  services: Record<string, SerializedServiceSchema>;
+}
+
 export function serializeSchema(
   services: AnyServiceSchemaMap,
+  handshakeSchema?: TSchema,
 ): SerializedServerSchema {
-  return Object.entries(services).reduce<SerializedServerSchema>(
-    (acc, [name, value]) => {
-      acc[name] = value.serialize();
-      return acc;
-    },
-    {},
-  );
+  const serializedServiceObject = Object.entries(services).reduce<
+    Record<string, SerializedServiceSchema>
+  >((acc, [name, value]) => {
+    acc[name] = value.serialize();
+    return acc;
+  }, {});
+
+  const schema: SerializedServerSchema = {
+    services: serializedServiceObject,
+  };
+
+  if (handshakeSchema) {
+    schema.handshakeSchema = Type.Strict(handshakeSchema);
+  }
+
+  return schema;
 }
 
 /**

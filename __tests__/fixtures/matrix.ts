@@ -1,30 +1,13 @@
 import { Codec } from '../../codec';
-import {
-  ClientTransport,
-  Connection,
-  ServerTransport,
-  TransportClientId,
-} from '../../transport';
 import { ValidCodecs, codecs } from './codec';
 import {
-  TestTransportOptions,
+  TransportMatrixEntry,
   ValidTransports,
   transports,
 } from './transports';
 
 interface TestMatrixEntry {
-  transport: {
-    name: string;
-    setup: (opts?: TestTransportOptions) => Promise<{
-      simulatePhantomDisconnect: () => void;
-      getClientTransport: (
-        id: TransportClientId,
-      ) => ClientTransport<Connection>;
-      getServerTransport: () => ServerTransport<Connection>;
-      restartServer: () => Promise<void>;
-      cleanup: () => Promise<void> | void;
-    }>;
-  };
+  transport: TransportMatrixEntry;
   codec: {
     name: string;
     codec: Codec;

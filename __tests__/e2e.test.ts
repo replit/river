@@ -655,48 +655,28 @@ describe.each(testMatrix())(
       await server.close();
       expect(dispose).toBeCalledTimes(1);
     });
-  },
-);
-
-describe.each(testMatrix())(
-  'client <-> server with custom handshake tests ($transport.name transport, $codec.name codec)',
-  async ({ transport, codec }) => {
-    const requestSchema = Type.Object({
-      data: Type.String(),
-    });
-
-    const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup({
-        client: {
-          codec: codec.codec,
-        },
-        server: {
-          codec: codec.codec,
-        },
-        customHandshake: {
-          client: {
-            schema: requestSchema,
-            construct: () => ({ data: 'foobar' }),
-          },
-          server: {
-            schema: requestSchema,
-            validate: (metadata) => {
-              return {
-                // @ts-expect-error we haven't extended the interface
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                data: metadata.data,
-                extra: 42,
-              };
-            },
-          },
-        },
-      });
-    afterAll(cleanup);
 
     test('procedure can use metadata', async () => {
       // setup
-      const clientTransport = getClientTransport('client');
-      const serverTransport = getServerTransport();
+      const requestSchema = Type.Object({
+        data: Type.String(),
+      });
+      const clientTransport = getClientTransport('client', {
+        schema: requestSchema,
+        construct: () => ({ data: 'foobar' }),
+      });
+      const serverTransport = getServerTransport({
+        schema: requestSchema,
+        validate: (metadata) => {
+          return {
+            // @ts-expect-error we haven't extended the interface
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            data: metadata.data,
+            extra: 42,
+          };
+        },
+      });
+
       const services = {
         test: ServiceSchema.define({
           getData: Procedure.rpc({
