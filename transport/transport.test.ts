@@ -922,7 +922,7 @@ describe.each(testMatrix())(
         construct: get,
       });
 
-      const clientHandshakeFailed = vi.fn(console.log);
+      const clientHandshakeFailed = vi.fn();
       clientTransport.addEventListener('protocolError', clientHandshakeFailed);
       const serverRejectedConnection = vi.fn();
       serverTransport.addEventListener(

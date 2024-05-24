@@ -995,7 +995,6 @@ export abstract class ServerTransport<
     let parsedMetadata: ParsedMetadata = {};
     if (this.handshakeExtensions) {
       // check that the metadata that was sent is the correct shape
-      console.log(rawMetadata)
       if (!Value.Check(this.handshakeExtensions.schema, rawMetadata)) {
         conn.telemetry?.span.setStatus({
           code: SpanStatusCode.ERROR,
