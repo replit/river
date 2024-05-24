@@ -1,6 +1,8 @@
 import {
+  ClientHandshakeOptions,
   ClientTransport,
   Connection,
+  ServerHandshakeOptions,
   ServerTransport,
   TransportClientId,
 } from '../../transport';
@@ -22,6 +24,7 @@ import {
 import { WebSocketClientTransport } from '../../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../../transport/impls/ws/server';
 import NodeWs from 'ws';
+import { TSchema } from '@sinclair/typebox';
 
 export type ValidTransports = 'ws' | 'unix sockets';
 
@@ -30,16 +33,23 @@ export interface TestTransportOptions {
   server?: ProvidedServerTransportOptions;
 }
 
-export const transports: Array<{
+export interface TransportMatrixEntry {
   name: ValidTransports;
   setup: (opts?: TestTransportOptions) => Promise<{
-    getClientTransport: (id: TransportClientId) => ClientTransport<Connection>;
-    getServerTransport: () => ServerTransport<Connection>;
+    getClientTransport: (
+      id: TransportClientId,
+      handshakeOptions?: ClientHandshakeOptions<TSchema>,
+    ) => ClientTransport<Connection>;
+    getServerTransport: (
+      handshakeOptions?: ServerHandshakeOptions<TSchema>,
+    ) => ServerTransport<Connection>;
     simulatePhantomDisconnect: () => void;
     restartServer: () => Promise<void>;
     cleanup: () => Promise<void> | void;
   }>;
-}> = [
+}
+
+export const transports: Array<TransportMatrixEntry> = [
   {
     name: 'ws',
     setup: async (opts) => {
@@ -58,22 +68,33 @@ export const transports: Array<{
             }
           }
         },
-        getClientTransport(id) {
+        getClientTransport(id, handshakeOptions) {
           const clientTransport = new WebSocketClientTransport(
             () => Promise.resolve(createLocalWebSocketClient(port)),
             id,
             opts?.client,
           );
+
+          if (handshakeOptions) {
+            clientTransport.extendHandshake(handshakeOptions);
+          }
+
           void clientTransport.connect('SERVER');
+
           transports.push(clientTransport);
           return clientTransport;
         },
-        getServerTransport() {
+        getServerTransport(handshakeOptions) {
           const serverTransport = new WebSocketServerTransport(
             wss,
             'SERVER',
             opts?.server,
           );
+
+          if (handshakeOptions) {
+            serverTransport.extendHandshake(handshakeOptions);
+          }
+
           transports.push(serverTransport);
           return serverTransport;
         },
@@ -94,7 +115,7 @@ export const transports: Array<{
           });
           wss = createWebSocketServer(server);
         },
-        cleanup: () => {
+        cleanup: async () => {
           wss.close();
           server.close();
         },
@@ -119,22 +140,32 @@ export const transports: Array<{
             }
           }
         },
-        getClientTransport(id) {
+        getClientTransport(id, handshakeOptions) {
           const clientTransport = new UnixDomainSocketClientTransport(
             socketPath,
             id,
             opts?.client,
           );
+
+          if (handshakeOptions) {
+            clientTransport.extendHandshake(handshakeOptions);
+          }
+
           void clientTransport.connect('SERVER');
           transports.push(clientTransport);
           return clientTransport;
         },
-        getServerTransport() {
+        getServerTransport(handshakeOptions) {
           const serverTransport = new UnixDomainSocketServerTransport(
             server,
             'SERVER',
             opts?.server,
           );
+
+          if (handshakeOptions) {
+            serverTransport.extendHandshake(handshakeOptions);
+          }
+
           transports.push(serverTransport);
           return serverTransport;
         },
@@ -146,13 +177,11 @@ export const transports: Array<{
             }
           }
 
-          await new Promise<void>((resolve) => {
-            server.close(() => resolve());
-          });
+          await new Promise((resolve) => server.close(resolve));
           server = net.createServer();
           await onUdsServeReady(server, socketPath);
         },
-        cleanup: () => {
+        cleanup: async () => {
           server.close();
         },
       };

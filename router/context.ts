@@ -1,7 +1,4 @@
-import {
-  ParsedHandshakeMetadata,
-  TransportClientId,
-} from '../transport/message';
+import { TransportClientId } from '../transport/message';
 import { Connection, Session } from '../transport/session';
 
 /**
@@ -28,6 +25,17 @@ import { Connection, Session } from '../transport/session';
 export interface ServiceContext {}
 
 /**
+ * The parsed metadata schema for a service. This is the
+ * return value of the {@link ServerHandshakeOptions.validate}
+ * if the handshake extension is used.
+
+ * You should use declaration merging to extend this interface
+ * with the sanitized metadata.
+ */
+/* eslint-disable-next-line @typescript-eslint/no-empty-interface */
+export interface ParsedMetadata {}
+
+/**
  * The {@link ServiceContext} with state. This is what is passed to procedures.
  */
 export type ServiceContextWithState<State> = ServiceContext & { state: State };
@@ -37,5 +45,6 @@ export type ServiceContextWithTransportInfo<State> = ServiceContext & {
   to: TransportClientId;
   from: TransportClientId;
   streamId: string;
-  session: Session<Connection> & { metadata: ParsedHandshakeMetadata };
+  session: Session<Connection>;
+  metadata: ParsedMetadata;
 };

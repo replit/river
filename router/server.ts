@@ -1,4 +1,4 @@
-import { Static } from '@sinclair/typebox';
+import { Static, TSchema } from '@sinclair/typebox';
 import { ServerTransport } from '../transport/transport';
 import { AnyProcedure, PayloadType } from './procedures';
 import {
@@ -15,6 +15,7 @@ import {
   isStreamOpen,
   TransportClientId,
   ControlFlags,
+  ServerHandshakeOptions,
 } from '../transport/message';
 import {
   ServiceContext,
@@ -58,8 +59,11 @@ interface ProcStream {
   };
 }
 
-class RiverServer<Services extends AnyServiceSchemaMap> {
-  transport: ServerTransport<Connection>;
+class RiverServer<
+  Services extends AnyServiceSchemaMap,
+  MetadataSchema extends TSchema,
+> {
+  transport: ServerTransport<Connection, MetadataSchema>;
   services: InstantiatedServiceSchemaMap<Services>;
   contextMap: Map<AnyService, ServiceContextWithState<object>>;
   // map of streamId to ProcStream
@@ -69,8 +73,9 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
   disconnectedSessions: Set<TransportClientId>;
 
   constructor(
-    transport: ServerTransport<Connection>,
+    transport: ServerTransport<Connection, MetadataSchema>,
     services: Services,
+    handshakeOptions?: ServerHandshakeOptions<MetadataSchema>,
     extendedContext?: Omit<ServiceContext, 'state'>,
   ) {
     const instances: Record<string, AnyService> = {};
@@ -86,6 +91,10 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
         ...extendedContext,
         state: instance.state,
       });
+    }
+
+    if (handshakeOptions) {
+      transport.extendHandshake(handshakeOptions);
     }
 
     this.transport = transport;
@@ -270,8 +279,8 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       );
     };
 
-    // by this point, our sessions should always have their handshake metadata
-    if (session.metadata === undefined) {
+    const sessionMeta = this.transport.sessionHandshakeMetadata.get(session);
+    if (!sessionMeta) {
       log?.error(`session doesn't have handshake metadata`, {
         ...session.loggingMetadata,
         tags: ['invariant-violation'],
@@ -288,8 +297,8 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
         to: message.to,
         from: message.from,
         streamId: message.streamId,
-        // we've already validated that the session has handshake metadata
-        session: session as ServiceContextWithTransportInfo<object>['session'],
+        session,
+        metadata: sessionMeta,
       };
 
     switch (procedure.type) {
@@ -550,13 +559,25 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
  * The server tracks the state of each service along with open streams and the extended context object.
  * @param transport - The transport to listen to.
  * @param services - An object containing all the services to be registered on the server.
+ * @param handshakeOptions - An optional object containing additional handshake options to be passed to the transport.
  * @param extendedContext - An optional object containing additional context to be passed to all services.
  * @returns A promise that resolves to a server instance with the registered services.
  */
-export function createServer<Services extends AnyServiceSchemaMap>(
-  transport: ServerTransport<Connection>,
+export function createServer<
+  Services extends AnyServiceSchemaMap,
+  MetadataSchema extends TSchema = TSchema,
+>(
+  transport: ServerTransport<Connection, MetadataSchema>,
   services: Services,
-  extendedContext?: Omit<ServiceContext, 'state'>,
+  providedServerOptions?: Partial<{
+    handshakeOptions?: ServerHandshakeOptions<MetadataSchema>;
+    extendedContext?: Omit<ServiceContext, 'state'>;
+  }>,
 ): Server<Services> {
-  return new RiverServer(transport, services, extendedContext);
+  return new RiverServer(
+    transport,
+    services,
+    providedServerOptions?.handshakeOptions,
+    providedServerOptions?.extendedContext,
+  );
 }

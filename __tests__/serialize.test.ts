@@ -5,152 +5,166 @@ import {
   TestServiceSchema,
 } from './fixtures/services';
 import { serializeSchema } from '../router';
+import { Type } from '@sinclair/typebox';
 
 describe('serialize server to jsonschema', () => {
   test('serialize entire service schema', () => {
     const schema = { test: TestServiceSchema };
-    expect(serializeSchema(schema)).toStrictEqual({
-      test: {
-        procedures: {
-          add: {
-            input: {
-              properties: {
-                n: { type: 'number' },
-              },
-              required: ['n'],
-              type: 'object',
-            },
-            output: {
-              properties: {
-                result: { type: 'number' },
-              },
-              required: ['result'],
-              type: 'object',
-            },
-            errors: {
-              not: {},
-            },
-            type: 'rpc',
-          },
-          echo: {
-            input: {
-              properties: {
-                msg: { type: 'string' },
-                ignore: { type: 'boolean' },
-                end: { type: 'boolean' },
-              },
-              required: ['msg', 'ignore'],
-              type: 'object',
-            },
-            output: {
-              properties: {
-                response: { type: 'string' },
-              },
-              required: ['response'],
-              type: 'object',
-            },
-            errors: {
-              not: {},
-            },
-            type: 'stream',
-          },
-          echoWithPrefix: {
-            errors: {
-              not: {},
-            },
-            init: {
-              properties: {
-                prefix: {
-                  type: 'string',
+    const handshakeSchema = Type.Object({
+      token: Type.String(),
+    });
+
+    expect(serializeSchema(schema, handshakeSchema)).toStrictEqual({
+      handshakeSchema: {
+        properties: {
+          token: { type: 'string' },
+        },
+        required: ['token'],
+        type: 'object',
+      },
+      services: {
+        test: {
+          procedures: {
+            add: {
+              input: {
+                properties: {
+                  n: { type: 'number' },
                 },
+                required: ['n'],
+                type: 'object',
               },
-              required: ['prefix'],
-              type: 'object',
-            },
-            input: {
-              properties: {
-                end: {
-                  type: 'boolean',
+              output: {
+                properties: {
+                  result: { type: 'number' },
                 },
-                ignore: {
-                  type: 'boolean',
-                },
-                msg: {
-                  type: 'string',
-                },
+                required: ['result'],
+                type: 'object',
               },
-              required: ['msg', 'ignore'],
-              type: 'object',
-            },
-            output: {
-              properties: {
-                response: {
-                  type: 'string',
-                },
+              errors: {
+                not: {},
               },
-              required: ['response'],
-              type: 'object',
+              type: 'rpc',
             },
-            type: 'stream',
-          },
-          echoUnion: {
-            description: 'Echos back whatever we sent',
-            errors: {
-              not: {},
+            echo: {
+              input: {
+                properties: {
+                  msg: { type: 'string' },
+                  ignore: { type: 'boolean' },
+                  end: { type: 'boolean' },
+                },
+                required: ['msg', 'ignore'],
+                type: 'object',
+              },
+              output: {
+                properties: {
+                  response: { type: 'string' },
+                },
+                required: ['response'],
+                type: 'object',
+              },
+              errors: {
+                not: {},
+              },
+              type: 'stream',
             },
-            input: {
-              anyOf: [
-                {
-                  description: 'A',
-                  properties: {
-                    a: {
-                      description: 'A number',
-                      type: 'number',
-                    },
+            echoWithPrefix: {
+              errors: {
+                not: {},
+              },
+              init: {
+                properties: {
+                  prefix: {
+                    type: 'string',
                   },
-                  required: ['a'],
-                  type: 'object',
                 },
-                {
-                  description: 'B',
-                  properties: {
-                    b: {
-                      description: 'A string',
-                      type: 'string',
-                    },
+                required: ['prefix'],
+                type: 'object',
+              },
+              input: {
+                properties: {
+                  end: {
+                    type: 'boolean',
                   },
-                  required: ['b'],
-                  type: 'object',
+                  ignore: {
+                    type: 'boolean',
+                  },
+                  msg: {
+                    type: 'string',
+                  },
                 },
-              ],
+                required: ['msg', 'ignore'],
+                type: 'object',
+              },
+              output: {
+                properties: {
+                  response: {
+                    type: 'string',
+                  },
+                },
+                required: ['response'],
+                type: 'object',
+              },
+              type: 'stream',
             },
-            output: {
-              anyOf: [
-                {
-                  description: 'A',
-                  properties: {
-                    a: {
-                      description: 'A number',
-                      type: 'number',
+            echoUnion: {
+              description: 'Echos back whatever we sent',
+              errors: {
+                not: {},
+              },
+              input: {
+                anyOf: [
+                  {
+                    description: 'A',
+                    properties: {
+                      a: {
+                        description: 'A number',
+                        type: 'number',
+                      },
                     },
+                    required: ['a'],
+                    type: 'object',
                   },
-                  required: ['a'],
-                  type: 'object',
-                },
-                {
-                  description: 'B',
-                  properties: {
-                    b: {
-                      description: 'A string',
-                      type: 'string',
+                  {
+                    description: 'B',
+                    properties: {
+                      b: {
+                        description: 'A string',
+                        type: 'string',
+                      },
                     },
+                    required: ['b'],
+                    type: 'object',
                   },
-                  required: ['b'],
-                  type: 'object',
-                },
-              ],
+                ],
+              },
+              output: {
+                anyOf: [
+                  {
+                    description: 'A',
+                    properties: {
+                      a: {
+                        description: 'A number',
+                        type: 'number',
+                      },
+                    },
+                    required: ['a'],
+                    type: 'object',
+                  },
+                  {
+                    description: 'B',
+                    properties: {
+                      b: {
+                        description: 'A string',
+                        type: 'string',
+                      },
+                    },
+                    required: ['b'],
+                    type: 'object',
+                  },
+                ],
+              },
+              type: 'rpc',
             },
-            type: 'rpc',
           },
         },
       },

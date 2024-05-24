@@ -655,54 +655,28 @@ describe.each(testMatrix())(
       await server.close();
       expect(dispose).toBeCalledTimes(1);
     });
-  },
-);
-
-describe.each(testMatrix())(
-  'client <-> server with handshake tests ($transport.name transport, $codec.name codec)',
-  async ({ transport, codec }) => {
-    const requestSchema = Type.Object({
-      data: Type.String(),
-    });
-
-    const parsedSchema = Type.Object({
-      data: Type.String(),
-      extra: Type.Number(),
-    });
-
-    const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup({
-        client: {
-          codec: codec.codec,
-          handshake: {
-            schema: requestSchema,
-            get: () => ({ data: 'foobar' }),
-          },
-        },
-
-        server: {
-          codec: codec.codec,
-          handshake: {
-            requestSchema,
-            parsedSchema,
-            parse: (metadata) => {
-              return {
-                // @ts-expect-error we haven't extended the interface
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                data: metadata.data,
-                extra: 42,
-              };
-            },
-          },
-        },
-      });
-
-    afterAll(cleanup);
 
     test('procedure can use metadata', async () => {
       // setup
-      const clientTransport = getClientTransport('client');
-      const serverTransport = getServerTransport();
+      const requestSchema = Type.Object({
+        data: Type.String(),
+      });
+      const clientTransport = getClientTransport('client', {
+        schema: requestSchema,
+        construct: () => ({ data: 'foobar' }),
+      });
+      const serverTransport = getServerTransport({
+        schema: requestSchema,
+        validate: (metadata) => {
+          return {
+            // @ts-expect-error we haven't extended the interface
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            data: metadata.data,
+            extra: 42,
+          };
+        },
+      });
+
       const services = {
         test: ServiceSchema.define({
           getData: Procedure.rpc({
@@ -712,10 +686,9 @@ describe.each(testMatrix())(
               extra: Type.Number(),
             }),
             handler: async (ctx) => {
-              // we haven't extended the interface, so we need to suppress the error
-              // with a cast
+              // we haven't extended the interface
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              return Ok({ ...ctx.session.metadata } as any);
+              return Ok({ ...ctx.metadata } as { data: string; extra: number });
             },
           }),
         }),

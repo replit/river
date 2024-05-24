@@ -1,5 +1,11 @@
 import { expect, vi } from 'vitest';
-import { Connection, OpaqueTransportMessage, Transport } from '../../transport';
+import {
+  ClientTransport,
+  Connection,
+  OpaqueTransportMessage,
+  ServerTransport,
+  Transport,
+} from '../../transport';
 import { Server } from '../../router';
 import { log } from '../../logging/log';
 import { AnyServiceSchemaMap } from '../../router/services';
@@ -107,14 +113,18 @@ export async function testFinishesCleanly({
   serverTransport,
   server,
 }: Partial<{
-  clientTransports: Array<Transport<Connection>>;
-  serverTransport: Transport<Connection>;
+  clientTransports: Array<ClientTransport<Connection>>;
+  serverTransport: ServerTransport<Connection>;
   server: Server<AnyServiceSchemaMap>;
 }>) {
   log?.info('*** end of test cleanup ***');
   vi.useFakeTimers({ shouldAdvanceTime: true });
 
   if (clientTransports) {
+    for (const t of clientTransports) {
+      t.reconnectOnConnectionDrop = false;
+    }
+
     await Promise.all(clientTransports.map(waitForTransportToFinish));
     await advanceFakeTimersBySessionGrace();
     await Promise.all(clientTransports.map(ensureTransportIsClean));

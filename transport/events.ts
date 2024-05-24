@@ -8,6 +8,7 @@ export const ProtocolError = {
   UseAfterDestroy: 'use_after_destroy',
   MessageOrderingViolated: 'message_ordering_violated',
 } as const;
+
 export type ProtocolErrorType =
   (typeof ProtocolError)[keyof typeof ProtocolError];
 
