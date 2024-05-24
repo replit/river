@@ -22,7 +22,6 @@ import {
 import { testMatrix } from '../__tests__/fixtures/matrix';
 import { PartialTransportMessage } from './message';
 import { Type } from '@sinclair/typebox';
-import { bindLogger, coloredStringLogger } from '../logging';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
