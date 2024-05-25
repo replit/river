@@ -824,7 +824,9 @@ export abstract class ClientTransport<
       }
     }
 
-    const { session } = this.getOrCreateSession(to, conn);
+    // dont pass conn here as we dont want the session to start using the conn
+    // until we have finished the handshake
+    const { session } = this.getOrCreateSession(to);
     const requestMsg = handshakeRequestMessage(
       this.clientId,
       to,
