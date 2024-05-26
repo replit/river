@@ -97,6 +97,34 @@ describe.each(testMatrix())(
       }
     });
 
+    test('sending right after session event should not cause invalid handshake', async () => {
+      const clientTransport = getClientTransport('client');
+      const protocolError = vi.fn();
+      clientTransport.addEventListener('protocolError', protocolError);
+      const serverTransport = getServerTransport();
+
+      const msg = createDummyTransportMessage();
+      const msgPromise = waitForMessage(serverTransport);
+      const sendHandle = (evt: EventMap['sessionStatus']) => {
+        if (evt.status === 'connect') {
+          clientTransport.send(serverTransport.clientId, msg);
+        }
+      };
+
+      clientTransport.addEventListener('sessionStatus', sendHandle);
+      onTestFinished(async () => {
+        clientTransport.removeEventListener('protocolError', protocolError);
+        clientTransport.removeEventListener('sessionStatus', sendHandle);
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
+
+      await expect(msgPromise).resolves.toStrictEqual(msg.payload);
+      expect(protocolError).toHaveBeenCalledTimes(0);
+    });
+
     test('seq numbers should be persisted across transparent reconnects', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();

@@ -313,8 +313,8 @@ export class Session<ConnType extends Connection> {
   replaceWithNewConnection(newConn: ConnType) {
     this.closeStaleConnection(newConn);
     this.cancelGrace();
-    this.connection = newConn;
     this.sendBufferedMessages(newConn);
+    this.connection = newConn;
   }
 
   beginGrace(cb: () => void) {
