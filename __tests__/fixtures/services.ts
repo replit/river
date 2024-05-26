@@ -25,6 +25,25 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     },
   }),
 
+  array: Procedure.rpc({
+    input: Type.Object({ n: Type.Number() }),
+    output: Type.Array(Type.Number()),
+    async handler(ctx, { n }) {
+      ctx.state.count += n;
+      return Ok([ctx.state.count]);
+    },
+  }),
+
+  arrayStream: Procedure.stream({
+    input: Type.Object({ n: Type.Number() }),
+    output: Type.Array(Type.Number()),
+    async handler(_, msgStream, returnStream) {
+      for await (const msg of msgStream) {
+        returnStream.push(Ok([msg.n]));
+      }
+    },
+  }),
+
   echo: Procedure.stream({
     input: EchoRequest,
     output: EchoResponse,
@@ -223,7 +242,7 @@ export const UploadableServiceSchema = ServiceSchema.define({
       for await (const { n } of msgStream) {
         result += n;
       }
-      return Ok({ result: init.prefix + ' ' + result });
+      return Ok({ result: `${init.prefix} ${result}` });
     },
   }),
 });

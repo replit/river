@@ -210,12 +210,12 @@ export function asClientStream<
       const _proc = proc as Procedure<State, 'stream', I, O, E, PayloadType>;
       await _proc
         .handler(dummyCtx(state, session, extendedContext), init, input, output)
-        .catch((err) => output.push(catchProcError(err)));
+        .catch((err: unknown) => output.push(catchProcError(err)));
     } else {
       const _proc = proc as Procedure<State, 'stream', I, O, E>;
       await _proc
         .handler(dummyCtx(state, session, extendedContext), input, output)
-        .catch((err) => output.push(catchProcError(err)));
+        .catch((err: unknown) => output.push(catchProcError(err)));
     }
   })();
 
@@ -241,7 +241,7 @@ export function asClientSubscription<
     void (async () => {
       return await proc
         .handler(dummyCtx(state, session, extendedContext), msg, output)
-        .catch((err) => output.push(catchProcError(err)));
+        .catch((err: unknown) => output.push(catchProcError(err)));
     })();
     return output;
   };

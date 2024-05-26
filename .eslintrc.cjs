@@ -37,6 +37,13 @@ module.exports = {
     '@typescript-eslint/require-await': 'off',
     '@typescript-eslint/array-type': ['error', { default: 'generic' }],
     '@typescript-eslint/no-invalid-void-type': 'off',
+    '@typescript-eslint/restrict-template-expressions': [
+      'error',
+      {
+        allowNullish: true,
+        allowNumber: true,
+      },
+    ],
   },
   ignorePatterns: ['dist/**/*'],
 };
