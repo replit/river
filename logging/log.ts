@@ -20,12 +20,20 @@ export type Logger = {
 
 export type Tags = 'invariant-violation';
 
-function cleanMessage<T extends Partial<OpaqueTransportMessage>>(
-  msg: T,
-): Omit<T, 'payload' | 'tracing'> {
-  const { payload, tracing, ...rest } = msg;
-  return rest;
-}
+const cleanedLogFn = (log: LogFn) => {
+  return (msg: string, metadata?: MessageMetadata) => {
+    // skip cloning object if metadata has no transportMessage
+    if (!metadata?.transportMessage) {
+      log(msg, metadata);
+      return;
+    }
+
+    // clone metadata and clean transportMessage
+    const { payload, tracing, ...rest } = metadata.transportMessage;
+    metadata.transportMessage = rest;
+    log(msg, metadata);
+  };
+};
 
 export type MessageMetadata = Partial<{
   protocolVersion: string;
@@ -33,10 +41,7 @@ export type MessageMetadata = Partial<{
   connectedTo: string;
   sessionId: string;
   connId: string;
-  transportMessage: Omit<
-    Partial<OpaqueTransportMessage>,
-    'payload' | 'tracing'
-  >;
+  transportMessage: Partial<OpaqueTransportMessage>;
   validationErrors: Array<ValueError>;
   tags: Array<Tags>;
 }>;
@@ -99,27 +104,12 @@ let _log: Logger | undefined = undefined;
 
 // log proxy to clean transport payloads
 export let log: Logger | undefined = undefined;
-const createLogProxy = (log: Logger) =>
-  new Proxy(
-    {},
-    {
-      get(_target, prop: LoggingLevel) {
-        return (msg: string, metadata?: MessageMetadata) => {
-          // skip cloning object if metadata has no transportMessage
-          if (!metadata?.transportMessage) {
-            log[prop](msg, metadata);
-            return;
-          }
-
-          // clone metadata and clean transportMessage
-          log[prop](msg, {
-            ...metadata,
-            transportMessage: cleanMessage(metadata.transportMessage ?? {}),
-          });
-        };
-      },
-    },
-  ) as Logger;
+const createLogProxy = (log: Logger) => ({
+  debug: cleanedLogFn(log.debug.bind(log)),
+  info: cleanedLogFn(log.info.bind(log)),
+  warn: cleanedLogFn(log.warn.bind(log)),
+  error: cleanedLogFn(log.error.bind(log)),
+});
 
 export function bindLogger(
   fn: LogFn | Logger | undefined,

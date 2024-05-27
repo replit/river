@@ -31,7 +31,9 @@ import {
 import { testMatrix } from './fixtures/matrix';
 import { Type } from '@sinclair/typebox';
 import { Procedure, ServiceSchema } from '../router';
+import { bindLogger, jsonLogger } from '../logging';
 
+bindLogger(jsonLogger);
 describe.each(testMatrix())(
   'client <-> server integration test ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
