@@ -1,5 +1,5 @@
+import { ValueError } from '@sinclair/typebox/value';
 import { OpaqueTransportMessage } from '../transport';
-import { PartialTransportMessage } from '../transport/message';
 
 const LoggingLevels = {
   debug: -1,
@@ -20,17 +20,26 @@ export type Logger = {
 
 export type Tags = 'invariant-violation';
 
-export type MessageMetadata = Record<string, unknown> &
-  Partial<{
-    protocolVersion: string;
-    clientId: string;
-    connectedTo: string;
-    sessionId: string;
-    connId: string;
-    fullTransportMessage: OpaqueTransportMessage;
-    partialTransportMessage: Partial<PartialTransportMessage>;
-    tags: Array<Tags>;
-  }>;
+function cleanMessage<T extends Partial<OpaqueTransportMessage>>(
+  msg: T,
+): Omit<T, 'payload' | 'tracing'> {
+  const { payload, tracing, ...rest } = msg;
+  return rest;
+}
+
+export type MessageMetadata = Partial<{
+  protocolVersion: string;
+  clientId: string;
+  connectedTo: string;
+  sessionId: string;
+  connId: string;
+  transportMessage: Omit<
+    Partial<OpaqueTransportMessage>,
+    'payload' | 'tracing'
+  >;
+  validationErrors: Array<ValueError>;
+  tags: Array<Tags>;
+}>;
 
 class BaseLogger implements Logger {
   minLevel: LoggingLevel;
@@ -86,19 +95,51 @@ export const jsonLogger: LogFn = (msg, ctx, level) => {
   console.log(JSON.stringify({ msg, ctx, level }));
 };
 
-export let log: Logger | undefined = undefined;
+let _log: Logger | undefined = undefined;
 
-export function bindLogger(fn: undefined, level?: LoggingLevel): undefined;
-export function bindLogger(fn: LogFn | Logger, level?: LoggingLevel): Logger;
+// log proxy to clean transport payloads
+export let log: Logger | undefined = undefined;
+const createLogProxy = (log: Logger) =>
+  new Proxy(
+    {},
+    {
+      get(_target, prop: LoggingLevel) {
+        return (msg: string, metadata?: MessageMetadata) => {
+          // skip cloning object if metadat has no transportMessage
+          if (!metadata?.transportMessage) {
+            log[prop](msg, metadata);
+            return;
+          }
+
+          // clone metadata and clean transportMessage
+          log[prop](msg, {
+            ...metadata,
+            transportMessage: cleanMessage(metadata.transportMessage ?? {}),
+          });
+        };
+      },
+    },
+  ) as Logger;
+
 export function bindLogger(
   fn: LogFn | Logger | undefined,
   level?: LoggingLevel,
-): Logger | undefined {
-  if (typeof fn === 'function') {
-    log = new BaseLogger(fn, level);
-    return log;
+): void {
+  // clear logger
+  if (!fn) {
+    _log = undefined;
+    log = undefined;
+    return;
   }
 
-  log = fn;
-  return fn;
+  // construct logger from fn
+  if (typeof fn === 'function') {
+    _log = new BaseLogger(fn, level);
+    log = createLogProxy(_log);
+    return;
+  }
+
+  // just assign
+  _log = fn;
+  log = createLogProxy(_log);
 }

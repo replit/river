@@ -224,10 +224,9 @@ export function createClient<
     const [input] = opts.args;
     log?.info(`invoked ${procType} ${serviceName}.${procName}`, {
       clientId: transport.clientId,
-      partialTransportMessage: {
+      transportMessage: {
         procedureName: procName,
         serviceName,
-        payload: input,
       },
     });
 

@@ -200,7 +200,7 @@ export class Session<ConnType extends Connection> {
     const fullMsg: TransportMessage = this.constructMsg(msg);
     log?.debug(`sending msg`, {
       ...this.loggingMetadata,
-      fullTransportMessage: fullMsg,
+      transportMessage: fullMsg,
     });
 
     if (this.connection) {
@@ -210,13 +210,13 @@ export class Session<ConnType extends Connection> {
         `failed to send msg to ${fullMsg.to}, connection is probably dead`,
         {
           ...this.loggingMetadata,
-          fullTransportMessage: fullMsg,
+          transportMessage: fullMsg,
         },
       );
     } else {
       log?.info(
         `failed to send msg to ${fullMsg.to}, connection not ready yet`,
-        { ...this.loggingMetadata, fullTransportMessage: fullMsg },
+        { ...this.loggingMetadata, transportMessage: fullMsg },
       );
     }
 
@@ -262,7 +262,7 @@ export class Session<ConnType extends Connection> {
     for (const msg of this.sendBuffer) {
       log?.debug(`resending msg`, {
         ...this.loggingMetadata,
-        fullTransportMessage: msg,
+        transportMessage: msg,
         connId: conn.id,
       });
       const ok = conn.send(this.codec.toBuffer(msg));
@@ -277,7 +277,7 @@ export class Session<ConnType extends Connection> {
 
         log?.error(errMsg, {
           ...this.loggingMetadata,
-          fullTransportMessage: msg,
+          transportMessage: msg,
           connId: conn.id,
           tags: ['invariant-violation'],
         });
