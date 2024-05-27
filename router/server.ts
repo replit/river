@@ -497,18 +497,33 @@ class RiverServer<
     const procedure = this.services[serviceName].procedures[procedureName];
     const procHasInitMessage = 'init' in procedure;
 
-    if (
-      isInit &&
-      procHasInitMessage &&
-      Value.Check(procedure.init, message.payload)
-    ) {
-      procStream.incoming.push(message.payload as PayloadType);
+    if (isInit && procHasInitMessage) {
+      if (Value.Check(procedure.init, message.payload)) {
+        procStream.incoming.push(message.payload as PayloadType);
+      } else {
+        log?.error(
+          `procedure ${serviceName}.${procedureName} received invalid init payload`,
+          {
+            clientId: this.transport.clientId,
+            transportMessage: message,
+            validationErrors: [
+              ...Value.Errors(procedure.init, message.payload),
+            ],
+          },
+        );
+      }
     } else if (Value.Check(procedure.input, message.payload)) {
       procStream.incoming.push(message.payload as PayloadType);
     } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
+      // whelp we got a message that isn't a control message and doesn't match the procedure input
+      // so definitely not a valid payload
       log?.error(
         `procedure ${serviceName}.${procedureName} received invalid payload`,
-        { clientId: this.transport.clientId, transportMessage: message },
+        {
+          clientId: this.transport.clientId,
+          transportMessage: message,
+          validationErrors: [...Value.Errors(procedure.input, message.payload)],
+        },
       );
     }
 

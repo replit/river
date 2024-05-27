@@ -322,6 +322,9 @@ export abstract class Transport<ConnType extends Connection> {
     if (!Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
       log?.error(`received invalid msg: ${JSON.stringify(parsedMsg)}`, {
         clientId: this.clientId,
+        validationErrors: [
+          ...Value.Errors(OpaqueTransportMessageSchema, parsedMsg),
+        ],
       });
       return null;
     }
@@ -630,6 +633,12 @@ export abstract class ClientTransport<
         clientId: this.clientId,
         connectedTo: parsed.from,
         transportMessage: parsed,
+        validationErrors: [
+          ...Value.Errors(
+            ControlMessageHandshakeResponseSchema,
+            parsed.payload,
+          ),
+        ],
       });
       this.protocolError(
         ProtocolError.HandshakeFailed,
@@ -810,6 +819,9 @@ export abstract class ClientTransport<
         log?.error(`constructed handshake metadata did not match schema`, {
           clientId: this.clientId,
           connectedTo: to,
+          validationErrors: [
+            ...Value.Errors(this.handshakeExtensions.schema, metadata),
+          ],
           tags: ['invariant-violation'],
         });
         this.protocolError(
@@ -1012,6 +1024,9 @@ export abstract class ServerTransport<
         log?.warn(`received malformed handshake metadata from ${from}`, {
           clientId: this.clientId,
           connId: conn.id,
+          validationErrors: [
+            ...Value.Errors(this.handshakeExtensions.schema, rawMetadata),
+          ],
         });
         this.protocolError(ProtocolError.HandshakeFailed, reason);
         return false;
@@ -1080,6 +1095,9 @@ export abstract class ServerTransport<
         // safe to log metadata here as we remove the payload
         // before passing it to user-land
         transportMessage: parsed,
+        validationErrors: [
+          ...Value.Errors(ControlMessageHandshakeRequestSchema, parsed.payload),
+        ],
       });
       this.protocolError(
         ProtocolError.HandshakeFailed,

@@ -105,7 +105,7 @@ const createLogProxy = (log: Logger) =>
     {
       get(_target, prop: LoggingLevel) {
         return (msg: string, metadata?: MessageMetadata) => {
-          // skip cloning object if metadat has no transportMessage
+          // skip cloning object if metadata has no transportMessage
           if (!metadata?.transportMessage) {
             log[prop](msg, metadata);
             return;
