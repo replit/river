@@ -1,7 +1,7 @@
 import { Static, TNever, Type, TSchema } from '@sinclair/typebox';
-import type { Pushable } from 'it-pushable';
 import { ServiceContextWithTransportInfo } from './context';
 import { Result, RiverError, RiverUncaughtSchema } from './result';
+import { ReadStream, WriteStream } from './streams';
 
 /**
  * Brands a type to prevent it from being directly constructed.
@@ -94,7 +94,7 @@ export type UploadProcedure<
       handler(
         context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
-        input: AsyncIterableIterator<Static<I>>,
+        input: ReadStream<Static<I>>,
       ): Promise<ProcedureResult<O, E>>;
     }
   : {
@@ -105,7 +105,7 @@ export type UploadProcedure<
       description?: string;
       handler(
         context: ServiceContextWithTransportInfo<State>,
-        input: AsyncIterableIterator<Static<I>>,
+        input: ReadStream<Static<I>>,
       ): Promise<ProcedureResult<O, E>>;
     };
 
@@ -131,7 +131,7 @@ export interface SubscriptionProcedure<
   handler(
     context: ServiceContextWithTransportInfo<State>,
     input: Static<I>,
-    output: Pushable<ProcedureResult<O, E>>,
+    output: WriteStream<ProcedureResult<O, E>>,
   ): Promise<(() => void) | void>;
 }
 
@@ -162,8 +162,8 @@ export type StreamProcedure<
       handler(
         context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
-        input: AsyncIterableIterator<Static<I>>,
-        output: Pushable<ProcedureResult<O, E>>,
+        input: ReadStream<Static<I>>,
+        output: WriteStream<ProcedureResult<O, E>>,
       ): Promise<(() => void) | void>;
     }
   : {
@@ -174,8 +174,8 @@ export type StreamProcedure<
       description?: string;
       handler(
         context: ServiceContextWithTransportInfo<State>,
-        input: AsyncIterableIterator<Static<I>>,
-        output: Pushable<ProcedureResult<O, E>>,
+        input: ReadStream<Static<I>>,
+        output: WriteStream<ProcedureResult<O, E>>,
       ): Promise<(() => void) | void>;
     };
 

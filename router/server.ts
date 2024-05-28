@@ -13,8 +13,6 @@ import {
   InstantiatedServiceSchemaMap,
   AnyServiceSchemaMap,
 } from './services';
-import { pushable } from 'it-pushable';
-import type { Pushable } from 'it-pushable';
 import {
   ControlMessagePayloadSchema,
   OpaqueTransportMessage,
@@ -41,6 +39,7 @@ import {
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { coerceErrorString } from '../util/stringify';
+import { ReadStreamImpl, WriteStreamImpl } from './streams';
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -56,10 +55,9 @@ interface ProcStream {
   id: string;
   serviceName: string;
   procedureName: string;
-  incoming: Pushable<PayloadType>;
-  outgoing: Pushable<Result<Static<PayloadType>, Static<RiverError>>>;
+  incoming: ReadStreamImpl<PayloadType>;
+  outgoing: WriteStreamImpl<Result<Static<PayloadType>, Static<RiverError>>>;
   promises: {
-    outputHandler: Promise<unknown>;
     inputHandler: Promise<unknown>;
   };
 }
@@ -116,7 +114,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     }
 
     let procStream = this.streamMap.get(message.streamId);
-    const isInitMessage = !procStream;
+    const isFirstMessage = !procStream;
 
     // create a proc stream if it doesnt exist
     procStream ||= this.createNewProcStream(message);
@@ -125,7 +123,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       return;
     }
 
-    await this.pushToStream(procStream, message, isInitMessage);
+    await this.pushToStream(procStream, message, isFirstMessage);
   };
 
   // cleanup streams on session close
@@ -217,48 +215,31 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     }
 
     const procedure = service.procedures[message.procedureName];
-    const incoming: ProcStream['incoming'] = pushable({ objectMode: true });
-    const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
+    const readStreamRequestCloseNotImplemented = () => void 0;
+    const incoming: ProcStream['incoming'] = new ReadStreamImpl(
+      readStreamRequestCloseNotImplemented,
+    );
     const needsClose =
       procedure.type === 'subscription' || procedure.type === 'stream';
     const disposables: Array<() => void> = [];
-
-    const outputHandler: Promise<unknown> =
-      // sending outgoing messages back to client
-      needsClose
-        ? // subscription and stream case, we need to send a close bit after the response stream
-          (async () => {
-            for await (const response of outgoing) {
-              this.transport.send(session.to, {
-                streamId: message.streamId,
-                controlFlags: 0,
-                payload: response,
-              });
-            }
-
-            // we ended, send a close bit back to the client
-            // also, if the client has disconnected, we don't need to send a close
-            if (!this.disconnectedSessions.has(message.from)) {
-              this.transport.sendCloseStream(session.to, message.streamId);
-            }
-
-            // call disposables returned from handlers
-            disposables.forEach((d) => d());
-          })()
-        : // rpc and upload case, we just send the response back with close bit
-          (async () => {
-            const response = await outgoing.next().then((res) => res.value);
-            if (response) {
-              this.transport.send(session.to, {
-                streamId: message.streamId,
-                controlFlags: ControlFlags.StreamClosedBit,
-                payload: response,
-              });
-
-              // call disposables returned from handlers
-              disposables.forEach((d) => d());
-            }
-          })();
+    const outgoing: ProcStream['outgoing'] = new WriteStreamImpl(
+      (response) => {
+        this.transport.send(session.to, {
+          streamId: message.streamId,
+          controlFlags: needsClose ? 0 : ControlFlags.StreamClosedBit,
+          payload: response,
+        });
+      },
+      () => {
+        if (needsClose && !this.disconnectedSessions.has(message.from)) {
+          // we ended, send a close bit back to the client
+          // also, if the client has disconnected, we don't need to send a close
+          this.transport.sendCloseStream(session.to, message.streamId);
+        }
+        // call disposables returned from handlers
+        disposables.forEach((d) => d());
+      },
+    );
 
     const errorHandler = (err: unknown, span: Span) => {
       const errorMsg = coerceErrorString(err);
@@ -273,7 +254,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       }
       span.setStatus({ code: SpanStatusCode.ERROR });
 
-      outgoing.push(
+      outgoing.write(
         Err({
           code: UNCAUGHT_ERROR,
           message: errorMsg,
@@ -306,11 +287,6 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     switch (procedure.type) {
       case 'rpc':
         inputHandler = (async () => {
-          const inputMessage = await incoming.next();
-          if (inputMessage.done) {
-            return;
-          }
-
           await tracer.startActiveSpan(
             `${message.serviceName}.${message.procedureName}`,
             {
@@ -326,12 +302,24 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
             },
             activeContext,
             async (span: Span) => {
+              if (!Value.Check(procedure.input, message.payload)) {
+                log?.error('subscription input failed validation', {
+                  clientId: this.transport.clientId,
+                  fullTransportMessage: message,
+                });
+
+                errorHandler('subscription input failed validation', span);
+                span.end();
+
+                return;
+              }
+
               try {
                 const outputMessage = await procedure.handler(
                   serviceContextWithTransportInfo,
-                  inputMessage.value,
+                  message.payload,
                 );
-                outgoing.push(outputMessage);
+                outgoing.write(outputMessage);
               } catch (err) {
                 errorHandler(err, span);
               } finally {
@@ -344,11 +332,6 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       case 'stream':
         if (procHasInitMessage) {
           inputHandler = (async () => {
-            const initMessage = await incoming.next();
-            if (initMessage.done) {
-              return;
-            }
-
             await tracer.startActiveSpan(
               `${message.serviceName}.${message.procedureName}`,
               {
@@ -364,10 +347,28 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
               },
               activeContext,
               async (span: Span) => {
+                if (!Value.Check(procedure.init, message.payload)) {
+                  log?.error(
+                    'procedure requires init, but first message failed validation',
+                    {
+                      clientId: this.transport.clientId,
+                      fullTransportMessage: message,
+                    },
+                  );
+
+                  errorHandler(
+                    'procedure requires init, but first message failed validation',
+                    span,
+                  );
+                  span.end();
+
+                  return;
+                }
+
                 try {
                   const dispose = await procedure.handler(
                     serviceContextWithTransportInfo,
-                    initMessage.value,
+                    message.payload,
                     incoming,
                     outgoing,
                   );
@@ -428,11 +429,6 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
         break;
       case 'subscription':
         inputHandler = (async () => {
-          const inputMessage = await incoming.next();
-          if (inputMessage.done) {
-            return;
-          }
-
           await tracer.startActiveSpan(
             `${message.serviceName}.${message.procedureName}`,
             {
@@ -448,10 +444,22 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
             },
             activeContext,
             async (span: Span) => {
+              if (!Value.Check(procedure.input, message.payload)) {
+                log?.error('subscription input failed validation', {
+                  clientId: this.transport.clientId,
+                  fullTransportMessage: message,
+                });
+
+                errorHandler('subscription input failed validation', span);
+                span.end();
+
+                return;
+              }
+
               try {
                 const dispose = await procedure.handler(
                   serviceContextWithTransportInfo,
-                  inputMessage.value,
+                  message.payload,
                   outgoing,
                 );
 
@@ -474,10 +482,6 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       case 'upload':
         if (procHasInitMessage) {
           inputHandler = (async () => {
-            const initMessage = await incoming.next();
-            if (initMessage.done) {
-              return;
-            }
             await tracer.startActiveSpan(
               `${message.serviceName}.${message.procedureName}`,
               {
@@ -493,15 +497,33 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
               },
               activeContext,
               async (span: Span) => {
+                if (!Value.Check(procedure.init, message.payload)) {
+                  log?.error(
+                    'procedure requires init, but first message failed validation',
+                    {
+                      clientId: this.transport.clientId,
+                      fullTransportMessage: message,
+                    },
+                  );
+
+                  errorHandler(
+                    'procedure requires init, but first message failed validation',
+                    span,
+                  );
+                  span.end();
+
+                  return;
+                }
+
                 try {
                   const outputMessage = await procedure.handler(
                     serviceContextWithTransportInfo,
-                    initMessage.value,
+                    message.payload,
                     incoming,
                   );
 
                   if (!this.disconnectedSessions.has(message.from)) {
-                    outgoing.push(outputMessage);
+                    outgoing.write(outputMessage);
                   }
                 } catch (err) {
                   errorHandler(err, span);
@@ -534,7 +556,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
                 );
 
                 if (!this.disconnectedSessions.has(message.from)) {
-                  outgoing.push(outputMessage);
+                  outgoing.write(outputMessage);
                 }
               } catch (err) {
                 errorHandler(err, span);
@@ -563,7 +585,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       outgoing,
       serviceName: message.serviceName,
       procedureName: message.procedureName,
-      promises: { inputHandler, outputHandler },
+      promises: { inputHandler },
     };
 
     this.streamMap.set(message.streamId, procStream);
@@ -580,25 +602,22 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
   async pushToStream(
     procStream: ProcStream,
     message: OpaqueTransportMessage,
-    isInit?: boolean,
+    isFirstMessage?: boolean,
   ) {
     const { serviceName, procedureName } = procStream;
     const procedure = this.services[serviceName].procedures[procedureName];
-    const procHasInitMessage = 'init' in procedure;
+    const hasInit = 'init' in procedure;
 
-    if (
-      isInit &&
-      procHasInitMessage &&
-      Value.Check(procedure.init, message.payload)
-    ) {
-      procStream.incoming.push(message.payload as PayloadType);
-    } else if (Value.Check(procedure.input, message.payload)) {
-      procStream.incoming.push(message.payload as PayloadType);
-    } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
-      log?.error(
-        `procedure ${serviceName}.${procedureName} received invalid payload`,
-        { clientId: this.transport.clientId, fullTransportMessage: message },
-      );
+    if (!isFirstMessage || !hasInit) {
+      // Init message is consumed during stream instantiation
+      if (Value.Check(procedure.input, message.payload)) {
+        procStream.incoming.pushValue(message.payload as PayloadType);
+      } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
+        log?.error(
+          `procedure ${serviceName}.${procedureName} received invalid payload`,
+          { clientId: this.transport.clientId, fullTransportMessage: message },
+        );
+      }
     }
 
     if (isStreamClose(message.controlFlags)) {
@@ -634,10 +653,11 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     }
 
     // end the streams and wait for the handlers to finish
-    stream.incoming.end();
+    if (!stream.incoming.isClosed()) {
+      stream.incoming.triggerClose();
+    }
     await stream.promises.inputHandler;
-    stream.outgoing.end();
-    await stream.promises.outputHandler;
+    stream.outgoing.close();
     this.streamMap.delete(id);
   };
 }

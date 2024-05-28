@@ -217,14 +217,14 @@ describe('Output<> type', () => {
         input: Type.Object({ n: Type.Number() }),
         output: Type.Object({ n: Type.Number() }),
         async handler(_c, _in, output) {
-          output.push(Ok({ n: 1 }));
+          output.write(Ok({ n: 1 }));
         },
       }),
       subscription: Procedure.subscription({
         input: Type.Object({ n: Type.Number() }),
         output: Type.Object({ n: Type.Number() }),
         async handler(_c, _in, output) {
-          output.push(Ok({ n: 1 }));
+          output.write(Ok({ n: 1 }));
         },
       }),
       upload: Procedure.upload({
