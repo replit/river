@@ -1032,9 +1032,13 @@ export abstract class ServerTransport<
         return false;
       }
 
+      const previousParsedMetadata = session
+        ? this.sessionHandshakeMetadata.get(session)
+        : undefined;
+
       parsedMetadata = await this.handshakeExtensions.validate(
         rawMetadata,
-        session,
+        previousParsedMetadata,
       );
 
       // handler rejected the connection

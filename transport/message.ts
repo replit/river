@@ -1,6 +1,5 @@
 import { Type, TSchema, Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
-import { Connection, Session } from './session';
 import { PropagationContext } from '../tracing';
 import { ParsedMetadata } from '../router/context';
 
@@ -50,7 +49,7 @@ export interface ServerHandshakeOptions<MetadataSchema extends TSchema> {
    */
   validate: (
     metadata: Static<MetadataSchema>,
-    session?: Session<Connection>,
+    previousParsedMetadata?: ParsedMetadata,
   ) => false | ParsedMetadata | Promise<false | ParsedMetadata>;
 }
 
