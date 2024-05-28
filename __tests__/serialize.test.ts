@@ -45,6 +45,48 @@ describe('serialize server to jsonschema', () => {
               },
               type: 'rpc',
             },
+            array: {
+              errors: {
+                not: {},
+              },
+              input: {
+                properties: {
+                  n: {
+                    type: 'number',
+                  },
+                },
+                required: ['n'],
+                type: 'object',
+              },
+              output: {
+                items: {
+                  type: 'number',
+                },
+                type: 'array',
+              },
+              type: 'rpc',
+            },
+            arrayStream: {
+              errors: {
+                not: {},
+              },
+              input: {
+                properties: {
+                  n: {
+                    type: 'number',
+                  },
+                },
+                required: ['n'],
+                type: 'object',
+              },
+              output: {
+                items: {
+                  type: 'number',
+                },
+                type: 'array',
+              },
+              type: 'stream',
+            },
             echo: {
               input: {
                 properties: {
@@ -195,6 +237,48 @@ describe('serialize service to jsonschema', () => {
             not: {},
           },
           type: 'rpc',
+        },
+        array: {
+          errors: {
+            not: {},
+          },
+          input: {
+            properties: {
+              n: {
+                type: 'number',
+              },
+            },
+            required: ['n'],
+            type: 'object',
+          },
+          output: {
+            items: {
+              type: 'number',
+            },
+            type: 'array',
+          },
+          type: 'rpc',
+        },
+        arrayStream: {
+          errors: {
+            not: {},
+          },
+          input: {
+            properties: {
+              n: {
+                type: 'number',
+              },
+            },
+            required: ['n'],
+            type: 'object',
+          },
+          output: {
+            items: {
+              type: 'number',
+            },
+            type: 'array',
+          },
+          type: 'stream',
         },
         echo: {
           input: {

@@ -47,6 +47,11 @@ export type Result<T, E> =
       payload: E;
     };
 
+export function Ok<const T extends Array<unknown>, const E>(p: T): Result<T, E>;
+export function Ok<const T extends ReadonlyArray<unknown>, const E>(
+  p: T,
+): Result<T, E>;
+export function Ok<const T, const E>(payload: T): Result<T, E>;
 export function Ok<const T, const E>(payload: T): Result<T, E> {
   return {
     ok: true,
