@@ -50,11 +50,11 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     async handler(_ctx, msgStream, returnStream) {
       for await (const { ignore, msg, end } of msgStream) {
         if (!ignore) {
-          returnStream.push(Ok({ response: msg }));
+          returnStream.write(Ok({ response: msg }));
         }
 
         if (end) {
-          returnStream.end();
+          returnStream.close();
         }
       }
     },
@@ -67,7 +67,7 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     async handler(_ctx, init, msgStream, returnStream) {
       for await (const { ignore, msg } of msgStream) {
         if (!ignore) {
-          returnStream.push(Ok({ response: `${init.prefix} ${msg}` }));
+          returnStream.write(Ok({ response: `${init.prefix} ${msg}` }));
         }
       }
     },
@@ -181,14 +181,14 @@ export const FallibleServiceSchema = ServiceSchema.define({
         if (throwError) {
           throw new Error('some message');
         } else if (throwResult) {
-          returnStream.push(
+          returnStream.write(
             Err({
               code: STREAM_ERROR,
               message: 'field throwResult was set to true',
             }),
           );
         } else {
-          returnStream.push(Ok({ response: msg }));
+          returnStream.write(Ok({ response: msg }));
         }
       }
     },
@@ -212,7 +212,7 @@ export const SubscribableServiceSchema = ServiceSchema.define(
       output: Type.Object({ result: Type.Number() }),
       async handler(ctx, _msg, returnStream) {
         return ctx.state.count.observe((count) => {
-          returnStream.push(Ok({ result: count }));
+          returnStream.write(Ok({ result: count }));
         });
       },
     }),
