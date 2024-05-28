@@ -932,6 +932,75 @@ describe.each(testMatrix())(
       });
     });
 
+    test('server gets previous parsed metadata on reconnect', async () => {
+      const schema = Type.Object({
+        kept: Type.String(),
+        discarded: Type.String(),
+      });
+      const construct = vi.fn(async () => ({
+        kept: 'kept',
+        discarded: 'discarded',
+      }));
+
+      const validate = vi.fn(async (metadata: unknown, _previous: unknown) => ({
+        // @ts-expect-error - we haven't extended the global type here
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        kept: metadata.kept,
+      }));
+
+      const serverTransport = getServerTransport({ schema, validate });
+      const clientTransport = getClientTransport('client', {
+        schema,
+        construct,
+      });
+
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
+
+      await waitFor(() => expect(serverTransport.sessions.size).toBe(1));
+      expect(construct).toHaveBeenCalledTimes(1);
+      expect(validate).toHaveBeenCalledTimes(1);
+      expect(validate).toHaveBeenCalledWith(
+        {
+          kept: 'kept',
+          discarded: 'discarded',
+        },
+        undefined,
+      );
+
+      const session = serverTransport.sessions.get(clientTransport.clientId);
+      assert(session);
+      expect(serverTransport.sessionHandshakeMetadata.get(session)).toEqual({
+        kept: 'kept',
+      });
+
+      expect(clientTransport.connections.size).toBe(1);
+      expect(serverTransport.connections.size).toBe(1);
+
+      // now, let's wait until the connection is considered dead
+      clientTransport.connections.forEach((conn) => conn.close());
+      await waitFor(() => expect(clientTransport.connections.size).toBe(0));
+
+      // should have reconnected by now
+      await waitFor(() => expect(clientTransport.connections.size).toBe(1));
+      await waitFor(() => expect(serverTransport.connections.size).toBe(1));
+
+      expect(validate).toHaveBeenCalledTimes(2);
+      expect(validate).toHaveBeenCalledWith(
+        {
+          kept: 'kept',
+          discarded: 'discarded',
+        },
+        {
+          kept: 'kept',
+        },
+      );
+    });
+
     test('parse can reject connection', async () => {
       const schema = Type.Object({
         foo: Type.String(),
