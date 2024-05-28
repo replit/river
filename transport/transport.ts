@@ -322,6 +322,9 @@ export abstract class Transport<ConnType extends Connection> {
     if (!Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
       log?.error(`received invalid msg: ${JSON.stringify(parsedMsg)}`, {
         clientId: this.clientId,
+        validationErrors: [
+          ...Value.Errors(OpaqueTransportMessageSchema, parsedMsg),
+        ],
       });
       return null;
     }
@@ -340,7 +343,7 @@ export abstract class Transport<ConnType extends Connection> {
     if (!session) {
       log?.error(`no existing session for ${msg.from}`, {
         clientId: this.clientId,
-        fullTransportMessage: msg,
+        transportMessage: msg,
         tags: ['invariant-violation'],
       });
       return;
@@ -351,19 +354,19 @@ export abstract class Transport<ConnType extends Connection> {
 
     log?.debug(`received msg`, {
       clientId: this.clientId,
-      fullTransportMessage: msg,
+      transportMessage: msg,
     });
     if (msg.seq !== session.nextExpectedSeq) {
       if (msg.seq < session.nextExpectedSeq) {
         log?.debug(
           `received duplicate msg (got seq: ${msg.seq}, wanted seq: ${session.nextExpectedSeq}), discarding`,
-          { clientId: this.clientId, fullTransportMessage: msg },
+          { clientId: this.clientId, transportMessage: msg },
         );
       } else {
         const errMsg = `received out-of-order msg (got seq: ${msg.seq}, wanted seq: ${session.nextExpectedSeq})`;
         log?.error(`${errMsg}, marking connection as dead`, {
           clientId: this.clientId,
-          fullTransportMessage: msg,
+          transportMessage: msg,
           tags: ['invariant-violation'],
         });
         this.protocolError(ProtocolError.MessageOrderingViolated, errMsg);
@@ -385,7 +388,7 @@ export abstract class Transport<ConnType extends Connection> {
     } else {
       log?.debug(`discarding msg (ack bit set)`, {
         clientId: this.clientId,
-        fullTransportMessage: msg,
+        transportMessage: msg,
       });
     }
   }
@@ -428,7 +431,7 @@ export abstract class Transport<ConnType extends Connection> {
       const err = 'transport is destroyed, cant send';
       log?.error(err, {
         clientId: this.clientId,
-        partialTransportMessage: msg,
+        transportMessage: msg,
         tags: ['invariant-violation'],
       });
       this.protocolError(ProtocolError.UseAfterDestroy, err);
@@ -436,7 +439,7 @@ export abstract class Transport<ConnType extends Connection> {
     } else if (this.state === 'closed') {
       log?.info(`transport closed when sending, discarding`, {
         clientId: this.clientId,
-        partialTransportMessage: msg,
+        transportMessage: msg,
       });
       return undefined;
     }
@@ -629,7 +632,13 @@ export abstract class ClientTransport<
       log?.warn(`received invalid handshake resp`, {
         clientId: this.clientId,
         connectedTo: parsed.from,
-        fullTransportMessage: parsed,
+        transportMessage: parsed,
+        validationErrors: [
+          ...Value.Errors(
+            ControlMessageHandshakeResponseSchema,
+            parsed.payload,
+          ),
+        ],
       });
       this.protocolError(
         ProtocolError.HandshakeFailed,
@@ -646,7 +655,7 @@ export abstract class ClientTransport<
       log?.warn(`received handshake rejection`, {
         clientId: this.clientId,
         connectedTo: parsed.from,
-        fullTransportMessage: parsed,
+        transportMessage: parsed,
       });
       this.protocolError(
         ProtocolError.HandshakeFailed,
@@ -658,7 +667,7 @@ export abstract class ClientTransport<
     log?.debug(`handshake from ${parsed.from} ok`, {
       clientId: this.clientId,
       connectedTo: parsed.from,
-      fullTransportMessage: parsed,
+      transportMessage: parsed,
     });
 
     const { session, isReconnect } = this.getOrCreateSession(
@@ -810,6 +819,9 @@ export abstract class ClientTransport<
         log?.error(`constructed handshake metadata did not match schema`, {
           clientId: this.clientId,
           connectedTo: to,
+          validationErrors: [
+            ...Value.Errors(this.handshakeExtensions.schema, metadata),
+          ],
           tags: ['invariant-violation'],
         });
         this.protocolError(
@@ -1012,6 +1024,9 @@ export abstract class ServerTransport<
         log?.warn(`received malformed handshake metadata from ${from}`, {
           clientId: this.clientId,
           connId: conn.id,
+          validationErrors: [
+            ...Value.Errors(this.handshakeExtensions.schema, rawMetadata),
+          ],
         });
         this.protocolError(ProtocolError.HandshakeFailed, reason);
         return false;
@@ -1074,12 +1089,15 @@ export abstract class ServerTransport<
         reason,
       });
       conn.send(this.codec.toBuffer(responseMsg));
-      // note: do _not_ log the payload, it may contain secrets
-      const logData = { ...(parsed.payload ?? {}), metadata: 'redacted' };
       log?.warn(reason, {
         clientId: this.clientId,
         connId: conn.id,
-        partialTransportMessage: { ...parsed, payload: logData },
+        // safe to log metadata here as we remove the payload
+        // before passing it to user-land
+        transportMessage: parsed,
+        validationErrors: [
+          ...Value.Errors(ControlMessageHandshakeRequestSchema, parsed.payload),
+        ],
       });
       this.protocolError(
         ProtocolError.HandshakeFailed,

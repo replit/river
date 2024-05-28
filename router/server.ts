@@ -113,7 +113,7 @@ class RiverServer<
     if (message.to !== this.transport.clientId) {
       log?.info(`got msg with destination that isn't this server, ignoring`, {
         clientId: this.transport.clientId,
-        fullTransportMessage: message,
+        transportMessage: message,
       });
       return;
     }
@@ -173,7 +173,7 @@ class RiverServer<
         `can't create a new procedure stream from a message that doesn't have the stream open bit set`,
         {
           clientId: this.transport.clientId,
-          fullTransportMessage: message,
+          transportMessage: message,
           tags: ['invariant-violation'],
         },
       );
@@ -183,7 +183,7 @@ class RiverServer<
     if (!message.procedureName || !message.serviceName) {
       log?.warn(`missing procedure or service name in stream open message`, {
         clientId: this.transport.clientId,
-        fullTransportMessage: message,
+        transportMessage: message,
       });
       return;
     }
@@ -191,7 +191,7 @@ class RiverServer<
     if (!(message.serviceName in this.services)) {
       log?.warn(`couldn't find service ${message.serviceName}`, {
         clientId: this.transport.clientId,
-        fullTransportMessage: message,
+        transportMessage: message,
       });
       return;
     }
@@ -203,7 +203,7 @@ class RiverServer<
         `couldn't find a matching procedure for ${message.serviceName}.${message.procedureName}`,
         {
           clientId: this.transport.clientId,
-          fullTransportMessage: message,
+          transportMessage: message,
         },
       );
       return;
@@ -213,7 +213,7 @@ class RiverServer<
     if (!session) {
       log?.warn(`couldn't find session for ${message.from}`, {
         clientId: this.transport.clientId,
-        fullTransportMessage: message,
+        transportMessage: message,
       });
       return;
     }
@@ -463,7 +463,7 @@ class RiverServer<
           `got request for invalid procedure type ${
             (procedure as AnyProcedure).type
           } at ${message.serviceName}.${message.procedureName}`,
-          { ...session.loggingMetadata, fullTransportMessage: message },
+          { ...session.loggingMetadata, transportMessage: message },
         );
         return;
     }
@@ -497,18 +497,33 @@ class RiverServer<
     const procedure = this.services[serviceName].procedures[procedureName];
     const procHasInitMessage = 'init' in procedure;
 
-    if (
-      isInit &&
-      procHasInitMessage &&
-      Value.Check(procedure.init, message.payload)
-    ) {
-      procStream.incoming.push(message.payload as PayloadType);
+    if (isInit && procHasInitMessage) {
+      if (Value.Check(procedure.init, message.payload)) {
+        procStream.incoming.push(message.payload as PayloadType);
+      } else {
+        log?.error(
+          `procedure ${serviceName}.${procedureName} received invalid init payload`,
+          {
+            clientId: this.transport.clientId,
+            transportMessage: message,
+            validationErrors: [
+              ...Value.Errors(procedure.init, message.payload),
+            ],
+          },
+        );
+      }
     } else if (Value.Check(procedure.input, message.payload)) {
       procStream.incoming.push(message.payload as PayloadType);
     } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
+      // whelp we got a message that isn't a control message and doesn't match the procedure input
+      // so definitely not a valid payload
       log?.error(
         `procedure ${serviceName}.${procedureName} received invalid payload`,
-        { clientId: this.transport.clientId, fullTransportMessage: message },
+        {
+          clientId: this.transport.clientId,
+          transportMessage: message,
+          validationErrors: [...Value.Errors(procedure.input, message.payload)],
+        },
       );
     }
 
