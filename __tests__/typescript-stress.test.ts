@@ -14,6 +14,10 @@ import {
 } from '../router/result';
 import { TestServiceSchema } from './fixtures/services';
 import { iterNext } from '../util/testHelpers';
+import {
+  createClientHandshakeOptions,
+  createServerHandshakeOptions,
+} from '../router/handshake';
 
 const input = Type.Union([
   Type.Object({ a: Type.Number() }),
@@ -203,39 +207,40 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
   });
 });
 
-describe('Output<> type', () => {
-  const services = {
-    test: ServiceSchema.define({
-      rpc: Procedure.rpc({
-        input: Type.Object({ n: Type.Number() }),
-        output: Type.Object({ n: Type.Number() }),
-        async handler(_, { n }) {
-          return Ok({ n });
-        },
-      }),
-      stream: Procedure.stream({
-        input: Type.Object({ n: Type.Number() }),
-        output: Type.Object({ n: Type.Number() }),
-        async handler(_c, _in, output) {
-          output.push(Ok({ n: 1 }));
-        },
-      }),
-      subscription: Procedure.subscription({
-        input: Type.Object({ n: Type.Number() }),
-        output: Type.Object({ n: Type.Number() }),
-        async handler(_c, _in, output) {
-          output.push(Ok({ n: 1 }));
-        },
-      }),
-      upload: Procedure.upload({
-        input: Type.Object({ n: Type.Number() }),
-        output: Type.Object({ n: Type.Number() }),
-        async handler(_c, _in) {
-          return Ok({ n: 1 });
-        },
-      }),
+const services = {
+  test: ServiceSchema.define({
+    rpc: Procedure.rpc({
+      input: Type.Object({ n: Type.Number() }),
+      output: Type.Object({ n: Type.Number() }),
+      async handler(_, { n }) {
+        return Ok({ n });
+      },
     }),
-  };
+    stream: Procedure.stream({
+      input: Type.Object({ n: Type.Number() }),
+      output: Type.Object({ n: Type.Number() }),
+      async handler(_c, _in, output) {
+        output.push(Ok({ n: 1 }));
+      },
+    }),
+    subscription: Procedure.subscription({
+      input: Type.Object({ n: Type.Number() }),
+      output: Type.Object({ n: Type.Number() }),
+      async handler(_c, _in, output) {
+        output.push(Ok({ n: 1 }));
+      },
+    }),
+    upload: Procedure.upload({
+      input: Type.Object({ n: Type.Number() }),
+      output: Type.Object({ n: Type.Number() }),
+      async handler(_c, _in) {
+        return Ok({ n: 1 });
+      },
+    }),
+  }),
+};
+
+describe('Output<> type', () => {
   createServer(new MockServerTransport('SERVER'), services);
   const client = createClient<typeof services>(
     new MockClientTransport('client'),
@@ -326,5 +331,30 @@ describe('ResultUwrap types', () => {
     // Then
     assert(!result.ok);
     expect(acceptErr(result.payload)).toEqual({ hello: 'world' });
+  });
+});
+
+describe('Handshake', () => {
+  test('custom handhshake types should work', () => {
+    const schema = Type.Object({ token: Type.String() });
+    createClient<typeof services>(new MockClientTransport('client'), 'SERVER', {
+      eagerlyConnect: false,
+      handshakeOptions: createClientHandshakeOptions(schema, () => ({
+        token: '123',
+      })),
+    });
+
+    createServer(new MockServerTransport('SERVER'), services, {
+      handshakeOptions: createServerHandshakeOptions(
+        schema,
+        (metadata, _prev) => {
+          if (metadata.token !== '123') {
+            return false;
+          }
+
+          return {};
+        },
+      ),
+    });
   });
 });

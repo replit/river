@@ -1,7 +1,6 @@
 import { Type, TSchema, Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import { PropagationContext } from '../tracing';
-import { ParsedMetadata } from '../router/context';
 
 /**
  * Control flags for transport messages.
@@ -14,47 +13,6 @@ export const enum ControlFlags {
   AckBit = 0b0001,
   StreamOpenBit = 0b0010,
   StreamClosedBit = 0b0100,
-}
-
-export interface ClientHandshakeOptions<
-  MetadataSchema extends TSchema = TSchema,
-> {
-  /**
-   * Schema for the metadata that the client sends to the server
-   * during the handshake.
-   */
-  schema: MetadataSchema;
-
-  /**
-   * Gets the {@link HandshakeRequestMetadata} to send to the server.
-   */
-  construct: () => Static<MetadataSchema> | Promise<Static<MetadataSchema>>;
-}
-
-export interface ServerHandshakeOptions<
-  MetadataSchema extends TSchema = TSchema,
-> {
-  /**
-   * Schema for the metadata that the server receives from the client
-   * during the handshake.
-   */
-  schema: MetadataSchema;
-
-  /**
-   * Parses the {@link HandshakeRequestMetadata} sent by the client, transforming
-   * it into {@link ParsedHandshakeMetadata}.
-   *
-   * May return `false` if the client should be rejected.
-   *
-   * @param metadata - The metadata sent by the client.
-   * @param session - The session that the client would be associated with.
-   * @param isReconnect - Whether the client is reconnecting to the session,
-   *                      or if this is a new session.
-   */
-  validate: (
-    metadata: Static<MetadataSchema>,
-    previousParsedMetadata?: ParsedMetadata,
-  ) => false | ParsedMetadata | Promise<false | ParsedMetadata>;
 }
 
 /**

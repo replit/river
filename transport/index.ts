@@ -14,8 +14,6 @@ export type {
   TransportMessage,
   OpaqueTransportMessage,
   TransportClientId,
-  ClientHandshakeOptions as ClientHandshakeOptions,
-  ServerHandshakeOptions as ServerHandshakeOptions,
   isStreamOpen,
   isStreamClose,
 } from './message';

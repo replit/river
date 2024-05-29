@@ -31,6 +31,10 @@ import {
 import { testMatrix } from './fixtures/matrix';
 import { Type } from '@sinclair/typebox';
 import { Procedure, ServiceSchema } from '../router';
+import {
+  createClientHandshakeOptions,
+  createServerHandshakeOptions,
+} from '../router/handshake';
 
 describe.each(testMatrix())(
   'client <-> server integration test ($transport.name transport, $codec.name codec)',
@@ -661,21 +665,18 @@ describe.each(testMatrix())(
       const requestSchema = Type.Object({
         data: Type.String(),
       });
-      const clientTransport = getClientTransport('client', {
-        schema: requestSchema,
-        construct: () => ({ data: 'foobar' }),
-      });
-      const serverTransport = getServerTransport({
-        schema: requestSchema,
-        validate: (metadata) => {
+      const clientTransport = getClientTransport(
+        'client',
+        createClientHandshakeOptions(requestSchema, () => ({ data: 'foobar' })),
+      );
+      const serverTransport = getServerTransport(
+        createServerHandshakeOptions(requestSchema, (metadata) => {
           return {
-            // @ts-expect-error we haven't extended the interface
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             data: metadata.data,
             extra: 42,
           };
-        },
-      });
+        }),
+      );
 
       const services = {
         test: ServiceSchema.define({

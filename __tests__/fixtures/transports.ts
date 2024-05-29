@@ -1,8 +1,6 @@
 import {
-  ClientHandshakeOptions,
   ClientTransport,
   Connection,
-  ServerHandshakeOptions,
   ServerTransport,
   TransportClientId,
 } from '../../transport';
@@ -24,6 +22,10 @@ import {
 import { WebSocketClientTransport } from '../../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../../transport/impls/ws/server';
 import NodeWs from 'ws';
+import {
+  ClientHandshakeOptions,
+  ServerHandshakeOptions,
+} from '../../router/handshake';
 
 export type ValidTransports = 'ws' | 'unix sockets';
 
