@@ -196,8 +196,8 @@ describe.each(testMatrix())(
       // test
       const [inputWriter, outputReader, close] =
         await client.test.echoWithPrefix.stream({
-        prefix: 'test',
-      });
+          prefix: 'test',
+        });
       const outputIterator = getIteratorFromStream(outputReader);
       inputWriter.write({ msg: 'abc', ignore: false });
       inputWriter.write({ msg: 'def', ignore: true });
