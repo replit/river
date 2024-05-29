@@ -198,6 +198,45 @@ transport.addEventListener('sessionStatus', (evt) => {
 });
 ```
 
+### Custom Handshake
+
+River allows you to extend the protocol-level handshake so you can add additional logic to
+validate incoming connections.
+
+You can do this by passing extra options to `createClient` and `createServer` and extending the `ParsedMetadata` interface:
+
+```ts
+declare module '@replit/river' {
+  interface ParsedMetadata {
+    userId: number;
+  }
+}
+
+const schema = Type.Object({ token: Type.String() });
+createClient<typeof services>(new MockClientTransport('client'), 'SERVER', {
+  eagerlyConnect: false,
+  handshakeOptions: createClientHandshakeOptions(schema, async () => ({
+    // the type of this function is
+    // () => Static<typeof schema> | Promise<Static<typeof schema>>
+    token: '123',
+  })),
+});
+
+createServer(new MockServerTransport('SERVER'), services, {
+  handshakeOptions: createServerHandshakeOptions(
+    schema,
+    (metadata, previousMetadata) => {
+      // the type of this function is
+      // (metadata: Static<typeof<schema>, previousMetadata?: ParsedMetadata) =>
+      //   | false | Promise<false> (if you reject it)
+      //   | ParsedMetadata | Promise<ParsedMetadata> (if you allow it)
+      // next time a connection happens on the same session, previousMetadata will
+      // be populated with the last returned value
+    },
+  ),
+});
+```
+
 ### Further examples
 
 We've also provided an end-to-end testing environment using `Next.js`, and a simple backend connected with the WebSocket transport that you can [play with on Replit](https://replit.com/@jzhao-replit/riverbed).

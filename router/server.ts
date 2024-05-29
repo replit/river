@@ -15,7 +15,6 @@ import {
   isStreamOpen,
   TransportClientId,
   ControlFlags,
-  ServerHandshakeOptions,
 } from '../transport/message';
 import {
   ServiceContext,
@@ -36,6 +35,7 @@ import { Connection } from '../transport/session';
 import { coerceErrorString } from '../util/stringify';
 import { Span, SpanStatusCode } from '@opentelemetry/api';
 import { createHandlerSpan } from '../tracing';
+import { ServerHandshakeOptions } from './handshake';
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.

@@ -18,7 +18,6 @@ import {
   TransportClientId,
   isStreamClose,
   PartialTransportMessage,
-  ClientHandshakeOptions,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
@@ -27,6 +26,7 @@ import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { log } from '../logging/log';
 import { createProcTelemetryInfo, getPropagationContext } from '../tracing';
+import { ClientHandshakeOptions } from './handshake';
 
 // helper to make next, yield, and return all the same type
 export type AsyncIter<T> = AsyncGenerator<T, T>;
@@ -198,7 +198,9 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   providedClientOptions: Partial<
-    ClientOptions & { handshakeOptions: ClientHandshakeOptions }
+    ClientOptions & {
+      handshakeOptions: ClientHandshakeOptions;
+    }
   > = {},
 ): Client<ServiceSchemaMap> {
   if (providedClientOptions.handshakeOptions) {

@@ -13,8 +13,6 @@ import {
   ControlMessagePayloadSchema,
   isAck,
   PROTOCOL_VERSION,
-  ClientHandshakeOptions,
-  ServerHandshakeOptions,
 } from './message';
 import { log } from '../logging/log';
 import {
@@ -36,6 +34,10 @@ import tracer, {
 } from '../tracing';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { ParsedMetadata } from '../router/context';
+import {
+  ClientHandshakeOptions,
+  ServerHandshakeOptions,
+} from '../router/handshake';
 
 /**
  * Represents the possible states of a transport.
