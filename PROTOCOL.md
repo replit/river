@@ -64,22 +64,18 @@ Note that this protocol specification does NOT detail the language-level specifi
 1. `subscription`: the client sends 1 message, the server responds with m messages.
 
 A server (also called a router) is made up of multiple 'services'. Each 'service' has multiple 'procedures'.
-A procedure declares its type (`rpc | stream | upload | subscription`), an input message type (`Input`), an output message type (`Output`), an error type (`Error`), and the associated handler.
+A procedure declares its type (`rpc | stream | upload | subscription`), an initial message (`Init`), an output message type (`Output`), an error type (`Error`), and the associated handler. `upload` and `stream` may define an input message type (`Input`), which means they accept further messages from the client.
 
 _Note: all types in this document are expressed roughly in TypeScript._
 
 The type signatures (in TypeScript) for the handlers of each of the procedure types are as follows:
 
-- `rpc`: `Input -> Result<Output, Error>`
-- `upload`: `AsyncIter<Input> -> Result<Output, Error>`
-  - with init message: `Init, AsyncIter<Input> -> Result<Output, Error>`
-- `subscription`: `Input -> Pushable<Result<Output, Error>>`
-- `stream`: `AsyncIter<Input> -> Pushable<Result<Output, Error>>`
-  - with init message: `Init, AsyncIter<Input> -> Pushable<Result<Output, Error>>`
+- `rpc`: `Init -> Result<Output, Error>`
+- `upload`: `Init, AsyncIter<Input> -> Result<Output, Error>`
+- `subscription`: `Init -> Pushable<Result<Output, Error>>`
+- `stream`: `Init, AsyncIter<Input> -> Pushable<Result<Output, Error>>`
 
-Note that any procedure that has a client-to-server procedure stream (i.e. `stream` and `upload`) can optionally define a single initialization message to be sent to the server before the client starts sending the actual `Input` messages.
-
-The types of `Input`, `Init`, `Output`, and `Error` MUST be representable as JSON schema.
+The types of `Init`, `Input`, `Output`, and `Error` MUST be representable as JSON schema.
 In the official TypeScript implementation, this is done via [TypeBox](https://github.com/sinclairzx81/typebox).
 The server is responsible for doing run-time type validation on incoming messages to ensure they match the handler's type signature before passing it to the handler.
 
@@ -104,7 +100,7 @@ type Result<T, E extends BaseError> =
   | { ok: false; payload: E };
 ```
 
-The messages in either direction must also contain additional information so that the receiving party knows where to route the message payload. This wrapper message is referred to as a `TransportMessage` and its payload can be a `Control`, a `Result`, an `Input`, or an `Output`. The schema for the transport message is as follows:
+The messages in either direction must also contain additional information so that the receiving party knows where to route the message payload. This wrapper message is referred to as a `TransportMessage` and its payload can be a `Control`, a `Result`, an `Init`, an `Input`, or an `Output`. The schema for the transport message is as follows:
 
 ```ts
 interface TransportMessage<Payload> {
@@ -122,7 +118,7 @@ interface TransportMessage<Payload> {
   procedureName?: string;
 
   // the actual payload
-  // - `Input` in the client to server direction
+  // - `Init` or `Input` in the client to server direction
   // - `Result<Output, Error>` in the server to client direction
   // - `Control` in either direction
   payload: Payload;
@@ -297,8 +293,8 @@ For an incoming message to be considered valid on the server, the transport mess
 - It should match the JSON schema for the `TransportMessage` type.
 - If the message has the `StreamOpenBit` set, it MUST have a `serviceName` and `procedureName`. The server MUST open a new stream and start a new instantiation of the handler for the specific `serviceName` and `procedureName`. The server should maintain a mapping of `streamId` to the handler instantiation so that future messages with the same `streamId` can be routed to the correct instantiation of the handler.
 - If the message does not have the `StreamOpenBit` set, it MUST have a `streamId` that the server recognizes and has an associated handler open for.
-- If this is the first message of the stream AND the associated procedure declares an `Init` message, the internal payload of the message should match the JSON schema for the `Init` type of the associated handler, and the server should pass the `Init` message to the handler.
-- If this is not the first message of the stream OR the associated procedure _does not_ declare an `Init` message, the internal payload of the message should match the JSON schema for the `Input` type of the associated handler, and the server should pass the `Input` message to the handler.
+- If this is the first message of the stream, the internal payload of the message should match the JSON schema for the `Init` type of the associated handler, and the server should pass the `Init` message to the handler.
+- If this is not the first message of the stream AND the procedure accepts further input, the internal payload of the message should match the JSON schema for the `Input` type of the associated handler, and the server should pass the `Input` message to the handler.
 
 If the message is invalid, the server MUST discard the message and send back an `INVALID_REQUEST` error message with a `StreamClosedBit`, this is an abrupt full close, the server should cleanup all associated resources with the stream without expecting a close response from the client. The server may choose to keep track of `INVALID_REQUEST` stream ids to avoid sending multiple errors back.
 
@@ -312,8 +308,8 @@ The following section will provide diagrams detailing the lifetime of streams fo
 
 The legend is as follows:
 
-- `>` represents an `Input` or `Init` message with the `StreamOpenBit` set.
-- `x` represents an `Input` or `Init` message with both `StreamOpenBit`and `StreamClosedBit` set.
+- `>` represents an `Init` message with the `StreamOpenBit` set.
+- `x` represents an `Init` message with both `StreamOpenBit`and `StreamClosedBit` set.
 - `<` represents a `Result` message with the `StreamClosedBit` set, errors in this message are only service-level errors.
 - `!` represents a `Result` message with the `StreamClosedBit` set and a `ProtocolError` in the payload (`{ ok: false, payload: ProtocolError }`).
 - `{` represents a `ControlClose` message.
