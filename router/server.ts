@@ -1,4 +1,4 @@
-import { Static, TSchema } from '@sinclair/typebox';
+import { Static } from '@sinclair/typebox';
 import { ServerTransport } from '../transport/transport';
 import { AnyProcedure, PayloadType } from './procedures';
 import {
@@ -59,11 +59,8 @@ interface ProcStream {
   };
 }
 
-class RiverServer<
-  Services extends AnyServiceSchemaMap,
-  MetadataSchema extends TSchema,
-> {
-  transport: ServerTransport<Connection, MetadataSchema>;
+class RiverServer<Services extends AnyServiceSchemaMap> {
+  transport: ServerTransport<Connection>;
   services: InstantiatedServiceSchemaMap<Services>;
   contextMap: Map<AnyService, ServiceContextWithState<object>>;
   // map of streamId to ProcStream
@@ -73,9 +70,9 @@ class RiverServer<
   disconnectedSessions: Set<TransportClientId>;
 
   constructor(
-    transport: ServerTransport<Connection, MetadataSchema>,
+    transport: ServerTransport<Connection>,
     services: Services,
-    handshakeOptions?: ServerHandshakeOptions<MetadataSchema>,
+    handshakeOptions?: ServerHandshakeOptions,
     extendedContext?: Omit<ServiceContext, 'state'>,
   ) {
     const instances: Record<string, AnyService> = {};
@@ -578,14 +575,11 @@ class RiverServer<
  * @param extendedContext - An optional object containing additional context to be passed to all services.
  * @returns A promise that resolves to a server instance with the registered services.
  */
-export function createServer<
-  Services extends AnyServiceSchemaMap,
-  MetadataSchema extends TSchema = TSchema,
->(
-  transport: ServerTransport<Connection, MetadataSchema>,
+export function createServer<Services extends AnyServiceSchemaMap>(
+  transport: ServerTransport<Connection>,
   services: Services,
   providedServerOptions?: Partial<{
-    handshakeOptions?: ServerHandshakeOptions<MetadataSchema>;
+    handshakeOptions?: ServerHandshakeOptions;
     extendedContext?: Omit<ServiceContext, 'state'>;
   }>,
 ): Server<Services> {

@@ -20,7 +20,7 @@ import {
   PartialTransportMessage,
   ClientHandshakeOptions,
 } from '../transport/message';
-import { Static, TSchema } from '@sinclair/typebox';
+import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
@@ -194,14 +194,11 @@ const defaultClientOptions: ClientOptions = {
  * @param {Partial<ClientOptions>} providedClientOptions - The options for the client.
  * @returns The client for the server.
  */
-export function createClient<
-  ServiceSchemaMap extends AnyServiceSchemaMap,
-  MetadataSchema extends TSchema = TSchema,
->(
-  transport: ClientTransport<Connection, MetadataSchema>,
+export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
+  transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   providedClientOptions: Partial<
-    ClientOptions & { handshakeOptions: ClientHandshakeOptions<MetadataSchema> }
+    ClientOptions & { handshakeOptions: ClientHandshakeOptions }
   > = {},
 ): Client<ServiceSchemaMap> {
   if (providedClientOptions.handshakeOptions) {

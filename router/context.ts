@@ -31,6 +31,14 @@ export interface ServiceContext {}
 
  * You should use declaration merging to extend this interface
  * with the sanitized metadata.
+ *
+ * ```ts
+ * declare module '@replit/river' {
+ *   interface ParsedMetadata {
+ *     userId: number;
+ *   }
+ * }
+ * ```
  */
 /* eslint-disable-next-line @typescript-eslint/no-empty-interface */
 export interface ParsedMetadata {}
