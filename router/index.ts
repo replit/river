@@ -43,5 +43,8 @@ export type {
   ResultUnwrapErr,
   Output,
 } from './result';
-
+export {
+  createClientHandshakeOptions,
+  createServerHandshakeOptions,
+} from './handshake';
 export { version as RIVER_VERSION } from '../package.json';
