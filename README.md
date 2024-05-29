@@ -157,6 +157,15 @@ if (result.ok) {
 }
 ```
 
+You can then access the `ParsedMetadata` in your procedure handlers:
+
+```ts
+async handler(ctx, ...args) {
+  // this contains the parsed metadata
+  console.log(ctx.metadata)
+}
+```
+
 ### Logging
 
 To add logging,
