@@ -297,11 +297,6 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
               return;
             }
 
-            const inputMessage = await incoming.next();
-            if (inputMessage.done) {
-              return;
-            }
-
             try {
               const outputMessage = await procedure.handler(
                 serviceContextWithTransportInfo,
