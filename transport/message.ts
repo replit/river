@@ -16,7 +16,9 @@ export const enum ControlFlags {
   StreamClosedBit = 0b0100,
 }
 
-export interface ClientHandshakeOptions<MetadataSchema extends TSchema> {
+export interface ClientHandshakeOptions<
+  MetadataSchema extends TSchema = TSchema,
+> {
   /**
    * Schema for the metadata that the client sends to the server
    * during the handshake.
@@ -29,7 +31,9 @@ export interface ClientHandshakeOptions<MetadataSchema extends TSchema> {
   construct: () => Static<MetadataSchema> | Promise<Static<MetadataSchema>>;
 }
 
-export interface ServerHandshakeOptions<MetadataSchema extends TSchema> {
+export interface ServerHandshakeOptions<
+  MetadataSchema extends TSchema = TSchema,
+> {
   /**
    * Schema for the metadata that the server receives from the client
    * during the handshake.

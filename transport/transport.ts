@@ -25,7 +25,7 @@ import {
   ProtocolErrorType,
 } from './events';
 import { Connection, Session, SessionOptions } from './session';
-import { Static, TSchema } from '@sinclair/typebox';
+import { Static } from '@sinclair/typebox';
 import { coerceErrorString } from '../util/stringify';
 import { ConnectionRetryOptions, LeakyBucketRateLimit } from './rateLimit';
 import { NaiveJsonCodec } from '../codec';
@@ -493,7 +493,6 @@ export abstract class Transport<ConnType extends Connection> {
 
 export abstract class ClientTransport<
   ConnType extends Connection,
-  HandshakeMetadata extends TSchema = TSchema,
 > extends Transport<ConnType> {
   /**
    * The options for this transport.
@@ -517,7 +516,7 @@ export abstract class ClientTransport<
   /**
    * Optional handshake options for this client.
    */
-  handshakeExtensions?: ClientHandshakeOptions<HandshakeMetadata>;
+  handshakeExtensions?: ClientHandshakeOptions;
 
   constructor(
     clientId: TransportClientId,
@@ -532,7 +531,7 @@ export abstract class ClientTransport<
     this.retryBudget = new LeakyBucketRateLimit(this.options);
   }
 
-  extendHandshake(options: ClientHandshakeOptions<HandshakeMetadata>) {
+  extendHandshake(options: ClientHandshakeOptions) {
     this.handshakeExtensions = options;
   }
 
@@ -811,7 +810,7 @@ export abstract class ClientTransport<
   }
 
   protected async sendHandshake(to: TransportClientId, conn: ConnType) {
-    let metadata: Static<HandshakeMetadata> | undefined;
+    let metadata: unknown = undefined;
 
     if (this.handshakeExtensions) {
       metadata = await this.handshakeExtensions.construct();
@@ -862,7 +861,6 @@ export abstract class ClientTransport<
 
 export abstract class ServerTransport<
   ConnType extends Connection,
-  CustomMetadataSchema extends TSchema = TSchema,
 > extends Transport<ConnType> {
   /**
    * The options for this transport.
@@ -872,7 +870,7 @@ export abstract class ServerTransport<
   /**
    * Optional handshake options for the server.
    */
-  handshakeExtensions?: ServerHandshakeOptions<CustomMetadataSchema>;
+  handshakeExtensions?: ServerHandshakeOptions;
 
   /**
    * A map of session handshake data for each session.
@@ -895,7 +893,7 @@ export abstract class ServerTransport<
     });
   }
 
-  extendHandshake(options: ServerHandshakeOptions<CustomMetadataSchema>) {
+  extendHandshake(options: ServerHandshakeOptions) {
     this.handshakeExtensions = options;
   }
 

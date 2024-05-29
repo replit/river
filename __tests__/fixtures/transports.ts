@@ -24,7 +24,6 @@ import {
 import { WebSocketClientTransport } from '../../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../../transport/impls/ws/server';
 import NodeWs from 'ws';
-import { TSchema } from '@sinclair/typebox';
 
 export type ValidTransports = 'ws' | 'unix sockets';
 
@@ -38,10 +37,10 @@ export interface TransportMatrixEntry {
   setup: (opts?: TestTransportOptions) => Promise<{
     getClientTransport: (
       id: TransportClientId,
-      handshakeOptions?: ClientHandshakeOptions<TSchema>,
+      handshakeOptions?: ClientHandshakeOptions,
     ) => ClientTransport<Connection>;
     getServerTransport: (
-      handshakeOptions?: ServerHandshakeOptions<TSchema>,
+      handshakeOptions?: ServerHandshakeOptions,
     ) => ServerTransport<Connection>;
     simulatePhantomDisconnect: () => void;
     restartServer: () => Promise<void>;
