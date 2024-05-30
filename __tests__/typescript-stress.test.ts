@@ -37,7 +37,7 @@ const fnBody = Procedure.rpc<
   typeof output,
   typeof errors
 >({
-  input,
+  init: input,
   output,
   errors,
   async handler(_state, msg) {
@@ -207,30 +207,32 @@ describe('Output<> type', () => {
   const services = {
     test: ServiceSchema.define({
       rpc: Procedure.rpc({
-        input: Type.Object({ n: Type.Number() }),
+        init: Type.Object({ n: Type.Number() }),
         output: Type.Object({ n: Type.Number() }),
         async handler(_, { n }) {
           return Ok({ n });
         },
       }),
       stream: Procedure.stream({
+        init: Type.Object({}),
         input: Type.Object({ n: Type.Number() }),
         output: Type.Object({ n: Type.Number() }),
-        async handler(_c, _in, output) {
+        async handler(_c, _init, _input, output) {
           output.write(Ok({ n: 1 }));
         },
       }),
       subscription: Procedure.subscription({
-        input: Type.Object({ n: Type.Number() }),
+        init: Type.Object({ n: Type.Number() }),
         output: Type.Object({ n: Type.Number() }),
-        async handler(_c, _in, output) {
+        async handler(_c, _init, output) {
           output.write(Ok({ n: 1 }));
         },
       }),
       upload: Procedure.upload({
+        init: Type.Object({}),
         input: Type.Object({ n: Type.Number() }),
         output: Type.Object({ n: Type.Number() }),
-        async handler(_c, _in) {
+        async handler(_c, _init, _input) {
           return Ok({ n: 1 });
         },
       }),
@@ -262,7 +264,7 @@ describe('Output<> type', () => {
 
     // Then
     void client.test.stream
-      .stream()
+      .stream({})
       .then(([_in, outputReader, _close]) =>
         iterNext(getIteratorFromStream(outputReader)),
       )
@@ -296,7 +298,7 @@ describe('Output<> type', () => {
 
     // Then
     void client.test.upload
-      .upload()
+      .upload({})
       .then(([_input, result]) => result)
       .then(acceptOutput);
     expect(client).toBeTruthy();

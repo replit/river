@@ -52,7 +52,7 @@ describe('bandwidth', async () => {
       { time: BENCH_DURATION },
     );
 
-    const [inputWriter, outputReader] = await client.test.echo.stream();
+    const [inputWriter, outputReader] = await client.test.echo.stream({});
     bench(
       `${name} -- stream`,
       async () => {
