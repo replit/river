@@ -300,9 +300,7 @@ function handleStream(
     procedureName,
     streamId,
   );
-  let firstMessage = true;
   let healthyClose = true;
-
   const inputWriter = new WriteStreamImpl(
     (rawIn: unknown) => {
       const m: PartialTransportMessage = {
@@ -310,14 +308,6 @@ function handleStream(
         payload: rawIn,
         controlFlags: 0,
       };
-
-      if (firstMessage) {
-        m.serviceName = serviceName;
-        m.procedureName = procedureName;
-        m.tracing = getPropagationContext(ctx);
-        m.controlFlags |= ControlFlags.StreamOpenBit;
-        firstMessage = false;
-      }
 
       transport.send(serverId, m);
     },
@@ -330,18 +320,14 @@ function handleStream(
   const readStreamRequestCloseNotImplemented = () => undefined;
   const outputReader = new ReadStreamImpl(readStreamRequestCloseNotImplemented);
 
-  if (init) {
-    transport.send(serverId, {
-      streamId,
-      serviceName,
-      procedureName,
-      tracing: getPropagationContext(ctx),
-      payload: init,
-      controlFlags: ControlFlags.StreamOpenBit,
-    });
-
-    firstMessage = false;
-  }
+  transport.send(serverId, {
+    streamId,
+    serviceName,
+    procedureName,
+    tracing: getPropagationContext(ctx),
+    payload: init,
+    controlFlags: ControlFlags.StreamOpenBit,
+  });
 
   // transport -> output
   function onMessage(msg: OpaqueTransportMessage) {
@@ -480,7 +466,6 @@ function handleUpload(
     streamId,
   );
 
-  let firstMessage = true;
   let healthyClose = true;
 
   const inputWriter = new WriteStreamImpl(
@@ -491,14 +476,6 @@ function handleUpload(
         controlFlags: 0,
       };
 
-      if (firstMessage) {
-        m.serviceName = serviceName;
-        m.procedureName = procedureName;
-        m.tracing = getPropagationContext(ctx);
-        m.controlFlags |= ControlFlags.StreamOpenBit;
-        firstMessage = false;
-      }
-
       transport.send(serverId, m);
     },
     () => {
@@ -508,18 +485,14 @@ function handleUpload(
     },
   );
 
-  if (init) {
-    transport.send(serverId, {
-      streamId,
-      serviceName,
-      procedureName,
-      tracing: getPropagationContext(ctx),
-      payload: init,
-      controlFlags: ControlFlags.StreamOpenBit,
-    });
-
-    firstMessage = false;
-  }
+  transport.send(serverId, {
+    streamId,
+    serviceName,
+    procedureName,
+    tracing: getPropagationContext(ctx),
+    payload: init,
+    controlFlags: ControlFlags.StreamOpenBit,
+  });
 
   const responsePromise = new Promise((resolve) => {
     // on disconnect, set a timer to return an error
