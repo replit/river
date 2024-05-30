@@ -40,29 +40,29 @@ export const RiverUncaughtSchema = Type.Object({
   message: Type.String(),
 });
 
-export type Result<T, E> =
+export type Result<T, Err> =
   | {
       ok: true;
       payload: T;
     }
   | {
       ok: false;
-      payload: E;
+      payload: Err;
     };
 
-export function Ok<const T extends Array<unknown>, const E>(p: T): Result<T, E>;
-export function Ok<const T extends ReadonlyArray<unknown>, const E>(
+export function Ok<const T extends Array<unknown>, const Err>(p: T): Result<T, Err>;
+export function Ok<const T extends ReadonlyArray<unknown>, const Err>(
   p: T,
-): Result<T, E>;
-export function Ok<const T, const E>(payload: T): Result<T, E>;
-export function Ok<const T, const E>(payload: T): Result<T, E> {
+): Result<T, Err>;
+export function Ok<const T, const Err>(payload: T): Result<T, Err>;
+export function Ok<const T, const Err>(payload: T): Result<T, Err> {
   return {
     ok: true,
     payload,
   };
 }
 
-export function Err<const T, const E>(error: E): Result<T, E> {
+export function Err<const T, const Err>(error: Err): Result<T, Err> {
   return {
     ok: false,
     payload: error,
@@ -79,8 +79,8 @@ export type ResultUnwrapOk<R> = R extends Result<infer T, infer __E>
 /**
  * Refine a {@link Result} type to its error payload.
  */
-export type ResultUnwrapErr<R> = R extends Result<infer __T, infer E>
-  ? E
+export type ResultUnwrapErr<R> = R extends Result<infer __T, infer Err>
+  ? Err
   : never;
 
 /**

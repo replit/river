@@ -38,33 +38,33 @@ export type PayloadType = TSchema;
  * from a single message.
  */
 export type ProcedureResult<
-  O extends PayloadType,
-  E extends RiverError,
-> = Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>;
+  Output extends PayloadType,
+  Err extends RiverError,
+> = Result<Static<Output>, Static<Err> | Static<typeof RiverUncaughtSchema>>;
 
 /**
  * Procedure for a single message in both directions (1:1).
  *
  * @template State - The context state object.
- * @template I - The TypeBox schema of the input object.
- * @template O - The TypeBox schema of the output object.
- * @template E - The TypeBox schema of the error object.
+ * @template Input - The TypeBox schema of the input object.
+ * @template Output - The TypeBox schema of the output object.
+ * @template Err - The TypeBox schema of the error object.
  */
 export interface RpcProcedure<
   State,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
+  Input extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
 > {
   type: 'rpc';
-  input: I;
-  output: O;
-  errors: E;
+  input: Input;
+  output: Output;
+  errors: Err;
   description?: string;
   handler(
     context: ServiceContextWithTransportInfo<State>,
-    input: Static<I>,
-  ): Promise<ProcedureResult<O, E>>;
+    input: Static<Input>,
+  ): Promise<ProcedureResult<Output, Err>>;
 }
 
 /**
@@ -72,66 +72,66 @@ export interface RpcProcedure<
  * single message from server (n:1).
  *
  * @template State - The context state object.
- * @template I - The TypeBox schema of the input object.
- * @template O - The TypeBox schema of the output object.
- * @template E - The TypeBox schema of the error object.
+ * @template Input - The TypeBox schema of the input object.
+ * @template Output - The TypeBox schema of the output object.
+ * @template Err - The TypeBox schema of the error object.
  * @template Init - The TypeBox schema of the input initialization object, if any.
  */
 export type UploadProcedure<
   State,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
+  Input extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
   Init extends PayloadType | null = null,
 > = Init extends PayloadType
   ? {
       type: 'upload';
       init: Init;
-      input: I;
-      output: O;
-      errors: E;
+      input: Input;
+      output: Output;
+      errors: Err;
       description?: string;
       handler(
         context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
-        input: ReadStream<Static<I>>,
-      ): Promise<ProcedureResult<O, E>>;
+        input: ReadStream<Static<Input>>,
+      ): Promise<ProcedureResult<Output, Err>>;
     }
   : {
       type: 'upload';
-      input: I;
-      output: O;
-      errors: E;
+      input: Input;
+      output: Output;
+      errors: Err;
       description?: string;
       handler(
         context: ServiceContextWithTransportInfo<State>,
-        input: ReadStream<Static<I>>,
-      ): Promise<ProcedureResult<O, E>>;
+        input: ReadStream<Static<Input>>,
+      ): Promise<ProcedureResult<Output, Err>>;
     };
 
 /**
  * Procedure for a single message from client, stream from server (1:n).
  *
  * @template State - The context state object.
- * @template I - The TypeBox schema of the input object.
- * @template O - The TypeBox schema of the output object.
- * @template E - The TypeBox schema of the error object.
+ * @template Input - The TypeBox schema of the input object.
+ * @template Output - The TypeBox schema of the output object.
+ * @template Err - The TypeBox schema of the error object.
  */
 export interface SubscriptionProcedure<
   State,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
+  Input extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
 > {
   type: 'subscription';
-  input: I;
-  output: O;
-  errors: E;
+  input: Input;
+  output: Output;
+  errors: Err;
   description?: string;
   handler(
     context: ServiceContextWithTransportInfo<State>,
-    input: Static<I>,
-    output: WriteStream<ProcedureResult<O, E>>,
+    input: Static<Input>,
+    output: WriteStream<ProcedureResult<Output, Err>>,
   ): Promise<(() => void) | void>;
 }
 
@@ -140,42 +140,42 @@ export interface SubscriptionProcedure<
  * (n:n).
  *
  * @template State - The context state object.
- * @template I - The TypeBox schema of the input object.
- * @template O - The TypeBox schema of the output object.
- * @template E - The TypeBox schema of the error object.
+ * @template Input - The TypeBox schema of the input object.
+ * @template Output - The TypeBox schema of the output object.
+ * @template Err - The TypeBox schema of the error object.
  * @template Init - The TypeBox schema of the input initialization object, if any.
  */
 export type StreamProcedure<
   State,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
+  Input extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
   Init extends PayloadType | null = null,
 > = Init extends PayloadType
   ? {
       type: 'stream';
       init: Init;
-      input: I;
-      output: O;
-      errors: E;
+      input: Input;
+      output: Output;
+      errors: Err;
       description?: string;
       handler(
         context: ServiceContextWithTransportInfo<State>,
         init: Static<Init>,
-        input: ReadStream<Static<I>>,
-        output: WriteStream<ProcedureResult<O, E>>,
+        input: ReadStream<Static<Input>>,
+        output: WriteStream<ProcedureResult<Output, Err>>,
       ): Promise<(() => void) | void>;
     }
   : {
       type: 'stream';
-      input: I;
-      output: O;
-      errors: E;
+      input: Input;
+      output: Output;
+      errors: Err;
       description?: string;
       handler(
         context: ServiceContextWithTransportInfo<State>,
-        input: ReadStream<Static<I>>,
-        output: WriteStream<ProcedureResult<O, E>>,
+        input: ReadStream<Static<Input>>,
+        output: WriteStream<ProcedureResult<Output, Err>>,
       ): Promise<(() => void) | void>;
     };
 
@@ -190,27 +190,27 @@ export type StreamProcedure<
  *
  * @template State - The TypeBox schema of the state object.
  * @template Ty - The type of the procedure.
- * @template I - The TypeBox schema of the input object.
- * @template O - The TypeBox schema of the output object.
+ * @template Input - The TypeBox schema of the input object.
+ * @template Output - The TypeBox schema of the output object.
  * @template Init - The TypeBox schema of the input initialization object, if any.
  */
 // prettier-ignore
 export type Procedure<
   State,
   Ty extends ValidProcType,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
+  Input extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
   Init extends PayloadType | null = null,
 > = { type: Ty } & (
   Init extends PayloadType
-  ? Ty extends 'upload' ? UploadProcedure<State, I, O, E, Init>
-  : Ty extends 'stream' ? StreamProcedure<State, I, O, E, Init>
+  ? Ty extends 'upload' ? UploadProcedure<State, Input, Output, Err, Init>
+  : Ty extends 'stream' ? StreamProcedure<State, Input, Output, Err, Init>
   : never
-  : Ty extends 'rpc' ? RpcProcedure<State, I, O, E>
-  : Ty extends 'upload' ? UploadProcedure<State, I, O, E>
-  : Ty extends 'subscription' ? SubscriptionProcedure<State, I, O, E>
-  : Ty extends 'stream' ? StreamProcedure<State, I, O, E>
+  : Ty extends 'rpc' ? RpcProcedure<State, Input, Output, Err>
+  : Ty extends 'upload' ? UploadProcedure<State, Input, Output, Err>
+  : Ty extends 'subscription' ? SubscriptionProcedure<State, Input, Output, Err>
+  : Ty extends 'stream' ? StreamProcedure<State, Input, Output, Err>
   : never
 );
 
@@ -245,27 +245,31 @@ export type ProcedureMap<State = object> = Record<string, AnyProcedure<State>>;
  * Creates an {@link RpcProcedure}.
  */
 // signature: default errors
-function rpc<State, I extends PayloadType, O extends PayloadType>(def: {
-  input: I;
-  output: O;
+function rpc<
+  State,
+  Input extends PayloadType,
+  Output extends PayloadType,
+>(def: {
+  input: Input;
+  output: Output;
   errors?: never;
   description?: string;
-  handler: RpcProcedure<State, I, O, TNever>['handler'];
-}): Branded<RpcProcedure<State, I, O, TNever>>;
+  handler: RpcProcedure<State, Input, Output, TNever>['handler'];
+}): Branded<RpcProcedure<State, Input, Output, TNever>>;
 
 // signature: explicit errors
 function rpc<
   State,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
+  Input extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
 >(def: {
-  input: I;
-  output: O;
-  errors: E;
+  input: Input;
+  output: Output;
+  errors: Err;
   description?: string;
-  handler: RpcProcedure<State, I, O, E>['handler'];
-}): Branded<RpcProcedure<State, I, O, E>>;
+  handler: RpcProcedure<State, Input, Output, Err>['handler'];
+}): Branded<RpcProcedure<State, Input, Output, Err>>;
 
 // implementation
 function rpc({
@@ -302,58 +306,62 @@ function rpc({
 // signature: init with default errors
 function upload<
   State,
-  I extends PayloadType,
-  O extends PayloadType,
+  Input extends PayloadType,
+  Output extends PayloadType,
   Init extends PayloadType,
 >(def: {
   init: Init;
-  input: I;
-  output: O;
+  input: Input;
+  output: Output;
   errors?: never;
   description?: string;
-  handler: UploadProcedure<State, I, O, TNever, Init>['handler'];
-}): Branded<UploadProcedure<State, I, O, TNever, Init>>;
+  handler: UploadProcedure<State, Input, Output, TNever, Init>['handler'];
+}): Branded<UploadProcedure<State, Input, Output, TNever, Init>>;
 
 // signature: init with explicit errors
 function upload<
   State,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
+  Input extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
   Init extends PayloadType,
 >(def: {
   init: Init;
-  input: I;
-  output: O;
-  errors: E;
+  input: Input;
+  output: Output;
+  errors: Err;
   description?: string;
-  handler: UploadProcedure<State, I, O, E, Init>['handler'];
-}): Branded<UploadProcedure<State, I, O, E, Init>>;
+  handler: UploadProcedure<State, Input, Output, Err, Init>['handler'];
+}): Branded<UploadProcedure<State, Input, Output, Err, Init>>;
 
 // signature: no init with default errors
-function upload<State, I extends PayloadType, O extends PayloadType>(def: {
+function upload<
+  State,
+  Input extends PayloadType,
+  Output extends PayloadType,
+>(def: {
   init?: never;
-  input: I;
-  output: O;
+  input: Input;
+  output: Output;
   errors?: never;
   description?: string;
-  handler: UploadProcedure<State, I, O, TNever>['handler'];
-}): Branded<UploadProcedure<State, I, O, TNever>>;
+  handler: UploadProcedure<State, Input, Output, TNever>['handler'];
+}): Branded<UploadProcedure<State, Input, Output, TNever>>;
 
 // signature: no init with explicit errors
 function upload<
   State,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
+  Input extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
 >(def: {
   init?: never;
-  input: I;
-  output: O;
-  errors: E;
+  input: Input;
+  output: Output;
+  errors: Err;
   description?: string;
-  handler: UploadProcedure<State, I, O, E>['handler'];
-}): Branded<UploadProcedure<State, I, O, E>>;
+  handler: UploadProcedure<State, Input, Output, Err>['handler'];
+}): Branded<UploadProcedure<State, Input, Output, Err>>;
 
 // implementation
 function upload({
@@ -403,29 +411,29 @@ function upload({
 // signature: default errors
 function subscription<
   State,
-  I extends PayloadType,
-  O extends PayloadType,
+  Input extends PayloadType,
+  Output extends PayloadType,
 >(def: {
-  input: I;
-  output: O;
+  input: Input;
+  output: Output;
   errors?: never;
   description?: string;
-  handler: SubscriptionProcedure<State, I, O, TNever>['handler'];
-}): Branded<SubscriptionProcedure<State, I, O, TNever>>;
+  handler: SubscriptionProcedure<State, Input, Output, TNever>['handler'];
+}): Branded<SubscriptionProcedure<State, Input, Output, TNever>>;
 
 // signature: explicit errors
 function subscription<
   State,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
+  Input extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
 >(def: {
-  input: I;
-  output: O;
-  errors: E;
+  input: Input;
+  output: Output;
+  errors: Err;
   description?: string;
-  handler: SubscriptionProcedure<State, I, O, E>['handler'];
-}): Branded<SubscriptionProcedure<State, I, O, E>>;
+  handler: SubscriptionProcedure<State, Input, Output, Err>['handler'];
+}): Branded<SubscriptionProcedure<State, Input, Output, Err>>;
 
 // implementation
 function subscription({
@@ -462,58 +470,62 @@ function subscription({
 // signature: init with default errors
 function stream<
   State,
-  I extends PayloadType,
-  O extends PayloadType,
+  Input extends PayloadType,
+  Output extends PayloadType,
   Init extends PayloadType,
 >(def: {
   init: Init;
-  input: I;
-  output: O;
+  input: Input;
+  output: Output;
   errors?: never;
   description?: string;
-  handler: StreamProcedure<State, I, O, TNever, Init>['handler'];
-}): Branded<StreamProcedure<State, I, O, TNever, Init>>;
+  handler: StreamProcedure<State, Input, Output, TNever, Init>['handler'];
+}): Branded<StreamProcedure<State, Input, Output, TNever, Init>>;
 
 // signature: init with explicit errors
 function stream<
   State,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
+  Input extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
   Init extends PayloadType,
 >(def: {
   init: Init;
-  input: I;
-  output: O;
-  errors: E;
+  input: Input;
+  output: Output;
+  errors: Err;
   description?: string;
-  handler: StreamProcedure<State, I, O, E, Init>['handler'];
-}): Branded<StreamProcedure<State, I, O, E, Init>>;
+  handler: StreamProcedure<State, Input, Output, Err, Init>['handler'];
+}): Branded<StreamProcedure<State, Input, Output, Err, Init>>;
 
 // signature: no init with default errors
-function stream<State, I extends PayloadType, O extends PayloadType>(def: {
+function stream<
+  State,
+  Input extends PayloadType,
+  Output extends PayloadType,
+>(def: {
   init?: never;
-  input: I;
-  output: O;
+  input: Input;
+  output: Output;
   errors?: never;
   description?: string;
-  handler: StreamProcedure<State, I, O, TNever>['handler'];
-}): Branded<StreamProcedure<State, I, O, TNever>>;
+  handler: StreamProcedure<State, Input, Output, TNever>['handler'];
+}): Branded<StreamProcedure<State, Input, Output, TNever>>;
 
 // signature: no init with explicit errors
 function stream<
   State,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
+  Input extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
 >(def: {
   init?: never;
-  input: I;
-  output: O;
-  errors: E;
+  input: Input;
+  output: Output;
+  errors: Err;
   description?: string;
-  handler: StreamProcedure<State, I, O, E>['handler'];
-}): Branded<StreamProcedure<State, I, O, E>>;
+  handler: StreamProcedure<State, Input, Output, Err>['handler'];
+}): Branded<StreamProcedure<State, Input, Output, Err>>;
 
 // implementation
 function stream({
