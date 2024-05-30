@@ -2,7 +2,6 @@ import { ClientTransport } from '../transport/transport';
 import {
   AnyService,
   ProcErrors,
-  ProcHasInit,
   ProcInit,
   ProcInput,
   ProcOutput,
@@ -46,7 +45,7 @@ type ServiceClient<Router extends AnyService> = {
   > extends 'rpc'
     ? {
         rpc: (
-          input: Static<ProcInput<Router, ProcName>>,
+          init: Static<ProcInit<Router, ProcName>>,
         ) => Promise<
           Result<
             Static<ProcOutput<Router, ProcName>>,
@@ -55,66 +54,37 @@ type ServiceClient<Router extends AnyService> = {
         >;
       }
     : ProcType<Router, ProcName> extends 'upload'
-    ? ProcHasInit<Router, ProcName> extends true
-      ? {
-          upload: (init: Static<ProcInit<Router, ProcName>>) => Promise<
-            [
-              WriteStream<Static<ProcInput<Router, ProcName>>>, // input
-              Promise<
-                Result<
-                  Static<ProcOutput<Router, ProcName>>,
-                  Static<ProcErrors<Router, ProcName>>
-                >
-              >, // output
-            ]
-          >;
-        }
-      : {
-          upload: () => Promise<
-            [
-              WriteStream<Static<ProcInput<Router, ProcName>>>, // input
-              Promise<
-                Result<
-                  Static<ProcOutput<Router, ProcName>>,
-                  Static<ProcErrors<Router, ProcName>>
-                >
-              >, // output
-            ]
-          >;
-        }
+    ? {
+        upload: (init: Static<ProcInit<Router, ProcName>>) => Promise<
+          [
+            WriteStream<Static<ProcInput<Router, ProcName>>>, // input
+            Promise<
+              Result<
+                Static<ProcOutput<Router, ProcName>>,
+                Static<ProcErrors<Router, ProcName>>
+              >
+            >, // output
+          ]
+        >;
+      }
     : ProcType<Router, ProcName> extends 'stream'
-    ? ProcHasInit<Router, ProcName> extends true
-      ? {
-          stream: (init: Static<ProcInit<Router, ProcName>>) => Promise<
-            [
-              WriteStream<Static<ProcInput<Router, ProcName>>>, // input
-              ReadStream<
-                Result<
-                  Static<ProcOutput<Router, ProcName>>,
-                  Static<ProcErrors<Router, ProcName>>
-                >
-              >, // output
-              () => void, // close handle
-            ]
-          >;
-        }
-      : {
-          stream: () => Promise<
-            [
-              WriteStream<Static<ProcInput<Router, ProcName>>>, // input
-              ReadStream<
-                Result<
-                  Static<ProcOutput<Router, ProcName>>,
-                  Static<ProcErrors<Router, ProcName>>
-                >
-              >, // output
-              () => void, // close handle
-            ]
-          >;
-        }
+    ? {
+        stream: (init: Static<ProcInit<Router, ProcName>>) => Promise<
+          [
+            WriteStream<Static<ProcInput<Router, ProcName>>>, // input
+            ReadStream<
+              Result<
+                Static<ProcOutput<Router, ProcName>>,
+                Static<ProcErrors<Router, ProcName>>
+              >
+            >, // output
+            () => void, // close handle
+          ]
+        >;
+      }
     : ProcType<Router, ProcName> extends 'subscription'
     ? {
-        subscribe: (input: Static<ProcInput<Router, ProcName>>) => Promise<
+        subscribe: (init: Static<ProcInit<Router, ProcName>>) => Promise<
           [
             ReadStream<
               Result<

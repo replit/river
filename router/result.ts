@@ -50,7 +50,9 @@ export type Result<T, Err> =
       payload: Err;
     };
 
-export function Ok<const T extends Array<unknown>, const Err>(p: T): Result<T, Err>;
+export function Ok<const T extends Array<unknown>, const Err>(
+  p: T,
+): Result<T, Err>;
 export function Ok<const T extends ReadonlyArray<unknown>, const Err>(
   p: T,
 ): Result<T, Err>;
