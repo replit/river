@@ -29,7 +29,7 @@ const cleanedLogFn = (log: LogFn) => {
     }
 
     // clone metadata and clean transportMessage
-    const { payload, tracing, ...rest } = metadata.transportMessage;
+    const { payload, ...rest } = metadata.transportMessage;
     metadata.transportMessage = rest;
     log(msg, metadata);
   };
