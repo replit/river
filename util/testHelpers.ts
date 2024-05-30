@@ -15,6 +15,16 @@ import {
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import net from 'node:net';
+import { beforeAll } from 'vitest';
+
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from '@opentelemetry/sdk-trace-base';
+import { W3CTraceContextPropagator } from '@opentelemetry/core';
+import { StackContextManager } from '@opentelemetry/sdk-trace-web';
+
 import {
   OpaqueTransportMessage,
   PartialTransportMessage,
@@ -23,6 +33,19 @@ import { coerceErrorString } from './stringify';
 import { Connection, Session, SessionOptions } from '../transport/session';
 import { Transport, defaultTransportOptions } from '../transport/transport';
 import { WsLike } from '../transport/impls/ws/wslike';
+
+beforeAll(() => {
+  const provider = new BasicTracerProvider();
+  provider.addSpanProcessor(
+    new SimpleSpanProcessor(new InMemorySpanExporter()),
+  );
+  const contextManager = new StackContextManager();
+  contextManager.enable();
+  provider.register({
+    propagator: new W3CTraceContextPropagator(),
+    contextManager: contextManager,
+  });
+});
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
@@ -139,7 +162,7 @@ function catchProcError(err: unknown) {
 
 export const testingSessionOptions: SessionOptions = defaultTransportOptions;
 
-function dummySession() {
+export function dummySession() {
   return new Session<Connection>(
     undefined,
     'client',

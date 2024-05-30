@@ -35,7 +35,7 @@ export function createSessionTelemetryInfo(
   session: Session<Connection>,
   propagationCtx?: PropagationContext,
 ): TelemetryInfo {
-  const ctx = propagationCtx
+  const parentCtx = propagationCtx
     ? propagation.extract(context.active(), propagationCtx)
     : context.active();
 
@@ -49,17 +49,18 @@ export function createSessionTelemetryInfo(
         'river.session.from': session.from,
       },
     },
-    ctx,
+    parentCtx,
   );
+
+  const ctx = trace.setSpan(parentCtx, span);
 
   return { span, ctx };
 }
 
 export function createConnectionTelemetryInfo(
   connection: Connection,
-  sessionSpan: Span,
+  info: TelemetryInfo,
 ): TelemetryInfo {
-  const ctx = trace.setSpan(context.active(), sessionSpan);
   const span = tracer.startSpan(
     `connection ${connection.id}`,
     {
@@ -67,10 +68,12 @@ export function createConnectionTelemetryInfo(
         component: 'river',
         'river.connection.id': connection.id,
       },
-      links: [{ context: sessionSpan.spanContext() }],
+      links: [{ context: info.span.spanContext() }],
     },
-    ctx,
+    info.ctx,
   );
+
+  const ctx = trace.setSpan(context.active(), span);
 
   return { span, ctx };
 }
@@ -97,6 +100,7 @@ export function createProcTelemetryInfo(
     },
     ctx,
   );
+  trace.setSpan(ctx, span);
 
   return { span, ctx };
 }

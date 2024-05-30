@@ -203,10 +203,7 @@ export abstract class Transport<ConnType extends Connection> {
       conn,
     });
 
-    conn.telemetry = createConnectionTelemetryInfo(
-      conn,
-      session.telemetry.span,
-    );
+    conn.telemetry = createConnectionTelemetryInfo(conn, session.telemetry);
 
     if (isReconnect) {
       session.replaceWithNewConnection(conn);
