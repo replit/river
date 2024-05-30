@@ -39,7 +39,7 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     output: Type.Array(Type.Number()),
     async handler(_, msgStream, returnStream) {
       for await (const msg of msgStream) {
-        returnStream.push(Ok([msg.n]));
+        returnStream.write(Ok([msg.n]));
       }
     },
   }),
