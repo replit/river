@@ -1,7 +1,6 @@
 import {
   AnyService,
   ProcErrors,
-  ProcHasInit,
   ProcInit,
   ProcInput,
   ProcOutput,
@@ -45,7 +44,7 @@ type ServiceClient<Router extends AnyService> = {
   > extends 'rpc'
     ? {
         rpc: (
-          input: Static<ProcInput<Router, ProcName>>,
+          init: Static<ProcInit<Router, ProcName>>,
         ) => Promise<
           Result<
             Static<ProcOutput<Router, ProcName>>,
@@ -54,66 +53,37 @@ type ServiceClient<Router extends AnyService> = {
         >;
       }
     : ProcType<Router, ProcName> extends 'upload'
-    ? ProcHasInit<Router, ProcName> extends true
-      ? {
-          upload: (init: Static<ProcInit<Router, ProcName>>) => Promise<
-            [
-              WriteStream<Static<ProcInput<Router, ProcName>>>, // input
-              Promise<
-                Result<
-                  Static<ProcOutput<Router, ProcName>>,
-                  Static<ProcErrors<Router, ProcName>>
-                >
-              >, // output
-            ]
-          >;
-        }
-      : {
-          upload: () => Promise<
-            [
-              WriteStream<Static<ProcInput<Router, ProcName>>>, // input
-              Promise<
-                Result<
-                  Static<ProcOutput<Router, ProcName>>,
-                  Static<ProcErrors<Router, ProcName>>
-                >
-              >, // output
-            ]
-          >;
-        }
+    ? {
+        upload: (init: Static<ProcInit<Router, ProcName>>) => Promise<
+          [
+            WriteStream<Static<ProcInput<Router, ProcName>>>, // input
+            Promise<
+              Result<
+                Static<ProcOutput<Router, ProcName>>,
+                Static<ProcErrors<Router, ProcName>>
+              >
+            >, // output
+          ]
+        >;
+      }
     : ProcType<Router, ProcName> extends 'stream'
-    ? ProcHasInit<Router, ProcName> extends true
-      ? {
-          stream: (init: Static<ProcInit<Router, ProcName>>) => Promise<
-            [
-              WriteStream<Static<ProcInput<Router, ProcName>>>, // input
-              ReadStream<
-                Result<
-                  Static<ProcOutput<Router, ProcName>>,
-                  Static<ProcErrors<Router, ProcName>>
-                >
-              >, // output
-              () => void, // close handle
-            ]
-          >;
-        }
-      : {
-          stream: () => Promise<
-            [
-              WriteStream<Static<ProcInput<Router, ProcName>>>, // input
-              ReadStream<
-                Result<
-                  Static<ProcOutput<Router, ProcName>>,
-                  Static<ProcErrors<Router, ProcName>>
-                >
-              >, // output
-              () => void, // close handle
-            ]
-          >;
-        }
+    ? {
+        stream: (init: Static<ProcInit<Router, ProcName>>) => Promise<
+          [
+            WriteStream<Static<ProcInput<Router, ProcName>>>, // input
+            ReadStream<
+              Result<
+                Static<ProcOutput<Router, ProcName>>,
+                Static<ProcErrors<Router, ProcName>>
+              >
+            >, // output
+            () => void, // close handle
+          ]
+        >;
+      }
     : ProcType<Router, ProcName> extends 'subscription'
     ? {
-        subscribe: (input: Static<ProcInput<Router, ProcName>>) => Promise<
+        subscribe: (init: Static<ProcInit<Router, ProcName>>) => Promise<
           [
             ReadStream<
               Result<
@@ -325,9 +295,7 @@ function handleStream(
     procedureName,
     streamId,
   );
-  let firstMessage = true;
   let healthyClose = true;
-
   const inputWriter = new WriteStreamImpl(
     (rawIn: unknown) => {
       const m: PartialTransportMessage = {
@@ -335,14 +303,6 @@ function handleStream(
         payload: rawIn,
         controlFlags: 0,
       };
-
-      if (firstMessage) {
-        m.serviceName = serviceName;
-        m.procedureName = procedureName;
-        m.tracing = getPropagationContext(ctx);
-        m.controlFlags |= ControlFlags.StreamOpenBit;
-        firstMessage = false;
-      }
 
       transport.send(serverId, m);
     },
@@ -355,18 +315,14 @@ function handleStream(
   const readStreamRequestCloseNotImplemented = () => undefined;
   const outputReader = new ReadStreamImpl(readStreamRequestCloseNotImplemented);
 
-  if (init) {
-    transport.send(serverId, {
-      streamId,
-      serviceName,
-      procedureName,
-      tracing: getPropagationContext(ctx),
-      payload: init,
-      controlFlags: ControlFlags.StreamOpenBit,
-    });
-
-    firstMessage = false;
-  }
+  transport.send(serverId, {
+    streamId,
+    serviceName,
+    procedureName,
+    tracing: getPropagationContext(ctx),
+    payload: init,
+    controlFlags: ControlFlags.StreamOpenBit,
+  });
 
   // transport -> output
   function onMessage(msg: OpaqueTransportMessage) {
@@ -507,7 +463,6 @@ function handleUpload(
     streamId,
   );
 
-  let firstMessage = true;
   let healthyClose = true;
 
   const inputWriter = new WriteStreamImpl(
@@ -518,14 +473,6 @@ function handleUpload(
         controlFlags: 0,
       };
 
-      if (firstMessage) {
-        m.serviceName = serviceName;
-        m.procedureName = procedureName;
-        m.tracing = getPropagationContext(ctx);
-        m.controlFlags |= ControlFlags.StreamOpenBit;
-        firstMessage = false;
-      }
-
       transport.send(serverId, m);
     },
     () => {
@@ -535,18 +482,14 @@ function handleUpload(
     },
   );
 
-  if (init) {
-    transport.send(serverId, {
-      streamId,
-      serviceName,
-      procedureName,
-      tracing: getPropagationContext(ctx),
-      payload: init,
-      controlFlags: ControlFlags.StreamOpenBit,
-    });
-
-    firstMessage = false;
-  }
+  transport.send(serverId, {
+    streamId,
+    serviceName,
+    procedureName,
+    tracing: getPropagationContext(ctx),
+    payload: init,
+    controlFlags: ControlFlags.StreamOpenBit,
+  });
 
   const responsePromise = new Promise((resolve) => {
     // on disconnect, set a timer to return an error

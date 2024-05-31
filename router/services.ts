@@ -61,16 +61,6 @@ export type ProcHandler<
 > = S['procedures'][ProcName]['handler'];
 
 /**
- * Helper to get whether the type definition for the procedure contains an init type.
- * @template S - The service.
- * @template ProcName - The name of the procedure.
- */
-export type ProcHasInit<
-  S extends AnyService,
-  ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName] extends { init: PayloadType } ? true : false;
-
-/**
  * Helper to get the type definition for the procedure init type of a service.
  * @template S - The service.
  * @template ProcName - The name of the procedure.
@@ -78,9 +68,7 @@ export type ProcHasInit<
 export type ProcInit<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName] extends { init: PayloadType }
-  ? S['procedures'][ProcName]['init']
-  : never;
+> = S['procedures'][ProcName]['init'];
 
 /**
  * Helper to get the type definition for the procedure input of a service.
@@ -90,7 +78,9 @@ export type ProcInit<
 export type ProcInput<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName]['input'];
+> = S['procedures'][ProcName] extends { input: PayloadType }
+  ? S['procedures'][ProcName]['input']
+  : never;
 
 /**
  * Helper to get the type definition for the procedure output of a service.
@@ -139,11 +129,11 @@ export interface ServiceConfiguration<State extends object> {
 }
 
 export interface SerializedProcedureSchema {
-  input: PayloadType;
+  input?: PayloadType;
   output: PayloadType;
   errors?: RiverError;
   type: 'rpc' | 'subscription' | 'upload' | 'stream';
-  init?: PayloadType;
+  init: PayloadType;
 }
 
 export interface SerializedServiceSchema {
@@ -238,10 +228,10 @@ export class ServiceSchema<
    *
    * const incrementProcedures = MyServiceScaffold.procedures({
    *   increment: Procedure.rpc({
-   *     input: Type.Object({ amount: Type.Number() }),
+   *     init: Type.Object({ amount: Type.Number() }),
    *     output: Type.Object({ current: Type.Number() }),
-   *     async handler(ctx, input) {
-   *       ctx.state.count += input.amount;
+   *     async handler(ctx, init) {
+   *       ctx.state.count += init.amount;
    *       return Ok({ current: ctx.state.count });
    *     }
    *   }),
@@ -265,10 +255,10 @@ export class ServiceSchema<
    *   .scaffold({ initializeState: () => ({ count: 0 }) })
    *   .finalize({
    *     increment: Procedure.rpc({
-   *       input: Type.Object({ amount: Type.Number() }),
+   *       init: Type.Object({ amount: Type.Number() }),
    *       output: Type.Object({ current: Type.Number() }),
-   *       async handler(ctx, input) {
-   *         ctx.state.count += input.amount;
+   *       async handler(ctx, init) {
+   *         ctx.state.count += init.amount;
    *         return Ok({ current: ctx.state.count });
    *       }
    *     }),
@@ -298,10 +288,10 @@ export class ServiceSchema<
    *   { initializeState: () => ({ count: 0 }) },
    *   {
    *     increment: Procedure.rpc({
-   *       input: Type.Object({ amount: Type.Number() }),
+   *       init: Type.Object({ amount: Type.Number() }),
    *       output: Type.Object({ current: Type.Number() }),
-   *       async handler(ctx, input) {
-   *         ctx.state.count += input.amount;
+   *       async handler(ctx, init) {
+   *         ctx.state.count += init.amount;
    *         return Ok({ current: ctx.state.count });
    *       }
    *     }),
@@ -333,10 +323,10 @@ export class ServiceSchema<
    * ```
    * const service = ServiceSchema.define({
    *   add: Procedure.rpc({
-   *     input: Type.Object({ a: Type.Number(), b: Type.Number() }),
+   *     init: Type.Object({ a: Type.Number(), b: Type.Number() }),
    *     output: Type.Object({ result: Type.Number() }),
-   *     async handler(ctx, input) {
-   *       return Ok({ result: input.a + input.b });
+   *     async handler(ctx, init) {
+   *       return Ok({ result: init.a + init.b });
    *     }
    *   }),
    * });
@@ -384,7 +374,7 @@ export class ServiceSchema<
         Object.entries(this.procedures).map(([procName, procDef]) => [
           procName,
           {
-            input: Type.Strict(procDef.input),
+            init: Type.Strict(procDef.init),
             output: Type.Strict(procDef.output),
             // Only add `description` field if the type declares it.
             ...('description' in procDef
@@ -397,10 +387,10 @@ export class ServiceSchema<
                 }
               : {}),
             type: procDef.type,
-            // Only add the `init` field if the type declares it.
-            ...('init' in procDef
+            // Only add the `input` field if the type declares it.
+            ...('input' in procDef
               ? {
-                  init: Type.Strict(procDef.init),
+                  input: Type.Strict(procDef.input),
                 }
               : {}),
           },

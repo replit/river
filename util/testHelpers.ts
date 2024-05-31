@@ -188,22 +188,21 @@ function dummyCtx<State>(
 
 export function asClientRpc<
   State extends object,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
-  Init extends PayloadType | null = null,
+  Init extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
 >(
   state: State,
-  proc: Procedure<State, 'rpc', I, O, E, Init>,
+  proc: Procedure<State, 'rpc', Init, null, Output, Err>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ) {
   return async (
-    msg: Static<I>,
+    msg: Static<Init>,
   ): Promise<
-    Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>
+    Result<Static<Output>, Static<Err> | Static<typeof RiverUncaughtSchema>>
   > => {
-    return await proc
+    return proc
       .handler(dummyCtx(state, session, extendedContext), msg)
       .catch(catchProcError);
   };
@@ -227,70 +226,53 @@ function createPipe<T>(): { reader: ReadStream<T>; writer: WriteStream<T> } {
 
 export function asClientStream<
   State extends object,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
-  Init extends PayloadType | null = null,
+  Init extends PayloadType,
+  Input extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
 >(
   state: State,
-  proc: Procedure<State, 'stream', I, O, E, Init>,
-  init?: Init extends PayloadType ? Static<Init> : null,
+  proc: Procedure<State, 'stream', Init, Input, Output, Err>,
+  init?: Static<Init>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
-): [WriteStream<Static<I>>, ReadStream<ProcedureResult<O, E>>] {
-  const inputPipe = createPipe<Static<I>>();
-  const outputPipe = createPipe<ProcedureResult<O, E>>();
+): [WriteStream<Static<Input>>, ReadStream<ProcedureResult<Output, Err>>] {
+  const inputPipe = createPipe<Static<Input>>();
+  const outputPipe = createPipe<ProcedureResult<Output, Err>>();
 
-  void (async () => {
-    if (init) {
-      const _proc = proc as Procedure<State, 'stream', I, O, E, PayloadType>;
-      await _proc
-
-        .handler(
-          dummyCtx(state, session, extendedContext),
-          init,
-          inputPipe.reader,
-          outputPipe.writer,
-        )
-        .catch((err: unknown) => outputPipe.writer.write(catchProcError(err)));
-    } else {
-      const _proc = proc as Procedure<State, 'stream', I, O, E>;
-      await _proc
-        .handler(
-          dummyCtx(state, session, extendedContext),
-          inputPipe.reader,
-          outputPipe.writer,
-        )
-        .catch((err: unknown) => outputPipe.writer.write(catchProcError(err)));
-    }
-  })();
+  void proc
+    .handler(
+      dummyCtx(state, session, extendedContext),
+      init ?? {},
+      inputPipe.reader,
+      outputPipe.writer,
+    )
+    .catch((err: unknown) => outputPipe.writer.write(catchProcError(err)));
 
   return [inputPipe.writer, outputPipe.reader];
 }
 
 export function asClientSubscription<
   State extends object,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
+  Init extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
 >(
   state: State,
-  proc: Procedure<State, 'subscription', I, O, E>,
+  proc: Procedure<State, 'subscription', Init, null, Output, Err>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
-): (msg: Static<I>) => ReadStream<ProcedureResult<O, E>> {
-  const outputPipe = createPipe<ProcedureResult<O, E>>();
+): (msg: Static<Init>) => ReadStream<ProcedureResult<Output, Err>> {
+  const outputPipe = createPipe<ProcedureResult<Output, Err>>();
 
-  return (msg: Static<I>) => {
-    void (async () => {
-      await proc
-        .handler(
-          dummyCtx(state, session, extendedContext),
-          msg,
-          outputPipe.writer,
-        )
-        .catch((err: unknown) => outputPipe.writer.write(catchProcError(err)));
-    })();
+  return (msg: Static<Init>) => {
+    void proc
+      .handler(
+        dummyCtx(state, session, extendedContext),
+        msg,
+        outputPipe.writer,
+      )
+      .catch((err: unknown) => outputPipe.writer.write(catchProcError(err)));
 
     return outputPipe.reader;
   };
@@ -298,35 +280,26 @@ export function asClientSubscription<
 
 export function asClientUpload<
   State extends object,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
-  Init extends PayloadType | null = null,
+  Init extends PayloadType,
+  Input extends PayloadType,
+  Output extends PayloadType,
+  Err extends RiverError,
 >(
   state: State,
-  proc: Procedure<State, 'upload', I, O, E, Init>,
-  init?: Init extends PayloadType ? Static<Init> : null,
+  proc: Procedure<State, 'upload', Init, Input, Output, Err>,
+  init?: Static<Init>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
-): [WriteStream<Static<I>>, Promise<ProcedureResult<O, E>>] {
-  const inputPipe = createPipe<Static<I>>();
-  if (init) {
-    const _proc = proc as Procedure<State, 'upload', I, O, E, PayloadType>;
-    const result = _proc
-      .handler(
-        dummyCtx(state, session, extendedContext),
-        init,
-        inputPipe.reader,
-      )
-      .catch(catchProcError);
-    return [inputPipe.writer, result];
-  } else {
-    const _proc = proc as Procedure<State, 'upload', I, O, E>;
-    const result = _proc
-      .handler(dummyCtx(state, session, extendedContext), inputPipe.reader)
-      .catch(catchProcError);
-    return [inputPipe.writer, result];
-  }
+): [WriteStream<Static<Input>>, Promise<ProcedureResult<Output, Err>>] {
+  const inputPipe = createPipe<Static<Input>>();
+  const result = proc
+    .handler(
+      dummyCtx(state, session, extendedContext),
+      init ?? {},
+      inputPipe.reader,
+    )
+    .catch(catchProcError);
+  return [inputPipe.writer, result];
 }
 
 export const getUnixSocketPath = () => {

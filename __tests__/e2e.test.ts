@@ -156,8 +156,9 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [inputWriter, outputReader, close] =
-        await client.test.echo.stream();
+      const [inputWriter, outputReader, close] = await client.test.echo.stream(
+        {},
+      );
       const outputIterator = getIteratorFromStream(outputReader);
 
       inputWriter.write({ msg: 'abc', ignore: false });
@@ -252,7 +253,7 @@ describe.each(testMatrix())(
 
       // test
       const [inputWriter, outputReader, close] =
-        await client.fallible.echo.stream();
+        await client.fallible.echo.stream({});
       const outputIterator = getIteratorFromStream(outputReader);
       inputWriter.write({ msg: 'abc', throwResult: false, throwError: false });
       const result1 = await iterNext(outputIterator);
@@ -348,7 +349,7 @@ describe.each(testMatrix())(
 
       // test
       const [inputWriter, addResult] =
-        await client.uploadable.addMultiple.upload();
+        await client.uploadable.addMultiple.upload({});
       inputWriter.write({ n: 1 });
       inputWriter.write({ n: 2 });
       inputWriter.close();
@@ -496,7 +497,7 @@ describe.each(testMatrix())(
       // test
       const openStreams = [];
       for (let i = 0; i < CONCURRENCY; i++) {
-        const streamHandle = await client.test.echo.stream();
+        const streamHandle = await client.test.echo.stream({});
         const inputWriter = streamHandle[0];
         inputWriter.write({ msg: `${i}-1`, ignore: false });
         inputWriter.write({ msg: `${i}-2`, ignore: false });
@@ -707,7 +708,7 @@ describe.each(testMatrix())(
       const services = {
         test: ServiceSchema.define({
           getData: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({
               data: Type.String(),
               extra: Type.Number(),
