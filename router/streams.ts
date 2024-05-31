@@ -43,10 +43,11 @@ export interface ReadStream<T> {
    */
   isLocked(): boolean;
   /**
-   * `waitForClose` returns a promise that resolves when the stream is closed,
-   * does not send a close request.
+   * `onClose` registers a callback that will be called when the stream
+   * is closed. Returns a function that can be used to unregister the
+   * listener.
    */
-  waitForClose(): Promise<undefined>;
+  onClose(cb: () => void): () => void;
   /**
    * `isClosed` returns true if the stream was closed by the writer.
    *
@@ -136,13 +137,9 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
    */
   private closed = false;
   /**
-   * Used to for `waitForClose` and `requestClose`.
+   * A list of listeners that will be called when the stream is closed.
    */
-  private closePromise: Promise<undefined>;
-  /**
-   * Resolves closePromise
-   */
-  private resolveClosePromise: () => void = () => undefined;
+  private onCloseListeners: Set<() => void>;
   /**
    * Whether the user has requested to close the stream.
    */
@@ -182,13 +179,11 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
 
   constructor(closeRequestCallback: () => void) {
     this.closeRequestCallback = closeRequestCallback;
-    this.closePromise = new Promise((resolve) => {
-      this.resolveClosePromise = () => resolve(undefined);
-    });
+    this.onCloseListeners = new Set();
   }
 
   public [Symbol.asyncIterator]() {
-    if (this.locked) {
+    if (this.isLocked()) {
       throw new TypeError('ReadStream is already locked');
     }
 
@@ -202,7 +197,7 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
             throw new InterruptedStreamError();
           }
 
-          if (this.closed) {
+          if (this.isClosed()) {
             return {
               done: true,
               value: undefined,
@@ -275,17 +270,33 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
     return this.locked;
   }
 
-  public waitForClose(): Promise<undefined> {
-    return this.closePromise;
+  public onClose(cb: () => void): () => void {
+    if (this.isClosed()) {
+      throw new Error('Stream is already closed');
+    }
+
+    this.onCloseListeners.add(cb);
+
+    return () => {
+      this.onCloseListeners.delete(cb);
+    };
   }
 
   public requestClose(): Promise<undefined> {
+    if (this.isClosed()) {
+      throw new Error('Cannot request close after stream already closed');
+    }
+
     if (!this.closeRequested) {
       this.closeRequested = true;
       this.closeRequestCallback();
     }
 
-    return this.closePromise;
+    return new Promise<undefined>((resolve) => {
+      this.onClose(() => {
+        resolve(undefined);
+      });
+    });
   }
 
   public isCloseRequested(): boolean {
@@ -318,13 +329,14 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
    * values before calling this method.
    */
   public triggerClose(): undefined {
-    if (this.closed) {
+    if (this.isClosed()) {
       throw new Error('Unexpected closing multiple times');
     }
 
     this.closed = true;
     this.resolveNextPromise?.();
-    this.resolveClosePromise();
+    this.onCloseListeners.forEach((cb) => cb());
+    this.onCloseListeners.clear();
   }
 
   /**

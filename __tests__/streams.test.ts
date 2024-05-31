@@ -180,10 +180,16 @@ describe('ReadStream unit', () => {
     stream.triggerClose();
   });
 
-  it('should resolve waitForClose until after close', async () => {
+  it('should throw when requesting to close after closing', () => {
+    const stream = new ReadStreamImpl<number>(noopCb);
+    stream.triggerClose();
+    expect(() => stream.requestClose()).toThrowError(Error);
+  });
+
+  it('should call onClose callback until after close', async () => {
     const stream = new ReadStreamImpl<number>(noopCb);
 
-    const waitP = stream.waitForClose();
+    const waitP = new Promise<void>((resolve) => stream.onClose(resolve));
 
     expect(
       await Promise.race([
@@ -199,29 +205,12 @@ describe('ReadStream unit', () => {
         waitP,
       ]),
     ).toEqual(undefined);
-    expect(
-      await Promise.race([
-        new Promise((resolve) => setTimeout(() => resolve('timeout'), 10)),
-        stream.waitForClose(),
-      ]),
-    ).toEqual(undefined);
   });
 
-  it('should resolve waitForClose when called after closing', async () => {
+  it('should error when onClose called after closing', async () => {
     const stream = new ReadStreamImpl<number>(noopCb);
     stream.triggerClose();
-    expect(
-      await Promise.race([
-        new Promise((resolve) => setTimeout(() => resolve('timeout'), 10)),
-        stream.waitForClose(),
-      ]),
-    ).toEqual(undefined);
-    expect(
-      await Promise.race([
-        new Promise((resolve) => setTimeout(() => resolve('timeout'), 10)),
-        stream.waitForClose(),
-      ]),
-    ).toEqual(undefined);
+    expect(() => stream.onClose(noopCb)).toThrowError(Error);
   });
 
   it('should throw when pushing to a closed stream', async () => {
