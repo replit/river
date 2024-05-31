@@ -166,8 +166,9 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const [inputWriter, outputReader, close] =
-        await client.test.echo.stream();
+      const [inputWriter, outputReader, close] = await client.test.echo.stream(
+        {},
+      );
       inputWriter.write({ msg: '1', ignore: false, end: undefined });
       inputWriter.write({ msg: '2', ignore: false, end: true });
 
@@ -291,7 +292,7 @@ describe.each(testMatrix())(
 
       // start procedure
       const [inputWriter, addResult] =
-        await client.uploadable.addMultiple.upload();
+        await client.uploadable.addMultiple.upload({});
       inputWriter.write({ n: 1 });
       inputWriter.write({ n: 2 });
       inputWriter.close();
@@ -336,7 +337,7 @@ describe.each(testMatrix())(
       });
 
       // start a stream
-      const [inputWriter, outputReader] = await client.test.echo.stream();
+      const [inputWriter, outputReader] = await client.test.echo.stream({});
       inputWriter.write({ msg: '1', ignore: false });
 
       const outputIterator = getIteratorFromStream(outputReader);

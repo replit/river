@@ -95,9 +95,9 @@ interface BaseError {
 The `Result` type MUST conform to:
 
 ```ts
-type Result<T, E extends BaseError> =
-  | { ok: true; payload: T }
-  | { ok: false; payload: E };
+type Result<SuccessPayload, ErrorPayload extends BaseError> =
+  | { ok: true; payload: SuccessPayload }
+  | { ok: false; payload: ErrorPayload };
 ```
 
 The messages in either direction must also contain additional information so that the receiving party knows where to route the message payload. This wrapper message is referred to as a `TransportMessage` and its payload can be a `Control`, a `Result`, an `Init`, an `Input`, or an `Output`. The schema for the transport message is as follows:

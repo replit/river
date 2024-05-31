@@ -18,7 +18,7 @@ import {
 import { UNCAUGHT_ERROR } from '../router/result';
 import { Observable } from './fixtures/observable';
 
-describe.skip('server-side test', () => {
+describe('server-side test', () => {
   const service = TestServiceSchema.instantiate();
 
   test('rpc basic', async () => {
@@ -73,7 +73,12 @@ describe.skip('server-side test', () => {
     assert(result2.ok);
     expect(result2.payload).toStrictEqual({ response: 'ghi' });
 
-    expect(outputIterator.next()).toEqual({ done: true, value: undefined });
+    await outputReader.requestClose();
+
+    expect(await outputIterator.next()).toEqual({
+      done: true,
+      value: undefined,
+    });
   });
 
   test('stream with initialization', async () => {
@@ -96,8 +101,12 @@ describe.skip('server-side test', () => {
     const result2 = await iterNext(outputIterator);
     assert(result2.ok);
     expect(result2.payload).toStrictEqual({ response: 'test ghi' });
+    await outputReader.requestClose();
 
-    expect(outputIterator.next()).toEqual({ done: true, value: undefined });
+    expect(await outputIterator.next()).toEqual({
+      done: true,
+      value: undefined,
+    });
   });
 
   test('fallible stream', async () => {

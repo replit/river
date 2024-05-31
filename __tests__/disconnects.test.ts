@@ -92,7 +92,7 @@ describe.each(testMatrix())(
       });
 
       // start procedure
-      const [inputWriter, outputReader] = await client.test.echo.stream();
+      const [inputWriter, outputReader] = await client.test.echo.stream({});
       const outputIterator = getIteratorFromStream(outputReader);
 
       inputWriter.write({ msg: 'abc', ignore: false });
@@ -241,7 +241,7 @@ describe.each(testMatrix())(
 
       // start procedure
       const [inputWriter, addResult] =
-        await client.uploadable.addMultiple.upload();
+        await client.uploadable.addMultiple.upload({});
       inputWriter.write({ n: 1 });
       inputWriter.write({ n: 2 });
       // end procedure
