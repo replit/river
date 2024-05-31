@@ -40,6 +40,22 @@ export const RiverUncaughtSchema = Type.Object({
   message: Type.String(),
 });
 
+export const AnyResultSchema = Type.Union([
+  Type.Object({
+    ok: Type.Literal(false),
+    payload: Type.Object({
+      code: Type.String(),
+      message: Type.String(),
+      extras: Type.Optional(Type.Unknown()),
+    }),
+  }),
+
+  Type.Object({
+    ok: Type.Literal(true),
+    payload: Type.Unknown(),
+  }),
+]);
+
 export type Result<T, Err> =
   | {
       ok: true;
@@ -104,27 +120,25 @@ export type Output<
     ? Procedure extends object & { rpc: infer RpcHandler extends Fn }
       ? Awaited<ReturnType<RpcHandler>>
       : Procedure extends object & { upload: infer UploadHandler extends Fn }
-      ? Awaited<ReturnType<UploadHandler>> extends [
+      ? ReturnType<UploadHandler> extends [
           infer __UploadInputMessage,
-          infer UploadOutputMessage,
+          (...args: never) => Promise<infer UploadOutputMessage>,
         ]
-        ? Awaited<UploadOutputMessage>
+        ? UploadOutputMessage
         : never
       : Procedure extends object & { stream: infer StreamHandler extends Fn }
-      ? Awaited<ReturnType<StreamHandler>> extends [
+      ? ReturnType<StreamHandler> extends [
           infer __StreamInputMessage,
           ReadStream<infer StreamOutputMessage>,
-          infer __StreamCloseHandle,
         ]
         ? StreamOutputMessage
         : never
       : Procedure extends object & {
           subscribe: infer SubscriptionHandler extends Fn;
         }
-      ? Awaited<ReturnType<SubscriptionHandler>> extends [
-          ReadStream<infer SubscriptionOutputMessage>,
-          infer __SubscriptionCloseHandle,
-        ]
+      ? Awaited<ReturnType<SubscriptionHandler>> extends ReadStream<
+          infer SubscriptionOutputMessage
+        >
         ? SubscriptionOutputMessage
         : never
       : never
