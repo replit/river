@@ -472,7 +472,10 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
 
     // Init message is consumed during stream instantiation
     if (!isInit) {
-      if (Value.Check(procedure.init, message.payload)) {
+      if (
+        'input' in procedure &&
+        Value.Check(procedure.input, message.payload)
+      ) {
         procStream.incoming.pushValue(message.payload as PayloadType);
       } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
         // whelp we got a message that isn't a control message and doesn't match the procedure input
