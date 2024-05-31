@@ -26,7 +26,7 @@ describe('serialize server to jsonschema', () => {
         test: {
           procedures: {
             add: {
-              input: {
+              init: {
                 properties: {
                   n: { type: 'number' },
                 },
@@ -49,7 +49,7 @@ describe('serialize server to jsonschema', () => {
               errors: {
                 not: {},
               },
-              input: {
+              init: {
                 properties: {
                   n: {
                     type: 'number',
@@ -70,6 +70,10 @@ describe('serialize server to jsonschema', () => {
               errors: {
                 not: {},
               },
+              init: {
+                properties: {},
+                type: 'object',
+              },
               input: {
                 properties: {
                   n: {
@@ -88,6 +92,10 @@ describe('serialize server to jsonschema', () => {
               type: 'stream',
             },
             echo: {
+              init: {
+                properties: {},
+                type: 'object',
+              },
               input: {
                 properties: {
                   msg: { type: 'string' },
@@ -153,7 +161,7 @@ describe('serialize server to jsonschema', () => {
               errors: {
                 not: {},
               },
-              input: {
+              init: {
                 anyOf: [
                   {
                     description: 'A',
@@ -207,6 +215,38 @@ describe('serialize server to jsonschema', () => {
               },
               type: 'rpc',
             },
+            unimplementedSubscription: {
+              errors: {
+                not: {},
+              },
+              init: {
+                properties: {},
+                type: 'object',
+              },
+              output: {
+                properties: {},
+                type: 'object',
+              },
+              type: 'subscription',
+            },
+            unimplementedUpload: {
+              errors: {
+                not: {},
+              },
+              init: {
+                properties: {},
+                type: 'object',
+              },
+              input: {
+                properties: {},
+                type: 'object',
+              },
+              output: {
+                properties: {},
+                type: 'object',
+              },
+              type: 'upload',
+            },
           },
         },
       },
@@ -219,7 +259,7 @@ describe('serialize service to jsonschema', () => {
     expect(TestServiceSchema.serialize()).toStrictEqual({
       procedures: {
         add: {
-          input: {
+          init: {
             properties: {
               n: { type: 'number' },
             },
@@ -242,7 +282,7 @@ describe('serialize service to jsonschema', () => {
           errors: {
             not: {},
           },
-          input: {
+          init: {
             properties: {
               n: {
                 type: 'number',
@@ -263,6 +303,10 @@ describe('serialize service to jsonschema', () => {
           errors: {
             not: {},
           },
+          init: {
+            properties: {},
+            type: 'object',
+          },
           input: {
             properties: {
               n: {
@@ -281,6 +325,10 @@ describe('serialize service to jsonschema', () => {
           type: 'stream',
         },
         echo: {
+          init: {
+            properties: {},
+            type: 'object',
+          },
           input: {
             properties: {
               msg: { type: 'string' },
@@ -346,7 +394,7 @@ describe('serialize service to jsonschema', () => {
           errors: {
             not: {},
           },
-          input: {
+          init: {
             anyOf: [
               {
                 description: 'A',
@@ -400,6 +448,38 @@ describe('serialize service to jsonschema', () => {
           },
           type: 'rpc',
         },
+        unimplementedSubscription: {
+          errors: {
+            not: {},
+          },
+          init: {
+            properties: {},
+            type: 'object',
+          },
+          output: {
+            properties: {},
+            type: 'object',
+          },
+          type: 'subscription',
+        },
+        unimplementedUpload: {
+          errors: {
+            not: {},
+          },
+          init: {
+            properties: {},
+            type: 'object',
+          },
+          input: {
+            properties: {},
+            type: 'object',
+          },
+          output: {
+            properties: {},
+            type: 'object',
+          },
+          type: 'upload',
+        },
       },
     });
   });
@@ -411,7 +491,7 @@ describe('serialize service to jsonschema', () => {
           errors: {
             not: {},
           },
-          input: {
+          init: {
             properties: {
               file: {
                 type: 'string',
@@ -439,7 +519,7 @@ describe('serialize service to jsonschema', () => {
     expect(FallibleServiceSchema.serialize()).toStrictEqual({
       procedures: {
         divide: {
-          input: {
+          init: {
             properties: {
               a: { type: 'number' },
               b: { type: 'number' },
@@ -485,6 +565,10 @@ describe('serialize service to jsonschema', () => {
               },
             },
             required: ['code', 'message'],
+            type: 'object',
+          },
+          init: {
+            properties: {},
             type: 'object',
           },
           input: {
