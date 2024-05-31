@@ -12,7 +12,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -42,7 +42,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -82,7 +82,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -99,6 +99,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.stream({
+            init: Type.Object({}),
             input: Type.Object({}),
             output: Type.Object({}),
             handler: async (_) => {
@@ -134,7 +135,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({
               total: Type.Number(),
             }),
@@ -151,7 +152,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -197,7 +198,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -214,7 +215,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({
+            init: Type.Object({
               total: Type.Number(),
             }),
             output: Type.Object({}),
@@ -232,7 +233,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 fieldBreakages: {
                   properties: {
                     fieldBreakages: {
@@ -262,7 +263,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({
+            init: Type.Object({
               total: Type.String(),
             }),
             output: Type.Object({}),
@@ -281,7 +282,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({
+            init: Type.Object({
               total: Type.Number(),
             }),
             output: Type.Object({}),
@@ -299,7 +300,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 fieldBreakages: {
                   properties: {
                     reason: 'field-breakage',
@@ -331,7 +332,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Union([
+            init: Type.Union([
               Type.Object({ total: Type.Number() }),
               Type.Object({ wat: Type.Number() }),
             ]),
@@ -351,7 +352,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({
+            init: Type.Object({
               total: Type.Number(),
             }),
             output: Type.Object({}),
@@ -369,7 +370,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 newType: 'object',
                 oldType: 'anyOf',
                 reason: 'type-changed',
@@ -391,7 +392,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Record(Type.String(), Type.String()),
+            init: Type.Record(Type.String(), Type.String()),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -408,7 +409,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Record(Type.String(), Type.String()),
             handler: () => {
               throw new Error('unimplemented');
@@ -427,7 +428,7 @@ describe('schema backwards incompatible changes', () => {
           procedureBreakages: {
             add: {
               reason: 'modified',
-              input: {
+              init: {
                 reason: 'type-changed',
                 oldType: 'probably-record',
                 newType: 'probably-object',
@@ -452,7 +453,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Record(Type.Number(), Type.String()),
+            init: Type.Record(Type.Number(), Type.String()),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -469,7 +470,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Record(Type.String(), Type.String()),
+            init: Type.Record(Type.String(), Type.String()),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -486,7 +487,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 fieldBreakages: {
                   patternProperties: {
                     fieldBreakages: {
@@ -516,7 +517,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Record(Type.Number(), Type.Number()),
+            init: Type.Record(Type.Number(), Type.Number()),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -533,7 +534,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Record(Type.Number(), Type.String()),
+            init: Type.Record(Type.Number(), Type.String()),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -549,7 +550,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 fieldBreakages: {
                   patternProperties: {
                     fieldBreakages: {
@@ -581,7 +582,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Not(Type.Object({ total: Type.Number() })),
+            init: Type.Not(Type.Object({ total: Type.Number() })),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -598,7 +599,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Union([
+            init: Type.Union([
               Type.Object({ total: Type.Number() }),
               Type.Object({ wat: Type.Number() }),
             ]),
@@ -617,7 +618,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 newType: 'anyOf',
                 oldType: 'not',
                 reason: 'type-changed',
@@ -639,7 +640,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Not(Type.Number()),
+            init: Type.Not(Type.Number()),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -656,7 +657,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Not(Type.String()),
+            init: Type.Not(Type.String()),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -674,7 +675,7 @@ describe('schema backwards incompatible changes', () => {
           procedureBreakages: {
             add: {
               reason: 'modified',
-              input: {
+              init: {
                 reason: 'field-breakage',
                 fieldBreakages: {
                   not: {
@@ -699,7 +700,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Intersect([
+            init: Type.Intersect([
               Type.Object({ x: Type.Number() }),
               Type.Object({ y: Type.Number() }),
             ]),
@@ -722,7 +723,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Intersect([
+            init: Type.Intersect([
               Type.Object({ x: Type.Number() }),
               Type.Object({ z: Type.Number() }),
             ]),
@@ -746,7 +747,7 @@ describe('schema backwards incompatible changes', () => {
           procedureBreakages: {
             add: {
               reason: 'modified',
-              input: {
+              init: {
                 reason: 'field-breakage',
                 fieldBreakages: {
                   allOf: {
@@ -800,7 +801,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Union([
+            init: Type.Union([
               Type.Object({ x: Type.Number() }),
               Type.Object({ y: Type.Number() }),
               Type.Object({ z: Type.Number() }),
@@ -821,7 +822,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Union([
+            init: Type.Union([
               Type.Object({ x: Type.Number() }),
               Type.Object({ y: Type.Number() }),
             ]),
@@ -840,7 +841,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 fieldBreakages: {
                   anyOf: {
                     fieldBreakages: {
@@ -870,7 +871,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Union([
               Type.Object({ x: Type.Number() }),
               Type.Object({ y: Type.Number() }),
@@ -890,7 +891,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Union([
               Type.Object({ x: Type.Number() }),
               Type.Object({ y: Type.Number() }),
@@ -940,7 +941,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Literal('old'),
+            init: Type.Literal('old'),
             output: Type.Literal('old'),
             handler: () => {
               throw new Error('unimplemented');
@@ -957,7 +958,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Literal('new'),
+            init: Type.Literal('new'),
             output: Type.Literal('new'),
             handler: () => {
               throw new Error('unimplemented');
@@ -973,7 +974,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 newType: 'string-const-new',
                 oldType: 'string-const-old',
                 reason: 'type-changed',
@@ -1000,7 +1001,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -1017,7 +1018,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Literal('mystring'),
+            init: Type.Literal('mystring'),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -1033,7 +1034,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 newType: 'string-const-mystring',
                 oldType: 'string',
                 reason: 'type-changed',
@@ -1055,7 +1056,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Literal('mystring'),
             handler: () => {
               throw new Error('unimplemented');
@@ -1072,7 +1073,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1110,7 +1111,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { minItems: 1 }),
+            init: Type.Array(Type.String(), { minItems: 1 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1127,7 +1128,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { minItems: 2 }),
+            init: Type.Array(Type.String(), { minItems: 2 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1143,7 +1144,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 fieldBreakages: {
                   minItems: {
                     newType: '2',
@@ -1170,7 +1171,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { minItems: 2 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -1187,7 +1188,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { minItems: 1 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -1230,7 +1231,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { maxItems: 1 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -1247,7 +1248,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { maxItems: 2 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -1290,7 +1291,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { maxItems: 2 }),
+            init: Type.Array(Type.String(), { maxItems: 2 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1307,7 +1308,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { maxItems: 1 }),
+            init: Type.Array(Type.String(), { maxItems: 1 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1323,7 +1324,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 fieldBreakages: {
                   maxItems: {
                     newType: '1',
@@ -1350,7 +1351,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { minContains: 1 }),
+            init: Type.Array(Type.String(), { minContains: 1 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1367,7 +1368,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { minContains: 2 }),
+            init: Type.Array(Type.String(), { minContains: 2 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1383,7 +1384,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 fieldBreakages: {
                   minContains: {
                     newType: '2',
@@ -1410,7 +1411,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { minContains: 2 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -1427,7 +1428,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { minContains: 1 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -1470,7 +1471,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { maxContains: 1 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -1487,7 +1488,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { maxContains: 2 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -1530,7 +1531,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { maxContains: 2 }),
+            init: Type.Array(Type.String(), { maxContains: 2 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1547,7 +1548,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { maxContains: 1 }),
+            init: Type.Array(Type.String(), { maxContains: 1 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1563,7 +1564,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 fieldBreakages: {
                   maxContains: {
                     newType: '1',
@@ -1590,7 +1591,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { uniqueItems: false }),
+            init: Type.Array(Type.String(), { uniqueItems: false }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1607,7 +1608,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { uniqueItems: true }),
+            init: Type.Array(Type.String(), { uniqueItems: true }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1623,7 +1624,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 fieldBreakages: {
                   uniqueItems: {
                     newType: 'true',
@@ -1650,7 +1651,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String()),
+            init: Type.Array(Type.String()),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1667,7 +1668,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { contains: Type.Literal('wow') }),
+            init: Type.Array(Type.String(), { contains: Type.Literal('wow') }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1683,7 +1684,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 fieldBreakages: {
                   contains: {
                     newType: 'contains',
@@ -1710,7 +1711,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { contains: Type.String() }),
+            init: Type.Array(Type.String(), { contains: Type.String() }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1727,7 +1728,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { contains: Type.Object({}) }),
+            init: Type.Array(Type.String(), { contains: Type.Object({}) }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -1743,7 +1744,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 fieldBreakages: {
                   contains: {
                     newType: 'object',
@@ -1770,7 +1771,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({
+            init: Type.Object({
               total: Type.Optional(Type.Number()),
             }),
             output: Type.Object({}),
@@ -1789,7 +1790,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({
+            init: Type.Object({
               total: Type.Number(),
             }),
             output: Type.Object({}),
@@ -1807,7 +1808,7 @@ describe('schema backwards incompatible changes', () => {
         adder: {
           procedureBreakages: {
             add: {
-              input: {
+              init: {
                 fieldBreakages: {
                   properties: {
                     fieldBreakages: {
@@ -1837,7 +1838,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({
               total: Type.Number(),
             }),
@@ -1854,7 +1855,7 @@ describe('schema backwards incompatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({
               total: Type.Optional(Type.Number()),
             }),
@@ -1906,7 +1907,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -1937,7 +1938,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -1959,7 +1960,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({}),
             handler: async (_) => ({ ok: true, payload: { total: 0 } }),
           }),
@@ -1974,7 +1975,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({
+            init: Type.Object({
               total: Type.Optional(Type.Number()),
             }),
             output: Type.Object({}),
@@ -1998,7 +1999,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({
               total: Type.Optional(Type.Number()),
             }),
@@ -2015,7 +2016,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -2037,7 +2038,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.String({}),
             handler: () => {
               throw new Error('unimplemented');
@@ -2054,7 +2055,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Literal('mystring'),
             handler: () => {
               throw new Error('unimplemented');
@@ -2076,7 +2077,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { minItems: 1 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -2093,7 +2094,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { minItems: 2 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -2115,7 +2116,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { minItems: 2 }),
+            init: Type.Array(Type.String(), { minItems: 2 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -2132,7 +2133,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { minItems: 1 }),
+            init: Type.Array(Type.String(), { minItems: 1 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -2154,7 +2155,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { maxItems: 2 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -2171,7 +2172,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { maxItems: 1 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -2193,7 +2194,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { maxItems: 1 }),
+            init: Type.Array(Type.String(), { maxItems: 1 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -2210,7 +2211,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { maxItems: 2 }),
+            init: Type.Array(Type.String(), { maxItems: 2 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -2232,7 +2233,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { minContains: 1 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -2249,7 +2250,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { minContains: 2 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -2271,7 +2272,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { minContains: 2 }),
+            init: Type.Array(Type.String(), { minContains: 2 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -2288,7 +2289,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { minContains: 1 }),
+            init: Type.Array(Type.String(), { minContains: 1 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -2310,7 +2311,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { maxContains: 2 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -2327,7 +2328,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { maxContains: 1 }),
             handler: () => {
               throw new Error('unimplemented');
@@ -2349,7 +2350,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { maxContains: 1 }),
+            init: Type.Array(Type.String(), { maxContains: 1 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -2366,7 +2367,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { maxContains: 2 }),
+            init: Type.Array(Type.String(), { maxContains: 2 }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -2388,7 +2389,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { uniqueItems: true }),
+            init: Type.Array(Type.String(), { uniqueItems: true }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -2405,7 +2406,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Array(Type.String(), { uniqueItems: false }),
+            init: Type.Array(Type.String(), { uniqueItems: false }),
             output: Type.String(),
             handler: () => {
               throw new Error('unimplemented');
@@ -2427,7 +2428,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { uniqueItems: false }),
             handler: () => {
               throw new Error('unimplemented');
@@ -2444,7 +2445,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), { uniqueItems: true }),
             handler: () => {
               throw new Error('unimplemented');
@@ -2466,7 +2467,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String()),
             handler: () => {
               throw new Error('unimplemented');
@@ -2483,7 +2484,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.String(),
+            init: Type.String(),
             output: Type.Array(Type.String(), {
               contains: Type.Literal('wow'),
             }),
@@ -2507,7 +2508,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Union([
+            init: Type.Union([
               Type.Object({ x: Type.Number() }),
               Type.Object({ y: Type.Number() }),
             ]),
@@ -2527,7 +2528,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Union([
+            init: Type.Union([
               Type.Object({ x: Type.Number() }),
               Type.Object({ y: Type.Number() }),
               Type.Object({ z: Type.Number() }),
@@ -2553,7 +2554,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Union([
               Type.Object({ x: Type.Number() }),
               Type.Object({ y: Type.Number() }),
@@ -2574,7 +2575,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Union([
               Type.Object({ x: Type.Number() }),
               Type.Object({ y: Type.Number() }),
@@ -2599,7 +2600,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({
+            init: Type.Object({
               total: Type.Number(),
             }),
             output: Type.Object({}),
@@ -2618,7 +2619,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({
+            init: Type.Object({
               total: Type.Optional(Type.Number()),
             }),
             output: Type.Object({}),
@@ -2642,7 +2643,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({
               total: Type.Optional(Type.Number()),
             }),
@@ -2659,7 +2660,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({
               total: Type.Number(),
             }),
@@ -2693,7 +2694,7 @@ describe('unsupported schema', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: UnionOneOf(),
             handler: () => {
               throw new Error('unimplemented');
@@ -2714,7 +2715,7 @@ describe('unsupported schema', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object(
               {
                 hey: Type.Boolean(),
@@ -2742,7 +2743,7 @@ describe('unsupported schema', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object(
               {
                 hey: Type.Boolean(),
@@ -2770,7 +2771,7 @@ describe('unsupported schema', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object(
               {
                 hey: Type.Boolean(),
