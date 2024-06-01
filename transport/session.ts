@@ -8,7 +8,7 @@ import {
   TransportMessage,
 } from './message';
 import { Codec } from '../codec';
-import { MessageMetadata, log } from '../logging/log';
+import { Logger, MessageMetadata } from '../logging/log';
 import { Static } from '@sinclair/typebox';
 import {
   PropagationContext,
@@ -64,7 +64,7 @@ export abstract class Connection {
 
   /**
    * Handle adding a callback for when an error is received.
-   * This should only be used for logging errors, all cleanup
+   * This should only be used for this.logging errors, all cleanup
    * should be delegated to addCloseListener.
    *
    * The implementer should take care such that the implemented
@@ -168,6 +168,7 @@ export class Session<ConnType extends Connection> {
    * The interval for sending heartbeats.
    */
   private heartbeat: ReturnType<typeof setInterval>;
+  private log?: Logger;
 
   constructor(
     conn: ConnType | undefined,
@@ -190,6 +191,10 @@ export class Session<ConnType extends Connection> {
       options.heartbeatIntervalMs,
     );
     this.telemetry = createSessionTelemetryInfo(this, propagationCtx);
+  }
+
+  bindLogger(log: Logger) {
+    this.log = log;
   }
 
   get loggingMetadata(): MessageMetadata {
@@ -217,7 +222,7 @@ export class Session<ConnType extends Connection> {
    */
   send(msg: PartialTransportMessage): string {
     const fullMsg: TransportMessage = this.constructMsg(msg);
-    log?.debug(`sending msg`, {
+    this.log?.debug(`sending msg`, {
       ...this.loggingMetadata,
       transportMessage: fullMsg,
     });
@@ -225,7 +230,7 @@ export class Session<ConnType extends Connection> {
     if (this.connection) {
       const ok = this.connection.send(this.codec.toBuffer(fullMsg));
       if (ok) return fullMsg.id;
-      log?.info(
+      this.log?.info(
         `failed to send msg to ${fullMsg.to}, connection is probably dead`,
         {
           ...this.loggingMetadata,
@@ -233,8 +238,8 @@ export class Session<ConnType extends Connection> {
         },
       );
     } else {
-      log?.info(
-        `failed to send msg to ${fullMsg.to}, connection not ready yet`,
+      this.log?.debug(
+        `buffering msg to ${fullMsg.to}, connection not ready yet`,
         { ...this.loggingMetadata, transportMessage: fullMsg },
       );
     }
@@ -247,7 +252,7 @@ export class Session<ConnType extends Connection> {
     const missDuration = misses * this.options.heartbeatIntervalMs;
     if (misses > this.options.heartbeatsUntilDead) {
       if (this.connection) {
-        log?.info(
+        this.log?.info(
           `closing connection to ${this.to} due to inactivity (missed ${misses} heartbeats which is ${missDuration}ms)`,
           this.loggingMetadata,
         );
@@ -274,12 +279,12 @@ export class Session<ConnType extends Connection> {
   }
 
   sendBufferedMessages(conn: ConnType) {
-    log?.info(`resending ${this.sendBuffer.length} buffered messages`, {
+    this.log?.info(`resending ${this.sendBuffer.length} buffered messages`, {
       ...this.loggingMetadata,
       connId: conn.id,
     });
     for (const msg of this.sendBuffer) {
-      log?.debug(`resending msg`, {
+      this.log?.debug(`resending msg`, {
         ...this.loggingMetadata,
         transportMessage: msg,
         connId: conn.id,
@@ -294,7 +299,7 @@ export class Session<ConnType extends Connection> {
           message: errMsg,
         });
 
-        log?.error(errMsg, {
+        this.log?.error(errMsg, {
           ...this.loggingMetadata,
           transportMessage: msg,
           connId: conn.id,
@@ -308,7 +313,7 @@ export class Session<ConnType extends Connection> {
 
   updateBookkeeping(ack: number, seq: number) {
     if (seq + 1 < this.ack) {
-      log?.error(`received stale seq ${seq} + 1 < ${this.ack}`, {
+      this.log?.error(`received stale seq ${seq} + 1 < ${this.ack}`, {
         ...this.loggingMetadata,
         tags: ['invariant-violation'],
       });
@@ -321,7 +326,7 @@ export class Session<ConnType extends Connection> {
 
   closeStaleConnection(conn?: ConnType) {
     if (this.connection === undefined || this.connection === conn) return;
-    log?.info(
+    this.log?.info(
       `closing old inner connection from session to ${this.to}`,
       this.loggingMetadata,
     );
@@ -337,7 +342,7 @@ export class Session<ConnType extends Connection> {
   }
 
   beginGrace(cb: () => void) {
-    log?.info(
+    this.log?.info(
       `starting ${this.options.sessionDisconnectGraceMs}ms grace period until session to ${this.to} is closed`,
       this.loggingMetadata,
     );
