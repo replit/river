@@ -460,6 +460,16 @@ export abstract class Transport<ConnType extends Connection> {
     });
   }
 
+  sendRequestCloseControl(to: TransportClientId, streamId: string) {
+    return this.send(to, {
+      streamId: streamId,
+      controlFlags: ControlFlags.StreamCloseRequestBit,
+      payload: {
+        type: 'CLOSE' as const,
+      } satisfies Static<typeof ControlMessagePayloadSchema>,
+    });
+  }
+
   protected protocolError(type: ProtocolErrorType, message: string) {
     this.eventDispatcher.dispatchEvent('protocolError', { type, message });
   }

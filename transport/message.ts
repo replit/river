@@ -10,9 +10,10 @@ import { PropagationContext } from '../tracing';
  * it will not be using the stream anymore.
  */
 export const enum ControlFlags {
-  AckBit = 0b0001,
-  StreamOpenBit = 0b0010,
-  StreamClosedBit = 0b0100,
+  AckBit = 0b00001,
+  StreamOpenBit = 0b00010,
+  StreamClosedBit = 0b00100,
+  StreamCloseRequestBit = 0b10000,
 }
 
 /**
@@ -214,5 +215,18 @@ export function isStreamClose(controlFlag: number): boolean {
     /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
     (controlFlag & ControlFlags.StreamClosedBit) ===
     ControlFlags.StreamClosedBit
+  );
+}
+
+/**
+ * Checks if the given control flag (usually found in msg.controlFlag) is a stream close request message.
+ * @param controlFlag - The control flag to check.
+ * @returns True if the control flag contains the StreamCloseBit, false otherwise.
+ */
+export function isStreamCloseRequest(controlFlag: number): boolean {
+  return (
+    /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
+    (controlFlag & ControlFlags.StreamCloseRequestBit) ===
+    ControlFlags.StreamCloseRequestBit
   );
 }
