@@ -1,7 +1,2 @@
-export {
-  stringLogger,
-  coloredStringLogger,
-  jsonLogger,
-  bindLogger,
-} from './log';
+export { stringLogger, coloredStringLogger, jsonLogger } from './log';
 export type { Logger, LogFn, MessageMetadata } from './log';

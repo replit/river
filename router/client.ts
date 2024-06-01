@@ -258,7 +258,7 @@ function handleRpc(
 ) {
   const streamId = nanoid();
   const { span, ctx } = createProcTelemetryInfo(
-    transport.clientId,
+    transport,
     'rpc',
     serviceName,
     procedureName,
@@ -316,7 +316,7 @@ function handleStream(
 ) {
   const streamId = nanoid();
   const { span, ctx } = createProcTelemetryInfo(
-    transport.clientId,
+    transport,
     'stream',
     serviceName,
     procedureName,
@@ -414,7 +414,7 @@ function handleSubscribe(
 ) {
   const streamId = nanoid();
   const { span, ctx } = createProcTelemetryInfo(
-    transport.clientId,
+    transport,
     'subscription',
     serviceName,
     procedureName,
@@ -484,7 +484,7 @@ function handleUpload(
 ) {
   const streamId = nanoid();
   const { span, ctx } = createProcTelemetryInfo(
-    transport.clientId,
+    transport,
     'upload',
     serviceName,
     procedureName,
