@@ -1,6 +1,5 @@
 import { ValueError } from '@sinclair/typebox/value';
 import { OpaqueTransportMessage } from '../transport';
-import { SpanContext } from '@opentelemetry/api';
 
 const LoggingLevels = {
   debug: -1,
@@ -45,7 +44,10 @@ export type MessageMetadata = Partial<{
   transportMessage: Partial<OpaqueTransportMessage>;
   validationErrors: Array<ValueError>;
   tags: Array<Tags>;
-  telemetry: Pick<SpanContext, 'traceId' | 'spanId'>;
+  telemetry: {
+    traceId: string;
+    spanId: string;
+  };
 }>;
 
 class BaseLogger implements Logger {

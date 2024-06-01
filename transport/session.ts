@@ -35,6 +35,19 @@ export abstract class Connection {
     this.id = `conn-${nanoid(12)}`; // for debugging, no collision safety needed
   }
 
+  get loggingMetadata(): MessageMetadata {
+    const metadata: MessageMetadata = { connId: this.id };
+    const spanContext = this.telemetry?.span.spanContext();
+    if (spanContext) {
+      metadata.telemetry = {
+        traceId: spanContext.traceId,
+        spanId: spanContext.spanId,
+      };
+    }
+
+    return metadata;
+  }
+
   /**
    * Handle adding a callback for when a message is received.
    * @param msg The message that was received.
@@ -179,12 +192,18 @@ export class Session<ConnType extends Connection> {
     this.telemetry = createSessionTelemetryInfo(this, propagationCtx);
   }
 
-  get loggingMetadata(): Omit<MessageMetadata, 'parsedMsg'> {
+  get loggingMetadata(): MessageMetadata {
+    const spanContext = this.telemetry.span.spanContext();
+
     return {
       clientId: this.from,
       connectedTo: this.to,
       sessionId: this.id,
       connId: this.connection?.id,
+      telemetry: {
+        traceId: spanContext.traceId,
+        spanId: spanContext.spanId,
+      },
     };
   }
 

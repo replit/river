@@ -9,6 +9,7 @@ import {
 import { version as RIVER_VERSION } from '../package.json';
 import { ValidProcType } from '../router';
 import { Connection, OpaqueTransportMessage, Session } from '../transport';
+import { log } from '../logging/log';
 
 export interface PropagationContext {
   traceparent: string;
@@ -52,6 +53,7 @@ export function createSessionTelemetryInfo(
     ctx,
   );
 
+  trace.setSpan(ctx, span);
   return { span, ctx };
 }
 
@@ -76,6 +78,7 @@ export function createConnectionTelemetryInfo(
 }
 
 export function createProcTelemetryInfo(
+  clientId: string,
   kind: ValidProcType,
   serviceName: string,
   procedureName: string,
@@ -98,6 +101,19 @@ export function createProcTelemetryInfo(
     ctx,
   );
 
+  trace.setSpan(ctx, span);
+
+  log?.info(`invoked ${serviceName}.${procedureName}`, {
+    clientId,
+    transportMessage: {
+      procedureName,
+      serviceName,
+    },
+    telemetry: {
+      traceId: span.spanContext().traceId,
+      spanId: span.spanContext().spanId,
+    },
+  });
   return { span, ctx };
 }
 
