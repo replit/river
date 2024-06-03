@@ -24,6 +24,7 @@ import {
   Err,
   Result,
   RiverError,
+  RiverUncaughtSchema,
   UNEXPECTED_DISCONNECT,
 } from './result';
 import { EventMap } from '../transport/events';
@@ -365,11 +366,19 @@ function handleProc(
       }
     }
 
-    if (isStreamClose(msg.controlFlags)) {
+    if (Value.Check(RiverUncaughtSchema, msg.payload)) {
+      inputWriter.close();
       outputReader.triggerClose();
     }
 
-    if (isStreamCloseRequest(msg.controlFlags)) {
+    if (isStreamClose(msg.controlFlags) && !outputReader.isClosed()) {
+      outputReader.triggerClose();
+    }
+
+    if (
+      isStreamCloseRequest(msg.controlFlags) &&
+      !inputWriter.isCloseRequested()
+    ) {
       inputWriter.triggerCloseRequest();
     }
   }
@@ -392,8 +401,8 @@ function handleProc(
         }),
       );
     }
+
     inputWriter.close();
-    outputReader.triggerClose();
   }
 
   transport.addEventListener('message', onMessage);
