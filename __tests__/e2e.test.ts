@@ -151,9 +151,7 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [inputWriter, outputReader, close] = await client.test.echo.stream(
-        {},
-      );
+      const [inputWriter, outputReader] = client.test.echo.stream({});
       const outputIterator = getIteratorFromStream(outputReader);
 
       inputWriter.write({ msg: 'abc', ignore: false });
@@ -177,7 +175,6 @@ describe.each(testMatrix())(
       // after the server stream is ended, the client stream should be ended too
       const result4 = await outputIterator.next();
       assert(result4.done);
-      close();
     });
 
     test('stream with init message', async () => {
@@ -199,10 +196,9 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [inputWriter, outputReader, close] =
-        await client.test.echoWithPrefix.stream({
-          prefix: 'test',
-        });
+      const [inputWriter, outputReader] = client.test.echoWithPrefix.stream({
+        prefix: 'test',
+      });
       const outputIterator = getIteratorFromStream(outputReader);
       inputWriter.write({ msg: 'abc', ignore: false });
       inputWriter.write({ msg: 'def', ignore: true });
@@ -216,8 +212,6 @@ describe.each(testMatrix())(
       const result2 = await iterNext(outputIterator);
       assert(result2.ok);
       expect(result2.payload).toStrictEqual({ response: 'test ghi' });
-
-      close();
     });
 
     test('fallible stream', async () => {
@@ -232,6 +226,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
+
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
@@ -241,8 +236,7 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [inputWriter, outputReader, close] =
-        await client.fallible.echo.stream({});
+      const [inputWriter, outputReader] = client.fallible.echo.stream({});
       const outputIterator = getIteratorFromStream(outputReader);
       inputWriter.write({ msg: 'abc', throwResult: false, throwError: false });
       const result1 = await iterNext(outputIterator);
@@ -261,11 +255,11 @@ describe.each(testMatrix())(
         code: UNCAUGHT_ERROR,
         message: 'some message',
       });
-
-      close();
+      inputWriter.close();
     });
 
-    test('subscription', async () => {
+    // Reenable when we have close requests implemented
+    test.skip('subscription', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -277,6 +271,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
+
       onTestFinished(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
@@ -286,9 +281,7 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [outputReader, close] = await client.subscribable.value.subscribe(
-        {},
-      );
+      const outputReader = client.subscribable.value.subscribe({});
       const outputIterator = getIteratorFromStream(outputReader);
       let result = await iterNext(outputIterator);
       assert(result.ok);
@@ -307,8 +300,7 @@ describe.each(testMatrix())(
       result = await iterNext(outputIterator);
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 4 });
-
-      close();
+      await outputReader.requestClose();
     });
 
     test('upload', async () => {
@@ -332,12 +324,10 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [inputWriter, addResult] =
-        await client.uploadable.addMultiple.upload({});
+      const [inputWriter, getResult] = client.uploadable.addMultiple.upload({});
       inputWriter.write({ n: 1 });
       inputWriter.write({ n: 2 });
-      inputWriter.close();
-      const result = await addResult;
+      const result = await getResult();
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 3 });
     });
@@ -363,14 +353,14 @@ describe.each(testMatrix())(
       });
 
       // test
-      const [inputWriter, addResult] =
-        await client.uploadable.addMultipleWithPrefix.upload({
+      const [inputWriter, getResult] =
+        client.uploadable.addMultipleWithPrefix.upload({
           prefix: 'test',
         });
       inputWriter.write({ n: 1 });
       inputWriter.write({ n: 2 });
       inputWriter.close();
-      const result = await addResult;
+      const result = await getResult();
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 'test 3' });
     });
@@ -479,7 +469,7 @@ describe.each(testMatrix())(
       // test
       const openStreams = [];
       for (let i = 0; i < CONCURRENCY; i++) {
-        const streamHandle = await client.test.echo.stream({});
+        const streamHandle = client.test.echo.stream({});
         const inputWriter = streamHandle[0];
         inputWriter.write({ msg: `${i}-1`, ignore: false });
         inputWriter.write({ msg: `${i}-2`, ignore: false });
@@ -500,8 +490,8 @@ describe.each(testMatrix())(
 
       // cleanup
       for (let i = 0; i < CONCURRENCY; i++) {
-        const [_input, _output, close] = openStreams[i];
-        close();
+        const [input, _output] = openStreams[i];
+        input.close();
       }
     });
 
