@@ -4,15 +4,23 @@ import { PropagationContext } from '../tracing';
 
 /**
  * Control flags for transport messages.
- * An RPC message is coded with StreamOpenBit | StreamClosedBit.
- * Streams are expected to start with StreamOpenBit sent and the client SHOULD send an empty
- * message with StreamClosedBit to close the stream handler on the server, indicating that
- * it will not be using the stream anymore.
  */
 export const enum ControlFlags {
+  /**
+   * Used in heartbeat messages.
+   */
   AckBit = 0b00001,
+  /**
+   * Used in stream open requests.
+   */
   StreamOpenBit = 0b00010,
+  /**
+   * Used when writer closes the stream.
+   */
   StreamClosedBit = 0b00100,
+  /**
+   * Used when readers no longer wish to receive messages.
+   */
   StreamCloseRequestBit = 0b10000,
 }
 
