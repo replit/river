@@ -73,7 +73,7 @@ export function createConnectionTelemetryInfo(
     info.ctx,
   );
 
-  const ctx = trace.setSpan(context.active(), span);
+  const ctx = trace.setSpan(info.ctx, span);
 
   return { span, ctx };
 }
