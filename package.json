@@ -91,8 +91,7 @@
     "bench": "vitest bench"
   },
   "engines": {
-    "node": "^20.9.0",
-    "pnpm": ">=8.10.2"
+    "node": ">=16"
   },
   "keywords": [
     "rpc",
