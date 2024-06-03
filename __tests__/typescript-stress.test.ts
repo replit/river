@@ -268,12 +268,8 @@ describe('Output<> type', () => {
     }
 
     // Then
-    void client.test.stream
-      .stream({})
-      .then(([_in, outputReader, _close]) =>
-        iterNext(getIteratorFromStream(outputReader)),
-      )
-      .then(acceptOutput);
+    const [, outputReader] = client.test.stream.stream({});
+    void iterNext(getIteratorFromStream(outputReader)).then(acceptOutput);
     expect(client).toBeTruthy();
   });
 
@@ -286,12 +282,9 @@ describe('Output<> type', () => {
     }
 
     // Then
-    void client.test.subscription
-      .subscribe({ n: 1 })
-      .then(([outputReader, _close]) =>
-        iterNext(getIteratorFromStream(outputReader)),
-      )
-      .then(acceptOutput);
+    const outputReader = client.test.subscription.subscribe({ n: 1 });
+    void iterNext(getIteratorFromStream(outputReader)).then(acceptOutput);
+
     expect(client).toBeTruthy();
   });
 
@@ -302,10 +295,9 @@ describe('Output<> type', () => {
     }
 
     // Then
-    void client.test.upload
-      .upload({})
-      .then(([_input, result]) => result)
-      .then(acceptOutput);
+    const [, finalize] = client.test.upload.upload({});
+    void finalize().then(acceptOutput);
+
     expect(client).toBeTruthy();
   });
 });
