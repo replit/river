@@ -15,7 +15,6 @@ import {
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import net from 'node:net';
-
 import {
   OpaqueTransportMessage,
   PartialTransportMessage,
