@@ -1,12 +1,32 @@
 console.log('running first');
-import { trace, context, Span } from '@opentelemetry/api';
+import { trace, context, propagation, Span } from '@opentelemetry/api';
 
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, beforeAll } from 'vitest';
 import { createDummyTransportMessage, dummySession } from '../util/testHelpers';
+
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from '@opentelemetry/sdk-trace-base';
+import { W3CTraceContextPropagator } from '@opentelemetry/core';
+import { StackContextManager } from '@opentelemetry/sdk-trace-web';
 
 import tracer from './index';
 import * as tracing from './index';
 import { OpaqueTransportMessage } from '../transport';
+
+beforeAll(() => {
+  const provider = new BasicTracerProvider();
+  provider.addSpanProcessor(
+    new SimpleSpanProcessor(new InMemorySpanExporter()),
+  );
+  const contextManager = new StackContextManager();
+  contextManager.enable();
+  trace.setGlobalTracerProvider(provider);
+  context.setGlobalContextManager(contextManager);
+  propagation.setGlobalPropagator(new W3CTraceContextPropagator());
+});
 
 describe('Basic tracing tests', () => {
   test('createSessionTelemetryInfo', () => {
