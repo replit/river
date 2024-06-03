@@ -1,5 +1,5 @@
 import { ValueError } from '@sinclair/typebox/value';
-import { OpaqueTransportMessage } from '../transport';
+import { OpaqueTransportMessage } from '../transport/message';
 
 const LoggingLevels = {
   debug: -1,
@@ -7,7 +7,7 @@ const LoggingLevels = {
   warn: 1,
   error: 2,
 } as const;
-type LoggingLevel = keyof typeof LoggingLevels;
+export type LoggingLevel = keyof typeof LoggingLevels;
 
 export type LogFn = (
   msg: string,
@@ -44,9 +44,13 @@ export type MessageMetadata = Partial<{
   transportMessage: Partial<OpaqueTransportMessage>;
   validationErrors: Array<ValueError>;
   tags: Array<Tags>;
+  telemetry: {
+    traceId: string;
+    spanId: string;
+  };
 }>;
 
-class BaseLogger implements Logger {
+export class BaseLogger implements Logger {
   minLevel: LoggingLevel;
   private output: LogFn;
 
@@ -80,8 +84,9 @@ class BaseLogger implements Logger {
   }
 }
 
-export const stringLogger: LogFn = (msg, _ctx, level = 'info') => {
-  console.log(`[river:${level}] ${msg}`);
+export const stringLogger: LogFn = (msg, ctx, level = 'info') => {
+  const from = ctx?.clientId ? `${ctx.clientId} -- ` : '';
+  console.log(`[river:${level}] ${from}${msg}`);
 };
 
 const colorMap = {
@@ -91,45 +96,19 @@ const colorMap = {
   error: '\u001b[31m',
 };
 
-export const coloredStringLogger: LogFn = (msg, _ctx, level = 'info') => {
+export const coloredStringLogger: LogFn = (msg, ctx, level = 'info') => {
   const color = colorMap[level];
-  console.log(`[river:${color}${level}\u001b[0m] ${msg}`);
+  const from = ctx?.clientId ? `${ctx.clientId} -- ` : '';
+  console.log(`[river:${color}${level}\u001b[0m] ${from}${msg}`);
 };
 
 export const jsonLogger: LogFn = (msg, ctx, level) => {
   console.log(JSON.stringify({ msg, ctx, level }));
 };
 
-let _log: Logger | undefined = undefined;
-
-// log proxy to clean transport payloads
-export let log: Logger | undefined = undefined;
-const createLogProxy = (log: Logger) => ({
+export const createLogProxy = (log: Logger) => ({
   debug: cleanedLogFn(log.debug.bind(log)),
   info: cleanedLogFn(log.info.bind(log)),
   warn: cleanedLogFn(log.warn.bind(log)),
   error: cleanedLogFn(log.error.bind(log)),
 });
-
-export function bindLogger(
-  fn: LogFn | Logger | undefined,
-  level?: LoggingLevel,
-): void {
-  // clear logger
-  if (!fn) {
-    _log = undefined;
-    log = undefined;
-    return;
-  }
-
-  // construct logger from fn
-  if (typeof fn === 'function') {
-    _log = new BaseLogger(fn, level);
-    log = createLogProxy(_log);
-    return;
-  }
-
-  // just assign
-  _log = fn;
-  log = createLogProxy(_log);
-}

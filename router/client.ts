@@ -24,7 +24,6 @@ import { nanoid } from 'nanoid';
 import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
-import { log } from '../logging/log';
 import { createProcTelemetryInfo, getPropagationContext } from '../tracing';
 import { ClientHandshakeOptions } from './handshake';
 
@@ -221,14 +220,6 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
     }
 
     const [input] = opts.args;
-    log?.info(`invoked ${procType} ${serviceName}.${procName}`, {
-      clientId: transport.clientId,
-      transportMessage: {
-        procedureName: procName,
-        serviceName,
-      },
-    });
-
     if (options.connectOnInvoke && !transport.connections.has(serverId)) {
       void transport.connect(serverId);
     }
@@ -267,6 +258,7 @@ function handleRpc(
 ) {
   const streamId = nanoid();
   const { span, ctx } = createProcTelemetryInfo(
+    transport,
     'rpc',
     serviceName,
     procedureName,
@@ -324,6 +316,7 @@ function handleStream(
 ) {
   const streamId = nanoid();
   const { span, ctx } = createProcTelemetryInfo(
+    transport,
     'stream',
     serviceName,
     procedureName,
@@ -421,6 +414,7 @@ function handleSubscribe(
 ) {
   const streamId = nanoid();
   const { span, ctx } = createProcTelemetryInfo(
+    transport,
     'subscription',
     serviceName,
     procedureName,
@@ -490,6 +484,7 @@ function handleUpload(
 ) {
   const streamId = nanoid();
   const { span, ctx } = createProcTelemetryInfo(
+    transport,
     'upload',
     serviceName,
     procedureName,

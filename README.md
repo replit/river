@@ -168,12 +168,19 @@ async handler(ctx, ...args) {
 
 ### Logging
 
-To add logging,
+To add logging, you can bind a logging function to a transport.
 
 ```ts
-import { bindLogger, stringLogger } from '@replit/river/logging';
+import { coloredStringLogger } from '@replit/river/logging';
 
-bindLogger(stringLogger, 'info');
+const transport = new WebSocketClientTransport(
+  async () => new WebSocket('ws://localhost:3000'),
+  'my-client-id',
+);
+
+transport.bindLogger(console.log);
+// or
+transport.bindLogger(coloredStringLogger);
 ```
 
 You can define your own logging functions that satisfy the `LogFn` type.
