@@ -139,7 +139,7 @@ function catchProcError(err: unknown) {
 
 export const testingSessionOptions: SessionOptions = defaultTransportOptions;
 
-export function dummySession() {
+function dummySession() {
   return new Session<Connection>(
     undefined,
     'client',

@@ -40,7 +40,7 @@ export function createSessionTelemetryInfo(
   session: Session<Connection>,
   propagationCtx?: PropagationContext,
 ): TelemetryInfo {
-  const parentCtx = propagationCtx
+  const ctx = propagationCtx
     ? propagation.extract(context.active(), propagationCtx)
     : context.active();
 
@@ -54,18 +54,18 @@ export function createSessionTelemetryInfo(
         'river.session.from': session.from,
       },
     },
-    parentCtx,
+    ctx,
   );
 
-  const ctx = trace.setSpan(parentCtx, span);
-
+  trace.setSpan(ctx, span);
   return { span, ctx };
 }
 
 export function createConnectionTelemetryInfo(
   connection: Connection,
-  info: TelemetryInfo,
+  sessionSpan: Span,
 ): TelemetryInfo {
+  const ctx = trace.setSpan(context.active(), sessionSpan);
   const span = tracer.startSpan(
     `connection ${connection.id}`,
     {
@@ -73,12 +73,10 @@ export function createConnectionTelemetryInfo(
         component: 'river',
         'river.connection.id': connection.id,
       },
-      links: [{ context: info.span.spanContext() }],
+      links: [{ context: sessionSpan.spanContext() }],
     },
-    info.ctx,
+    ctx,
   );
-
-  const ctx = trace.setSpan(info.ctx, span);
 
   return { span, ctx };
 }
@@ -90,7 +88,7 @@ export function createProcTelemetryInfo(
   procedureName: string,
   streamId: string,
 ): TelemetryInfo {
-  const baseCtx = context.active();
+  const ctx = context.active();
   const span = tracer.startSpan(
     `procedure call ${serviceName}.${procedureName}`,
     {
@@ -104,10 +102,10 @@ export function createProcTelemetryInfo(
       },
       kind: SpanKind.CLIENT,
     },
-    baseCtx,
+    ctx,
   );
 
-  const ctx = trace.setSpan(baseCtx, span);
+  trace.setSpan(ctx, span);
 
   transport.log?.info(`invoked ${serviceName}.${procedureName}`, {
     clientId: transport.clientId,
