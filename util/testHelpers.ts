@@ -24,6 +24,7 @@ import {
 } from '@opentelemetry/sdk-trace-base';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { StackContextManager } from '@opentelemetry/sdk-trace-web';
+import { trace, context, propagation } from '@opentelemetry/api';
 
 import {
   OpaqueTransportMessage,
@@ -41,10 +42,9 @@ beforeAll(() => {
   );
   const contextManager = new StackContextManager();
   contextManager.enable();
-  provider.register({
-    propagator: new W3CTraceContextPropagator(),
-    contextManager: contextManager,
-  });
+  trace.setGlobalTracerProvider(provider);
+  context.setGlobalContextManager(contextManager);
+  propagation.setGlobalPropagator(new W3CTraceContextPropagator());
 });
 
 /**

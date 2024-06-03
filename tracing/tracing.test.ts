@@ -11,10 +11,8 @@ import { OpaqueTransportMessage } from '../transport';
 describe('Basic tracing tests', () => {
   test('createSessionTelemetryInfo', () => {
     const parentCtx = context.active();
-    console.log(parentCtx);
     const span = tracer.startSpan('empty span', {}, parentCtx);
     const ctx = trace.setSpan(parentCtx, span);
-    console.log(ctx);
 
     const propCtx = tracing.getPropagationContext(ctx);
 
@@ -39,12 +37,13 @@ describe('Basic tracing tests', () => {
 
   test('createHandlerSpan', () => {
     const parentCtx = context.active();
-    console.log(parentCtx);
     const span = tracer.startSpan('testing span', {}, parentCtx);
     const ctx = trace.setSpan(parentCtx, span);
 
     const msg = createDummyTransportMessage() as OpaqueTransportMessage;
     msg.tracing = tracing.getPropagationContext(ctx);
+
+    expect(msg.tracing?.traceparent).toBeTruthy();
 
     void tracing.createHandlerSpan('rpc', msg, async (span) => {
       expect(
