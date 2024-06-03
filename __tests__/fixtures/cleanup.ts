@@ -7,7 +7,6 @@ import {
   Transport,
 } from '../../transport';
 import { Server } from '../../router';
-import { log } from '../../logging/log';
 import { AnyServiceSchemaMap } from '../../router/services';
 import { testingSessionOptions } from '../../util/testHelpers';
 
@@ -117,7 +116,10 @@ export async function testFinishesCleanly({
   serverTransport: ServerTransport<Connection>;
   server: Server<AnyServiceSchemaMap>;
 }>) {
-  log?.info('*** end of test cleanup ***');
+  for (const t of [...(clientTransports ?? []), serverTransport]) {
+    t?.log?.info('*** end of test cleanup ***');
+  }
+
   vi.useFakeTimers({ shouldAdvanceTime: true });
 
   if (clientTransports) {

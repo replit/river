@@ -3,7 +3,6 @@ import {
   ProvidedClientTransportOptions,
 } from '../../transport';
 import { TransportClientId } from '../../message';
-import { log } from '../../../logging/log';
 import { WebSocketConnection } from './connection';
 import { WsLike } from './wslike';
 
@@ -35,7 +34,7 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
   }
 
   async createNewOutgoingConnection(to: string) {
-    log?.info(`establishing a new websocket to ${to}`, {
+    this.log?.info(`establishing a new websocket to ${to}`, {
       clientId: this.clientId,
       connectedTo: to,
     });
@@ -63,7 +62,7 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
     });
 
     const conn = new WebSocketConnection(ws);
-    log?.info(`raw websocket to ${to} ok, starting handshake`, {
+    this.log?.info(`raw websocket to ${to} ok, starting handshake`, {
       clientId: this.clientId,
       connectedTo: to,
     });

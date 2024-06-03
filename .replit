@@ -15,7 +15,7 @@ externalPort = 80
 [languages.eslint]
 pattern = "**{*.ts,*.js,*.tsx,*.jsx}"
 [languages.eslint.languageServer]
-start = "./node_modules/vscode-langservers-extracted/bin/vscode-eslint-language-server --stdio"
+start = "vscode-eslint-language-server --stdio"
 [languages.eslint.languageServer.configuration]
 nodePath = "node"        # this should resolve to nvm
 validate = "probe"

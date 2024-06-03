@@ -1,5 +1,4 @@
 import { Socket } from 'node:net';
-import { log } from '../../../logging/log';
 import { UdsConnection } from './connection';
 import {
   ClientTransport,
@@ -25,7 +24,7 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
       oldConnection.close();
     }
 
-    log?.info(`establishing a new uds to ${to}`, {
+    this.log?.info(`establishing a new uds to ${to}`, {
       clientId: this.clientId,
       connectedTo: to,
     });

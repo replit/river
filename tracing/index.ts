@@ -8,7 +8,12 @@ import {
 } from '@opentelemetry/api';
 import { version as RIVER_VERSION } from '../package.json';
 import { ValidProcType } from '../router';
-import { Connection, OpaqueTransportMessage, Session } from '../transport';
+import {
+  ClientTransport,
+  Connection,
+  OpaqueTransportMessage,
+  Session,
+} from '../transport';
 
 export interface PropagationContext {
   traceparent: string;
@@ -79,12 +84,13 @@ export function createConnectionTelemetryInfo(
 }
 
 export function createProcTelemetryInfo(
+  transport: ClientTransport<Connection>,
   kind: ValidProcType,
   serviceName: string,
   procedureName: string,
   streamId: string,
 ): TelemetryInfo {
-  const ctx = context.active();
+  const baseCtx = context.active();
   const span = tracer.startSpan(
     `procedure call ${serviceName}.${procedureName}`,
     {
@@ -98,10 +104,22 @@ export function createProcTelemetryInfo(
       },
       kind: SpanKind.CLIENT,
     },
-    ctx,
+    baseCtx,
   );
-  trace.setSpan(ctx, span);
 
+  const ctx = trace.setSpan(baseCtx, span);
+
+  transport.log?.info(`invoked ${serviceName}.${procedureName}`, {
+    clientId: transport.clientId,
+    transportMessage: {
+      procedureName,
+      serviceName,
+    },
+    telemetry: {
+      traceId: span.spanContext().traceId,
+      spanId: span.spanContext().spanId,
+    },
+  });
   return { span, ctx };
 }
 
