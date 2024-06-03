@@ -101,10 +101,11 @@ export interface WriteStream<T> {
    */
   isCloseRequested(): boolean;
   /**
-   * `waitForCloseRequest` returns a promise that resolves when the reader requests
-   * to close the stream.
+   * `onCloseRequest` registers a callback that will be called when the stream's
+   * reader requests a close. Returns a function that can be used to unregister the
+   * listener.
    */
-  waitForCloseRequest(): Promise<undefined>;
+  onCloseRequest(cb: () => void): () => void;
   /**
    * `isClosed` returns true if the stream was closed by the writer.
    */
@@ -372,25 +373,18 @@ export class WriteStreamImpl<T> implements WriteStream<T> {
    */
   private closeRequested = false;
   /**
-   * A promise that resolves when we recive a close request.
+   * A list of listeners that will be called when the stream is closed.
    */
-  private closeRequestPromise: Promise<undefined>;
-  /**
-   * Resolves closePromise
-   */
-  private resolveRequestClosePromise: () => void = () => undefined;
+  private onCloseListeners: Set<() => void>;
 
   constructor(writeCb: (value: T) => void, closeCb: () => void) {
     this.writeCb = writeCb;
     this.closeCb = closeCb;
-
-    this.closeRequestPromise = new Promise((resolve) => {
-      this.resolveRequestClosePromise = () => resolve(undefined);
-    });
+    this.onCloseListeners = new Set();
   }
 
   public write(value: T): undefined {
-    if (this.closed) {
+    if (this.isClosed()) {
       throw new Error('Cannot write to closed stream');
     }
 
@@ -398,7 +392,7 @@ export class WriteStreamImpl<T> implements WriteStream<T> {
   }
 
   public close(): undefined {
-    if (this.closed) {
+    if (this.isClosed()) {
       return;
     }
 
@@ -410,8 +404,14 @@ export class WriteStreamImpl<T> implements WriteStream<T> {
     return this.closeRequested;
   }
 
-  public waitForCloseRequest(): Promise<undefined> {
-    return this.closeRequestPromise;
+  public onCloseRequest(cb: () => void): () => void {
+    if (this.isClosed()) {
+      throw new Error('Stream is already closed');
+    }
+
+    this.onCloseListeners.add(cb);
+
+    return () => this.onCloseListeners.delete(cb);
   }
 
   public isClosed(): boolean {
@@ -424,15 +424,16 @@ export class WriteStreamImpl<T> implements WriteStream<T> {
    * Triggers a close request.
    */
   public triggerCloseRequest(): undefined {
-    if (this.closeRequested) {
+    if (this.isCloseRequested()) {
       throw new Error('Cannot trigger close request multiple times');
     }
 
-    if (this.closed) {
+    if (this.isClosed()) {
       throw new Error('Cannot trigger close request on closed stream');
     }
 
     this.closeRequested = true;
-    this.resolveRequestClosePromise();
+    this.onCloseListeners.forEach((cb) => cb());
+    this.onCloseListeners.clear();
   }
 }
