@@ -235,7 +235,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
         if (needsClose && !this.disconnectedSessions.has(initMessage.from)) {
           // we ended, send a close bit back to the client
           // also, if the client has disconnected, we don't need to send a close
-          this.transport.sendCloseStream(session.to, initMessage.streamId);
+          this.transport.sendCloseControl(session.to, initMessage.streamId);
         }
         // call disposables returned from handlers
         disposables.forEach((d) => d());
