@@ -361,7 +361,9 @@ describe('WriteStream unit', () => {
 
     expect(stream.isCloseRequested()).toBeFalsy();
 
-    const closeRequestP = stream.waitForCloseRequest();
+    const closeRequestP = new Promise<void>((resolve) =>
+      stream.onCloseRequest(resolve),
+    );
     expect(
       await Promise.race([
         new Promise((resolve) => setTimeout(() => resolve('timeout'), 10)),
@@ -371,6 +373,11 @@ describe('WriteStream unit', () => {
 
     stream.triggerCloseRequest();
     expect(stream.isCloseRequested()).toBeTruthy();
-    await expect(closeRequestP).resolves.toEqual(undefined);
+    expect(
+      await Promise.race([
+        new Promise((resolve) => setTimeout(() => resolve('timeout'), 10)),
+        closeRequestP,
+      ]),
+    ).toEqual(undefined);
   });
 });
