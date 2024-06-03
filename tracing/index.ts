@@ -123,16 +123,16 @@ export function createProcTelemetryInfo(
   return { span, ctx };
 }
 
-export function createHandlerSpan(
+export function createHandlerSpan<Fn extends (span: Span) => unknown>(
   kind: ValidProcType,
   message: OpaqueTransportMessage,
-  fn: (span: Span) => Promise<unknown>,
-) {
+  fn: Fn,
+): ReturnType<Fn> {
   const ctx = message.tracing
     ? propagation.extract(context.active(), message.tracing)
     : context.active();
 
-  return tracer.startActiveSpan(
+  return tracer.startActiveSpan<Fn>(
     `procedure handler ${message.serviceName}.${message.procedureName}`,
     {
       attributes: {
