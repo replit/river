@@ -379,7 +379,7 @@ export abstract class Transport<ConnType extends Connection> {
     if (this.state !== 'open') return;
     const session = this.sessions.get(msg.from);
     if (!session) {
-      this.log?.error(`no existing session for ${msg.from}`, {
+      this.log?.error(`received message for unknown session from ${msg.from}`, {
         clientId: this.clientId,
         transportMessage: msg,
         ...conn.loggingMetadata,
@@ -770,7 +770,7 @@ export abstract class ClientTransport<
       const budgetConsumed = this.retryBudget.getBudgetConsumed(to);
       if (!this.retryBudget.hasBudget(to)) {
         const errMsg = `tried to connect to ${to} but retry budget exceeded (more than ${budgetConsumed} attempts in the last ${this.retryBudget.totalBudgetRestoreTime}ms)`;
-        this.log?.warn(errMsg, { clientId: this.clientId, connectedTo: to });
+        this.log?.error(errMsg, { clientId: this.clientId, connectedTo: to });
         this.protocolError(ProtocolError.RetriesExceeded, errMsg);
         return;
       }
