@@ -491,7 +491,7 @@ export abstract class Transport<ConnType extends Connection> {
   }
 
   // control helpers
-  sendCloseStream(to: TransportClientId, streamId: string) {
+  sendCloseControl(to: TransportClientId, streamId: string) {
     return this.send(to, {
       streamId: streamId,
       controlFlags: ControlFlags.StreamClosedBit,
