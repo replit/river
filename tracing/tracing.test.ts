@@ -1,6 +1,13 @@
 import { trace, context, propagation, Span } from '@opentelemetry/api';
-
-import { describe, test, expect } from 'vitest';
+import {
+  describe,
+  test,
+  expect,
+  vi,
+  afterAll,
+  onTestFinished,
+  assert,
+} from 'vitest';
 import { createDummyTransportMessage, dummySession } from '../util/testHelpers';
 
 import {
@@ -10,10 +17,14 @@ import {
 } from '@opentelemetry/sdk-trace-base';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { StackContextManager } from '@opentelemetry/sdk-trace-web';
-
-import tracer from './index';
-import * as tracing from './index';
+import tracer, {
+  createSessionTelemetryInfo,
+  getPropagationContext,
+  createHandlerSpan,
+} from './index';
 import { OpaqueTransportMessage } from '../transport';
+import { testMatrix } from '../__tests__/fixtures/matrix';
+import { testFinishesCleanly, waitFor } from '../__tests__/fixtures/cleanup';
 
 describe('Basic tracing tests', () => {
   const provider = new BasicTracerProvider();
@@ -31,20 +42,12 @@ describe('Basic tracing tests', () => {
     const span = tracer.startSpan('empty span', {}, parentCtx);
     const ctx = trace.setSpan(parentCtx, span);
 
-    const propCtx = tracing.getPropagationContext(ctx);
-
+    const propCtx = getPropagationContext(ctx);
     expect(propCtx?.traceparent).toBeTruthy();
+    const teleInfo = createSessionTelemetryInfo(dummySession(), propCtx);
 
-    const teleInfo = tracing.createSessionTelemetryInfo(
-      dummySession(),
-      propCtx,
-    );
-
-    expect(
-      // @ts-expect-error: hacking to get parentSpanId
-      propCtx?.traceparent.includes(teleInfo.span.parentSpanId as string),
-    ).toBeTruthy();
-
+    // @ts-expect-error: hacking to get parentSpanId
+    expect(propCtx?.traceparent).toContain(teleInfo.span.parentSpanId);
     expect(
       teleInfo.ctx.getValue(
         Symbol.for('OpenTelemetry Context Key SPAN'),
@@ -58,15 +61,58 @@ describe('Basic tracing tests', () => {
     const ctx = trace.setSpan(parentCtx, span);
 
     const msg = createDummyTransportMessage() as OpaqueTransportMessage;
-    msg.tracing = tracing.getPropagationContext(ctx);
-
+    msg.tracing = getPropagationContext(ctx);
     expect(msg.tracing?.traceparent).toBeTruthy();
 
-    void tracing.createHandlerSpan('rpc', msg, async (span) => {
-      expect(
-        // @ts-expect-error: hacking to get parentSpanId
-        msg.tracing?.traceparent.includes(span.parentSpanId as string),
-      ).toBeTruthy();
-    });
+    const spanMock = vi.fn<[Span]>();
+    void createHandlerSpan('rpc', msg, spanMock);
+    expect(spanMock).toHaveBeenCalledTimes(1);
+    const createdSpan = spanMock.mock.calls[0][0];
+    // @ts-expect-error: hacking to get parentSpanId
+    expect(createdSpan.parentSpanId).toBe(span.spanContext().spanId);
   });
 });
+
+describe.each(testMatrix())(
+  'Integrated tracing tests ($transport.name transport, $codec.name codec)',
+  async ({ transport, codec }) => {
+    const opts = { codec: codec.codec };
+    const { getClientTransport, getServerTransport, cleanup } =
+      await transport.setup({ client: opts, server: opts });
+    afterAll(cleanup);
+
+    test('Traces sessions and connections across network boundary', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+        });
+      });
+
+      await clientTransport.connect(serverTransport.clientId);
+      await waitFor(() => {
+        expect(clientTransport.sessions.size).toBe(1);
+        expect(serverTransport.sessions.size).toBe(1);
+      });
+
+      const clientSession = clientTransport.sessions.get(
+        serverTransport.clientId,
+      );
+      const serverSession = serverTransport.sessions.get(
+        clientTransport.clientId,
+      );
+
+      assert(clientSession);
+      assert(serverSession);
+
+      const clientSpan = clientSession.telemetry.span;
+      const serverSpan = serverSession.telemetry.span;
+
+      // ensure server span is a child of client span
+      // @ts-expect-error: hacking to get parentSpanId
+      expect(serverSpan.parentSpanId).toBe(clientSpan.spanContext().spanId);
+    });
+  },
+);
