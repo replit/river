@@ -13,13 +13,20 @@ import {
   ControlFlags,
   TransportClientId,
   isStreamClose,
-  PartialTransportMessage,
+  ControlMessageCloseSchema,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
-import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
+import {
+  AnyResultSchema,
+  Err,
+  Result,
+  RiverError,
+  UNEXPECTED_DISCONNECT,
+} from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
+import { Logger } from '../logging';
 import { createProcTelemetryInfo, getPropagationContext } from '../tracing';
 import { ClientHandshakeOptions } from './handshake';
 import { ClientTransport } from '../transport';
@@ -29,8 +36,62 @@ import {
   WriteStream,
   WriteStreamImpl,
 } from './streams';
+import { Value } from '@sinclair/typebox/value';
+import { PayloadType, ValidProcType } from './procedures';
 
-export type AsyncIter<T> = AsyncGenerator<T, T>;
+type RPCFn<
+  Router extends AnyService,
+  ProcName extends keyof Router['procedures'],
+> = (
+  init: Static<ProcInit<Router, ProcName>>,
+) => Promise<
+  Result<
+    Static<ProcOutput<Router, ProcName>>,
+    Static<ProcErrors<Router, ProcName>>
+  >
+>;
+
+type UploadFn<
+  Router extends AnyService,
+  ProcName extends keyof Router['procedures'],
+> = (
+  init: Static<ProcInit<Router, ProcName>>,
+) => [
+  WriteStream<Static<ProcInput<Router, ProcName>>>,
+  () => Promise<
+    Result<
+      Static<ProcOutput<Router, ProcName>>,
+      Static<ProcErrors<Router, ProcName>>
+    >
+  >,
+];
+
+type StreamFn<
+  Router extends AnyService,
+  ProcName extends keyof Router['procedures'],
+> = (
+  init: Static<ProcInit<Router, ProcName>>,
+) => [
+  WriteStream<Static<ProcInput<Router, ProcName>>>,
+  ReadStream<
+    Result<
+      Static<ProcOutput<Router, ProcName>>,
+      Static<ProcErrors<Router, ProcName>>
+    >
+  >,
+];
+
+type SubscriptionFn<
+  Router extends AnyService,
+  ProcName extends keyof Router['procedures'],
+> = (
+  init: Static<ProcInit<Router, ProcName>>,
+) => ReadStream<
+  Result<
+    Static<ProcOutput<Router, ProcName>>,
+    Static<ProcErrors<Router, ProcName>>
+  >
+>;
 
 /**
  * A helper type to transform an actual service type into a type
@@ -43,57 +104,35 @@ type ServiceClient<Router extends AnyService> = {
     ProcName
   > extends 'rpc'
     ? {
-        rpc: (
-          init: Static<ProcInit<Router, ProcName>>,
-        ) => Promise<
-          Result<
-            Static<ProcOutput<Router, ProcName>>,
-            Static<ProcErrors<Router, ProcName>>
-          >
-        >;
+        // If your go-to-definition ended up here, you probably meant to
+        // go to the procedure name. For example:
+        // riverClient.myService.someprocedure.rpc({})
+        //            click here ^^^^^^^^^^^^^
+        rpc: RPCFn<Router, ProcName>;
       }
     : ProcType<Router, ProcName> extends 'upload'
     ? {
-        upload: (init: Static<ProcInit<Router, ProcName>>) => Promise<
-          [
-            WriteStream<Static<ProcInput<Router, ProcName>>>, // input
-            Promise<
-              Result<
-                Static<ProcOutput<Router, ProcName>>,
-                Static<ProcErrors<Router, ProcName>>
-              >
-            >, // output
-          ]
-        >;
+        // If your go-to-definition ended up here, you probably meant to
+        // go to the procedure name. For example:
+        // riverClient.myService.someprocedure.upload({})
+        //            click here ^^^^^^^^^^^^^
+        upload: UploadFn<Router, ProcName>;
       }
     : ProcType<Router, ProcName> extends 'stream'
     ? {
-        stream: (init: Static<ProcInit<Router, ProcName>>) => Promise<
-          [
-            WriteStream<Static<ProcInput<Router, ProcName>>>, // input
-            ReadStream<
-              Result<
-                Static<ProcOutput<Router, ProcName>>,
-                Static<ProcErrors<Router, ProcName>>
-              >
-            >, // output
-            () => void, // close handle
-          ]
-        >;
+        // If your go-to-definition ended up here, you probably meant to
+        // go to the procedure name. For example:
+        // riverClient.myService.someprocedure.stream({})
+        //            click here ^^^^^^^^^^^^^
+        stream: StreamFn<Router, ProcName>;
       }
     : ProcType<Router, ProcName> extends 'subscription'
     ? {
-        subscribe: (init: Static<ProcInit<Router, ProcName>>) => Promise<
-          [
-            ReadStream<
-              Result<
-                Static<ProcOutput<Router, ProcName>>,
-                Static<ProcErrors<Router, ProcName>>
-              >
-            >, // output
-            () => void, // close handle
-          ]
-        >;
+        // If your go-to-definition ended up here, you probably meant to
+        // go to the procedure name. For example:
+        // riverClient.myService.subscribe.stream({})
+        //            click here ^^^^^^^^^^^^^
+        subscribe: SubscriptionFn<Router, ProcName>;
       }
     : never;
 };
@@ -184,351 +223,228 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
     void transport.connect(serverId);
   }
 
-  return _createRecursiveProxy(async (opts) => {
-    const [serviceName, procName, procType] = [...opts.path];
-    if (!(serviceName && procName && procType)) {
+  return _createRecursiveProxy((opts) => {
+    const [serviceName, procName, procMethod] = [...opts.path];
+    if (!(serviceName && procName && procMethod)) {
       throw new Error(
         'invalid river call, ensure the service and procedure you are calling exists',
       );
     }
 
-    const [input] = opts.args;
+    const [init] = opts.args;
+
     if (options.connectOnInvoke && !transport.connections.has(serverId)) {
       void transport.connect(serverId);
     }
 
-    if (procType === 'rpc') {
-      return handleRpc(transport, serverId, input, serviceName, procName);
-    } else if (procType === 'stream') {
-      return handleStream(transport, serverId, input, serviceName, procName);
-    } else if (procType === 'subscribe') {
-      return handleSubscribe(transport, serverId, input, serviceName, procName);
-    } else if (procType === 'upload') {
-      return handleUpload(transport, serverId, input, serviceName, procName);
-    } else {
-      throw new Error(`invalid river call, unknown procedure type ${procType}`);
+    if (
+      procMethod !== 'rpc' &&
+      procMethod !== 'subscribe' &&
+      procMethod !== 'stream' &&
+      procMethod !== 'upload'
+    ) {
+      throw new Error(
+        `invalid river call, unknown procedure type ${procMethod}`,
+      );
     }
+
+    return handleProc(
+      procMethod === 'subscribe' ? 'subscription' : procMethod,
+      transport,
+      serverId,
+      init,
+      serviceName,
+      procName,
+    );
   }, []) as Client<ServiceSchemaMap>;
 }
 
-function createSessionDisconnectHandler(
-  from: TransportClientId,
-  cb: () => void,
-) {
-  return (evt: EventMap['sessionStatus']) => {
-    if (evt.status === 'disconnect' && evt.session.to === from) {
-      cb();
-    }
-  };
-}
+type ClientProcReturn<ProcType extends ValidProcType> = ReturnType<
+  ProcType extends 'rpc'
+    ? RPCFn<AnyService, string>
+    : ProcType extends 'upload'
+    ? UploadFn<AnyService, string>
+    : ProcType extends 'stream'
+    ? StreamFn<AnyService, string>
+    : ProcType extends 'subscription'
+    ? SubscriptionFn<AnyService, string>
+    : never
+>;
 
-function handleRpc(
+function handleProc(
+  procType: ValidProcType,
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
-  input: unknown,
+  init: Static<PayloadType>,
   serviceName: string,
   procedureName: string,
-) {
+): ClientProcReturn<ValidProcType> {
+  const procClosesWithInit = procType === 'rpc' || procType === 'subscription';
+
   const streamId = nanoid();
   const { span, ctx } = createProcTelemetryInfo(
     transport,
-    'rpc',
+    procType,
     serviceName,
     procedureName,
     streamId,
   );
-  transport.send(serverId, {
-    streamId,
-    serviceName,
-    procedureName,
-    payload: input,
-    tracing: getPropagationContext(ctx),
-    controlFlags: ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit,
-  });
-
-  const responsePromise = new Promise((resolve) => {
-    // on disconnect, set a timer to return an error
-    // on (re)connect, clear the timer
-    const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
-      cleanup();
-      resolve(
-        Err({
-          code: UNEXPECTED_DISCONNECT,
-          message: `${serverId} unexpectedly disconnected`,
-        }),
-      );
-    });
-
-    function cleanup() {
-      transport.removeEventListener('message', onMessage);
-      transport.removeEventListener('sessionStatus', onSessionStatus);
-      span.end();
-    }
-
-    function onMessage(msg: OpaqueTransportMessage) {
-      if (msg.streamId !== streamId) return;
-      if (msg.to !== transport.clientId) return;
-
-      // cleanup and resolve as soon as we get a message
-      cleanup();
-      resolve(msg.payload);
-    }
-
-    transport.addEventListener('message', onMessage);
-    transport.addEventListener('sessionStatus', onSessionStatus);
-  });
-  return responsePromise;
-}
-
-function handleStream(
-  transport: ClientTransport<Connection>,
-  serverId: TransportClientId,
-  init: unknown,
-  serviceName: string,
-  procedureName: string,
-) {
-  const streamId = nanoid();
-  const { span, ctx } = createProcTelemetryInfo(
-    transport,
-    'stream',
-    serviceName,
-    procedureName,
-    streamId,
-  );
-  let healthyClose = true;
-  const inputWriter = new WriteStreamImpl(
-    (rawIn: unknown) => {
-      const m: PartialTransportMessage = {
+  let didSessionDisconnect = false;
+  const inputWriter = new WriteStreamImpl<Static<PayloadType>>(
+    (rawIn) => {
+      transport.send(serverId, {
         streamId,
         payload: rawIn,
         controlFlags: 0,
-      };
-
-      transport.send(serverId, m);
+        tracing: getPropagationContext(ctx),
+      });
     },
     () => {
-      // after closing input stream, send a close message to the server
-      if (!healthyClose) return;
-      transport.sendCloseStream(serverId, streamId);
-    },
-  );
-  const readStreamRequestCloseNotImplemented = () => undefined;
-  const outputReader = new ReadStreamImpl(readStreamRequestCloseNotImplemented);
+      span.addEvent('inputWriter closed');
 
-  transport.send(serverId, {
-    streamId,
-    serviceName,
-    procedureName,
-    tracing: getPropagationContext(ctx),
-    payload: init,
-    controlFlags: ControlFlags.StreamOpenBit,
-  });
-
-  // transport -> output
-  function onMessage(msg: OpaqueTransportMessage) {
-    if (msg.streamId !== streamId) return;
-    if (msg.to !== transport.clientId) return;
-
-    if (isStreamClose(msg.controlFlags)) {
-      cleanup();
-    } else {
-      outputReader.pushValue(msg.payload);
-    }
-  }
-
-  function cleanup() {
-    if (!inputWriter.isClosed()) {
-      // TODO we should not need this check once we have good
-      // close semantics
-      inputWriter.close();
-    }
-
-    if (!outputReader.isClosed()) {
-      // TODO we should not need this check once we have good
-      // close semantics
-      outputReader.triggerClose();
-    }
-
-    transport.removeEventListener('message', onMessage);
-    transport.removeEventListener('sessionStatus', onSessionStatus);
-    span.end();
-  }
-
-  // close stream after disconnect + grace period elapses
-  const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
-    outputReader.pushValue(
-      Err({
-        code: UNEXPECTED_DISCONNECT,
-        message: `${serverId} unexpectedly disconnected`,
-      }),
-    );
-    healthyClose = false;
-    cleanup();
-  });
-
-  transport.addEventListener('message', onMessage);
-  transport.addEventListener('sessionStatus', onSessionStatus);
-  return [inputWriter, outputReader, cleanup];
-}
-
-function handleSubscribe(
-  transport: ClientTransport<Connection>,
-  serverId: TransportClientId,
-  input: unknown,
-  serviceName: string,
-  procedureName: string,
-) {
-  const streamId = nanoid();
-  const { span, ctx } = createProcTelemetryInfo(
-    transport,
-    'subscription',
-    serviceName,
-    procedureName,
-    streamId,
-  );
-
-  transport.send(serverId, {
-    streamId,
-    serviceName,
-    procedureName,
-    payload: input,
-    tracing: getPropagationContext(ctx),
-    controlFlags: ControlFlags.StreamOpenBit,
-  });
-  let healthyClose = true;
-
-  // transport -> output
-  const readStreamRequestCloseNotImplemented = () => undefined;
-  const outputReader = new ReadStreamImpl(readStreamRequestCloseNotImplemented);
-  function onMessage(msg: OpaqueTransportMessage) {
-    if (msg.streamId !== streamId) return;
-    if (msg.to !== transport.clientId) return;
-
-    if (isStreamClose(msg.controlFlags)) {
-      cleanup();
-    } else {
-      outputReader.pushValue(msg.payload);
-    }
-  }
-
-  function cleanup() {
-    if (!outputReader.isClosed()) {
-      // TODO we should not need this check once we have good
-      // close semantics
-      outputReader.triggerClose();
-    }
-
-    transport.removeEventListener('message', onMessage);
-    transport.removeEventListener('sessionStatus', onSessionStatus);
-    span.end();
-  }
-
-  const closeHandler = () => {
-    cleanup();
-    if (!healthyClose) return;
-    transport.sendCloseStream(serverId, streamId);
-  };
-
-  // close stream after disconnect + grace period elapses
-  const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
-    outputReader.pushValue(
-      Err({
-        code: UNEXPECTED_DISCONNECT,
-        message: `${serverId} unexpectedly disconnected`,
-      }),
-    );
-    healthyClose = false;
-    cleanup();
-  });
-
-  transport.addEventListener('message', onMessage);
-  transport.addEventListener('sessionStatus', onSessionStatus);
-
-  return [outputReader, closeHandler];
-}
-
-function handleUpload(
-  transport: ClientTransport<Connection>,
-  serverId: TransportClientId,
-  init: unknown,
-  serviceName: string,
-  procedureName: string,
-) {
-  const streamId = nanoid();
-  const { span, ctx } = createProcTelemetryInfo(
-    transport,
-    'upload',
-    serviceName,
-    procedureName,
-    streamId,
-  );
-
-  let healthyClose = true;
-
-  const inputWriter = new WriteStreamImpl(
-    (rawIn: unknown) => {
-      const m: PartialTransportMessage = {
-        streamId,
-        payload: rawIn,
-        controlFlags: 0,
-      };
-
-      transport.send(serverId, m);
-    },
-    () => {
-      // after closing input stream, send a close message to the server
-      if (!healthyClose) return;
-      transport.sendCloseStream(serverId, streamId);
-    },
-  );
-
-  transport.send(serverId, {
-    streamId,
-    serviceName,
-    procedureName,
-    tracing: getPropagationContext(ctx),
-    payload: init,
-    controlFlags: ControlFlags.StreamOpenBit,
-  });
-
-  const responsePromise = new Promise((resolve) => {
-    // on disconnect, set a timer to return an error
-    // on (re)connect, clear the timer
-    const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
-      healthyClose = false;
-      cleanup();
-      resolve(
-        Err({
-          code: UNEXPECTED_DISCONNECT,
-          message: `${serverId} unexpectedly disconnected`,
-        }),
-      );
-    });
-
-    function cleanup() {
-      if (!inputWriter.isClosed()) {
-        // TODO we should not need this check once we have good
-        // close semantics
-        inputWriter.close();
+      if (!procClosesWithInit && !didSessionDisconnect) {
+        //
+        // If the session ended, we don't need to be sending any more messages.
+        transport.sendCloseControl(serverId, streamId);
       }
 
-      transport.removeEventListener('message', onMessage);
-      transport.removeEventListener('sessionStatus', onSessionStatus);
-      span.end();
-    }
+      maybeCleanup();
+    },
+  );
 
-    function onMessage(msg: OpaqueTransportMessage) {
-      if (msg.streamId !== streamId) return;
-      if (msg.to !== transport.clientId) return;
-
-      // cleanup and resolve as soon as we get a message
-      cleanup();
-      resolve(msg.payload);
-    }
-
-    transport.addEventListener('message', onMessage);
-    transport.addEventListener('sessionStatus', onSessionStatus);
+  const readStreamRequestCloseNotImplemented = () => undefined;
+  const outputReader = new ReadStreamImpl<
+    Result<Static<PayloadType>, Static<RiverError>>
+  >(readStreamRequestCloseNotImplemented);
+  const removeOnCloseListener = outputReader.onClose(() => {
+    span.addEvent('outputReader closed');
+    maybeCleanup();
   });
 
-  return [inputWriter, responsePromise];
+  function maybeCleanup() {
+    if (!inputWriter.isClosed() || !outputReader.isClosed()) {
+      return;
+    }
+
+    transport.removeEventListener('message', onMessage);
+    transport.removeEventListener('sessionStatus', onSessionStatus);
+    removeOnCloseListener();
+    span.end();
+  }
+
+  function onMessage(msg: OpaqueTransportMessage) {
+    if (msg.streamId !== streamId) return;
+    if (msg.to !== transport.clientId) return;
+
+    if (outputReader.isClosed()) {
+      transport.log?.error('Received message after stream is closed', {
+        clientId: transport.clientId,
+        transportMessage: msg,
+      });
+
+      return;
+    }
+
+    if (!Value.Check(ControlMessageCloseSchema, msg.payload)) {
+      if (Value.Check(AnyResultSchema, msg.payload)) {
+        outputReader.pushValue(msg.payload);
+      } else {
+        transport.log?.error(
+          'Got non-control payload, but was not a valid result',
+          {
+            clientId: transport.clientId,
+            transportMessage: msg,
+            validationErrors: [...Value.Errors(AnyResultSchema, msg.payload)],
+          },
+        );
+      }
+    }
+    if (isStreamClose(msg.controlFlags)) {
+      outputReader.triggerClose();
+    }
+  }
+
+  function onSessionStatus(evt: EventMap['sessionStatus']) {
+    if (evt.status !== 'disconnect') {
+      return;
+    }
+
+    if (evt.session.to !== serverId) {
+      return;
+    }
+
+    didSessionDisconnect = true;
+    if (!outputReader.isClosed()) {
+      outputReader.pushValue(
+        Err({
+          code: UNEXPECTED_DISCONNECT,
+          message: `${serverId} unexpectedly disconnected`,
+        }),
+      );
+    }
+    inputWriter.close();
+    outputReader.triggerClose();
+  }
+
+  transport.addEventListener('message', onMessage);
+  transport.addEventListener('sessionStatus', onSessionStatus);
+
+  transport.send(serverId, {
+    streamId,
+    serviceName,
+    procedureName,
+    tracing: getPropagationContext(ctx),
+    payload: init,
+    controlFlags: procClosesWithInit
+      ? ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit
+      : ControlFlags.StreamOpenBit,
+  });
+
+  if (procClosesWithInit) {
+    inputWriter.close();
+  }
+
+  if (procType === 'subscription') {
+    return outputReader;
+  }
+
+  if (procType === 'rpc') {
+    return getSingleMessage(outputReader, transport.log);
+  }
+
+  if (procType === 'upload') {
+    let didFinalize = false;
+    return [
+      inputWriter,
+      async () => {
+        if (didFinalize) {
+          throw new Error('upload stream already finalized');
+        }
+
+        didFinalize = true;
+
+        if (!inputWriter.isClosed()) {
+          inputWriter.close();
+        }
+
+        return getSingleMessage(outputReader, transport.log);
+      },
+    ];
+  }
+
+  // good ol' `stream` procType
+  return [inputWriter, outputReader];
+}
+
+async function getSingleMessage(
+  outputReader: ReadStream<Result<unknown, Static<RiverError>>>,
+  log?: Logger,
+): Promise<Result<unknown, Static<RiverError>>> {
+  const ret = await outputReader.asArray();
+
+  if (ret.length > 1) {
+    log?.error('Expected single message from server, got multiple');
+  }
+
+  return ret[0];
 }
