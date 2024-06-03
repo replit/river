@@ -92,7 +92,7 @@ describe.each(testMatrix())(
       });
 
       // start procedure
-      const [inputWriter, outputReader] = await client.test.echo.stream({});
+      const [inputWriter, outputReader] = client.test.echo.stream({});
       const outputIterator = getIteratorFromStream(outputReader);
 
       inputWriter.write({ msg: 'abc', ignore: false });
@@ -144,6 +144,7 @@ describe.each(testMatrix())(
         client2Transport,
         serverTransport.clientId,
       );
+
       addPostTestCleanup(async () => {
         await cleanupTransports([
           client1Transport,
@@ -154,15 +155,13 @@ describe.each(testMatrix())(
 
       // start procedure
       // client1 and client2 both subscribe
-      const [outputReader1, close1] =
-        await client1.subscribable.value.subscribe({});
+      const outputReader1 = client1.subscribable.value.subscribe({});
       const outputIterator1 = getIteratorFromStream(outputReader1);
       let result = await iterNext(outputIterator1);
       assert(result.ok);
       expect(result.payload).toStrictEqual({ result: 0 });
 
-      const [outputReader2, close2] =
-        await client2.subscribable.value.subscribe({});
+      const outputReader2 = client2.subscribable.value.subscribe({});
       const outputIterator2 = getIteratorFromStream(outputReader2);
       result = await iterNext(outputIterator2);
       assert(result.ok);
@@ -215,8 +214,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
 
       // cleanup client1 (client2 is already disconnected)
-      close1();
-      close2();
+      await outputReader1.requestClose();
       await testFinishesCleanly({
         clientTransports: [client1Transport, client2Transport],
         serverTransport,
@@ -240,8 +238,9 @@ describe.each(testMatrix())(
       });
 
       // start procedure
-      const [inputWriter, addResult] =
-        await client.uploadable.addMultiple.upload({});
+      const [inputWriter, getAddResult] = client.uploadable.addMultiple.upload(
+        {},
+      );
       inputWriter.write({ n: 1 });
       inputWriter.write({ n: 2 });
       // end procedure
@@ -257,7 +256,7 @@ describe.each(testMatrix())(
       await advanceFakeTimersBySessionGrace();
 
       // we should get an error + expect the streams to be cleaned up
-      await expect(addResult).resolves.toMatchObject(
+      await expect(getAddResult()).resolves.toMatchObject(
         Err({
           code: UNEXPECTED_DISCONNECT,
         }),

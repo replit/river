@@ -59,6 +59,8 @@ const testServiceProcedures = TestServiceScaffold.procedures({
           returnStream.close();
         }
       }
+
+      returnStream.close();
     },
   }),
 
@@ -72,6 +74,8 @@ const testServiceProcedures = TestServiceScaffold.procedures({
           returnStream.write(Ok({ response: `${init.prefix} ${msg}` }));
         }
       }
+
+      returnStream.close();
     },
   }),
 
