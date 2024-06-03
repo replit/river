@@ -1,23 +1,18 @@
 {
   description = "It's like tRPC but... with JSON Schema Support, duplex streaming and support for service multiplexing. Transport agnostic!";
 
-  inputs.nixpkgs.url = "github:nixos/nixpkgs?rev=911ad1e67f458b6bcf0278fa85e33bb9924fed7e";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs";
 
   outputs = { self, nixpkgs }:
   let
     mkDevShell = system:
     let
       pkgs = nixpkgs.legacyPackages.${system};
-      customNodePackages = pkgs.callPackage ./nix/node-packages/default.nix {
-        nodejs = pkgs.nodejs_20;
-      };
     in
     pkgs.mkShell {
       nativeBuildInputs = with pkgs; [
+        nodejs
         nodePackages.typescript-language-server
-        nodejs_20
-        node2nix
-        customNodePackages."pnpm-8.10.2"
       ];
     };
   in
