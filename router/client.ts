@@ -14,6 +14,7 @@ import {
   TransportClientId,
   isStreamClose,
   ControlMessageCloseSchema,
+  isStreamCloseRequest,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
@@ -312,10 +313,11 @@ function handleProc(
     },
   );
 
-  const readStreamRequestCloseNotImplemented = () => undefined;
   const outputReader = new ReadStreamImpl<
     Result<Static<PayloadType>, Static<RiverError>>
-  >(readStreamRequestCloseNotImplemented);
+  >(() => {
+    transport.sendRequestCloseControl(serverId, streamId);
+  });
   const removeOnCloseListener = outputReader.onClose(() => {
     span.addEvent('outputReader closed');
     maybeCleanup();
@@ -359,8 +361,13 @@ function handleProc(
         );
       }
     }
+
     if (isStreamClose(msg.controlFlags)) {
       outputReader.triggerClose();
+    }
+
+    if (isStreamCloseRequest(msg.controlFlags)) {
+      inputWriter.triggerCloseRequest();
     }
   }
 
