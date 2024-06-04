@@ -7,7 +7,6 @@ import { Procedure } from '../../router';
 export const EchoRequest = Type.Object({
   msg: Type.String(),
   ignore: Type.Boolean(),
-  end: Type.Optional(Type.Boolean()),
 });
 export const EchoResponse = Type.Object({ response: Type.String() });
 
@@ -50,17 +49,15 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     input: EchoRequest,
     output: EchoResponse,
     async handler(_ctx, _init, msgStream, returnStream) {
-      for await (const { ignore, msg, end } of msgStream) {
+      returnStream.onCloseRequest(() => {
+        returnStream.close();
+      });
+
+      for await (const { ignore, msg } of msgStream) {
         if (!ignore) {
           returnStream.write(Ok({ response: msg }));
         }
-
-        if (end) {
-          returnStream.close();
-        }
       }
-
-      returnStream.close();
     },
   }),
 
@@ -69,13 +66,15 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     input: EchoRequest,
     output: EchoResponse,
     async handler(_ctx, init, msgStream, returnStream) {
+      returnStream.onCloseRequest(() => {
+        returnStream.close();
+      });
+
       for await (const { ignore, msg } of msgStream) {
         if (!ignore) {
           returnStream.write(Ok({ response: `${init.prefix} ${msg}` }));
         }
       }
-
-      returnStream.close();
     },
   }),
 
@@ -235,9 +234,18 @@ export const SubscribableServiceSchema = ServiceSchema.define(
       init: Type.Object({}),
       output: Type.Object({ result: Type.Number() }),
       async handler(ctx, _msg, returnStream) {
-        return ctx.state.count.observe((count) => {
+        const dispose1 = ctx.state.count.observe((count) => {
           returnStream.write(Ok({ result: count }));
         });
+
+        const dispose2 = returnStream.onCloseRequest(() => {
+          returnStream.close();
+        });
+
+        return () => {
+          dispose1();
+          dispose2();
+        };
       },
     }),
   },

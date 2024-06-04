@@ -100,7 +100,6 @@ describe('serialize server to jsonschema', () => {
                 properties: {
                   msg: { type: 'string' },
                   ignore: { type: 'boolean' },
-                  end: { type: 'boolean' },
                 },
                 required: ['msg', 'ignore'],
                 type: 'object',
@@ -132,9 +131,6 @@ describe('serialize server to jsonschema', () => {
               },
               input: {
                 properties: {
-                  end: {
-                    type: 'boolean',
-                  },
                   ignore: {
                     type: 'boolean',
                   },
@@ -333,7 +329,6 @@ describe('serialize service to jsonschema', () => {
             properties: {
               msg: { type: 'string' },
               ignore: { type: 'boolean' },
-              end: { type: 'boolean' },
             },
             required: ['msg', 'ignore'],
             type: 'object',
@@ -365,9 +360,6 @@ describe('serialize service to jsonschema', () => {
           },
           input: {
             properties: {
-              end: {
-                type: 'boolean',
-              },
               ignore: {
                 type: 'boolean',
               },
