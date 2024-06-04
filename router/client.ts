@@ -40,7 +40,7 @@ import {
 import { Value } from '@sinclair/typebox/value';
 import { PayloadType, ValidProcType } from './procedures';
 
-type RPCFn<
+type RpcFn<
   Router extends AnyService,
   ProcName extends keyof Router['procedures'],
 > = (
@@ -109,7 +109,7 @@ type ServiceClient<Router extends AnyService> = {
         // go to the procedure name. For example:
         // riverClient.myService.someprocedure.rpc({})
         //            click here ^^^^^^^^^^^^^
-        rpc: RPCFn<Router, ProcName>;
+        rpc: RpcFn<Router, ProcName>;
       }
     : ProcType<Router, ProcName> extends 'upload'
     ? {
@@ -269,7 +269,7 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
 
 type ClientProcReturn<ProcType extends ValidProcType> = ReturnType<
   ProcType extends 'rpc'
-    ? RPCFn<AnyService, string>
+    ? RpcFn<AnyService, string>
     : ProcType extends 'upload'
     ? UploadFn<AnyService, string>
     : ProcType extends 'stream'
