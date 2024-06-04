@@ -1,3 +1,21 @@
+import { Err, Result } from './result';
+
+interface BaseError {
+  code: string;
+  message: string;
+  extra?: Record<string, unknown>;
+}
+
+export const StreamDrainedError = {
+  code: 'STREAM_DRAINED',
+  message: 'Stream was drained',
+} as const;
+
+type ReadStreamResult<T, E extends BaseError> = Result<
+  T,
+  E | typeof StreamDrainedError
+>;
+
 /**
  * A `ReadStream` represents a stream of data.
  *
@@ -7,7 +25,7 @@
  * The stream can only be locked (aka consumed) once and will remain
  * locked, trying to lock the stream again will throw an TypeError.
  */
-export interface ReadStream<T> {
+export interface ReadStream<T, E extends BaseError> {
   /**
    * Stream implements AsyncIterator API and can be consumed via
    * for-await-of loops.
@@ -17,7 +35,7 @@ export interface ReadStream<T> {
     next(): Promise<
       | {
           done: false;
-          value: T;
+          value: ReadStreamResult<T, E>;
         }
       | {
           done: true;
@@ -30,12 +48,12 @@ export interface ReadStream<T> {
    * with an array of the stream's content when the stream is closed.
    *
    */
-  asArray(): Promise<Array<T>>;
+  asArray(): Promise<Array<ReadStreamResult<T, E>>>;
   /**
    * `drain` locks the stream and discards any existing or future data.
    *
    * If there is an existing Promise waiting for the next value,
-   * `drain` causes it to throw an {@link InterruptedStreamError}.
+   * `drain` causes it to resolve with a {@link StreamDrainedError} error.
    */
   drain(): undefined;
   /**
@@ -70,20 +88,6 @@ export interface ReadStream<T> {
 }
 
 /**
- * `InterruptedStreamError` is an error that is thrown when the consumer is interrupted.
- */
-export class InterruptedStreamError extends Error {
-  constructor() {
-    super('Consumer was interrupted');
-    this.name = 'InterruptedStreamError';
-
-    if ('captureStackTrace' in Error) {
-      Error.captureStackTrace(this, InterruptedStreamError);
-    }
-  }
-}
-
-/**
  * A `WriteStream` is a streams that can be written to.
  */
 export interface WriteStream<T> {
@@ -113,26 +117,14 @@ export interface WriteStream<T> {
 }
 
 /**
- * A `ReadWriteStream` combines a Readable and Writable stream.
- */
-export interface ReadWriteStream<TRead, TWrite> {
-  /**
-   * The reader side of the stream.
-   */
-  reader: ReadStream<TRead>;
-  /**
-   * The writer side of the stream.
-   */
-  writer: WriteStream<TWrite>;
-}
-
-/**
  * Internal implementation of a `ReadStream`.
  * This won't be exposed as an interface to river
  * consumers directly, it has internal river methods
  * to pushed data to the stream and close it.
  */
-export class ReadStreamImpl<T> implements ReadStream<T> {
+export class ReadStreamImpl<T, E extends BaseError>
+  implements ReadStream<T, E>
+{
   /**
    * Whether the stream is closed.
    */
@@ -158,16 +150,15 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
    */
   private drained = false;
   /**
-   * This flag helps us decide what to do in cases where
-   * we called drain, and stream has already closed. It
-   * helps us avoid throwing an error when we could
-   * simply signal that iteration is done/stream is closed.
+   * This flag allows us to avoid cases where drain was called,
+   * but the stream is fully consumed and closed. We don't need
+   * to signal that drain was closed.
    */
   private didDrainDisposeValues = false;
   /**
    * A list of values that have been pushed to the stream but not yet emitted to the user.
    */
-  private queue: Array<T> = [];
+  private queue: Array<ReadStreamResult<T, E>> = [];
   /**
    * Used by methods in the class to signal to the iterator that it
    * should check for the next value.
@@ -188,17 +179,22 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
       throw new TypeError('ReadStream is already locked');
     }
 
+    // first iteration with drain signals an error, the following one signals end of iteration.
+    let didSignalDrain = false;
     this.locked = true;
 
     return {
       next: async () => {
+        if (this.drained && didSignalDrain) {
+          return {
+            done: true,
+            value: undefined,
+          } as const;
+        }
+
         // Wait until we have something in the queue
         while (this.queue.length === 0) {
-          if (this.didDrainDisposeValues) {
-            throw new InterruptedStreamError();
-          }
-
-          if (this.isClosed()) {
+          if (this.isClosed() && !this.didDrainDisposeValues) {
             return {
               done: true,
               value: undefined,
@@ -206,13 +202,12 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
           }
 
           if (this.drained) {
-            // while we could just wait and let
-            // one of the above cases handle it
-            // after we know if there are more
-            // incoming values or the stream will
-            // simply close, let's just clean up
-            // as soon as possible and end the iteration
-            throw new InterruptedStreamError();
+            didSignalDrain = true;
+
+            return {
+              done: false,
+              value: Err(StreamDrainedError),
+            } as const;
           }
 
           if (!this.nextPromise) {
@@ -234,15 +229,14 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
         return { done: false, value } as const;
       },
       return: async () => {
-        // clean up when exiting the iterator early with `break` or `return`
         this.drain();
         return { done: true, value: undefined } as const;
       },
     };
   }
 
-  public async asArray(): Promise<Array<T>> {
-    const array: Array<T> = [];
+  public async asArray(): Promise<Array<ReadStreamResult<T, E>>> {
+    const array: Array<ReadStreamResult<T, E>> = [];
     for await (const value of this) {
       array.push(value);
     }
@@ -309,9 +303,8 @@ export class ReadStreamImpl<T> implements ReadStream<T> {
    *
    * Pushes a value to the stream.
    */
-  public pushValue(value: T): undefined {
+  public pushValue(value: ReadStreamResult<T, E>): undefined {
     if (this.drained) {
-      this.didDrainDisposeValues = true;
       return;
     }
 

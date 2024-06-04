@@ -56,31 +56,27 @@ export const AnyResultSchema = Type.Union([
   }),
 ]);
 
-export type Result<T, Err> =
-  | {
-      ok: true;
-      payload: T;
-    }
-  | {
-      ok: false;
-      payload: Err;
-    };
+interface OkResult<T> {
+  ok: true;
+  payload: T;
+}
+interface ErrResult<Err> {
+  ok: false;
+  payload: Err;
+}
+export type Result<T, Err> = OkResult<T> | ErrResult<Err>;
 
-export function Ok<const T extends Array<unknown>, const Err>(
-  p: T,
-): Result<T, Err>;
-export function Ok<const T extends ReadonlyArray<unknown>, const Err>(
-  p: T,
-): Result<T, Err>;
-export function Ok<const T, const Err>(payload: T): Result<T, Err>;
-export function Ok<const T, const Err>(payload: T): Result<T, Err> {
+export function Ok<const T extends Array<unknown>>(p: T): OkResult<T>;
+export function Ok<const T extends ReadonlyArray<unknown>>(p: T): OkResult<T>;
+export function Ok<const T>(payload: T): OkResult<T>;
+export function Ok<const T>(payload: T): OkResult<T> {
   return {
     ok: true,
     payload,
   };
 }
 
-export function Err<const T, const Err>(error: Err): Result<T, Err> {
+export function Err<const Err>(error: Err): ErrResult<Err> {
   return {
     ok: false,
     payload: error,
