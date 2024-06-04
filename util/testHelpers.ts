@@ -5,13 +5,11 @@ import {
   Err,
   PayloadType,
   Procedure,
-  Result,
-  RiverError,
-  RiverUncaughtSchema,
   ServiceContext,
   ServiceContextWithTransportInfo,
   UNCAUGHT_ERROR,
 } from '../router';
+import { RiverError, Result, RiverUncaughtSchema } from '../router/result';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import net from 'node:net';
