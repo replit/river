@@ -73,6 +73,8 @@ describe('server-side test', () => {
     assert(result2.ok);
     expect(result2.payload).toStrictEqual({ response: 'ghi' });
 
+    await outputReader.requestClose();
+
     expect(await outputIterator.next()).toEqual({
       done: true,
       value: undefined,
@@ -100,6 +102,7 @@ describe('server-side test', () => {
     assert(result2.ok);
     expect(result2.payload).toStrictEqual({ response: 'test ghi' });
 
+    await outputReader.requestClose();
     expect(await outputIterator.next()).toEqual({
       done: true,
       value: undefined,
