@@ -183,8 +183,8 @@ describe.each(testMatrix())(
 
       // start procedure
       const [inputWriter, outputReader] = client.test.echo.stream({});
-      inputWriter.write({ msg: '1', ignore: false, end: undefined });
-      inputWriter.write({ msg: '2', ignore: false, end: true });
+      inputWriter.write({ msg: '1', ignore: false });
+      inputWriter.write({ msg: '2', ignore: false });
 
       const outputIterator = getIteratorFromStream(outputReader);
       const result1 = await iterNext(outputIterator);
@@ -192,8 +192,9 @@ describe.each(testMatrix())(
       expect(result1.payload).toStrictEqual({ response: '1' });
 
       // ensure we only have one stream despite pushing multiple messages.
-      await waitFor(() => expect(server.streams.size).toEqual(1));
       inputWriter.close();
+      await waitFor(() => expect(server.streams.size).toEqual(1));
+      await outputReader.requestClose();
       // ensure we no longer have any streams since the input was closed.
       await waitFor(() => expect(server.streams.size).toEqual(0));
 
@@ -203,6 +204,7 @@ describe.each(testMatrix())(
 
       const result3 = await outputIterator.next();
       assert(result3.done);
+      // end procedure
 
       // number of message handlers shouldn't increase after stream ends
       expect(
@@ -231,25 +233,24 @@ describe.each(testMatrix())(
       const services = {
         subscribable: SubscribableServiceSchema,
       };
-      /*const server = */ createServer(serverTransport, services);
+      const server = createServer(serverTransport, services);
       const client = createClient<typeof services>(
         clientTransport,
         serverTransport.clientId,
       );
 
-      // TODO enable when we implement close requests
-      // onTestFinished(async () => {
-      //   await testFinishesCleanly({
-      //     clientTransports: [clientTransport],
-      //     serverTransport,
-      //     server,
-      //   });
-      // });
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
 
       const serverListeners =
         serverTransport.eventDispatcher.numberOfListeners('message');
-      /* const clientListeners = */
-      clientTransport.eventDispatcher.numberOfListeners('message');
+      const clientListeners =
+        clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
       const outputReader = client.subscribable.value.subscribe({});
@@ -262,14 +263,16 @@ describe.each(testMatrix())(
       result = await iterNext(outputIterator);
       assert(result.ok);
 
+      await outputReader.requestClose();
+      // end procedure
+
       // number of message handlers shouldn't increase after subscription ends
       expect(
         serverTransport.eventDispatcher.numberOfListeners('message'),
       ).toEqual(serverListeners);
-      // TODO enable when we implement close requests
-      // expect(
-      //   clientTransport.eventDispatcher.numberOfListeners('message'),
-      // ).toEqual(clientListeners);
+      expect(
+        clientTransport.eventDispatcher.numberOfListeners('message'),
+      ).toEqual(clientListeners);
 
       // check number of connections
       expect(serverTransport.connections.size).toEqual(1);
@@ -282,9 +285,8 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
 
-      // TODO enable when we implement close requests
       // no observers should remain subscribed to the observable
-      // expect(server.services.subscribable.state.count.listenerCount).toEqual(0);
+      expect(server.services.subscribable.state.count.listenerCount).toEqual(0);
     });
 
     test('upload', async () => {
