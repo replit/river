@@ -209,14 +209,22 @@ export function asClientRpc<
 
 function createPipe<T>(): { reader: ReadStream<T>; writer: WriteStream<T> } {
   const reader = new ReadStreamImpl<T>(() => {
-    writer.triggerCloseRequest();
+    // Make it async to simulate request going over the wire
+    // using promises so that we don't get affected by fake timers.
+    void Promise.resolve().then(() => {
+      writer.triggerCloseRequest();
+    });
   });
   const writer = new WriteStreamImpl<T>(
     (v) => {
       reader.pushValue(v);
     },
     () => {
-      reader.triggerClose();
+      // Make it async to simulate request going over the wire
+      // using promises so that we don't get affected by fake timers.
+      void Promise.resolve().then(() => {
+        reader.triggerClose();
+      });
     },
   );
 

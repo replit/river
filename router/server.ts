@@ -13,6 +13,7 @@ import {
   isStreamOpen,
   TransportClientId,
   ControlFlags,
+  isStreamCloseRequest,
 } from '../transport/message';
 import {
   ServiceContext,
@@ -243,10 +244,9 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       void this.cleanupStream(initMessage.streamId);
     };
 
-    const readStreamRequestCloseNotImplemented = () => void 0;
-    const inputReader: ProcStream['inputReader'] = new ReadStreamImpl(
-      readStreamRequestCloseNotImplemented,
-    );
+    const inputReader: ProcStream['inputReader'] = new ReadStreamImpl(() => {
+      this.transport.sendRequestCloseControl(session.to, initMessage.streamId);
+    });
     const removeOnCloseListener = inputReader.onClose(() => {
       maybeCleanup();
     });
@@ -482,14 +482,10 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
 
     if (isStreamClose(message.controlFlags)) {
       procStream.inputReader.triggerClose();
+    }
 
-      const streamsFromThisClient = this.clientStreams.get(message.from);
-      if (streamsFromThisClient) {
-        streamsFromThisClient.delete(message.streamId);
-        if (streamsFromThisClient.size === 0) {
-          this.clientStreams.delete(message.from);
-        }
-      }
+    if (isStreamCloseRequest(message.controlFlags)) {
+      procStream.outputWriter.triggerCloseRequest();
     }
   }
 

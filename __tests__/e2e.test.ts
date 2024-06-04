@@ -157,7 +157,7 @@ describe.each(testMatrix())(
       inputWriter.write({ msg: 'abc', ignore: false });
       inputWriter.write({ msg: 'def', ignore: true });
       inputWriter.write({ msg: 'ghi', ignore: false });
-      inputWriter.write({ msg: 'end', ignore: false, end: true });
+      inputWriter.write({ msg: 'end', ignore: false });
       inputWriter.close();
 
       const result1 = await iterNext(outputIterator);
@@ -171,6 +171,8 @@ describe.each(testMatrix())(
       const result3 = await iterNext(outputIterator);
       assert(result3.ok);
       expect(result3.payload).toStrictEqual({ response: 'end' });
+
+      await outputReader.requestClose();
 
       // after the server stream is ended, the client stream should be ended too
       const result4 = await outputIterator.next();
@@ -212,6 +214,7 @@ describe.each(testMatrix())(
       const result2 = await iterNext(outputIterator);
       assert(result2.ok);
       expect(result2.payload).toStrictEqual({ response: 'test ghi' });
+      await outputReader.requestClose();
     });
 
     test('fallible stream', async () => {
@@ -258,8 +261,7 @@ describe.each(testMatrix())(
       inputWriter.close();
     });
 
-    // Reenable when we have close requests implemented
-    test.skip('subscription', async () => {
+    test('subscription', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -490,8 +492,9 @@ describe.each(testMatrix())(
 
       // cleanup
       for (let i = 0; i < CONCURRENCY; i++) {
-        const [input, _output] = openStreams[i];
-        input.close();
+        const [inputWriter, outputReader] = openStreams[i];
+        inputWriter.close();
+        await outputReader.requestClose();
       }
     });
 
