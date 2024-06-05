@@ -1,45 +1,16 @@
-import {
-  TLiteral,
-  TNever,
-  TObject,
-  TSchema,
-  TString,
-  TUnion,
-  Type,
-} from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import { Client } from './client';
 import { ReadStream } from './streams';
 
-type TLiteralString = TLiteral<string>;
+export interface BaseError {
+  code: string;
+  message: string;
+  extra?: Record<string, unknown>;
+}
 
-export type RiverErrorSchema =
-  | TObject<{
-      code: TLiteralString | TUnion<Array<TLiteralString>>;
-      message: TLiteralString | TString;
-    }>
-  | TObject<{
-      code: TLiteralString | TUnion<Array<TLiteralString>>;
-      message: TLiteralString | TString;
-      extras: TSchema;
-    }>;
-
-export type RiverError =
-  | TUnion<Array<RiverErrorSchema>>
-  | RiverErrorSchema
-  | TNever;
-
-export const UNCAUGHT_ERROR = 'UNCAUGHT_ERROR';
-export const UNEXPECTED_DISCONNECT = 'UNEXPECTED_DISCONNECT';
-export const INVALID_REQUEST = 'INVALID_REQUEST';
-export const RiverUncaughtSchema = Type.Object({
-  code: Type.Union([
-    Type.Literal(UNCAUGHT_ERROR),
-    Type.Literal(UNEXPECTED_DISCONNECT),
-    Type.Literal(INVALID_REQUEST),
-  ]),
-  message: Type.String(),
-});
-
+/**
+ * AnyResultSchema is a schema to validate any result.
+ */
 export const AnyResultSchema = Type.Union([
   Type.Object({
     ok: Type.Literal(false),
@@ -56,15 +27,15 @@ export const AnyResultSchema = Type.Union([
   }),
 ]);
 
-interface OkResult<T> {
+export interface OkResult<T> {
   ok: true;
   payload: T;
 }
-interface ErrResult<Err> {
+export interface ErrResult<Err extends BaseError> {
   ok: false;
   payload: Err;
 }
-export type Result<T, Err> = OkResult<T> | ErrResult<Err>;
+export type Result<T, Err extends BaseError> = OkResult<T> | ErrResult<Err>;
 
 export function Ok<const T extends Array<unknown>>(p: T): OkResult<T>;
 export function Ok<const T extends ReadonlyArray<unknown>>(p: T): OkResult<T>;
@@ -76,7 +47,7 @@ export function Ok<const T>(payload: T): OkResult<T> {
   };
 }
 
-export function Err<const Err>(error: Err): ErrResult<Err> {
+export function Err<const Err extends BaseError>(error: Err): ErrResult<Err> {
   return {
     ok: false,
     payload: error,
@@ -89,6 +60,22 @@ export function Err<const Err>(error: Err): ErrResult<Err> {
 export type ResultUnwrapOk<R> = R extends Result<infer T, infer __E>
   ? T
   : never;
+
+/**
+ * Unwrap a {@link Result} type and return the payload if successful,
+ * otherwise throws an error.
+ * @param result - The result to unwrap.
+ * @throws Will throw an error if the result is not ok.
+ */
+export function unwrap<T, Err extends BaseError>(result: Result<T, Err>): T {
+  if (result.ok) {
+    return result.payload;
+  }
+
+  throw new Error(
+    `Cannot non-ok result, got: ${result.payload.code} - ${result.payload.message}`,
+  );
+}
 
 /**
  * Refine a {@link Result} type to its error payload.
@@ -125,7 +112,7 @@ export type Output<
       : Procedure extends object & { stream: infer StreamHandler extends Fn }
       ? ReturnType<StreamHandler> extends [
           infer __StreamInputMessage,
-          ReadStream<infer StreamOutputMessage>,
+          ReadStream<infer StreamOutputMessage, BaseError>,
         ]
         ? StreamOutputMessage
         : never
@@ -133,7 +120,8 @@ export type Output<
           subscribe: infer SubscriptionHandler extends Fn;
         }
       ? Awaited<ReturnType<SubscriptionHandler>> extends ReadStream<
-          infer SubscriptionOutputMessage
+          infer SubscriptionOutputMessage,
+          BaseError
         >
         ? SubscriptionOutputMessage
         : never

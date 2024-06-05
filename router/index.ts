@@ -17,13 +17,20 @@ export type {
   ValidProcType,
   PayloadType,
   ProcedureMap,
-  ProcedureResult,
   RpcProcedure as RPCProcedure,
   UploadProcedure,
   SubscriptionProcedure,
   StreamProcedure,
+  ProcedureErrorSchemaType,
 } from './procedures';
-export { Procedure } from './procedures';
+export {
+  Procedure,
+  UNCAUGHT_ERROR_CODE,
+  UNEXPECTED_DISCONNECT_CODE,
+  INVALID_REQUEST_CODE,
+  OutputReaderErrorSchema,
+  InputReaderErrorSchema,
+} from './procedures';
 export { createClient } from './client';
 export type { Client } from './client';
 export { createServer } from './server';
@@ -34,11 +41,11 @@ export type {
   ServiceContextWithState,
   ServiceContextWithTransportInfo,
 } from './context';
-export { Ok, Err, UNCAUGHT_ERROR, RiverUncaughtSchema } from './result';
+export { Ok, Err } from './result';
 export type {
-  RiverErrorSchema,
-  RiverError,
   Result,
+  ErrResult,
+  OkResult,
   ResultUnwrapOk,
   ResultUnwrapErr,
   Output,

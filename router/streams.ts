@@ -1,10 +1,4 @@
-import { Err, Result } from './result';
-
-interface BaseError {
-  code: string;
-  message: string;
-  extra?: Record<string, unknown>;
-}
+import { BaseError, Err, Result } from './result';
 
 export const StreamDrainedError = {
   code: 'STREAM_DRAINED',
@@ -303,7 +297,7 @@ export class ReadStreamImpl<T, E extends BaseError>
    *
    * Pushes a value to the stream.
    */
-  public pushValue(value: ReadStreamResult<T, E>): undefined {
+  public pushValue(value: Result<T, E>): undefined {
     if (this.drained) {
       return;
     }

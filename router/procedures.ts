@@ -1,6 +1,15 @@
-import { Static, TNever, Type, TSchema } from '@sinclair/typebox';
+import {
+  Static,
+  TNever,
+  TLiteral,
+  TObject,
+  TSchema,
+  TString,
+  TUnion,
+  Type,
+} from '@sinclair/typebox';
 import { ServiceContextWithTransportInfo } from './context';
-import { Result, RiverError, RiverUncaughtSchema } from './result';
+import { Result } from './result';
 import { ReadStream, WriteStream } from './streams';
 
 /**
@@ -32,15 +41,65 @@ export type ValidProcType =
  * Represents the payload type for {@link Procedure}s.
  */
 export type PayloadType = TSchema;
+type TLiteralString = TLiteral<string>;
+
+// TODO would be good to make this a real Schema
+export type ErrorBaseSchemaType =
+  | TObject<{
+      code: TLiteralString | TUnion<Array<TLiteralString>>;
+      message: TLiteralString | TString;
+    }>
+  | TObject<{
+      code: TLiteralString | TUnion<Array<TLiteralString>>;
+      message: TLiteralString | TString;
+      extras: TSchema;
+    }>;
 
 /**
- * Represents results from a {@link Procedure}. Might come from inside a stream or
- * from a single message.
+ * UNCAUGHT_ERROR_CODE is the code that is used when an error is thrown
+ * inside a procedure handler that's not required.
  */
-export type ProcedureResult<
-  Output extends PayloadType,
-  Err extends RiverError,
-> = Result<Static<Output>, Static<Err> | Static<typeof RiverUncaughtSchema>>;
+export const UNCAUGHT_ERROR_CODE = 'UNCAUGHT_ERROR';
+/**
+ * UNEXPECTED_DISCONNECT_CODE is the code used the stream's session
+ * disconnect unexpetedly.
+ */
+export const UNEXPECTED_DISCONNECT_CODE = 'UNEXPECTED_DISCONNECT';
+/**
+ * INVALID_REQUEST_CODE is the code used when a client's request is invalid.
+ */
+export const INVALID_REQUEST_CODE = 'INVALID_REQUEST';
+
+/**
+ * OutputReaderErrorSchema is the schema for all the errors that can be
+ * emitted in the Output ReadStream on the client.
+ */
+export const OutputReaderErrorSchema = Type.Object({
+  code: Type.Union([
+    Type.Literal(UNCAUGHT_ERROR_CODE),
+    Type.Literal(UNEXPECTED_DISCONNECT_CODE),
+    Type.Literal(INVALID_REQUEST_CODE),
+  ]),
+  message: Type.String(),
+});
+
+/**
+ * InputReaderErrorSchema is the schema for all the errors that can be
+ * emitted in the Input ReadStream on the server.
+ */
+export const InputReaderErrorSchema = Type.Object({
+  code: Type.Union([Type.Literal(UNEXPECTED_DISCONNECT_CODE)]),
+  message: Type.String(),
+});
+
+/**
+ * Represents an acceptable schema to pass to a procedure.
+ * Just a type of a schema, not an actual schema.
+ */
+export type ProcedureErrorSchemaType =
+  | TUnion<Array<ErrorBaseSchemaType>>
+  | ErrorBaseSchemaType
+  | TNever;
 
 /**
  * Procedure for a single message in both directions (1:1).
@@ -54,7 +113,7 @@ export interface RpcProcedure<
   State,
   Init extends PayloadType,
   Output extends PayloadType,
-  Err extends RiverError,
+  Err extends ProcedureErrorSchemaType,
 > {
   type: 'rpc';
   init: Init;
@@ -64,7 +123,7 @@ export interface RpcProcedure<
   handler(
     context: ServiceContextWithTransportInfo<State>,
     init: Static<Init>,
-  ): Promise<ProcedureResult<Output, Err>>;
+  ): Promise<Result<Static<Output>, Static<Err>>>;
 }
 
 /**
@@ -82,7 +141,7 @@ export interface UploadProcedure<
   Init extends PayloadType,
   Input extends PayloadType,
   Output extends PayloadType,
-  Err extends RiverError,
+  Err extends ProcedureErrorSchemaType,
 > {
   type: 'upload';
   init: Init;
@@ -93,8 +152,8 @@ export interface UploadProcedure<
   handler(
     context: ServiceContextWithTransportInfo<State>,
     init: Static<Init>,
-    input: ReadStream<Static<Input>>,
-  ): Promise<ProcedureResult<Output, Err>>;
+    input: ReadStream<Static<Input>, Static<typeof InputReaderErrorSchema>>,
+  ): Promise<Result<Static<Output>, Static<Err>>>;
 }
 
 /**
@@ -109,7 +168,7 @@ export interface SubscriptionProcedure<
   State,
   Init extends PayloadType,
   Output extends PayloadType,
-  Err extends RiverError,
+  Err extends ProcedureErrorSchemaType,
 > {
   type: 'subscription';
   init: Init;
@@ -119,7 +178,7 @@ export interface SubscriptionProcedure<
   handler(
     context: ServiceContextWithTransportInfo<State>,
     init: Static<Init>,
-    output: WriteStream<ProcedureResult<Output, Err>>,
+    output: WriteStream<Result<Static<Output>, Static<Err>>>,
   ): Promise<(() => void) | void>;
 }
 
@@ -138,7 +197,7 @@ export interface StreamProcedure<
   Init extends PayloadType,
   Input extends PayloadType,
   Output extends PayloadType,
-  Err extends RiverError,
+  Err extends ProcedureErrorSchemaType,
 > {
   type: 'stream';
   init: Init;
@@ -149,8 +208,8 @@ export interface StreamProcedure<
   handler(
     context: ServiceContextWithTransportInfo<State>,
     init: Static<Init>,
-    input: ReadStream<Static<Input>>,
-    output: WriteStream<ProcedureResult<Output, Err>>,
+    input: ReadStream<Static<Input>, Static<typeof InputReaderErrorSchema>>,
+    output: WriteStream<Result<Static<Output>, Static<Err>>>,
   ): Promise<(() => void) | void>;
 }
 
@@ -175,7 +234,7 @@ export type Procedure<
   Init extends PayloadType,
   Input extends PayloadType | null,
   Output extends PayloadType,
-  Err extends RiverError,
+  Err extends ProcedureErrorSchemaType,
 > = { type: Ty } & (Input extends PayloadType
   ? Ty extends 'upload'
     ? UploadProcedure<State, Init, Input, Output, Err>
@@ -200,7 +259,7 @@ export type AnyProcedure<State = object> = Procedure<
   PayloadType,
   PayloadType | null,
   PayloadType,
-  RiverError
+  ProcedureErrorSchemaType
 >;
 
 /**
@@ -232,7 +291,7 @@ function rpc<
   State,
   Init extends PayloadType,
   Output extends PayloadType,
-  Err extends RiverError,
+  Err extends ProcedureErrorSchemaType,
 >(def: {
   init: Init;
   output: Output;
@@ -251,13 +310,13 @@ function rpc({
 }: {
   init: PayloadType;
   output: PayloadType;
-  errors?: RiverError;
+  errors?: ProcedureErrorSchemaType;
   description?: string;
   handler: RpcProcedure<
     object,
     PayloadType,
     PayloadType,
-    RiverError
+    ProcedureErrorSchemaType
   >['handler'];
 }) {
   return {
@@ -294,7 +353,7 @@ function upload<
   Init extends PayloadType,
   Input extends PayloadType,
   Output extends PayloadType,
-  Err extends RiverError,
+  Err extends ProcedureErrorSchemaType,
 >(def: {
   init: Init;
   input: Input;
@@ -316,14 +375,14 @@ function upload({
   init: PayloadType;
   input: PayloadType;
   output: PayloadType;
-  errors?: RiverError;
+  errors?: ProcedureErrorSchemaType;
   description?: string;
   handler: UploadProcedure<
     object,
     PayloadType,
     PayloadType,
     PayloadType,
-    RiverError
+    ProcedureErrorSchemaType
   >['handler'];
 }) {
   return {
@@ -358,7 +417,7 @@ function subscription<
   State,
   Init extends PayloadType,
   Output extends PayloadType,
-  Err extends RiverError,
+  Err extends ProcedureErrorSchemaType,
 >(def: {
   init: Init;
   output: Output;
@@ -377,13 +436,13 @@ function subscription({
 }: {
   init: PayloadType;
   output: PayloadType;
-  errors?: RiverError;
+  errors?: ProcedureErrorSchemaType;
   description?: string;
   handler: SubscriptionProcedure<
     object,
     PayloadType,
     PayloadType,
-    RiverError
+    ProcedureErrorSchemaType
   >['handler'];
 }) {
   return {
@@ -420,7 +479,7 @@ function stream<
   Init extends PayloadType,
   Input extends PayloadType,
   Output extends PayloadType,
-  Err extends RiverError,
+  Err extends ProcedureErrorSchemaType,
 >(def: {
   init: Init;
   input: Input;
@@ -442,14 +501,14 @@ function stream({
   init: PayloadType;
   input: PayloadType;
   output: PayloadType;
-  errors?: RiverError;
+  errors?: ProcedureErrorSchemaType;
   description?: string;
   handler: StreamProcedure<
     object,
     PayloadType,
     PayloadType,
     PayloadType,
-    RiverError
+    ProcedureErrorSchemaType
   >['handler'];
 }) {
   return {
