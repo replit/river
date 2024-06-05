@@ -13,13 +13,16 @@ import {
   TestServiceSchema,
   UploadableServiceSchema,
 } from './fixtures/services';
-import { createClient, createServer } from '../router';
+import {
+  createClient,
+  createServer,
+  UNEXPECTED_DISCONNECT_CODE,
+} from '../router';
 import {
   advanceFakeTimersBySessionGrace,
   testFinishesCleanly,
   waitFor,
 } from './fixtures/cleanup';
-import { Err, UNEXPECTED_DISCONNECT } from '../router/result';
 import { testMatrix } from './fixtures/matrix';
 
 describe.each(testMatrix())(
@@ -63,11 +66,11 @@ describe.each(testMatrix())(
       await advanceFakeTimersBySessionGrace();
 
       // we should get an error + expect the streams to be cleaned up
-      await expect(procPromise).resolves.toMatchObject(
-        Err({
-          code: UNEXPECTED_DISCONNECT,
-        }),
-      );
+      await expect(procPromise).resolves.toMatchObject({
+        ok: false,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
+      });
 
       await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
@@ -112,11 +115,11 @@ describe.each(testMatrix())(
       await advanceFakeTimersBySessionGrace();
 
       // we should get an error + expect the streams to be cleaned up
-      await expect(nextResPromise).resolves.toMatchObject(
-        Err({
-          code: UNEXPECTED_DISCONNECT,
-        }),
-      );
+      await expect(nextResPromise).resolves.toMatchObject({
+        ok: false,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
+      });
 
       await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
@@ -192,12 +195,11 @@ describe.each(testMatrix())(
       // after we've disconnected, hit end of grace period
       await advanceFakeTimersBySessionGrace();
 
-      // we should get an error from the subscription on client2
-      await expect(nextResPromise).resolves.toMatchObject(
-        Err({
-          code: UNEXPECTED_DISCONNECT,
-        }),
-      );
+      await expect(nextResPromise).resolves.toMatchObject({
+        ok: false,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
+      });
 
       // client1 who is still connected can still add values and receive updates
       assert((await add2Promise).ok);
@@ -252,11 +254,11 @@ describe.each(testMatrix())(
       await advanceFakeTimersBySessionGrace();
 
       // we should get an error + expect the streams to be cleaned up
-      await expect(getAddResult()).resolves.toMatchObject(
-        Err({
-          code: UNEXPECTED_DISCONNECT,
-        }),
-      );
+      await expect(getAddResult()).resolves.toMatchObject({
+        ok: false,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
+      });
 
       await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
