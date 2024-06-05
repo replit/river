@@ -137,17 +137,16 @@ export interface ServiceConfiguration<State extends object> {
   initializeState: () => State;
 }
 
+export interface SerializedProcedureSchema {
+  input: PayloadType;
+  output: PayloadType;
+  errors?: RiverError;
+  type: 'rpc' | 'subscription' | 'upload' | 'stream';
+  init?: PayloadType;
+}
+
 export interface SerializedServiceSchema {
-  procedures: Record<
-    string,
-    {
-      input: PayloadType;
-      output: PayloadType;
-      errors?: RiverError;
-      type: 'rpc' | 'subscription' | 'upload' | 'stream';
-      init?: PayloadType;
-    }
-  >;
+  procedures: Record<string, SerializedProcedureSchema>;
 }
 
 export interface SerializedServerSchema {
