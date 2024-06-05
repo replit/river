@@ -15,7 +15,7 @@ import {
   SubscribableServiceSchema,
   UploadableServiceSchema,
 } from './fixtures/services';
-import { UNCAUGHT_ERROR } from '../router/result';
+import { UNCAUGHT_ERROR_CODE } from '../router';
 import { Observable } from './fixtures/observable';
 
 describe('server-side test', () => {
@@ -131,7 +131,7 @@ describe('server-side test', () => {
     const result3 = await iterNext(outputIterator);
     assert(!result3.ok);
     expect(result3.payload).toStrictEqual({
-      code: UNCAUGHT_ERROR,
+      code: UNCAUGHT_ERROR_CODE,
       message: 'some message',
     });
 
@@ -161,7 +161,7 @@ describe('server-side test', () => {
 
   test('uploads', async () => {
     const service = UploadableServiceSchema.instantiate({});
-    const [inputWriter, result] = asClientUpload(
+    const [inputWriter, getAddResult] = asClientUpload(
       {},
       service.procedures.addMultiple,
     );
@@ -169,12 +169,15 @@ describe('server-side test', () => {
     inputWriter.write({ n: 1 });
     inputWriter.write({ n: 2 });
     inputWriter.close();
-    expect(await result).toStrictEqual({ ok: true, payload: { result: 3 } });
+    expect(await getAddResult()).toStrictEqual({
+      ok: true,
+      payload: { result: 3 },
+    });
   });
 
   test('uploads with initialization', async () => {
     const service = UploadableServiceSchema.instantiate({});
-    const [inputWriter, result] = asClientUpload(
+    const [inputWriter, getAddResult] = asClientUpload(
       {},
       service.procedures.addMultipleWithPrefix,
       { prefix: 'test' },
@@ -183,7 +186,7 @@ describe('server-side test', () => {
     inputWriter.write({ n: 1 });
     inputWriter.write({ n: 2 });
     inputWriter.close();
-    expect(await result).toStrictEqual({
+    expect(await getAddResult()).toStrictEqual({
       ok: true,
       payload: { result: 'test 3' },
     });

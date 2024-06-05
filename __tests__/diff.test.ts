@@ -2684,7 +2684,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({
               total: Type.Optional(Type.Number()),
             }),
@@ -2710,7 +2710,7 @@ describe('schema backwards compatible changes', () => {
         },
         {
           add: Procedure.rpc({
-            input: Type.Object({}),
+            init: Type.Object({}),
             output: Type.Object({
               total: Type.Optional(Type.Number()),
             }),
