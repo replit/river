@@ -1,6 +1,6 @@
 import { Type } from '@sinclair/typebox';
 import { ServiceSchema } from '../../router/services';
-import { Err, Ok } from '../../router/result';
+import { Err, Ok, unwrap } from '../../router/result';
 import { Observable } from './observable';
 import { Procedure } from '../../router';
 
@@ -37,9 +37,9 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     init: Type.Object({}),
     input: Type.Object({ n: Type.Number() }),
     output: Type.Array(Type.Number()),
-    async handler(_, _init, msgStream, returnStream) {
-      for await (const msg of msgStream) {
-        returnStream.write(Ok([msg.n]));
+    async handler(_, _init, inputStream, returnStream) {
+      for await (const msg of inputStream) {
+        returnStream.write(Ok([unwrap(msg).n]));
       }
     },
   }),
@@ -48,12 +48,13 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     init: Type.Object({}),
     input: EchoRequest,
     output: EchoResponse,
-    async handler(_ctx, _init, msgStream, returnStream) {
+    async handler(_ctx, _init, inputStream, returnStream) {
       returnStream.onCloseRequest(() => {
         returnStream.close();
       });
 
-      for await (const { ignore, msg } of msgStream) {
+      for await (const input of inputStream) {
+        const { ignore, msg } = unwrap(input);
         if (!ignore) {
           returnStream.write(Ok({ response: msg }));
         }
@@ -65,12 +66,13 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     init: Type.Object({ prefix: Type.String() }),
     input: EchoRequest,
     output: EchoResponse,
-    async handler(_ctx, init, msgStream, returnStream) {
+    async handler(_ctx, init, inputStream, returnStream) {
       returnStream.onCloseRequest(() => {
         returnStream.close();
       });
 
-      for await (const { ignore, msg } of msgStream) {
+      for await (const input of inputStream) {
+        const { ignore, msg } = unwrap(input);
         if (!ignore) {
           returnStream.write(Ok({ response: `${init.prefix} ${msg}` }));
         }
@@ -199,19 +201,20 @@ export const FallibleServiceSchema = ServiceSchema.define({
       code: Type.Literal(STREAM_ERROR),
       message: Type.String(),
     }),
-    async handler(_ctx, _init, msgStream, returnStream) {
-      for await (const { msg, throwError, throwResult } of msgStream) {
+    async handler(_ctx, _init, inputStream, outputStream) {
+      for await (const input of inputStream) {
+        const { msg, throwError, throwResult } = unwrap(input);
         if (throwError) {
           throw new Error('some message');
         } else if (throwResult) {
-          returnStream.write(
+          outputStream.write(
             Err({
               code: STREAM_ERROR,
               message: 'field throwResult was set to true',
             }),
           );
         } else {
-          returnStream.write(Ok({ response: msg }));
+          outputStream.write(Ok({ response: msg }));
         }
       }
     },
@@ -256,10 +259,10 @@ export const UploadableServiceSchema = ServiceSchema.define({
     init: Type.Object({}),
     input: Type.Object({ n: Type.Number() }),
     output: Type.Object({ result: Type.Number() }),
-    async handler(_ctx, _init, msgStream) {
+    async handler(_ctx, _init, inputStream) {
       let result = 0;
-      for await (const { n } of msgStream) {
-        result += n;
+      for await (const input of inputStream) {
+        result += unwrap(input).n;
       }
 
       return Ok({ result: result });
@@ -270,10 +273,10 @@ export const UploadableServiceSchema = ServiceSchema.define({
     init: Type.Object({ prefix: Type.String() }),
     input: Type.Object({ n: Type.Number() }),
     output: Type.Object({ result: Type.String() }),
-    async handler(_ctx, init, msgStream) {
+    async handler(_ctx, init, inputStream) {
       let result = 0;
-      for await (const { n } of msgStream) {
-        result += n;
+      for await (const input of inputStream) {
+        result += unwrap(input).n;
       }
       return Ok({ result: `${init.prefix} ${result}` });
     },

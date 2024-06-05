@@ -19,13 +19,7 @@ import {
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
-import {
-  AnyResultSchema,
-  Err,
-  Result,
-  RiverError,
-  UNEXPECTED_DISCONNECT,
-} from './result';
+import { BaseError, Err, Result, AnyResultSchema } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { Logger } from '../logging';
@@ -38,32 +32,30 @@ import {
   WriteStreamImpl,
 } from './streams';
 import { Value } from '@sinclair/typebox/value';
-import { PayloadType, ValidProcType } from './procedures';
+import {
+  PayloadType,
+  UNEXPECTED_DISCONNECT_CODE,
+  ValidProcType,
+} from './procedures';
 
 type RpcFn<
   Router extends AnyService,
   ProcName extends keyof Router['procedures'],
 > = (
-  init: Static<ProcInit<Router, ProcName>>,
+  init: ProcInit<Router, ProcName>,
 ) => Promise<
-  Result<
-    Static<ProcOutput<Router, ProcName>>,
-    Static<ProcErrors<Router, ProcName>>
-  >
+  Result<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>
 >;
 
 type UploadFn<
   Router extends AnyService,
   ProcName extends keyof Router['procedures'],
 > = (
-  init: Static<ProcInit<Router, ProcName>>,
+  init: ProcInit<Router, ProcName>,
 ) => [
-  WriteStream<Static<ProcInput<Router, ProcName>>>,
+  WriteStream<ProcInput<Router, ProcName>>,
   () => Promise<
-    Result<
-      Static<ProcOutput<Router, ProcName>>,
-      Static<ProcErrors<Router, ProcName>>
-    >
+    Result<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>
   >,
 ];
 
@@ -71,28 +63,18 @@ type StreamFn<
   Router extends AnyService,
   ProcName extends keyof Router['procedures'],
 > = (
-  init: Static<ProcInit<Router, ProcName>>,
+  init: ProcInit<Router, ProcName>,
 ) => [
-  WriteStream<Static<ProcInput<Router, ProcName>>>,
-  ReadStream<
-    Result<
-      Static<ProcOutput<Router, ProcName>>,
-      Static<ProcErrors<Router, ProcName>>
-    >
-  >,
+  WriteStream<ProcInput<Router, ProcName>>,
+  ReadStream<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>,
 ];
 
 type SubscriptionFn<
   Router extends AnyService,
   ProcName extends keyof Router['procedures'],
 > = (
-  init: Static<ProcInit<Router, ProcName>>,
-) => ReadStream<
-  Result<
-    Static<ProcOutput<Router, ProcName>>,
-    Static<ProcErrors<Router, ProcName>>
-  >
->;
+  init: ProcInit<Router, ProcName>,
+) => ReadStream<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>;
 
 /**
  * A helper type to transform an actual service type into a type
@@ -313,11 +295,11 @@ function handleProc(
     },
   );
 
-  const outputReader = new ReadStreamImpl<
-    Result<Static<PayloadType>, Static<RiverError>>
-  >(() => {
-    transport.sendRequestCloseControl(serverId, streamId);
-  });
+  const outputReader = new ReadStreamImpl<Static<PayloadType>, BaseError>(
+    () => {
+      transport.sendRequestCloseControl(serverId, streamId);
+    },
+  );
   const removeOnCloseListener = outputReader.onClose(() => {
     span.addEvent('outputReader closed');
     maybeCleanup();
@@ -384,7 +366,7 @@ function handleProc(
     if (!outputReader.isClosed()) {
       outputReader.pushValue(
         Err({
-          code: UNEXPECTED_DISCONNECT,
+          code: UNEXPECTED_DISCONNECT_CODE,
           message: `${serverId} unexpectedly disconnected`,
         }),
       );
@@ -444,9 +426,9 @@ function handleProc(
 }
 
 async function getSingleMessage(
-  outputReader: ReadStream<Result<unknown, Static<RiverError>>>,
+  outputReader: ReadStream<unknown, BaseError>,
   log?: Logger,
-): Promise<Result<unknown, Static<RiverError>>> {
+): Promise<Result<unknown, BaseError>> {
   const ret = await outputReader.asArray();
 
   if (ret.length > 1) {
