@@ -11,6 +11,7 @@ import {
   Output,
   ResultUnwrapErr,
   ResultUnwrapOk,
+  unwrap,
 } from '../router/result';
 import { TestServiceSchema } from './fixtures/services';
 import { getIteratorFromStream, iterNext } from '../util/testHelpers';
@@ -269,7 +270,9 @@ describe('Output<> type', () => {
 
     // Then
     const [, outputReader] = client.test.stream.stream({});
-    void iterNext(getIteratorFromStream(outputReader)).then(acceptOutput);
+    void iterNext(getIteratorFromStream(outputReader))
+      .then(unwrap)
+      .then(acceptOutput);
     expect(client).toBeTruthy();
   });
 
@@ -283,7 +286,9 @@ describe('Output<> type', () => {
 
     // Then
     const outputReader = client.test.subscription.subscribe({ n: 1 });
-    void iterNext(getIteratorFromStream(outputReader)).then(acceptOutput);
+    void iterNext(getIteratorFromStream(outputReader))
+      .then(unwrap)
+      .then(acceptOutput);
 
     expect(client).toBeTruthy();
   });
@@ -319,7 +324,7 @@ describe('ResultUwrap types', () => {
 
   test('it unwraps Err correctly', () => {
     // Given
-    const result = Err({ hello: 'world' });
+    const result = Err({ code: 'world', message: 'hello' });
 
     // When
     function acceptErr(payload: ResultUnwrapErr<typeof result>) {
@@ -328,7 +333,10 @@ describe('ResultUwrap types', () => {
 
     // Then
     assert(!result.ok);
-    expect(acceptErr(result.payload)).toEqual({ hello: 'world' });
+    expect(acceptErr(result.payload)).toEqual({
+      code: 'world',
+      message: 'hello',
+    });
   });
 });
 
