@@ -1,11 +1,12 @@
-import { Type, TUnion, TSchema } from '@sinclair/typebox';
-import { RiverError, RiverUncaughtSchema } from './result';
+import { Type, TSchema, Static } from '@sinclair/typebox';
 import {
   Branded,
   ProcedureMap,
   Unbranded,
   AnyProcedure,
   PayloadType,
+  ProcedureErrorSchemaType,
+  OutputReaderErrorSchema,
 } from './procedures';
 
 /**
@@ -67,7 +68,7 @@ export type ProcHandler<
 export type ProcInit<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName]['init'];
+> = Static<S['procedures'][ProcName]['init']>;
 
 /**
  * Helper to get the type definition for the procedure input of a service.
@@ -78,7 +79,7 @@ export type ProcInput<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
 > = S['procedures'][ProcName] extends { input: PayloadType }
-  ? S['procedures'][ProcName]['input']
+  ? Static<S['procedures'][ProcName]['input']>
   : never;
 
 /**
@@ -89,7 +90,7 @@ export type ProcInput<
 export type ProcOutput<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName]['output'];
+> = Static<S['procedures'][ProcName]['output']>;
 
 /**
  * Helper to get the type definition for the procedure errors of a service.
@@ -99,7 +100,9 @@ export type ProcOutput<
 export type ProcErrors<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = TUnion<[S['procedures'][ProcName]['errors'], typeof RiverUncaughtSchema]>;
+> =
+  | Static<S['procedures'][ProcName]['errors']>
+  | Static<typeof OutputReaderErrorSchema>;
 
 /**
  * Helper to get the type of procedure in a service.
@@ -128,11 +131,11 @@ export interface ServiceConfiguration<State extends object> {
 }
 
 export interface SerializedProcedureSchema {
+  init: PayloadType;
   input?: PayloadType;
   output: PayloadType;
-  errors?: RiverError;
+  errors?: ProcedureErrorSchemaType;
   type: 'rpc' | 'subscription' | 'upload' | 'stream';
-  init: PayloadType;
 }
 
 export interface SerializedServiceSchema {

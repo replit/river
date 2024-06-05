@@ -1,6 +1,13 @@
 import { Static } from '@sinclair/typebox';
 import { ServerTransport } from '../transport';
-import { AnyProcedure, PayloadType } from './procedures';
+import {
+  AnyProcedure,
+  PayloadType,
+  ProcedureErrorSchemaType,
+  OutputReaderErrorSchema,
+  InputReaderErrorSchema,
+  UNCAUGHT_ERROR_CODE,
+} from './procedures';
 import {
   AnyService,
   InstantiatedServiceSchemaMap,
@@ -22,13 +29,7 @@ import {
 } from './context';
 import { Logger } from '../logging/log';
 import { Value } from '@sinclair/typebox/value';
-import {
-  Err,
-  Result,
-  RiverError,
-  RiverUncaughtSchema,
-  UNCAUGHT_ERROR,
-} from './result';
+import { Err, Result, Ok } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { coerceErrorString } from '../util/stringify';
@@ -52,9 +53,12 @@ interface ProcStream {
   id: string;
   serviceName: string;
   procedureName: string;
-  inputReader: ReadStreamImpl<PayloadType>;
+  inputReader: ReadStreamImpl<
+    Static<PayloadType>,
+    Static<typeof InputReaderErrorSchema>
+  >;
   outputWriter: WriteStreamImpl<
-    Result<Static<PayloadType>, Static<RiverError>>
+    Result<Static<PayloadType>, Static<ProcedureErrorSchemaType>>
   >;
   inputHandlerPromise: InputHandlerReturn;
 }
@@ -220,7 +224,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     const procedure = service.procedures[initMessage.procedureName];
 
     if (!Value.Check(procedure.init, initMessage.payload)) {
-      log?.error(`procedure init failed validation`, {
+      this.log?.error(`procedure init failed validation`, {
         clientId: this.transport.clientId,
         transportMessage: initMessage,
       });
@@ -283,9 +287,9 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       if (!outputWriter.isClosed()) {
         outputWriter.write(
           Err({
-            code: UNCAUGHT_ERROR,
+            code: UNCAUGHT_ERROR_CODE,
             message: errorMsg,
-          } satisfies Static<typeof RiverUncaughtSchema>),
+          } satisfies Static<typeof OutputReaderErrorSchema>),
         );
         outputWriter.close();
       }
@@ -456,7 +460,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
         'input' in procedure &&
         Value.Check(procedure.input, message.payload)
       ) {
-        procStream.inputReader.pushValue(message.payload as PayloadType);
+        procStream.inputReader.pushValue(Ok(message.payload));
       } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
         // whelp we got a message that isn't a control message and doesn't match the procedure input
         // so definitely not a valid payload

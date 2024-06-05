@@ -13,7 +13,6 @@ import {
   OrderingServiceSchema,
   NonObjectSchemas,
 } from './fixtures/services';
-import { Ok, UNCAUGHT_ERROR } from '../router/result';
 import {
   advanceFakeTimersBySessionGrace,
   cleanupTransports,
@@ -23,7 +22,7 @@ import {
 } from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
 import { Type } from '@sinclair/typebox';
-import { Procedure, ServiceSchema } from '../router';
+import { Procedure, ServiceSchema, Ok, UNCAUGHT_ERROR_CODE } from '../router';
 import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,
@@ -267,7 +266,7 @@ describe.each(testMatrix())(
       expect(result3).toStrictEqual({
         ok: false,
         payload: {
-          code: UNCAUGHT_ERROR,
+          code: UNCAUGHT_ERROR_CODE,
           message: 'some message',
         },
       });

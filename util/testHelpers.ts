@@ -2,15 +2,16 @@ import NodeWs, { WebSocketServer } from 'ws';
 import http from 'node:http';
 import {
   Err,
+  Ok,
   PayloadType,
   Procedure,
-  ProcedureResult,
   Result,
-  RiverError,
-  RiverUncaughtSchema,
+  ProcedureErrorSchemaType,
+  InputReaderErrorSchema,
+  OutputReaderErrorSchema,
   ServiceContext,
   ServiceContextWithTransportInfo,
-  UNCAUGHT_ERROR,
+  UNCAUGHT_ERROR_CODE,
 } from '../router';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
@@ -30,6 +31,7 @@ import {
 } from '../router/streams';
 import { WsLike } from '../transport/impls/ws/wslike';
 import { defaultTransportOptions } from '../transport/options';
+import { BaseError } from '../router/result';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
@@ -83,7 +85,9 @@ export function onUdsServeReady(
   });
 }
 
-export function getIteratorFromStream<T>(readStream: ReadStream<T>) {
+export function getIteratorFromStream<T, E extends BaseError>(
+  readStream: ReadStream<T, E>,
+) {
   return readStream[Symbol.asyncIterator]();
 }
 
@@ -156,7 +160,7 @@ export async function waitForMessage(
 
 function catchProcError(err: unknown) {
   const errorMsg = coerceErrorString(err);
-  return Err({ code: UNCAUGHT_ERROR, message: errorMsg });
+  return Err({ code: UNCAUGHT_ERROR_CODE, message: errorMsg });
 }
 
 export const testingSessionOptions: SessionOptions = defaultTransportOptions;
@@ -190,7 +194,7 @@ export function asClientRpc<
   State extends object,
   Init extends PayloadType,
   Output extends PayloadType,
-  Err extends RiverError,
+  Err extends ProcedureErrorSchemaType,
 >(
   state: State,
   proc: Procedure<State, 'rpc', Init, null, Output, Err>,
@@ -200,7 +204,7 @@ export function asClientRpc<
   return async (
     msg: Static<Init>,
   ): Promise<
-    Result<Static<Output>, Static<Err> | Static<typeof RiverUncaughtSchema>>
+    Result<Static<Output>, Static<Err> | Static<typeof OutputReaderErrorSchema>>
   > => {
     return proc
       .handler(dummyCtx(state, session, extendedContext), msg)
@@ -208,17 +212,59 @@ export function asClientRpc<
   };
 }
 
-function createPipe<T>(): { reader: ReadStream<T>; writer: WriteStream<T> } {
-  const reader = new ReadStreamImpl<T>(() => {
+function createOutputPipe<
+  Output extends PayloadType,
+  Err extends ProcedureErrorSchemaType,
+>(): {
+  reader: ReadStream<
+    Static<Output>,
+    Static<Err> | Static<typeof OutputReaderErrorSchema>
+  >;
+  writer: WriteStream<Result<Static<Output>, Static<Err>>>;
+} {
+  const reader = new ReadStreamImpl<
+    Static<Output>,
+    Static<Err> | Static<typeof OutputReaderErrorSchema>
+  >(() => {
     // Make it async to simulate request going over the wire
     // using promises so that we don't get affected by fake timers.
     void Promise.resolve().then(() => {
       writer.triggerCloseRequest();
     });
   });
-  const writer = new WriteStreamImpl<T>(
+  const writer = new WriteStreamImpl<Result<Static<Output>, Static<Err>>>(
     (v) => {
       reader.pushValue(v);
+    },
+    () => {
+      // Make it async to simulate request going over the wire
+      // using promises so that we don't get affected by fake timers.
+      void Promise.resolve().then(() => {
+        reader.triggerClose();
+      });
+    },
+  );
+
+  return { reader, writer };
+}
+
+function createInputPipe<Input extends PayloadType>(): {
+  reader: ReadStream<Static<Input>, Static<typeof InputReaderErrorSchema>>;
+  writer: WriteStream<Static<Input>>;
+} {
+  const reader = new ReadStreamImpl<
+    Static<Input>,
+    Static<typeof InputReaderErrorSchema>
+  >(() => {
+    // Make it async to simulate request going over the wire
+    // using promises so that we don't get affected by fake timers.
+    void Promise.resolve().then(() => {
+      writer.triggerCloseRequest();
+    });
+  });
+  const writer = new WriteStreamImpl<Static<Input>>(
+    (v) => {
+      reader.pushValue(Ok(v));
     },
     () => {
       // Make it async to simulate request going over the wire
@@ -237,16 +283,16 @@ export function asClientStream<
   Init extends PayloadType,
   Input extends PayloadType,
   Output extends PayloadType,
-  Err extends RiverError,
+  Err extends ProcedureErrorSchemaType,
 >(
   state: State,
   proc: Procedure<State, 'stream', Init, Input, Output, Err>,
   init?: Static<Init>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
-): [WriteStream<Static<Input>>, ReadStream<ProcedureResult<Output, Err>>] {
-  const inputPipe = createPipe<Static<Input>>();
-  const outputPipe = createPipe<ProcedureResult<Output, Err>>();
+): [WriteStream<Static<Input>>, ReadStream<Static<Output>, Static<Err>>] {
+  const inputPipe = createInputPipe<Input>();
+  const outputPipe = createOutputPipe<Output, Err>();
 
   void proc
     .handler(
@@ -264,14 +310,14 @@ export function asClientSubscription<
   State extends object,
   Init extends PayloadType,
   Output extends PayloadType,
-  Err extends RiverError,
+  Err extends ProcedureErrorSchemaType,
 >(
   state: State,
   proc: Procedure<State, 'subscription', Init, null, Output, Err>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
-): (msg: Static<Init>) => ReadStream<ProcedureResult<Output, Err>> {
-  const outputPipe = createPipe<ProcedureResult<Output, Err>>();
+): (msg: Static<Init>) => ReadStream<Static<Output>, Static<Err>> {
+  const outputPipe = createOutputPipe<Output, Err>();
 
   return (msg: Static<Init>) => {
     void proc
@@ -291,15 +337,18 @@ export function asClientUpload<
   Init extends PayloadType,
   Input extends PayloadType,
   Output extends PayloadType,
-  Err extends RiverError,
+  Err extends ProcedureErrorSchemaType,
 >(
   state: State,
   proc: Procedure<State, 'upload', Init, Input, Output, Err>,
   init?: Static<Init>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
-): [WriteStream<Static<Input>>, Promise<ProcedureResult<Output, Err>>] {
-  const inputPipe = createPipe<Static<Input>>();
+): [
+  WriteStream<Static<Input>>,
+  () => Promise<Result<Static<Output>, Static<Err>>>,
+] {
+  const inputPipe = createInputPipe<Input>();
   const result = proc
     .handler(
       dummyCtx(state, session, extendedContext),
@@ -307,7 +356,8 @@ export function asClientUpload<
       inputPipe.reader,
     )
     .catch(catchProcError);
-  return [inputPipe.writer, result];
+
+  return [inputPipe.writer, () => result];
 }
 
 export const getUnixSocketPath = () => {
