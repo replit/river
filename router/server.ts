@@ -224,7 +224,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     const procedure = service.procedures[initMessage.procedureName];
 
     if (!Value.Check(procedure.init, initMessage.payload)) {
-      log?.error(`procedure init failed validation`, {
+      this.log?.error(`procedure init failed validation`, {
         clientId: this.transport.clientId,
         transportMessage: initMessage,
       });
