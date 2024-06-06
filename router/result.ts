@@ -1,12 +1,36 @@
-import { Type } from '@sinclair/typebox';
+import {
+  Static,
+  TLiteral,
+  TObject,
+  TSchema,
+  TString,
+  TUnion,
+  Type,
+} from '@sinclair/typebox';
 import { Client } from './client';
 import { ReadStream } from './streams';
 
-export interface BaseError {
-  code: string;
-  message: string;
-  extra?: Record<string, unknown>;
-}
+type TLiteralString = TLiteral<string>;
+
+export type BaseErrorSchemaType =
+  | TObject<{
+      code: TLiteralString | TUnion<Array<TLiteralString>>;
+      message: TLiteralString | TString;
+    }>
+  | TObject<{
+      code: TLiteralString | TUnion<Array<TLiteralString>>;
+      message: TLiteralString | TString;
+      extras: TSchema;
+    }>;
+
+/**
+ * Takes in a specific error schema and returns a result schema the error
+ */
+export const ErrResultSchema = <T extends BaseErrorSchemaType>(t: T) =>
+  Type.Object({
+    ok: Type.Literal(false),
+    payload: t,
+  });
 
 /**
  * AnyResultSchema is a schema to validate any result.
@@ -31,11 +55,13 @@ export interface OkResult<T> {
   ok: true;
   payload: T;
 }
-export interface ErrResult<Err extends BaseError> {
+export interface ErrResult<Err extends Static<BaseErrorSchemaType>> {
   ok: false;
   payload: Err;
 }
-export type Result<T, Err extends BaseError> = OkResult<T> | ErrResult<Err>;
+export type Result<T, Err extends Static<BaseErrorSchemaType>> =
+  | OkResult<T>
+  | ErrResult<Err>;
 
 export function Ok<const T extends Array<unknown>>(p: T): OkResult<T>;
 export function Ok<const T extends ReadonlyArray<unknown>>(p: T): OkResult<T>;
@@ -47,7 +73,9 @@ export function Ok<const T>(payload: T): OkResult<T> {
   };
 }
 
-export function Err<const Err extends BaseError>(error: Err): ErrResult<Err> {
+export function Err<const Err extends Static<BaseErrorSchemaType>>(
+  error: Err,
+): ErrResult<Err> {
   return {
     ok: false,
     payload: error,
@@ -67,7 +95,9 @@ export type ResultUnwrapOk<R> = R extends Result<infer T, infer __E>
  * @param result - The result to unwrap.
  * @throws Will throw an error if the result is not ok.
  */
-export function unwrap<T, Err extends BaseError>(result: Result<T, Err>): T {
+export function unwrap<T, Err extends Static<BaseErrorSchemaType>>(
+  result: Result<T, Err>,
+): T {
   if (result.ok) {
     return result.payload;
   }
@@ -112,7 +142,7 @@ export type Output<
       : Procedure extends object & { stream: infer StreamHandler extends Fn }
       ? ReturnType<StreamHandler> extends [
           infer __StreamInputMessage,
-          ReadStream<infer StreamOutputMessage, BaseError>,
+          ReadStream<infer StreamOutputMessage, Static<BaseErrorSchemaType>>,
         ]
         ? StreamOutputMessage
         : never
@@ -121,7 +151,7 @@ export type Output<
         }
       ? Awaited<ReturnType<SubscriptionHandler>> extends ReadStream<
           infer SubscriptionOutputMessage,
-          BaseError
+          Static<BaseErrorSchemaType>
         >
         ? SubscriptionOutputMessage
         : never

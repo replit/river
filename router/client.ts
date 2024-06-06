@@ -19,7 +19,7 @@ import {
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
-import { BaseError, Err, Result, AnyResultSchema } from './result';
+import { BaseErrorSchemaType, Err, Result, AnyResultSchema } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { Logger } from '../logging';
@@ -295,11 +295,12 @@ function handleProc(
     },
   );
 
-  const outputReader = new ReadStreamImpl<Static<PayloadType>, BaseError>(
-    () => {
-      transport.sendRequestCloseControl(serverId, streamId);
-    },
-  );
+  const outputReader = new ReadStreamImpl<
+    Static<PayloadType>,
+    Static<BaseErrorSchemaType>
+  >(() => {
+    transport.sendRequestCloseControl(serverId, streamId);
+  });
   const removeOnCloseListener = outputReader.onClose(() => {
     span.addEvent('outputReader closed');
     maybeCleanup();
@@ -426,9 +427,9 @@ function handleProc(
 }
 
 async function getSingleMessage(
-  outputReader: ReadStream<unknown, BaseError>,
+  outputReader: ReadStream<unknown, Static<BaseErrorSchemaType>>,
   log?: Logger,
-): Promise<Result<unknown, BaseError>> {
+): Promise<Result<unknown, Static<BaseErrorSchemaType>>> {
   const ret = await outputReader.asArray();
 
   if (ret.length > 1) {
