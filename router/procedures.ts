@@ -1,15 +1,6 @@
-import {
-  Static,
-  TNever,
-  TLiteral,
-  TObject,
-  TSchema,
-  TString,
-  TUnion,
-  Type,
-} from '@sinclair/typebox';
+import { Static, TNever, TSchema, TUnion, Type } from '@sinclair/typebox';
 import { ServiceContextWithTransportInfo } from './context';
-import { Result } from './result';
+import { BaseErrorSchemaType, Result } from './result';
 import { ReadStream, WriteStream } from './streams';
 
 /**
@@ -41,19 +32,6 @@ export type ValidProcType =
  * Represents the payload type for {@link Procedure}s.
  */
 export type PayloadType = TSchema;
-type TLiteralString = TLiteral<string>;
-
-// TODO would be good to make this a real Schema
-export type ErrorBaseSchemaType =
-  | TObject<{
-      code: TLiteralString | TUnion<Array<TLiteralString>>;
-      message: TLiteralString | TString;
-    }>
-  | TObject<{
-      code: TLiteralString | TUnion<Array<TLiteralString>>;
-      message: TLiteralString | TString;
-      extras: TSchema;
-    }>;
 
 /**
  * UNCAUGHT_ERROR_CODE is the code that is used when an error is thrown
@@ -97,8 +75,8 @@ export const InputReaderErrorSchema = Type.Object({
  * Just a type of a schema, not an actual schema.
  */
 export type ProcedureErrorSchemaType =
-  | TUnion<Array<ErrorBaseSchemaType>>
-  | ErrorBaseSchemaType
+  | TUnion<Array<BaseErrorSchemaType>>
+  | BaseErrorSchemaType
   | TNever;
 
 /**
