@@ -1,11 +1,12 @@
-import { BaseError, Err, Result } from './result';
+import { Static } from '@sinclair/typebox';
+import { BaseErrorSchemaType, Err, Result } from './result';
 
 export const StreamDrainedError = {
   code: 'STREAM_DRAINED',
   message: 'Stream was drained',
 } as const;
 
-type ReadStreamResult<T, E extends BaseError> = Result<
+type ReadStreamResult<T, E extends Static<BaseErrorSchemaType>> = Result<
   T,
   E | typeof StreamDrainedError
 >;
@@ -19,7 +20,7 @@ type ReadStreamResult<T, E extends BaseError> = Result<
  * The stream can only be locked (aka consumed) once and will remain
  * locked, trying to lock the stream again will throw an TypeError.
  */
-export interface ReadStream<T, E extends BaseError> {
+export interface ReadStream<T, E extends Static<BaseErrorSchemaType>> {
   /**
    * Stream implements AsyncIterator API and can be consumed via
    * for-await-of loops.
@@ -116,7 +117,7 @@ export interface WriteStream<T> {
  * consumers directly, it has internal river methods
  * to pushed data to the stream and close it.
  */
-export class ReadStreamImpl<T, E extends BaseError>
+export class ReadStreamImpl<T, E extends Static<BaseErrorSchemaType>>
   implements ReadStream<T, E>
 {
   /**
