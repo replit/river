@@ -47,6 +47,10 @@ export const UNEXPECTED_DISCONNECT_CODE = 'UNEXPECTED_DISCONNECT';
  * INVALID_REQUEST_CODE is the code used when a client's request is invalid.
  */
 export const INVALID_REQUEST_CODE = 'INVALID_REQUEST';
+/**
+ * ABORT_CODE is the code used when either server or client aborts the stream.
+ */
+export const ABORT_CODE = 'ABORT';
 
 /**
  * OutputReaderErrorSchema is the schema for all the errors that can be
@@ -57,6 +61,7 @@ export const OutputReaderErrorSchema = Type.Object({
     Type.Literal(UNCAUGHT_ERROR_CODE),
     Type.Literal(UNEXPECTED_DISCONNECT_CODE),
     Type.Literal(INVALID_REQUEST_CODE),
+    Type.Literal(ABORT_CODE),
   ]),
   message: Type.String(),
 });
@@ -66,7 +71,10 @@ export const OutputReaderErrorSchema = Type.Object({
  * emitted in the Input ReadStream on the server.
  */
 export const InputReaderErrorSchema = Type.Object({
-  code: Type.Union([Type.Literal(UNEXPECTED_DISCONNECT_CODE)]),
+  code: Type.Union([
+    Type.Literal(UNEXPECTED_DISCONNECT_CODE),
+    Type.Literal(ABORT_CODE),
+  ]),
   message: Type.String(),
 });
 

@@ -16,10 +16,17 @@ import {
   isStreamClose,
   ControlMessageCloseSchema,
   isStreamCloseRequest,
+  isStreamAbort,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
-import { BaseErrorSchemaType, Err, Result, AnyResultSchema } from './result';
+import {
+  BaseErrorSchemaType,
+  Err,
+  Result,
+  AnyResultSchema,
+  ErrResultSchema,
+} from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { Logger } from '../logging';
@@ -33,10 +40,14 @@ import {
 } from './streams';
 import { Value } from '@sinclair/typebox/value';
 import {
+  ABORT_CODE,
+  OutputReaderErrorSchema,
   PayloadType,
   UNEXPECTED_DISCONNECT_CODE,
   ValidProcType,
 } from './procedures';
+
+const OutputErrResultSchema = ErrResultSchema(OutputReaderErrorSchema);
 
 type RpcFn<
   Router extends AnyService,
@@ -321,8 +332,43 @@ function handleProc(
     if (msg.streamId !== streamId) return;
     if (msg.to !== transport.clientId) return;
 
+    if (isStreamAbort(msg.controlFlags)) {
+      span.addEvent('received abort');
+
+      if (!outputReader.isClosed()) {
+        if (Value.Check(OutputErrResultSchema, msg.payload)) {
+          outputReader.pushValue(msg.payload);
+        } else {
+          outputReader.pushValue(
+            Err({
+              code: ABORT_CODE,
+              message: 'Stream aborted with invalid payload',
+            }),
+          );
+          transport.log?.error(
+            'Got stream abort without a valid protocol error',
+            {
+              clientId: transport.clientId,
+              transportMessage: msg,
+              validationErrors: [
+                ...Value.Errors(OutputErrResultSchema, msg.payload),
+              ],
+            },
+          );
+        }
+
+        outputReader.triggerClose();
+      }
+
+      inputWriter.close();
+
+      return;
+    }
+
     if (outputReader.isClosed()) {
-      transport.log?.error('Received message after stream is closed', {
+      span.recordException('Received message after output stream is closed');
+
+      transport.log?.error('Received message after output stream is closed', {
         clientId: transport.clientId,
         transportMessage: msg,
       });
@@ -346,10 +392,14 @@ function handleProc(
     }
 
     if (isStreamClose(msg.controlFlags)) {
+      span.addEvent('received output close');
+
       outputReader.triggerClose();
     }
 
     if (isStreamCloseRequest(msg.controlFlags)) {
+      span.addEvent('received input close request');
+
       inputWriter.triggerCloseRequest();
     }
   }
