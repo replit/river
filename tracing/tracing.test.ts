@@ -8,7 +8,7 @@ import {
   onTestFinished,
   assert,
 } from 'vitest';
-import { createDummyTransportMessage, dummySession } from '../util/testHelpers';
+import { dummySession } from '../util/testHelpers';
 
 import {
   BasicTracerProvider,
@@ -22,7 +22,6 @@ import tracer, {
   getPropagationContext,
   createHandlerSpan,
 } from './index';
-import { OpaqueTransportMessage } from '../transport';
 import { testMatrix } from '../__tests__/fixtures/matrix';
 import { testFinishesCleanly, waitFor } from '../__tests__/fixtures/cleanup';
 
@@ -60,12 +59,15 @@ describe('Basic tracing tests', () => {
     const span = tracer.startSpan('testing span', {}, parentCtx);
     const ctx = trace.setSpan(parentCtx, span);
 
-    const msg = createDummyTransportMessage() as OpaqueTransportMessage;
-    msg.tracing = getPropagationContext(ctx);
-    expect(msg.tracing?.traceparent).toBeTruthy();
-
     const spanMock = vi.fn<[Span]>();
-    void createHandlerSpan('rpc', msg, spanMock);
+    void createHandlerSpan(
+      'rpc',
+      getPropagationContext(ctx),
+      'myservice',
+      'myprocedure',
+      'mystream',
+      spanMock,
+    );
     expect(spanMock).toHaveBeenCalledTimes(1);
     const createdSpan = spanMock.mock.calls[0][0];
     // @ts-expect-error: hacking to get parentSpanId

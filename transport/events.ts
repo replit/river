@@ -57,10 +57,15 @@ export class EventDispatcher<T extends EventTypes> {
 
   dispatchEvent<K extends T>(eventType: K, event: EventMap[K]) {
     const handlers = this.eventListeners[eventType];
-    if (handlers) {
-      for (const handler of handlers) {
-        handler(event);
-      }
+    if (!handlers) {
+      return;
+    }
+
+    // copying ensures that adding more listeners in a handler doesn't
+    // affect the current dispatch.
+    const copy = [...handlers];
+    for (const handler of copy) {
+      handler(event);
     }
   }
 }

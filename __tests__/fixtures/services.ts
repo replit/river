@@ -240,15 +240,12 @@ export const SubscribableServiceSchema = ServiceSchema.define(
         const dispose1 = ctx.state.count.observe((count) => {
           returnStream.write(Ok({ result: count }));
         });
+        ctx.addCleanup(dispose1);
 
         const dispose2 = returnStream.onCloseRequest(() => {
           returnStream.close();
         });
-
-        return () => {
-          dispose1();
-          dispose2();
-        };
+        ctx.addCleanup(dispose2);
       },
     }),
   },
@@ -307,18 +304,3 @@ export const NonObjectSchemas = ServiceSchema.define({
     },
   }),
 });
-
-export function SchemaWithDisposableState(dispose: () => void) {
-  return ServiceSchema.define(
-    { initializeState: () => ({ [Symbol.dispose]: dispose }) },
-    {
-      add: Procedure.rpc({
-        init: Type.Number(),
-        output: Type.Number(),
-        async handler(_ctx, n) {
-          return Ok(n + 1);
-        },
-      }),
-    },
-  );
-}

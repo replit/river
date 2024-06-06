@@ -43,7 +43,10 @@ export async function advanceFakeTimersBySessionGrace() {
   );
 }
 
-async function ensureTransportIsClean(t: Transport<Connection>) {
+async function ensureTransportIsClean(
+  t: Transport<Connection>,
+  hasServer = false,
+) {
   expect(
     t.state,
     `[post-test cleanup] transport ${t.clientId} should be closed after the test`,
@@ -60,12 +63,12 @@ async function ensureTransportIsClean(t: Transport<Connection>) {
   expect(
     t.eventDispatcher.numberOfListeners('message'),
     `[post-test cleanup] transport ${t.clientId} should not have open message handlers after the test`,
-  ).equal(0);
+  ).equal(hasServer ? 1 : 0);
 
   expect(
     t.eventDispatcher.numberOfListeners('sessionStatus'),
     `[post-test cleanup] transport ${t.clientId} should not have open session status handlers after the test`,
-  ).equal(0);
+  ).equal(hasServer ? 1 : 0);
 
   expect(
     t.eventDispatcher.numberOfListeners('connectionStatus'),
@@ -101,9 +104,9 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
 export async function ensureServerIsClean(s: Server<AnyServiceSchemaMap>) {
   return waitFor(() =>
     expect(
-      s.streams,
+      s.openStreams,
       `[post-test cleanup] server should not have any open streams after the test`,
-    ).toStrictEqual(new Map()),
+    ).toStrictEqual(new Set()),
   );
 }
 
@@ -129,20 +132,19 @@ export async function testFinishesCleanly({
 
     await Promise.all(clientTransports.map(waitForTransportToFinish));
     await advanceFakeTimersBySessionGrace();
-    await Promise.all(clientTransports.map(ensureTransportIsClean));
+    await Promise.all(clientTransports.map((t) => ensureTransportIsClean(t)));
   }
 
   // server sits on top of server transport so we clean it up first
   if (server) {
     await advanceFakeTimersBySessionGrace();
     await ensureServerIsClean(server);
-    await server.close();
   }
 
   if (serverTransport) {
     await waitForTransportToFinish(serverTransport);
     await advanceFakeTimersBySessionGrace();
-    await ensureTransportIsClean(serverTransport);
+    await ensureTransportIsClean(serverTransport, !!server);
   }
 
   vi.useRealTimers();
