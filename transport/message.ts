@@ -17,11 +17,15 @@ export const enum ControlFlags {
   /**
    * Used when writer closes the stream.
    */
-  StreamClosedBit = 0b00100,
+  StreamClosedBit = 0b01000,
   /**
    * Used when readers no longer wish to receive messages.
    */
   StreamCloseRequestBit = 0b10000,
+  /**
+   * Used when an abort happens due to cancellation or errors
+   */
+  AbortBit = 0b00100,
 }
 
 /**

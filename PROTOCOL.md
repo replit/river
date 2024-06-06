@@ -144,9 +144,9 @@ The `controlFlags` property is a [bit field](https://en.wikipedia.org/wiki/Bit_f
 
 - The `AckBit` (`0b00001`) MUST only be set in the case of an explicit heartbeat that _only_ contains ack/seq information and no application-level payload (i.e., only used to update transport level bookkeeping).
 - The `StreamOpenBit` (`0b00010`) MUST be set for the first message of a new stream.
-- The `StreamClosedBit` (`0b00100`) MUST be set for the last message of a stream.
+- The `StreamAbortBit` (`0b00100`) MUST be set when a stream is to be abruptly closed due to cancellations or an internal error condition.
+- The `StreamClosedBit` (`0b01000`) MUST be set for the last message of a stream.
 - The `StreamCloseRequestBit` (`0b10000`) MUST be set for a message that is requesting the other side to close the stream.
-- The `StreamAbortBit` (`0b01000`) MUST be set when a stream is to be abruptly closed due to cancellations or an internal error condition.
 
 All messages MUST have no control flags set (i.e., the `controlFlags` field is `0b00000`) unless:
 
