@@ -212,6 +212,13 @@ function diffRequired(
     return null;
   }
 
+  if (origin === 'client' && !oldRequired && newRequired) {
+    return { reason: 'new-required' };
+  }
+  if (origin === 'server' && oldRequired && !newRequired) {
+    return { reason: 'removed-required' };
+  }
+
   return null;
 }
 
@@ -558,7 +565,6 @@ function diffJSONSchema(
         };
       }
     }
-    console.log('yo', newSchema);
 
     if (
       'additionalProperties' in newSchema ||

@@ -1761,6 +1761,138 @@ describe('schema backwards incompatible changes', () => {
       },
     });
   });
+
+  test('upgrade optional client->server field to required is incompatible', () => {
+    const oldSchema = serializeSchema({
+      adder: ServiceSchema.define(
+        {
+          initializeState: () => ({}),
+        },
+        {
+          add: Procedure.rpc({
+            input: Type.Object({
+              total: Type.Optional(Type.Number()),
+            }),
+            output: Type.Object({}),
+            handler: () => {
+              throw new Error('unimplemented');
+            },
+          }),
+        },
+      ),
+    });
+
+    const newSchema = serializeSchema({
+      adder: ServiceSchema.define(
+        {
+          initializeState: () => ({}),
+        },
+        {
+          add: Procedure.rpc({
+            input: Type.Object({
+              total: Type.Number(),
+            }),
+            output: Type.Object({}),
+            handler: () => {
+              throw new Error('unimplemented');
+            },
+          }),
+        },
+      ),
+    });
+
+    const diff = diffServerSchema(oldSchema, newSchema);
+    expect(diff).toEqual({
+      serviceBreakages: {
+        adder: {
+          procedureBreakages: {
+            add: {
+              input: {
+                fieldBreakages: {
+                  properties: {
+                    fieldBreakages: {
+                      total: {
+                        reason: 'new-required',
+                      },
+                    },
+                    reason: 'field-breakage',
+                  },
+                },
+                reason: 'field-breakage',
+              },
+              reason: 'modified',
+            },
+          },
+          reason: 'modified',
+        },
+      },
+    });
+  });
+
+  test('downgrade require server->client field to optional is incompatible', () => {
+    const oldSchema = serializeSchema({
+      adder: ServiceSchema.define(
+        {
+          initializeState: () => ({}),
+        },
+        {
+          add: Procedure.rpc({
+            input: Type.Object({}),
+            output: Type.Object({
+              total: Type.Number(),
+            }),
+            handler: async (_) => ({ ok: true, payload: { total: 0 } }),
+          }),
+        },
+      ),
+    });
+
+    const newSchema = serializeSchema({
+      adder: ServiceSchema.define(
+        {
+          initializeState: () => ({}),
+        },
+        {
+          add: Procedure.rpc({
+            input: Type.Object({}),
+            output: Type.Object({
+              total: Type.Optional(Type.Number()),
+            }),
+            handler: () => {
+              throw new Error('unimplemented');
+            },
+          }),
+        },
+      ),
+    });
+
+    const diff = diffServerSchema(oldSchema, newSchema);
+    expect(diff).toEqual({
+      serviceBreakages: {
+        adder: {
+          procedureBreakages: {
+            add: {
+              output: {
+                fieldBreakages: {
+                  properties: {
+                    fieldBreakages: {
+                      total: {
+                        reason: 'removed-required',
+                      },
+                    },
+                    reason: 'field-breakage',
+                  },
+                },
+                reason: 'field-breakage',
+              },
+              reason: 'modified',
+            },
+          },
+          reason: 'modified',
+        },
+      },
+    });
+  });
 });
 
 describe('schema backwards compatible changes', () => {
@@ -2457,6 +2589,90 @@ describe('schema backwards compatible changes', () => {
 
     const diff = diffServerSchema(oldSchema, newSchema);
     expect(diff).toEqual(null);
+  });
+
+  test('downgrade required client->server field to optional is compatible', () => {
+    const oldSchema = serializeSchema({
+      adder: ServiceSchema.define(
+        {
+          initializeState: () => ({}),
+        },
+        {
+          add: Procedure.rpc({
+            input: Type.Object({
+              total: Type.Number(),
+            }),
+            output: Type.Object({}),
+            handler: () => {
+              throw new Error('unimplemented');
+            },
+          }),
+        },
+      ),
+    });
+
+    const newSchema = serializeSchema({
+      adder: ServiceSchema.define(
+        {
+          initializeState: () => ({}),
+        },
+        {
+          add: Procedure.rpc({
+            input: Type.Object({
+              total: Type.Optional(Type.Number()),
+            }),
+            output: Type.Object({}),
+            handler: () => {
+              throw new Error('unimplemented');
+            },
+          }),
+        },
+      ),
+    });
+
+    const diff = diffServerSchema(oldSchema, newSchema);
+    expect(diff).toBeNull();
+  });
+
+  test('upgrade optional server->client field to require is compatible', () => {
+    const oldSchema = serializeSchema({
+      adder: ServiceSchema.define(
+        {
+          initializeState: () => ({}),
+        },
+        {
+          add: Procedure.rpc({
+            input: Type.Object({}),
+            output: Type.Object({
+              total: Type.Optional(Type.Number()),
+            }),
+            handler: async (_) => ({ ok: true, payload: { total: 0 } }),
+          }),
+        },
+      ),
+    });
+
+    const newSchema = serializeSchema({
+      adder: ServiceSchema.define(
+        {
+          initializeState: () => ({}),
+        },
+        {
+          add: Procedure.rpc({
+            input: Type.Object({}),
+            output: Type.Object({
+              total: Type.Number(),
+            }),
+            handler: () => {
+              throw new Error('unimplemented');
+            },
+          }),
+        },
+      ),
+    });
+
+    const diff = diffServerSchema(oldSchema, newSchema);
+    expect(diff).toBeNull();
   });
 });
 
