@@ -31,7 +31,7 @@ import {
 } from '../router/streams';
 import { WsLike } from '../transport/impls/ws/wslike';
 import { defaultTransportOptions } from '../transport/options';
-import { BaseError } from '../router/result';
+import { BaseErrorSchemaType } from '../router/result';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
@@ -85,7 +85,7 @@ export function onUdsServeReady(
   });
 }
 
-export function getIteratorFromStream<T, E extends BaseError>(
+export function getIteratorFromStream<T, E extends Static<BaseErrorSchemaType>>(
   readStream: ReadStream<T, E>,
 ) {
   return readStream[Symbol.asyncIterator]();
