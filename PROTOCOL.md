@@ -279,7 +279,7 @@ When a message is received, it MUST be validated before being processed.
 - Either side can initiate a close by sending a message with a `StreamClosedBit`
   - The closing party MUST NOT send any more messages.
   - To get a full close, the other side MUST respond with a `StreamClosedBit` acknowledging the close.
-- In case of errors or if one side wishes to abruptly abort the stream, a message with a `StreamAbortBit` and a `ProtocolError` payload. 
+- In case of errors or if one side wishes to abruptly abort the stream, a message with a `StreamAbortBit` and a `ProtocolError` payload.
 
 When a message is validated at this level, the implementor must update the bookkeeping information for the session (see the 'Transparent Reconnections' heading for more information).
 
