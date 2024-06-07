@@ -159,8 +159,44 @@ describe('network edge cases', async () => {
       waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
     ).resolves.toStrictEqual(msg1.payload);
 
-    // unclean disconnect
+    // unclean client disconnect
     clientTransport.sessions.forEach((session) =>
+      (session.connection?.ws as NodeWs).terminate(),
+    );
+
+    // by this point the client should have reconnected
+    const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
+    await expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
+    ).resolves.toStrictEqual(msg2.payload);
+  });
+
+  test('ws connection always calls the close callback', async () => {
+    const clientTransport = new WebSocketClientTransport(
+      () => Promise.resolve(createLocalWebSocketClient(port)),
+      'client',
+    );
+    const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
+    await clientTransport.connect(serverTransport.clientId);
+    onTestFinished(async () => {
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
+    const msg1 = createDummyTransportMessage();
+    const msg2 = createDummyTransportMessage();
+
+    const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+    await expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
+    ).resolves.toStrictEqual(msg1.payload);
+
+    // unclean server disconnect. Note that the Node implementation sends the reason on the
+    // `onclose`, but (some?) browsers call the `onerror` handler before it since it was an unclean
+    // exit.
+    serverTransport.sessions.forEach((session) =>
       (session.connection?.ws as NodeWs).terminate(),
     );
 
