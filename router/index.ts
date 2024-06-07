@@ -12,6 +12,8 @@ export {
   ServiceSchema,
   serializeSchema,
   SerializedServerSchema,
+  SerializedServiceSchema,
+  SerializedProcedureSchema,
 } from './services';
 export type {
   ValidProcType,
