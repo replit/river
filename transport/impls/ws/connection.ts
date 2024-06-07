@@ -26,8 +26,6 @@ export class WebSocketConnection extends Connection {
             `websocket closed with code and reason: ${code} - ${reason}`,
           ),
         );
-
-        return;
       }
 
       if (this.closeCb) {
