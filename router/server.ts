@@ -7,6 +7,7 @@ import {
   OutputReaderErrorSchema,
   InputReaderErrorSchema,
   UNCAUGHT_ERROR_CODE,
+  ABORT_CODE,
 } from './procedures';
 import {
   AnyService,
@@ -21,6 +22,7 @@ import {
   TransportClientId,
   ControlFlags,
   isStreamCloseRequest,
+  isStreamAbort,
 } from '../transport/message';
 import {
   ServiceContext,
@@ -29,7 +31,7 @@ import {
 } from './context';
 import { Logger } from '../logging/log';
 import { Value } from '@sinclair/typebox/value';
-import { Err, Result, Ok } from './result';
+import { Err, Result, Ok, ErrResultSchema } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { coerceErrorString } from '../util/stringify';
@@ -37,6 +39,8 @@ import { Span, SpanStatusCode } from '@opentelemetry/api';
 import { createHandlerSpan } from '../tracing';
 import { ServerHandshakeOptions } from './handshake';
 import { ReadStreamImpl, WriteStreamImpl } from './streams';
+
+const InputErrResultSchema = ErrResultSchema(InputReaderErrorSchema);
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -463,6 +467,34 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
 
     // Init message is consumed during stream instantiation
     if (!isInit) {
+      if (isStreamAbort(message.controlFlags)) {
+        if (!procStream.inputReader.isClosed()) {
+          if (Value.Check(InputErrResultSchema, message.payload)) {
+            procStream.inputReader.pushValue(message.payload);
+          } else {
+            procStream.inputReader.pushValue(
+              Err({
+                code: ABORT_CODE,
+                message: 'Stream aborted with invalid payload',
+              }),
+            );
+            this.log?.error('Got stream abort without a valid protocol error', {
+              clientId: this.transport.clientId,
+              transportMessage: message,
+              validationErrors: [
+                ...Value.Errors(InputErrResultSchema, message.payload),
+              ],
+            });
+          }
+
+          procStream.inputReader.triggerClose();
+        }
+
+        procStream.outputWriter.close();
+
+        return;
+      }
+
       if (
         'input' in procedure &&
         Value.Check(procedure.input, message.payload)
