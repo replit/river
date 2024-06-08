@@ -1,12 +1,4 @@
-import {
-  describe,
-  test,
-  expect,
-  afterAll,
-  vi,
-  onTestFinished,
-  assert,
-} from 'vitest';
+import { describe, test, expect, afterAll, vi, assert } from 'vitest';
 import {
   createDummyTransportMessage,
   payloadToTransportMessage,
@@ -31,7 +23,9 @@ describe.each(testMatrix())(
       await transport.setup({ client: opts, server: opts });
     afterAll(cleanup);
 
-    test('connection is recreated after clean client disconnect', async () => {
+    test('connection is recreated after clean client disconnect', async ({
+      onTestFinished,
+    }) => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       onTestFinished(async () => {
@@ -58,7 +52,7 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(msg2.payload);
     });
 
-    test('idle transport cleans up nicely', async () => {
+    test('idle transport cleans up nicely', async ({ onTestFinished }) => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       await waitFor(() => expect(serverTransport.connections.size).toBe(1));
@@ -70,7 +64,9 @@ describe.each(testMatrix())(
       });
     });
 
-    test('heartbeats should not interupt normal operation', async () => {
+    test('heartbeats should not interupt normal operation', async ({
+      onTestFinished,
+    }) => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       onTestFinished(async () => {
@@ -97,7 +93,9 @@ describe.each(testMatrix())(
       }
     });
 
-    test('sending right after session event should not cause invalid handshake', async () => {
+    test('sending right after session event should not cause invalid handshake', async ({
+      onTestFinished,
+    }) => {
       const clientTransport = getClientTransport('client');
       const protocolError = vi.fn();
       clientTransport.addEventListener('protocolError', protocolError);
@@ -125,7 +123,9 @@ describe.each(testMatrix())(
       expect(protocolError).toHaveBeenCalledTimes(0);
     });
 
-    test('seq numbers should be persisted across transparent reconnects', async () => {
+    test('seq numbers should be persisted across transparent reconnects', async ({
+      onTestFinished,
+    }) => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       onTestFinished(async () => {
@@ -196,7 +196,9 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(clientMsgs.map((msg) => msg.payload));
     });
 
-    test('both client and server transport get connect/disconnect notifs', async () => {
+    test('both client and server transport get connect/disconnect notifs', async ({
+      onTestFinished,
+    }) => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const clientConnStart = vi.fn();
@@ -387,7 +389,7 @@ describe.each(testMatrix())(
       serverTransport.close();
     });
 
-    test('multiple connections works', async () => {
+    test('multiple connections works', async ({ onTestFinished }) => {
       const clientId1 = 'client1';
       const clientId2 = 'client2';
       const serverId = 'SERVER';
@@ -439,12 +441,13 @@ describe.each(testMatrix())(
 describe.each(testMatrix())(
   'transport connection edge cases ($transport.name transport, $codec.name codec)',
   ({ transport, codec }) => {
-    test('messages should not be resent when the client loses all state and reconnects to the server', async () => {
+    test('messages should not be resent when the client loses all state and reconnects to the server', async ({
+      onTestFinished,
+    }) => {
       const opts = { codec: codec.codec };
       const { getClientTransport, getServerTransport, cleanup } =
         await transport.setup({ client: opts, server: opts });
       onTestFinished(cleanup);
-
       let clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const serverConnStart = vi.fn();
@@ -531,7 +534,9 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(msg4.payload);
     });
 
-    test('messages should not be resent when client reconnects to a different instance of the server', async () => {
+    test('messages should not be resent when client reconnects to a different instance of the server', async ({
+      onTestFinished,
+    }) => {
       const opts = { codec: codec.codec };
       const { getClientTransport, getServerTransport, restartServer, cleanup } =
         await transport.setup({ client: opts, server: opts });
@@ -634,7 +639,7 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(msg4.payload);
     });
 
-    test('recovers from phantom disconnects', async () => {
+    test('recovers from phantom disconnects', async ({ onTestFinished }) => {
       const opts = { codec: codec.codec };
       const {
         getClientTransport,
@@ -774,7 +779,9 @@ describe.each(testMatrix())(
       await transport.setup({ client: opts, server: opts });
     afterAll(cleanup);
 
-    test('handshakes and stores parsed metadata in session', async () => {
+    test('handshakes and stores parsed metadata in session', async ({
+      onTestFinished,
+    }) => {
       const schema = Type.Object({
         kept: Type.String(),
         discarded: Type.String(),
@@ -813,11 +820,13 @@ describe.each(testMatrix())(
         kept: 'kept',
       });
 
-      expect(clientTransport.connections.size).toBe(1);
+      await waitFor(() => expect(clientTransport.connections.size).toBe(1));
       expect(serverTransport.connections.size).toBe(1);
     });
 
-    test('client checks request schema on construction', async () => {
+    test('client checks request schema on construction', async ({
+      onTestFinished,
+    }) => {
       const schema = Type.Object({
         foo: Type.String(),
       });
@@ -868,7 +877,9 @@ describe.each(testMatrix())(
       expect(serverTransport.connections.size).toBe(0);
     });
 
-    test('server checks request schema on receive', async () => {
+    test('server checks request schema on receive', async ({
+      onTestFinished,
+    }) => {
       const clientRequestSchema = Type.Object({
         foo: Type.Number(),
       });
@@ -932,7 +943,9 @@ describe.each(testMatrix())(
       });
     });
 
-    test('server gets previous parsed metadata on reconnect', async () => {
+    test('server gets previous parsed metadata on reconnect', async ({
+      onTestFinished,
+    }) => {
       const schema = Type.Object({
         kept: Type.String(),
         discarded: Type.String(),
@@ -978,7 +991,7 @@ describe.each(testMatrix())(
         kept: 'kept',
       });
 
-      expect(clientTransport.connections.size).toBe(1);
+      await waitFor(() => expect(clientTransport.connections.size).toBe(1));
       expect(serverTransport.connections.size).toBe(1);
 
       // now, let's wait until the connection is considered dead
@@ -1001,7 +1014,7 @@ describe.each(testMatrix())(
       );
     });
 
-    test('parse can reject connection', async () => {
+    test('parse can reject connection', async ({ onTestFinished }) => {
       const schema = Type.Object({
         foo: Type.String(),
       });

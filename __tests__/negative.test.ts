@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, onTestFinished, test, vi } from 'vitest';
+import { afterAll, describe, expect, test, vi } from 'vitest';
 import http from 'node:http';
 import { testFinishesCleanly, waitFor } from './fixtures/cleanup';
 import {
@@ -26,12 +26,16 @@ describe('should handle incompatabilities', async () => {
   const port = await onWsServerReady(server);
   const wss = createWebSocketServer(server);
 
-  afterAll(() => {
-    wss.close();
-    server.close();
+  afterAll(async () => {
+    await new Promise((accept, _reject) => {
+      wss.close(accept);
+    });
+    await new Promise((accept, _reject) => {
+      server.close(accept);
+    });
   });
 
-  test('emits use after destroy events', async () => {
+  test('emits use after destroy events', async ({ onTestFinished }) => {
     const clientTransport = new WebSocketClientTransport(
       () => Promise.resolve(createLocalWebSocketClient(port)),
       'client',
@@ -63,7 +67,9 @@ describe('should handle incompatabilities', async () => {
     );
   });
 
-  test('retrying single connection attempt should hit retry limit reached', async () => {
+  test('retrying single connection attempt should hit retry limit reached', async ({
+    onTestFinished,
+  }) => {
     const clientTransport = new WebSocketClientTransport(
       () => Promise.reject(new Error('fake connection failure')),
       'client',
@@ -95,7 +101,9 @@ describe('should handle incompatabilities', async () => {
     );
   });
 
-  test('repeated connections that close instantly still triggers backoff', async () => {
+  test('repeated connections that close instantly still triggers backoff', async ({
+    onTestFinished,
+  }) => {
     let conns = 0;
     const serverWsConnHandler = (ws: WsLike) => {
       conns += 1;
@@ -113,20 +121,24 @@ describe('should handle incompatabilities', async () => {
 
     const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
-    onTestFinished(() => {
+    const promises: Array<Promise<void>> = [];
+    onTestFinished(async () => {
       wss.off('connection', serverWsConnHandler);
       clientTransport.removeEventListener('protocolError', errMock);
       clientTransport.close();
+      // We still need them all to connect before we close the server socket, othjerwise the
+      // async promises will throw an unhandled error.
+      await Promise.all(promises);
     });
 
     for (let i = 0; i < maxAttempts; i++) {
-      void clientTransport.connect('SERVER');
+      promises.push(clientTransport.connect('SERVER'));
     }
 
     expect(conns).toBeLessThan(maxAttempts);
   });
 
-  test('incorrect client handshake', async () => {
+  test('incorrect client handshake', async ({ onTestFinished }) => {
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     // add listeners
     const spy = vi.fn();
@@ -160,7 +172,9 @@ describe('should handle incompatabilities', async () => {
     );
   });
 
-  test('seq number in the future should raise protocol error', async () => {
+  test('seq number in the future should raise protocol error', async ({
+    onTestFinished,
+  }) => {
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
 
     // add listeners
@@ -213,7 +227,7 @@ describe('should handle incompatabilities', async () => {
     );
   });
 
-  test('mismatched protocol version', async () => {
+  test('mismatched protocol version', async ({ onTestFinished }) => {
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     // add listeners
     const spy = vi.fn();
