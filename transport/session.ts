@@ -118,7 +118,7 @@ export interface SessionOptions {
 export class Session<ConnType extends Connection> {
   private codec: Codec;
   private options: SessionOptions;
-  telemetry: TelemetryInfo;
+  readonly telemetry: TelemetryInfo;
 
   /**
    * The buffer of messages that have been sent but not yet acknowledged.
@@ -129,13 +129,18 @@ export class Session<ConnType extends Connection> {
    * The active connection associated with this session
    */
   connection?: ConnType;
+  /**
+   * A connection that is currently undergoing handshaking. Used to distinguish between the active
+   * connection, but still be able to close it if needed.
+   */
+  private handshakingConnection?: ConnType;
   readonly from: TransportClientId;
   readonly to: TransportClientId;
 
   /**
    * The unique ID of this session.
    */
-  id: string;
+  readonly id: string;
 
   /**
    * What the other side advertised as their session ID
@@ -324,7 +329,7 @@ export class Session<ConnType extends Connection> {
     this.ack = seq + 1;
   }
 
-  closeStaleConnection(conn?: ConnType) {
+  private closeStaleConnection(conn?: ConnType) {
     if (this.connection === undefined || this.connection === conn) return;
     this.log?.info(
       `closing old inner connection from session to ${this.to}`,
@@ -339,6 +344,14 @@ export class Session<ConnType extends Connection> {
     this.cancelGrace();
     this.sendBufferedMessages(newConn);
     this.connection = newConn;
+    // we only call replaceWithNewConnection after
+    // having successfully completed a handshake so we clear
+    // it here
+    this.handshakingConnection = undefined;
+  }
+
+  replaceWithNewHandshakingConnection(newConn: ConnType) {
+    this.handshakingConnection = newConn;
   }
 
   beginGrace(cb: () => void) {
@@ -346,17 +359,56 @@ export class Session<ConnType extends Connection> {
       `starting ${this.options.sessionDisconnectGraceMs}ms grace period until session to ${this.to} is closed`,
       this.loggingMetadata,
     );
+    // Replace any old timeouts to prevent this from firing twice.
+    this.cancelGrace({ keepHeartbeatMisses: true });
     this.disconnectionGrace = setTimeout(() => {
-      this.close();
+      if (this.connection !== undefined) {
+        this.log?.warn(
+          `grace period for ${this.to} elapsed while connected. not calling callback`,
+          {
+            ...this.loggingMetadata,
+            connId: this.connection.id,
+            tags: ['invariant-violation'],
+          },
+        );
+        return;
+      }
+      this.log?.info(
+        `grace period for ${this.to} elapsed`,
+        this.loggingMetadata,
+      );
       cb();
     }, this.options.sessionDisconnectGraceMs);
   }
 
   // called on reconnect of the underlying session
-  cancelGrace() {
-    this.heartbeatMisses = 0;
+  cancelGrace(
+    { keepHeartbeatMisses }: { keepHeartbeatMisses: boolean } = {
+      keepHeartbeatMisses: false,
+    },
+  ) {
+    if (!keepHeartbeatMisses) {
+      this.heartbeatMisses = 0;
+    }
+    if (this.disconnectionGrace === undefined) return;
     clearTimeout(this.disconnectionGrace);
     this.disconnectionGrace = undefined;
+  }
+
+  /**
+   * Used to close the handshaking connection, if set.
+   */
+  closeHandshakingConnection(expectedHandshakingConn?: ConnType) {
+    if (this.handshakingConnection === undefined) return;
+    if (
+      expectedHandshakingConn !== undefined &&
+      this.handshakingConnection === expectedHandshakingConn
+    ) {
+      // If the handshaking connection is the expected one, don't close it.
+      return;
+    }
+    this.handshakingConnection.close();
+    this.handshakingConnection = undefined;
   }
 
   // closed when we want to discard the whole session
