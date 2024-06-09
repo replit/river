@@ -617,23 +617,22 @@ export abstract class ClientTransport<
 
     // kill the conn after the grace period if we haven't received a handshake
     const handshakeTimeout = setTimeout(() => {
-      if (!session) {
-        this.log?.warn(
-          `connection to ${to} timed out waiting for handshake, closing`,
-          { ...conn.loggingMetadata, clientId: this.clientId, connectedTo: to },
-        );
-        conn.close();
-      }
+      if (session) return;
+      this.log?.warn(
+        `connection to ${to} timed out waiting for handshake, closing`,
+        { ...conn.loggingMetadata, clientId: this.clientId, connectedTo: to },
+      );
+      conn.close();
     }, this.options.sessionDisconnectGraceMs);
 
     const handshakeHandler = (data: Uint8Array) => {
       const maybeSession = this.receiveHandshakeResponseMessage(data, conn);
+      clearTimeout(handshakeTimeout);
       if (!maybeSession) {
         conn.close();
         return;
       } else {
         session = maybeSession;
-        clearTimeout(handshakeTimeout);
       }
 
       // when we are done handshake sequence,
