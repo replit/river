@@ -7,5 +7,9 @@ export default defineConfig({
     coverage: {
       exclude: [...coverageConfigDefaults.exclude, '**/.direnv/**'],
     },
+    sequence: {
+      hooks: 'stack',
+    },
+    fileParallelism: false,
   },
 });

@@ -1,12 +1,4 @@
-import {
-  afterAll,
-  assert,
-  describe,
-  expect,
-  test,
-  vi,
-  onTestFinished,
-} from 'vitest';
+import { afterAll, assert, describe, expect, test, vi } from 'vitest';
 import { iterNext } from '../util/testHelpers';
 import {
   SubscribableServiceSchema,
@@ -31,7 +23,9 @@ describe.each(testMatrix())(
       await transport.setup({ client: opts, server: opts });
     afterAll(cleanup);
 
-    test('closing a transport from the client cleans up connection on the server', async () => {
+    test('closing a transport from the client cleans up connection on the server', async ({
+      onTestFinished,
+    }) => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -71,7 +65,9 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test('closing a transport from the server cleans up connection on the client', async () => {
+    test('closing a transport from the server cleans up connection on the client', async ({
+      onTestFinished,
+    }) => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -111,7 +107,7 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test('rpc', async () => {
+    test('rpc', async ({ onTestFinished }) => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -158,7 +154,7 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test('stream', async () => {
+    test('stream', async ({ onTestFinished }) => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -226,7 +222,7 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test('subscription', async () => {
+    test('subscription', async ({ onTestFinished }) => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -289,7 +285,7 @@ describe.each(testMatrix())(
       expect(server.services.subscribable.state.count.listenerCount).toEqual(0);
     });
 
-    test('upload', async () => {
+    test('upload', async ({ onTestFinished }) => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -344,7 +340,9 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test("shouldn't send messages across stale sessions", async () => {
+    test("shouldn't send messages across stale sessions", async ({
+      onTestFinished,
+    }) => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();

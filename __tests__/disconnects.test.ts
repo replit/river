@@ -1,12 +1,4 @@
-import {
-  afterAll,
-  assert,
-  describe,
-  expect,
-  onTestFinished,
-  test,
-  vi,
-} from 'vitest';
+import { afterAll, assert, describe, expect, test, vi } from 'vitest';
 import { iterNext } from '../util/testHelpers';
 import {
   SubscribableServiceSchema,
@@ -30,7 +22,7 @@ describe.each(testMatrix())(
       await transport.setup({ client: opts, server: opts });
     afterAll(cleanup);
 
-    test('rpc', async () => {
+    test('rpc', async ({ onTestFinished }) => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const services = { test: TestServiceSchema };
@@ -73,7 +65,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     });
 
-    test('stream', async () => {
+    test('stream', async ({ onTestFinished }) => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const services = { test: TestServiceSchema };
@@ -120,7 +112,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     });
 
-    test('subscription', async () => {
+    test('subscription', async ({ onTestFinished }) => {
       const client1Transport = getClientTransport('client1');
       const client2Transport = getClientTransport('client2');
       const serverTransport = getServerTransport();
@@ -211,7 +203,7 @@ describe.each(testMatrix())(
       close2();
     });
 
-    test('upload', async () => {
+    test('upload', async ({ onTestFinished }) => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const services = {
