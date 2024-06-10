@@ -1,9 +1,9 @@
 import {
-  afterAll,
   assert,
   describe,
   expect,
   afterEach,
+  beforeEach,
   test,
   vi,
 } from 'vitest';
@@ -14,6 +14,16 @@ import {
   UploadableServiceSchema,
 } from './fixtures/services';
 import { createClient, createServer } from '../router';
+import {
+  type ClientHandshakeOptions,
+  type ServerHandshakeOptions,
+} from '../router/handshake';
+import type {
+  ClientTransport,
+  Connection,
+  ServerTransport,
+  TransportClientId,
+} from '../transport';
 import {
   advanceFakeTimersBySessionGrace,
   ensureTransportBuffersAreEventuallyEmpty,
@@ -26,12 +36,22 @@ import { testMatrix } from './fixtures/matrix';
 describe.each(testMatrix())(
   'procedures should clean up after themselves ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
-    const opts = { codec: codec.codec };
-    const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup({ client: opts, server: opts });
-    afterAll(cleanup);
+    let getClientTransport: (
+      id: TransportClientId,
+      handshakeOptions?: ClientHandshakeOptions,
+    ) => ClientTransport<Connection>;
+    let getServerTransport: (
+      handshakeOptions?: ServerHandshakeOptions,
+    ) => ServerTransport<Connection>;
     const cleanups: Array<() => Promise<void> | void> = [];
 
+    beforeEach(async () => {
+      const opts = { codec: codec.codec };
+      let cleanup: () => Promise<void> | void;
+      ({ getClientTransport, getServerTransport, cleanup } =
+        await transport.setup({ client: opts, server: opts }));
+      addCleanup(cleanup);
+    });
     afterEach(async () => {
       while (cleanups.length > 0) {
         await cleanups.pop()?.();

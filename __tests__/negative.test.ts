@@ -1,5 +1,6 @@
-import { afterAll, afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import http from 'node:http';
+import { type WebSocketServer } from 'ws';
 import { testFinishesCleanly, waitFor } from './fixtures/cleanup';
 import {
   createDummyTransportMessage,
@@ -22,24 +23,26 @@ import { ProtocolError } from '../transport/events';
 import { WsLike } from '../transport/impls/ws/wslike';
 
 describe('should handle incompatabilities', async () => {
-  const server = http.createServer();
-  const port = await onWsServerReady(server);
-  const wss = createWebSocketServer(server);
+  let server: http.Server;
+  let port: number;
+  let wss: WebSocketServer;
+  const cleanups: Array<() => Promise<void> | void> = [];
 
-  afterAll(async () => {
+  beforeEach(async () => {
+    server = http.createServer();
+    port = await onWsServerReady(server);
+    wss = createWebSocketServer(server);
+  });
+  afterEach(async () => {
+    while (cleanups.length > 0) {
+      await cleanups.pop()?.();
+    }
     await new Promise((accept, _reject) => {
       wss.close(accept);
     });
     await new Promise((accept, _reject) => {
       server.close(accept);
     });
-  });
-  const cleanups: Array<() => Promise<void> | void> = [];
-
-  afterEach(async () => {
-    while (cleanups.length > 0) {
-      await cleanups.pop()?.();
-    }
   });
   // vitest runs all the `onTestFinished` callbacks after all the repetitions of the test are
   // done. That is definitely a choice that was made. Instead, we hand-roll it ourselves to avoid

@@ -1,9 +1,9 @@
 import {
-  afterAll,
   assert,
   describe,
   expect,
   afterEach,
+  beforeEach,
   test,
   vi,
 } from 'vitest';
@@ -20,17 +20,37 @@ import {
   waitFor,
 } from './fixtures/cleanup';
 import { Err, UNEXPECTED_DISCONNECT } from '../router/result';
+import {
+  type ClientHandshakeOptions,
+  type ServerHandshakeOptions,
+} from '../router/handshake';
+import type {
+  ClientTransport,
+  Connection,
+  ServerTransport,
+  TransportClientId,
+} from '../transport';
 import { testMatrix } from './fixtures/matrix';
 
 describe.each(testMatrix())(
   'procedures should handle unexpected disconnects ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
-    const opts = { codec: codec.codec };
-    const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup({ client: opts, server: opts });
-    afterAll(cleanup);
+    let getClientTransport: (
+      id: TransportClientId,
+      handshakeOptions?: ClientHandshakeOptions,
+    ) => ClientTransport<Connection>;
+    let getServerTransport: (
+      handshakeOptions?: ServerHandshakeOptions,
+    ) => ServerTransport<Connection>;
     const cleanups: Array<() => Promise<void> | void> = [];
 
+    beforeEach(async () => {
+      let cleanup: () => Promise<void> | void;
+      const opts = { codec: codec.codec };
+      ({ getClientTransport, getServerTransport, cleanup } =
+        await transport.setup({ client: opts, server: opts }));
+      addCleanup(cleanup);
+    });
     afterEach(async () => {
       while (cleanups.length > 0) {
         await cleanups.pop()?.();

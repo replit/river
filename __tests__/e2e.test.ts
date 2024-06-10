@@ -1,5 +1,5 @@
 import {
-  afterAll,
+  beforeEach,
   afterEach,
   assert,
   describe,
@@ -34,17 +34,35 @@ import { Procedure, ServiceSchema } from '../router';
 import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,
+  type ClientHandshakeOptions,
+  type ServerHandshakeOptions,
 } from '../router/handshake';
+import type {
+  ClientTransport,
+  Connection,
+  ServerTransport,
+  TransportClientId,
+} from '../transport';
 
 describe.each(testMatrix())(
   'client <-> server integration test ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
-    const opts = { codec: codec.codec };
-    const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup({ client: opts, server: opts });
-    afterAll(cleanup);
+    let getClientTransport: (
+      id: TransportClientId,
+      handshakeOptions?: ClientHandshakeOptions,
+    ) => ClientTransport<Connection>;
+    let getServerTransport: (
+      handshakeOptions?: ServerHandshakeOptions,
+    ) => ServerTransport<Connection>;
     const cleanups: Array<() => Promise<void> | void> = [];
 
+    beforeEach(async () => {
+      const opts = { codec: codec.codec };
+      let cleanup: () => Promise<void> | void;
+      ({ getClientTransport, getServerTransport, cleanup } =
+        await transport.setup({ client: opts, server: opts }));
+      addCleanup(cleanup);
+    });
     afterEach(async () => {
       while (cleanups.length > 0) {
         await cleanups.pop()?.();

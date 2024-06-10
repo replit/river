@@ -2,8 +2,8 @@ import {
   describe,
   test,
   expect,
-  afterAll,
   afterEach,
+  beforeEach,
   vi,
   assert,
 } from 'vitest';
@@ -14,6 +14,16 @@ import {
   testingSessionOptions,
 } from '../util/testHelpers';
 import { EventMap, ProtocolError } from '../transport/events';
+import {
+  type ClientHandshakeOptions,
+  type ServerHandshakeOptions,
+} from '../router/handshake';
+import type {
+  ClientTransport,
+  Connection,
+  ServerTransport,
+  TransportClientId,
+} from '../transport';
 import {
   advanceFakeTimersBySessionGrace,
   testFinishesCleanly,
@@ -26,12 +36,22 @@ import { Type } from '@sinclair/typebox';
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
-    const opts = { codec: codec.codec };
-    const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup({ client: opts, server: opts });
-    afterAll(cleanup);
+    let getClientTransport: (
+      id: TransportClientId,
+      handshakeOptions?: ClientHandshakeOptions,
+    ) => ClientTransport<Connection>;
+    let getServerTransport: (
+      handshakeOptions?: ServerHandshakeOptions,
+    ) => ServerTransport<Connection>;
     const cleanups: Array<() => Promise<void> | void> = [];
 
+    beforeEach(async () => {
+      const opts = { codec: codec.codec };
+      let cleanup: () => Promise<void> | void;
+      ({ getClientTransport, getServerTransport, cleanup } =
+        await transport.setup({ client: opts, server: opts }));
+      addCleanup(cleanup);
+    });
     afterEach(async () => {
       while (cleanups.length > 0) {
         await cleanups.pop()?.();
@@ -452,8 +472,22 @@ describe.each(testMatrix())(
 describe.each(testMatrix())(
   'transport connection edge cases ($transport.name transport, $codec.name codec)',
   ({ transport, codec }) => {
+    let getClientTransport: (
+      id: TransportClientId,
+      handshakeOptions?: ClientHandshakeOptions,
+    ) => ClientTransport<Connection>;
+    let getServerTransport: (
+      handshakeOptions?: ServerHandshakeOptions,
+    ) => ServerTransport<Connection>;
     const cleanups: Array<() => Promise<void> | void> = [];
 
+    beforeEach(async () => {
+      const opts = { codec: codec.codec };
+      let cleanup: () => Promise<void> | void;
+      ({ getClientTransport, getServerTransport, cleanup } =
+        await transport.setup({ client: opts, server: opts }));
+      addCleanup(cleanup);
+    });
     afterEach(async () => {
       while (cleanups.length > 0) {
         await cleanups.pop()?.();
@@ -467,10 +501,6 @@ describe.each(testMatrix())(
     };
 
     test('messages should not be resent when the client loses all state and reconnects to the server', async () => {
-      const opts = { codec: codec.codec };
-      const { getClientTransport, getServerTransport, cleanup } =
-        await transport.setup({ client: opts, server: opts });
-      addCleanup(cleanup);
       let clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const serverConnStart = vi.fn();
@@ -795,12 +825,22 @@ describe.each(testMatrix())(
 describe.each(testMatrix())(
   'transport handshake tests ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
-    const opts = { codec: codec.codec };
-    const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup({ client: opts, server: opts });
-    afterAll(cleanup);
+    let getClientTransport: (
+      id: TransportClientId,
+      handshakeOptions?: ClientHandshakeOptions,
+    ) => ClientTransport<Connection>;
+    let getServerTransport: (
+      handshakeOptions?: ServerHandshakeOptions,
+    ) => ServerTransport<Connection>;
     const cleanups: Array<() => Promise<void> | void> = [];
 
+    beforeEach(async () => {
+      const opts = { codec: codec.codec };
+      let cleanup: () => Promise<void> | void;
+      ({ getClientTransport, getServerTransport, cleanup } =
+        await transport.setup({ client: opts, server: opts }));
+      addCleanup(cleanup);
+    });
     afterEach(async () => {
       while (cleanups.length > 0) {
         await cleanups.pop()?.();
