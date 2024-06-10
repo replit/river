@@ -259,12 +259,19 @@ export abstract class Transport<ConnType extends Connection> {
     return session;
   }
 
-  protected getOrCreateSession(
-    to: TransportClientId,
-    conn?: ConnType,
-    sessionId?: string,
-    propagationCtx?: PropagationContext,
-  ) {
+  protected getOrCreateSession({
+    to,
+    conn,
+    handshakingConn,
+    sessionId,
+    propagationCtx,
+  }: {
+    to: TransportClientId;
+    conn?: ConnType;
+    handshakingConn?: ConnType;
+    sessionId?: string;
+    propagationCtx?: PropagationContext;
+  }) {
     let session = this.sessions.get(to);
     let isReconnect = session !== undefined;
 
@@ -277,7 +284,15 @@ export abstract class Transport<ConnType extends Connection> {
         `session for ${to} already exists but has a different session id (expected: ${session.advertisedSessionId}, got: ${sessionId}), creating a new one`,
         session.loggingMetadata,
       );
-      this.deleteSession(session);
+      // note that here we are only interested in closing the handshaking connection if it _does
+      // not_ match the current handshaking connection. otherwise we can be in a situation where we
+      // can accidentally close the current connection and are never able to establish a full
+      // handshake.
+      this.deleteSession({
+        session,
+        closeHandshakingConnection: handshakingConn !== undefined,
+        handshakingConn,
+      });
       isReconnect = false;
       session = undefined;
     }
@@ -294,10 +309,24 @@ export abstract class Transport<ConnType extends Connection> {
       session.advertisedSessionId = sessionId;
     }
 
+    if (handshakingConn !== undefined) {
+      session.replaceWithNewHandshakingConnection(handshakingConn);
+    }
     return { session, isReconnect };
   }
 
-  protected deleteSession(session: Session<ConnType>) {
+  protected deleteSession({
+    session,
+    closeHandshakingConnection,
+    handshakingConn,
+  }: {
+    session: Session<ConnType>;
+    closeHandshakingConnection: boolean;
+    handshakingConn?: ConnType;
+  }) {
+    if (closeHandshakingConnection) {
+      session.closeHandshakingConnection(handshakingConn);
+    }
     session.close();
     session.telemetry.span.end();
     this.sessions.delete(session.to);
@@ -326,7 +355,11 @@ export abstract class Transport<ConnType extends Connection> {
     session.connection = undefined;
     session.beginGrace(() => {
       session.telemetry.span.addEvent('session grace period expired');
-      this.deleteSession(session);
+      this.deleteSession({
+        session,
+        closeHandshakingConnection: true,
+        handshakingConn: conn,
+      });
     });
   }
 
@@ -416,7 +449,7 @@ export abstract class Transport<ConnType extends Connection> {
           code: SpanStatusCode.ERROR,
           message: 'message order violated',
         });
-        session.close();
+        this.deleteSession({ session, closeHandshakingConnection: true });
       }
 
       return;
@@ -487,7 +520,7 @@ export abstract class Transport<ConnType extends Connection> {
       return undefined;
     }
 
-    return this.getOrCreateSession(to).session.send(msg);
+    return this.getOrCreateSession({ to }).session.send(msg);
   }
 
   // control helpers
@@ -513,7 +546,7 @@ export abstract class Transport<ConnType extends Connection> {
   close() {
     this.state = 'closed';
     for (const session of this.sessions.values()) {
-      this.deleteSession(session);
+      this.deleteSession({ session, closeHandshakingConnection: true });
     }
 
     this.log?.info(`manually closed transport`, { clientId: this.clientId });
@@ -527,7 +560,7 @@ export abstract class Transport<ConnType extends Connection> {
   destroy() {
     this.state = 'destroyed';
     for (const session of this.sessions.values()) {
-      this.deleteSession(session);
+      this.deleteSession({ session, closeHandshakingConnection: true });
     }
 
     this.log?.info(`manually destroyed transport`, { clientId: this.clientId });
@@ -720,11 +753,11 @@ export abstract class ClientTransport<
       transportMessage: parsed,
     });
 
-    const { session, isReconnect } = this.getOrCreateSession(
-      parsed.from,
+    const { session, isReconnect } = this.getOrCreateSession({
+      to: parsed.from,
       conn,
-      parsed.payload.status.sessionId,
-    );
+      sessionId: parsed.payload.status.sessionId,
+    });
 
     this.onConnect(conn, parsed.from, session, isReconnect);
 
@@ -861,9 +894,21 @@ export abstract class ClientTransport<
     }
   }
 
-  protected deleteSession(session: Session<ConnType>) {
+  protected deleteSession({
+    session,
+    closeHandshakingConnection,
+    handshakingConn,
+  }: {
+    session: Session<ConnType>;
+    closeHandshakingConnection: boolean;
+    handshakingConn?: ConnType;
+  }) {
     this.inflightConnectionPromises.delete(session.to);
-    super.deleteSession(session);
+    super.deleteSession({
+      session,
+      closeHandshakingConnection,
+      handshakingConn,
+    });
   }
 
   protected async sendHandshake(to: TransportClientId, conn: ConnType) {
@@ -894,8 +939,9 @@ export abstract class ClientTransport<
     }
 
     // dont pass conn here as we dont want the session to start using the conn
-    // until we have finished the handshake
-    const { session } = this.getOrCreateSession(to);
+    // until we have finished the handshake. Still, let the session know that
+    // it is semi-associated with the conn, and it can close it if .close() is called.
+    const { session } = this.getOrCreateSession({ to, handshakingConn: conn });
     const requestMsg = handshakeRequestMessage(
       this.clientId,
       to,
@@ -1201,12 +1247,12 @@ export abstract class ServerTransport<
       return false;
     }
 
-    const { session, isReconnect } = this.getOrCreateSession(
-      parsed.from,
+    const { session, isReconnect } = this.getOrCreateSession({
+      to: parsed.from,
       conn,
-      parsed.payload.sessionId,
-      parsed.tracing,
-    );
+      sessionId: parsed.payload.sessionId,
+      propagationCtx: parsed.tracing,
+    });
 
     this.sessionHandshakeMetadata.set(session, parsedMetadata);
 
