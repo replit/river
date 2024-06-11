@@ -16,21 +16,21 @@ import {
 } from '../../../__tests__/fixtures/cleanup';
 import { PartialTransportMessage } from '../../message';
 import type NodeWs from 'ws';
-import { createPostTestChecks } from '../../../__tests__/fixtures/cleanup';
+import { createPostTestCleanups } from '../../../__tests__/fixtures/cleanup';
 
 describe('sending and receiving across websockets works', async () => {
   let server: http.Server;
   let port: number;
   let wss: NodeWs.Server;
 
-  const { onTestFinished, postTestChecks } = createPostTestChecks();
+  const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
   beforeEach(async () => {
     server = http.createServer();
     port = await onWsServerReady(server);
     wss = createWebSocketServer(server);
 
     return async () => {
-      await postTestChecks();
+      await postTestCleanup();
       wss.close();
       server.close();
     };
@@ -43,7 +43,7 @@ describe('sending and receiving across websockets works', async () => {
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     await clientTransport.connect(serverTransport.clientId);
-    onTestFinished(async () => {
+    addPostTestCleanup(async () => {
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -85,7 +85,7 @@ describe('sending and receiving across websockets works', async () => {
 
     const client1 = await initClient(clientId1);
     const client2 = await initClient(clientId2);
-    onTestFinished(async () => {
+    addPostTestCleanup(async () => {
       await testFinishesCleanly({
         clientTransports: [client1, client2],
         serverTransport,
@@ -109,7 +109,7 @@ describe('sending and receiving across websockets works', async () => {
 
   test('hanging ws connection with no handshake is cleaned up after grace', async () => {
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
-    onTestFinished(async () => {
+    addPostTestCleanup(async () => {
       await testFinishesCleanly({
         clientTransports: [],
         serverTransport,
@@ -142,7 +142,7 @@ describe('sending and receiving across websockets works', async () => {
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     await clientTransport.connect(serverTransport.clientId);
-    onTestFinished(async () => {
+    addPostTestCleanup(async () => {
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -176,7 +176,7 @@ describe('sending and receiving across websockets works', async () => {
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     await clientTransport.connect(serverTransport.clientId);
-    onTestFinished(async () => {
+    addPostTestCleanup(async () => {
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,

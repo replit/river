@@ -15,14 +15,14 @@ import { testMatrix } from '../__tests__/fixtures/matrix';
 import { PartialTransportMessage } from './message';
 import { Type } from '@sinclair/typebox';
 import { TestSetupHelpers } from '../__tests__/fixtures/transports';
-import { createPostTestChecks } from '../__tests__/fixtures/cleanup';
+import { createPostTestCleanups } from '../__tests__/fixtures/cleanup';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
 
-    const { onTestFinished, postTestChecks } = createPostTestChecks();
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
     let getClientTransport: TestSetupHelpers['getClientTransport'];
     let getServerTransport: TestSetupHelpers['getServerTransport'];
     beforeEach(async () => {
@@ -30,7 +30,7 @@ describe.each(testMatrix())(
       getClientTransport = setup.getClientTransport;
       getServerTransport = setup.getServerTransport;
       return async () => {
-        await postTestChecks();
+        await postTestCleanup();
         await setup.cleanup();
       };
     });
@@ -38,7 +38,7 @@ describe.each(testMatrix())(
     test('connection is recreated after clean client disconnect', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -66,7 +66,7 @@ describe.each(testMatrix())(
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       await waitFor(() => expect(serverTransport.connections.size).toBe(1));
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -77,7 +77,7 @@ describe.each(testMatrix())(
     test('heartbeats should not interupt normal operation', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -116,7 +116,7 @@ describe.each(testMatrix())(
       };
 
       clientTransport.addEventListener('sessionStatus', sendHandle);
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         clientTransport.removeEventListener('protocolError', protocolError);
         clientTransport.removeEventListener('sessionStatus', sendHandle);
         await testFinishesCleanly({
@@ -132,7 +132,7 @@ describe.each(testMatrix())(
     test('seq numbers should be persisted across transparent reconnects', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -255,7 +255,7 @@ describe.each(testMatrix())(
         }
       };
 
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         // teardown
         clientTransport.removeEventListener(
           'connectionStatus',
@@ -415,7 +415,7 @@ describe.each(testMatrix())(
 
       const client1Transport = await initClient(clientId1);
       const client2Transport = await initClient(clientId2);
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [client1Transport, client2Transport],
           serverTransport,
@@ -445,11 +445,11 @@ describe.each(testMatrix())(
   ({ transport, codec }) => {
     const opts = { codec: codec.codec };
     let testHelpers: TestSetupHelpers;
-    const { onTestFinished, postTestChecks } = createPostTestChecks();
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
     beforeEach(async () => {
       testHelpers = await transport.setup({ client: opts, server: opts });
       return async () => {
-        await postTestChecks();
+        await postTestCleanup();
         await testHelpers.cleanup();
       };
     });
@@ -485,7 +485,7 @@ describe.each(testMatrix())(
 
       serverTransport.addEventListener('connectionStatus', serverConnHandler);
       serverTransport.addEventListener('sessionStatus', serverSessHandler);
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         // teardown
         serverTransport.removeEventListener(
           'connectionStatus',
@@ -572,7 +572,7 @@ describe.each(testMatrix())(
 
       clientTransport.addEventListener('connectionStatus', clientConnHandler);
       clientTransport.addEventListener('sessionStatus', clientSessHandler);
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         // teardown
         clientTransport.removeEventListener(
           'connectionStatus',
@@ -699,7 +699,7 @@ describe.each(testMatrix())(
       clientTransport.addEventListener('sessionStatus', clientSessHandler);
       serverTransport.addEventListener('connectionStatus', serverConnHandler);
       serverTransport.addEventListener('sessionStatus', serverSessHandler);
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         // teardown
         clientTransport.removeEventListener(
           'connectionStatus',
@@ -768,7 +768,7 @@ describe.each(testMatrix())(
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
 
-    const { onTestFinished, postTestChecks } = createPostTestChecks();
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
     let getClientTransport: TestSetupHelpers['getClientTransport'];
     let getServerTransport: TestSetupHelpers['getServerTransport'];
     beforeEach(async () => {
@@ -776,7 +776,7 @@ describe.each(testMatrix())(
       getClientTransport = setup.getClientTransport;
       getServerTransport = setup.getServerTransport;
       return async () => {
-        await postTestChecks();
+        await postTestCleanup();
         await setup.cleanup();
       };
     });
@@ -801,7 +801,7 @@ describe.each(testMatrix())(
         schema,
         construct: get,
       });
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -847,7 +847,7 @@ describe.each(testMatrix())(
       const clientHandshakeFailed = vi.fn();
       clientTransport.addEventListener('protocolError', clientHandshakeFailed);
 
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         clientTransport.removeEventListener(
           'protocolError',
           clientHandshakeFailed,
@@ -905,7 +905,7 @@ describe.each(testMatrix())(
       const serverHandshakeFailed = vi.fn();
       serverTransport.addEventListener('protocolError', serverHandshakeFailed);
 
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         clientTransport.removeEventListener(
           'protocolError',
           clientHandshakeFailed,
@@ -961,7 +961,7 @@ describe.each(testMatrix())(
         construct,
       });
 
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -1033,7 +1033,7 @@ describe.each(testMatrix())(
         serverRejectedConnection,
       );
 
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         clientTransport.removeEventListener(
           'protocolError',
           clientHandshakeFailed,

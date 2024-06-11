@@ -16,7 +16,7 @@ import {
 import { Ok, UNCAUGHT_ERROR } from '../router/result';
 import {
   advanceFakeTimersBySessionGrace,
-  createPostTestChecks,
+  createPostTestCleanups,
   testFinishesCleanly,
   waitFor,
 } from './fixtures/cleanup';
@@ -34,7 +34,7 @@ describe.each(testMatrix())(
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
 
-    const { onTestFinished, postTestChecks } = createPostTestChecks();
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
     let getClientTransport: TestSetupHelpers['getClientTransport'];
     let getServerTransport: TestSetupHelpers['getServerTransport'];
     beforeEach(async () => {
@@ -42,7 +42,7 @@ describe.each(testMatrix())(
       getClientTransport = setup.getClientTransport;
       getServerTransport = setup.getServerTransport;
       return async () => {
-        await postTestChecks();
+        await postTestCleanup();
         await setup.cleanup();
       };
     });
@@ -57,7 +57,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -83,7 +83,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -118,7 +118,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -145,7 +145,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -189,7 +189,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -229,7 +229,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -272,7 +272,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -317,7 +317,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -348,7 +348,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -381,7 +381,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -431,7 +431,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -462,7 +462,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -508,7 +508,7 @@ describe.each(testMatrix())(
         eagerlyConnect: true,
       });
 
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -532,7 +532,7 @@ describe.each(testMatrix())(
         serverTransport.clientId,
         { connectOnInvoke: true },
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -578,7 +578,7 @@ describe.each(testMatrix())(
         },
       );
 
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -617,7 +617,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -658,7 +658,7 @@ describe.each(testMatrix())(
           };
         }),
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,

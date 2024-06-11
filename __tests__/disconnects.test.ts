@@ -14,14 +14,14 @@ import {
 import { Err, UNEXPECTED_DISCONNECT } from '../router/result';
 import { testMatrix } from './fixtures/matrix';
 import { TestSetupHelpers } from './fixtures/transports';
-import { createPostTestChecks } from './fixtures/cleanup';
+import { createPostTestCleanups } from './fixtures/cleanup';
 
 describe.each(testMatrix())(
   'procedures should handle unexpected disconnects ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
 
-    const { onTestFinished, postTestChecks } = createPostTestChecks();
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
     let getClientTransport: TestSetupHelpers['getClientTransport'];
     let getServerTransport: TestSetupHelpers['getServerTransport'];
     beforeEach(async () => {
@@ -29,7 +29,7 @@ describe.each(testMatrix())(
       getClientTransport = setup.getClientTransport;
       getServerTransport = setup.getServerTransport;
       return async () => {
-        await postTestChecks();
+        await postTestCleanup();
         await setup.cleanup();
       };
     });
@@ -43,7 +43,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -86,7 +86,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -141,7 +141,7 @@ describe.each(testMatrix())(
         client2Transport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [client1Transport, client2Transport],
           serverTransport,
@@ -226,7 +226,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,

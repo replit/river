@@ -18,7 +18,7 @@ import { OpaqueTransportMessage } from '../transport';
 import { testMatrix } from '../__tests__/fixtures/matrix';
 import { testFinishesCleanly, waitFor } from '../__tests__/fixtures/cleanup';
 import { TestSetupHelpers } from '../__tests__/fixtures/transports';
-import { createPostTestChecks } from '../__tests__/fixtures/cleanup';
+import { createPostTestCleanups } from '../__tests__/fixtures/cleanup';
 
 describe('Basic tracing tests', () => {
   const provider = new BasicTracerProvider();
@@ -72,7 +72,7 @@ describe.each(testMatrix())(
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
 
-    const { onTestFinished, postTestChecks } = createPostTestChecks();
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
     let getClientTransport: TestSetupHelpers['getClientTransport'];
     let getServerTransport: TestSetupHelpers['getServerTransport'];
     beforeEach(async () => {
@@ -80,7 +80,7 @@ describe.each(testMatrix())(
       getClientTransport = setup.getClientTransport;
       getServerTransport = setup.getServerTransport;
       return async () => {
-        await postTestChecks();
+        await postTestCleanup();
         await setup.cleanup();
       };
     });
@@ -88,7 +88,7 @@ describe.each(testMatrix())(
     test('Traces sessions and connections across network boundary', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      onTestFinished(async () => {
+      addPostTestCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,

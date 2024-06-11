@@ -12,20 +12,20 @@ import {
   testFinishesCleanly,
 } from '../../../__tests__/fixtures/cleanup';
 import net from 'node:net';
-import { createPostTestChecks } from '../../../__tests__/fixtures/cleanup';
+import { createPostTestCleanups } from '../../../__tests__/fixtures/cleanup';
 
 describe('sending and receiving across unix sockets works', async () => {
   let socketPath: string;
   let server: net.Server;
 
-  const { onTestFinished, postTestChecks } = createPostTestChecks();
+  const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
   beforeEach(async () => {
     socketPath = getUnixSocketPath();
     server = net.createServer();
     await onUdsServeReady(server, socketPath);
 
     return async () => {
-      await postTestChecks();
+      await postTestCleanup();
       server.close();
     };
   });
@@ -50,7 +50,7 @@ describe('sending and receiving across unix sockets works', async () => {
         test: [1, 2, 3, 4],
       },
     ];
-    onTestFinished(async () => {
+    addPostTestCleanup(async () => {
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -74,7 +74,7 @@ describe('sending and receiving across unix sockets works', async () => {
       server,
       'SERVER',
     );
-    onTestFinished(async () => {
+    addPostTestCleanup(async () => {
       await testFinishesCleanly({
         clientTransports: [],
         serverTransport,

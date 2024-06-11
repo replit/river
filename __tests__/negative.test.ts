@@ -21,21 +21,21 @@ import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
 import { WsLike } from '../transport/impls/ws/wslike';
 import NodeWs from 'ws';
-import { createPostTestChecks } from './fixtures/cleanup';
+import { createPostTestCleanups } from './fixtures/cleanup';
 
 describe('should handle incompatabilities', async () => {
   let server: http.Server;
   let port: number;
   let wss: NodeWs.Server;
 
-  const { onTestFinished, postTestChecks } = createPostTestChecks();
+  const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
   beforeEach(async () => {
     server = http.createServer();
     port = await onWsServerReady(server);
     wss = createWebSocketServer(server);
 
     return async () => {
-      await postTestChecks();
+      await postTestCleanup();
       wss.close();
       server.close();
     };
@@ -52,7 +52,7 @@ describe('should handle incompatabilities', async () => {
 
     const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
-    onTestFinished(async () => {
+    addPostTestCleanup(async () => {
       clientTransport.removeEventListener('protocolError', errMock);
 
       await testFinishesCleanly({
@@ -78,7 +78,7 @@ describe('should handle incompatabilities', async () => {
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
-    onTestFinished(async () => {
+    addPostTestCleanup(async () => {
       clientTransport.removeEventListener('protocolError', errMock);
 
       await testFinishesCleanly({
@@ -122,7 +122,7 @@ describe('should handle incompatabilities', async () => {
     const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
     const promises: Array<Promise<void>> = [];
-    onTestFinished(async () => {
+    addPostTestCleanup(async () => {
       wss.off('connection', serverWsConnHandler);
       clientTransport.removeEventListener('protocolError', errMock);
       await testFinishesCleanly({
@@ -144,7 +144,7 @@ describe('should handle incompatabilities', async () => {
     const errMock = vi.fn();
     serverTransport.addEventListener('connectionStatus', spy);
     serverTransport.addEventListener('protocolError', errMock);
-    onTestFinished(async () => {
+    addPostTestCleanup(async () => {
       serverTransport.removeEventListener('connectionStatus', spy);
       serverTransport.removeEventListener('protocolError', errMock);
 
@@ -179,7 +179,7 @@ describe('should handle incompatabilities', async () => {
     const errMock = vi.fn();
     serverTransport.addEventListener('connectionStatus', spy);
     serverTransport.addEventListener('protocolError', errMock);
-    onTestFinished(async () => {
+    addPostTestCleanup(async () => {
       serverTransport.removeEventListener('connectionStatus', spy);
       serverTransport.removeEventListener('protocolError', errMock);
 
@@ -231,7 +231,7 @@ describe('should handle incompatabilities', async () => {
     const errMock = vi.fn();
     serverTransport.addEventListener('connectionStatus', spy);
     serverTransport.addEventListener('protocolError', errMock);
-    onTestFinished(async () => {
+    addPostTestCleanup(async () => {
       serverTransport.removeEventListener('protocolError', errMock);
       serverTransport.removeEventListener('connectionStatus', spy);
 
