@@ -45,7 +45,7 @@ export async function advanceFakeTimersBySessionGrace() {
 
 async function ensureTransportIsClean(t: Transport<Connection>) {
   expect(
-    t.state,
+    t.getStatus(),
     `[post-test cleanup] transport ${t.clientId} should be closed after the test`,
   ).to.not.equal('open');
 
@@ -56,21 +56,6 @@ async function ensureTransportIsClean(t: Transport<Connection>) {
       `[post-test cleanup] transport ${t.clientId} should not have open sessions after the test`,
     ).toStrictEqual(new Map()),
   );
-
-  expect(
-    t.eventDispatcher.numberOfListeners('message'),
-    `[post-test cleanup] transport ${t.clientId} should not have open message handlers after the test`,
-  ).equal(0);
-
-  expect(
-    t.eventDispatcher.numberOfListeners('sessionStatus'),
-    `[post-test cleanup] transport ${t.clientId} should not have open session status handlers after the test`,
-  ).equal(0);
-
-  expect(
-    t.eventDispatcher.numberOfListeners('connectionStatus'),
-    `[post-test cleanup] transport ${t.clientId} should not have open connection status handlers after the test`,
-  ).equal(0);
 }
 
 export function waitFor<T>(cb: () => T | Promise<T>) {
@@ -136,7 +121,6 @@ export async function testFinishesCleanly({
   if (server) {
     await advanceFakeTimersBySessionGrace();
     await ensureServerIsClean(server);
-    await server.close();
   }
 
   if (serverTransport) {

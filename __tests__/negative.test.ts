@@ -41,7 +41,7 @@ describe('should handle incompatabilities', async () => {
     };
   });
 
-  test('emits use after destroy events', async () => {
+  test('throws when sending after close', async () => {
     const clientTransport = new WebSocketClientTransport(
       () => Promise.resolve(createLocalWebSocketClient(port)),
       'client',
@@ -61,16 +61,13 @@ describe('should handle incompatabilities', async () => {
       });
     });
 
-    clientTransport.destroy();
-    const msg = createDummyTransportMessage();
-    clientTransport.send(serverTransport.clientId, msg);
-
-    expect(errMock).toHaveBeenCalledTimes(1);
-    expect(errMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: ProtocolError.UseAfterDestroy,
-      }),
-    );
+    clientTransport.close();
+    expect(() =>
+      clientTransport.send(
+        serverTransport.clientId,
+        createDummyTransportMessage(),
+      ),
+    ).toThrow();
   });
 
   test('retrying single connection attempt should hit retry limit reached', async () => {

@@ -376,10 +376,10 @@ describe.each(testMatrix())(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
 
-      clientTransport.destroy();
+      clientTransport.close();
 
-      // this is not expected to be clean because we destroyed the transport
-      expect(clientTransport.state).toEqual('destroyed');
+      // this is not expected to be clean because we closed the transport
+      expect(clientTransport.getStatus()).toEqual('closed');
       await waitFor(() =>
         expect(
           clientTransport.connections,

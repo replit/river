@@ -12,7 +12,6 @@ import {
   UploadableServiceSchema,
   OrderingServiceSchema,
   NonObjectSchemas,
-  SchemaWithDisposableState,
 } from './fixtures/services';
 import { Ok, UNCAUGHT_ERROR } from '../router/result';
 import {
@@ -640,28 +639,6 @@ describe.each(testMatrix())(
       );
       assert(result2.ok);
       expect(result2.payload).toStrictEqual(weirdRecursivePayload);
-    });
-
-    test('calls service dispose methods on cleanup', async () => {
-      // setup
-      const clientTransport = getClientTransport('client');
-      const serverTransport = getServerTransport();
-      const dispose = vi.fn();
-      const services = {
-        disposable: SchemaWithDisposableState(dispose),
-      };
-      const server = createServer(serverTransport, services);
-      onTestFinished(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-          server,
-        });
-      });
-
-      // test
-      await server.close();
-      expect(dispose).toBeCalledTimes(1);
     });
 
     test('procedure can use metadata', async () => {

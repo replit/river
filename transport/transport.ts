@@ -48,10 +48,9 @@ import {
 /**
  * Represents the possible states of a transport.
  * @property {'open'} open - The transport is open and operational (note that this doesn't mean it is actively connected)
- * @property {'closed'} closed - The transport is closed and not operational, but can be reopened.
- * @property {'destroyed'} destroyed - The transport is permanently destroyed and cannot be reopened.
+ * @property {'closed'} closed - The transport is permanently closed and cannot be reopened.
  */
-export type TransportStatus = 'open' | 'closed' | 'destroyed';
+export type TransportStatus = 'open' | 'closed';
 
 type TransportOptions = SessionOptions;
 
@@ -121,10 +120,9 @@ const defaultServerTransportOptions: ServerTransportOptions = {
  */
 export abstract class Transport<ConnType extends Connection> {
   /**
-   * A flag indicating whether the transport has been destroyed.
-   * A destroyed transport will not attempt to reconnect and cannot be used again.
+   * The status of the transport.
    */
-  state: TransportStatus;
+  private status: TransportStatus;
 
   /**
    * The {@link Codec} used to encode and decode messages.
@@ -178,7 +176,7 @@ export abstract class Transport<ConnType extends Connection> {
     this.sessions = new Map();
     this.codec = this.options.codec;
     this.clientId = clientId;
-    this.state = 'open';
+    this.status = 'open';
   }
 
   bindLogger(fn: LogFn | Logger, level?: LoggingLevel) {
@@ -406,7 +404,7 @@ export abstract class Transport<ConnType extends Connection> {
    * @param msg The received message.
    */
   protected handleMsg(msg: OpaqueTransportMessage, conn: ConnType) {
-    if (this.state !== 'open') return;
+    if (this.getStatus() !== 'open') return;
     const session = this.sessions.get(msg.from);
     if (!session) {
       this.log?.error(`received message for unknown session from ${msg.from}`, {
@@ -499,25 +497,17 @@ export abstract class Transport<ConnType extends Connection> {
    * @param msg The message to send.
    * @returns The ID of the sent message or undefined if it wasn't sent
    */
-  send(
-    to: TransportClientId,
-    msg: PartialTransportMessage,
-  ): string | undefined {
-    if (this.state === 'destroyed') {
-      const err = 'transport is destroyed, cant send';
+
+  send(to: TransportClientId, msg: PartialTransportMessage): string {
+    if (this.getStatus() === 'closed') {
+      const err = 'transport is closed, cant send';
       this.log?.error(err, {
         clientId: this.clientId,
         transportMessage: msg,
         tags: ['invariant-violation'],
       });
-      this.protocolError(ProtocolError.UseAfterDestroy, err);
-      return undefined;
-    } else if (this.state === 'closed') {
-      this.log?.info(`transport closed when sending, discarding`, {
-        clientId: this.clientId,
-        transportMessage: msg,
-      });
-      return undefined;
+
+      throw new Error(err);
     }
 
     return this.getOrCreateSession({ to }).session.send(msg);
@@ -544,26 +534,23 @@ export abstract class Transport<ConnType extends Connection> {
    * Closes the transport. Any messages sent while the transport is closed will be silently discarded.
    */
   close() {
-    this.state = 'closed';
+    this.status = 'closed';
+
     for (const session of this.sessions.values()) {
       this.deleteSession({ session, closeHandshakingConnection: true });
     }
+
+    this.eventDispatcher.dispatchEvent('transportStatus', {
+      status: this.status,
+    });
+
+    this.eventDispatcher.removeAllListeners();
 
     this.log?.info(`manually closed transport`, { clientId: this.clientId });
   }
 
-  /**
-   * Default destroy implementation for transports. You should override this in the downstream
-   * implementation if you need to do any additional cleanup and call super.destroy() at the end.
-   * Destroys the transport. Any messages sent while the transport is destroyed will throw an error.
-   */
-  destroy() {
-    this.state = 'destroyed';
-    for (const session of this.sessions.values()) {
-      this.deleteSession({ session, closeHandshakingConnection: true });
-    }
-
-    this.log?.info(`manually destroyed transport`, { clientId: this.clientId });
+  getStatus(): TransportStatus {
+    return this.status;
   }
 }
 
@@ -612,7 +599,7 @@ export abstract class ClientTransport<
   }
 
   protected handleConnection(conn: ConnType, to: TransportClientId): void {
-    if (this.state !== 'open') return;
+    if (this.getStatus() !== 'open') return;
     let session: Session<ConnType> | undefined = undefined;
 
     // kill the conn after the grace period if we haven't received a handshake
@@ -784,7 +771,7 @@ export abstract class ClientTransport<
    * @param to The client ID of the node to connect to.
    */
   async connect(to: TransportClientId): Promise<void> {
-    const canProceedWithConnection = () => this.state === 'open';
+    const canProceedWithConnection = () => this.getStatus() === 'open';
     if (!canProceedWithConnection()) {
       this.log?.info(
         `transport state is no longer open, cancelling attempt to connect to ${to}`,
@@ -1003,7 +990,7 @@ export abstract class ServerTransport<
   }
 
   protected handleConnection(conn: ConnType) {
-    if (this.state !== 'open') return;
+    if (this.getStatus() !== 'open') return;
 
     this.log?.info(`new incoming connection`, {
       ...conn.loggingMetadata,

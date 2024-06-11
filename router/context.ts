@@ -49,7 +49,7 @@ export interface ParsedMetadata {}
 export type ServiceContextWithState<State> = ServiceContext & { state: State };
 
 export type ServiceContextWithTransportInfo<State> = ServiceContext & {
-  state: Omit<State, typeof Symbol.dispose>;
+  state: State;
   to: TransportClientId;
   from: TransportClientId;
   streamId: string;

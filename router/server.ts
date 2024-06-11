@@ -44,7 +44,6 @@ import { ServerHandshakeOptions } from './handshake';
 export interface Server<Services extends AnyServiceSchemaMap> {
   services: InstantiatedServiceSchemaMap<Services>;
   streams: Map<string, ProcStream>;
-  close(): Promise<void>;
 }
 
 interface ProcStream {
@@ -102,6 +101,16 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     this.transport.addEventListener('message', this.onMessage);
     this.transport.addEventListener('sessionStatus', this.onSessionStatus);
     this.log = transport.log;
+
+    this.transport.addEventListener('transportStatus', async ({ status }) => {
+      if (status !== 'closed') {
+        return;
+      }
+
+      this.transport.removeEventListener('message', this.onMessage);
+      this.transport.removeEventListener('sessionStatus', this.onSessionStatus);
+      await Promise.all([...this.streamMap.keys()].map(this.cleanupStream));
+    });
   }
 
   get streams() {
@@ -153,21 +162,6 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     this.disconnectedSessions.delete(disconnectedClientId);
     this.clientStreams.delete(disconnectedClientId);
   };
-
-  async close() {
-    this.transport.removeEventListener('message', this.onMessage);
-    this.transport.removeEventListener('sessionStatus', this.onSessionStatus);
-    await Promise.all([...this.streamMap.keys()].map(this.cleanupStream));
-
-    for (const context of this.contextMap.values()) {
-      if (Symbol.dispose in context.state) {
-        const dispose = context.state[Symbol.dispose];
-        if (typeof dispose === 'function') {
-          dispose();
-        }
-      }
-    }
-  }
 
   createNewProcStream(message: OpaqueTransportMessage) {
     if (!isStreamOpen(message.controlFlags)) {
