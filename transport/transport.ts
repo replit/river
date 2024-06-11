@@ -124,7 +124,7 @@ export abstract class Transport<ConnType extends Connection> {
    * A flag indicating whether the transport has been destroyed.
    * A destroyed transport will not attempt to reconnect and cannot be used again.
    */
-  state: TransportStatus;
+  private status: TransportStatus;
 
   /**
    * The {@link Codec} used to encode and decode messages.
@@ -178,7 +178,7 @@ export abstract class Transport<ConnType extends Connection> {
     this.sessions = new Map();
     this.codec = this.options.codec;
     this.clientId = clientId;
-    this.state = 'open';
+    this.status = 'open';
   }
 
   bindLogger(fn: LogFn | Logger, level?: LoggingLevel) {
@@ -406,7 +406,7 @@ export abstract class Transport<ConnType extends Connection> {
    * @param msg The received message.
    */
   protected handleMsg(msg: OpaqueTransportMessage, conn: ConnType) {
-    if (this.state !== 'open') return;
+    if (this.getStatus() !== 'open') return;
     const session = this.sessions.get(msg.from);
     if (!session) {
       this.log?.error(`received message for unknown session from ${msg.from}`, {
@@ -503,7 +503,7 @@ export abstract class Transport<ConnType extends Connection> {
     to: TransportClientId,
     msg: PartialTransportMessage,
   ): string | undefined {
-    if (this.state === 'destroyed') {
+    if (this.getStatus() === 'destroyed') {
       const err = 'transport is destroyed, cant send';
       this.log?.error(err, {
         clientId: this.clientId,
@@ -512,7 +512,7 @@ export abstract class Transport<ConnType extends Connection> {
       });
       this.protocolError(ProtocolError.UseAfterDestroy, err);
       return undefined;
-    } else if (this.state === 'closed') {
+    } else if (this.getStatus() === 'closed') {
       this.log?.info(`transport closed when sending, discarding`, {
         clientId: this.clientId,
         transportMessage: msg,
@@ -544,7 +544,7 @@ export abstract class Transport<ConnType extends Connection> {
    * Closes the transport. Any messages sent while the transport is closed will be silently discarded.
    */
   close() {
-    this.state = 'closed';
+    this.setStatus('closed');
     for (const session of this.sessions.values()) {
       this.deleteSession({ session, closeHandshakingConnection: true });
     }
@@ -558,12 +558,22 @@ export abstract class Transport<ConnType extends Connection> {
    * Destroys the transport. Any messages sent while the transport is destroyed will throw an error.
    */
   destroy() {
-    this.state = 'destroyed';
+    this.setStatus('destroyed');
     for (const session of this.sessions.values()) {
       this.deleteSession({ session, closeHandshakingConnection: true });
     }
 
     this.log?.info(`manually destroyed transport`, { clientId: this.clientId });
+  }
+
+  private setStatus(status: TransportStatus) {
+    this.status = status;
+
+    this.eventDispatcher.dispatchEvent('transportStatus', { status });
+  }
+
+  getStatus(): TransportStatus {
+    return this.status;
   }
 }
 
@@ -612,7 +622,7 @@ export abstract class ClientTransport<
   }
 
   protected handleConnection(conn: ConnType, to: TransportClientId): void {
-    if (this.state !== 'open') return;
+    if (this.getStatus() !== 'open') return;
     let session: Session<ConnType> | undefined = undefined;
 
     // kill the conn after the grace period if we haven't received a handshake
@@ -784,7 +794,7 @@ export abstract class ClientTransport<
    * @param to The client ID of the node to connect to.
    */
   async connect(to: TransportClientId): Promise<void> {
-    const canProceedWithConnection = () => this.state === 'open';
+    const canProceedWithConnection = () => this.getStatus() === 'open';
     if (!canProceedWithConnection()) {
       this.log?.info(
         `transport state is no longer open, cancelling attempt to connect to ${to}`,
@@ -1003,7 +1013,7 @@ export abstract class ServerTransport<
   }
 
   protected handleConnection(conn: ConnType) {
-    if (this.state !== 'open') return;
+    if (this.getStatus() !== 'open') return;
 
     this.log?.info(`new incoming connection`, {
       ...conn.loggingMetadata,

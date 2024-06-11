@@ -1,3 +1,4 @@
+import { TransportStatus } from '.';
 import { OpaqueTransportMessage } from './message';
 import { Connection, Session } from './session';
 
@@ -25,6 +26,9 @@ export interface EventMap {
   protocolError: {
     type: ProtocolErrorType;
     message: string;
+  };
+  transportStatus: {
+    status: TransportStatus;
   };
 }
 
