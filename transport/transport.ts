@@ -48,10 +48,9 @@ import {
 /**
  * Represents the possible states of a transport.
  * @property {'open'} open - The transport is open and operational (note that this doesn't mean it is actively connected)
- * @property {'closed'} closed - The transport is closed and not operational, but can be reopened.
- * @property {'destroyed'} destroyed - The transport is permanently destroyed and cannot be reopened.
+ * @property {'closed'} closed - The transport is permanently closed and cannot be reopened.
  */
-export type TransportStatus = 'open' | 'closed' | 'destroyed';
+export type TransportStatus = 'open' | 'closed';
 
 type TransportOptions = SessionOptions;
 
@@ -121,8 +120,7 @@ const defaultServerTransportOptions: ServerTransportOptions = {
  */
 export abstract class Transport<ConnType extends Connection> {
   /**
-   * A flag indicating whether the transport has been destroyed.
-   * A destroyed transport will not attempt to reconnect and cannot be used again.
+   * The status of the transport.
    */
   private status: TransportStatus;
 
@@ -499,25 +497,16 @@ export abstract class Transport<ConnType extends Connection> {
    * @param msg The message to send.
    * @returns The ID of the sent message or undefined if it wasn't sent
    */
-  send(
-    to: TransportClientId,
-    msg: PartialTransportMessage,
-  ): string | undefined {
-    if (this.getStatus() === 'destroyed') {
-      const err = 'transport is destroyed, cant send';
+  send(to: TransportClientId, msg: PartialTransportMessage): string {
+    if (this.getStatus() === 'closed') {
+      const err = 'transport is closed, cant send';
       this.log?.error(err, {
         clientId: this.clientId,
         transportMessage: msg,
         tags: ['invariant-violation'],
       });
-      this.protocolError(ProtocolError.UseAfterDestroy, err);
-      return undefined;
-    } else if (this.getStatus() === 'closed') {
-      this.log?.info(`transport closed when sending, discarding`, {
-        clientId: this.clientId,
-        transportMessage: msg,
-      });
-      return undefined;
+
+      throw new Error(err);
     }
 
     return this.getOrCreateSession({ to }).session.send(msg);
@@ -544,32 +533,17 @@ export abstract class Transport<ConnType extends Connection> {
    * Closes the transport. Any messages sent while the transport is closed will be silently discarded.
    */
   close() {
-    this.setStatus('closed');
+    this.status = 'closed';
+
     for (const session of this.sessions.values()) {
       this.deleteSession({ session, closeHandshakingConnection: true });
     }
+
+    this.eventDispatcher.dispatchEvent('transportStatus', {
+      status: this.status,
+    });
 
     this.log?.info(`manually closed transport`, { clientId: this.clientId });
-  }
-
-  /**
-   * Default destroy implementation for transports. You should override this in the downstream
-   * implementation if you need to do any additional cleanup and call super.destroy() at the end.
-   * Destroys the transport. Any messages sent while the transport is destroyed will throw an error.
-   */
-  destroy() {
-    this.setStatus('destroyed');
-    for (const session of this.sessions.values()) {
-      this.deleteSession({ session, closeHandshakingConnection: true });
-    }
-
-    this.log?.info(`manually destroyed transport`, { clientId: this.clientId });
-  }
-
-  private setStatus(status: TransportStatus) {
-    this.status = status;
-
-    this.eventDispatcher.dispatchEvent('transportStatus', { status });
   }
 
   getStatus(): TransportStatus {

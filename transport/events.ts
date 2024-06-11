@@ -6,7 +6,6 @@ type ConnectionStatus = 'connect' | 'disconnect';
 export const ProtocolError = {
   RetriesExceeded: 'conn_retry_exceeded',
   HandshakeFailed: 'handshake_failed',
-  UseAfterDestroy: 'use_after_destroy',
   MessageOrderingViolated: 'message_ordering_violated',
 } as const;
 
