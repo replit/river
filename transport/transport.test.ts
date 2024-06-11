@@ -377,7 +377,7 @@ describe.each(testMatrix())(
       clientTransport.destroy();
 
       // this is not expected to be clean because we destroyed the transport
-      expect(clientTransport.state).toEqual('destroyed');
+      expect(clientTransport.getStatus()).toEqual('destroyed');
       await waitFor(() =>
         expect(
           clientTransport.connections,

@@ -45,7 +45,7 @@ export async function advanceFakeTimersBySessionGrace() {
 
 async function ensureTransportIsClean(t: Transport<Connection>) {
   expect(
-    t.state,
+    t.getStatus(),
     `[post-test cleanup] transport ${t.clientId} should be closed after the test`,
   ).to.not.equal('open');
 
