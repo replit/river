@@ -16,7 +16,7 @@ import {
 } from '../../../__tests__/fixtures/cleanup';
 import { PartialTransportMessage } from '../../message';
 import type NodeWs from 'ws';
-import { createPostTestChecks } from '../../../__tests__/cleanup.test';
+import { createPostTestChecks } from '../../../__tests__/fixtures/cleanup';
 
 describe('sending and receiving across websockets works', async () => {
   let server: http.Server;

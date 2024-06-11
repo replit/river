@@ -14,7 +14,7 @@ import {
 import { Err, UNEXPECTED_DISCONNECT } from '../router/result';
 import { testMatrix } from './fixtures/matrix';
 import { TestSetupHelpers } from './fixtures/transports';
-import { createPostTestChecks } from './cleanup.test';
+import { createPostTestChecks } from './fixtures/cleanup';
 
 describe.each(testMatrix())(
   'procedures should handle unexpected disconnects ($transport.name transport, $codec.name codec)',

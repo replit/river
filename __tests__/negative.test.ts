@@ -21,7 +21,7 @@ import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
 import { WsLike } from '../transport/impls/ws/wslike';
 import NodeWs from 'ws';
-import { createPostTestChecks } from './cleanup.test';
+import { createPostTestChecks } from './fixtures/cleanup';
 
 describe('should handle incompatabilities', async () => {
   let server: http.Server;
@@ -119,6 +119,7 @@ describe('should handle incompatabilities', async () => {
       'client',
       { attemptBudgetCapacity: maxAttempts },
     );
+
     clientTransport.reconnectOnConnectionDrop = false;
 
     const errMock = vi.fn();
@@ -127,7 +128,9 @@ describe('should handle incompatabilities', async () => {
     onTestFinished(async () => {
       wss.off('connection', serverWsConnHandler);
       clientTransport.removeEventListener('protocolError', errMock);
-      clientTransport.close();
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+      });
     });
 
     for (let i = 0; i < maxAttempts; i++) {

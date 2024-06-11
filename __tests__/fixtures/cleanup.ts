@@ -147,3 +147,17 @@ export async function testFinishesCleanly({
 
   vi.useRealTimers();
 }
+
+export const createPostTestChecks = () => {
+  const cleanupFns: Array<() => Promise<void>> = [];
+  return {
+    onTestFinished: (fn: () => Promise<void>) => {
+      cleanupFns.push(fn);
+    },
+    postTestChecks: async () => {
+      while (cleanupFns.length > 0) {
+        await cleanupFns.pop()?.();
+      }
+    },
+  };
+};

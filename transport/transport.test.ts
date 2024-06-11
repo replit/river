@@ -15,7 +15,7 @@ import { testMatrix } from '../__tests__/fixtures/matrix';
 import { PartialTransportMessage } from './message';
 import { Type } from '@sinclair/typebox';
 import { TestSetupHelpers } from '../__tests__/fixtures/transports';
-import { createPostTestChecks } from '../__tests__/cleanup.test';
+import { createPostTestChecks } from '../__tests__/fixtures/cleanup';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',

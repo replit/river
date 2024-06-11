@@ -17,6 +17,7 @@ import {
 import { Ok, UNCAUGHT_ERROR } from '../router/result';
 import {
   advanceFakeTimersBySessionGrace,
+  createPostTestChecks,
   testFinishesCleanly,
   waitFor,
 } from './fixtures/cleanup';
@@ -28,7 +29,6 @@ import {
   createServerHandshakeOptions,
 } from '../router/handshake';
 import { TestSetupHelpers } from './fixtures/transports';
-import { createPostTestChecks } from './cleanup.test';
 
 describe.each(testMatrix())(
   'client <-> server integration test ($transport.name transport, $codec.name codec)',
@@ -681,6 +681,13 @@ describe.each(testMatrix())(
           };
         }),
       );
+      onTestFinished(async () => {
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
 
       const services = {
         test: ServiceSchema.define({
@@ -703,13 +710,6 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-          server,
-        });
-      });
 
       // test
       const result = await client.test.getData.rpc({});

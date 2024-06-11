@@ -12,7 +12,7 @@ import {
   testFinishesCleanly,
 } from '../../../__tests__/fixtures/cleanup';
 import net from 'node:net';
-import { createPostTestChecks } from '../../../__tests__/cleanup.test';
+import { createPostTestChecks } from '../../../__tests__/fixtures/cleanup';
 
 describe('sending and receiving across unix sockets works', async () => {
   let socketPath: string;

@@ -8,6 +8,7 @@ import {
 import { createClient, createServer } from '../router';
 import {
   advanceFakeTimersBySessionGrace,
+  createPostTestChecks,
   ensureTransportBuffersAreEventuallyEmpty,
   testFinishesCleanly,
   waitFor,
@@ -15,20 +16,6 @@ import {
 } from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
 import { TestSetupHelpers } from './fixtures/transports';
-
-export const createPostTestChecks = () => {
-  const cleanupFns: Array<() => Promise<void>> = [];
-  return {
-    onTestFinished: (fn: () => Promise<void>) => {
-      cleanupFns.push(fn);
-    },
-    postTestChecks: async () => {
-      while (cleanupFns.length > 0) {
-        await cleanupFns.pop()?.();
-      }
-    },
-  };
-};
 
 describe.each(testMatrix())(
   'procedures should clean up after themselves ($transport.name transport, $codec.name codec)',

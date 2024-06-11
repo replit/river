@@ -18,7 +18,7 @@ import { OpaqueTransportMessage } from '../transport';
 import { testMatrix } from '../__tests__/fixtures/matrix';
 import { testFinishesCleanly, waitFor } from '../__tests__/fixtures/cleanup';
 import { TestSetupHelpers } from '../__tests__/fixtures/transports';
-import { createPostTestChecks } from '../__tests__/cleanup.test';
+import { createPostTestChecks } from '../__tests__/fixtures/cleanup';
 
 describe('Basic tracing tests', () => {
   const provider = new BasicTracerProvider();
