@@ -56,21 +56,6 @@ async function ensureTransportIsClean(t: Transport<Connection>) {
       `[post-test cleanup] transport ${t.clientId} should not have open sessions after the test`,
     ).toStrictEqual(new Map()),
   );
-
-  expect(
-    t.eventDispatcher.numberOfListeners('message'),
-    `[post-test cleanup] transport ${t.clientId} should not have open message handlers after the test`,
-  ).equal(0);
-
-  expect(
-    t.eventDispatcher.numberOfListeners('sessionStatus'),
-    `[post-test cleanup] transport ${t.clientId} should not have open session status handlers after the test`,
-  ).equal(0);
-
-  expect(
-    t.eventDispatcher.numberOfListeners('connectionStatus'),
-    `[post-test cleanup] transport ${t.clientId} should not have open connection status handlers after the test`,
-  ).equal(0);
 }
 
 export function waitFor<T>(cb: () => T | Promise<T>) {

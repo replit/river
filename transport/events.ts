@@ -39,6 +39,10 @@ export type EventHandler<K extends EventTypes> = (
 export class EventDispatcher<T extends EventTypes> {
   private eventListeners: { [K in T]?: Set<EventHandler<K>> } = {};
 
+  removeAllListeners() {
+    this.eventListeners = {};
+  }
+
   numberOfListeners<K extends T>(eventType: K) {
     return this.eventListeners[eventType]?.size ?? 0;
   }

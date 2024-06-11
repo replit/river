@@ -544,6 +544,8 @@ export abstract class Transport<ConnType extends Connection> {
       status: this.status,
     });
 
+    this.eventDispatcher.removeAllListeners();
+
     this.log?.info(`manually closed transport`, { clientId: this.clientId });
   }
 
