@@ -1,4 +1,4 @@
-import { afterAll, assert, describe, expect, test, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 import { iterNext } from '../util/testHelpers';
 import {
   SubscribableServiceSchema,
@@ -14,18 +14,41 @@ import {
   waitForTransportToFinish,
 } from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
+import { TestSetupHelpers } from './fixtures/transports';
+
+export const createPostTestChecks = () => {
+  const cleanupFns: Array<() => Promise<void>> = [];
+  return {
+    onTestFinished: (fn: () => Promise<void>) => {
+      cleanupFns.push(fn);
+    },
+    postTestChecks: async () => {
+      while (cleanupFns.length > 0) {
+        await cleanupFns.pop()?.();
+      }
+    },
+  };
+};
 
 describe.each(testMatrix())(
   'procedures should clean up after themselves ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
-    const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup({ client: opts, server: opts });
-    afterAll(cleanup);
 
-    test('closing a transport from the client cleans up connection on the server', async ({
-      onTestFinished,
-    }) => {
+    const { onTestFinished, postTestChecks } = createPostTestChecks();
+    let getClientTransport: TestSetupHelpers['getClientTransport'];
+    let getServerTransport: TestSetupHelpers['getServerTransport'];
+    beforeEach(async () => {
+      const setup = await transport.setup({ client: opts, server: opts });
+      getClientTransport = setup.getClientTransport;
+      getServerTransport = setup.getServerTransport;
+      return async () => {
+        await postTestChecks();
+        await setup.cleanup();
+      };
+    });
+
+    test('closing a transport from the client cleans up connection on the server', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -65,9 +88,7 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test('closing a transport from the server cleans up connection on the client', async ({
-      onTestFinished,
-    }) => {
+    test('closing a transport from the server cleans up connection on the client', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -107,7 +128,7 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test('rpc', async ({ onTestFinished }) => {
+    test('rpc', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -154,7 +175,7 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test('stream', async ({ onTestFinished }) => {
+    test('stream', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -222,7 +243,7 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test('subscription', async ({ onTestFinished }) => {
+    test('subscription', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -285,7 +306,7 @@ describe.each(testMatrix())(
       expect(server.services.subscribable.state.count.listenerCount).toEqual(0);
     });
 
-    test('upload', async ({ onTestFinished }) => {
+    test('upload', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -340,9 +361,7 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test("shouldn't send messages across stale sessions", async ({
-      onTestFinished,
-    }) => {
+    test("shouldn't send messages across stale sessions", async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();

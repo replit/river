@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { describe, test, expect, afterAll, onTestFinished, vi } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 import {
   createWebSocketServer,
   onWsServerReady,
@@ -16,15 +16,24 @@ import {
 } from '../../../__tests__/fixtures/cleanup';
 import { PartialTransportMessage } from '../../message';
 import type NodeWs from 'ws';
+import { createPostTestChecks } from '../../../__tests__/cleanup.test';
 
 describe('sending and receiving across websockets works', async () => {
-  const server = http.createServer();
-  const port = await onWsServerReady(server);
-  const wss = createWebSocketServer(server);
+  let server: http.Server;
+  let port: number;
+  let wss: NodeWs.Server;
 
-  afterAll(() => {
-    wss.close();
-    server.close();
+  const { onTestFinished, postTestChecks } = createPostTestChecks();
+  beforeEach(async () => {
+    server = http.createServer();
+    port = await onWsServerReady(server);
+    wss = createWebSocketServer(server);
+
+    return async () => {
+      await postTestChecks();
+      wss.close();
+      server.close();
+    };
   });
 
   test('basic send/receive', async () => {
@@ -96,17 +105,6 @@ describe('sending and receiving across websockets works', async () => {
     await expect(promises).resolves.toStrictEqual(
       expect.arrayContaining([msg1.payload, msg2.payload]),
     );
-  });
-});
-
-describe('network edge cases', async () => {
-  const server = http.createServer();
-  const port = await onWsServerReady(server);
-  const wss = createWebSocketServer(server);
-
-  afterAll(() => {
-    wss.close();
-    server.close();
   });
 
   test('hanging ws connection with no handshake is cleaned up after grace', async () => {

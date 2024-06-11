@@ -656,7 +656,6 @@ function getReportingType(schema: TAnySchema): string {
     return schema.type;
   }
 
-  console.error(schema);
   throw new Error(
     'Subschema not supported, probably a conditional subschema. Check logs.',
   );

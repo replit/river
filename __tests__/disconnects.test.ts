@@ -1,4 +1,4 @@
-import { afterAll, assert, describe, expect, test, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 import { iterNext } from '../util/testHelpers';
 import {
   SubscribableServiceSchema,
@@ -13,16 +13,28 @@ import {
 } from './fixtures/cleanup';
 import { Err, UNEXPECTED_DISCONNECT } from '../router/result';
 import { testMatrix } from './fixtures/matrix';
+import { TestSetupHelpers } from './fixtures/transports';
+import { createPostTestChecks } from './cleanup.test';
 
 describe.each(testMatrix())(
   'procedures should handle unexpected disconnects ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
-    const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup({ client: opts, server: opts });
-    afterAll(cleanup);
 
-    test('rpc', async ({ onTestFinished }) => {
+    const { onTestFinished, postTestChecks } = createPostTestChecks();
+    let getClientTransport: TestSetupHelpers['getClientTransport'];
+    let getServerTransport: TestSetupHelpers['getServerTransport'];
+    beforeEach(async () => {
+      const setup = await transport.setup({ client: opts, server: opts });
+      getClientTransport = setup.getClientTransport;
+      getServerTransport = setup.getServerTransport;
+      return async () => {
+        await postTestChecks();
+        await setup.cleanup();
+      };
+    });
+
+    test('rpc', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const services = { test: TestServiceSchema };
@@ -65,7 +77,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     });
 
-    test('stream', async ({ onTestFinished }) => {
+    test('stream', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const services = { test: TestServiceSchema };
@@ -112,7 +124,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
     });
 
-    test('subscription', async ({ onTestFinished }) => {
+    test('subscription', async () => {
       const client1Transport = getClientTransport('client1');
       const client2Transport = getClientTransport('client2');
       const serverTransport = getServerTransport();
@@ -203,7 +215,7 @@ describe.each(testMatrix())(
       close2();
     });
 
-    test('upload', async ({ onTestFinished }) => {
+    test('upload', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const services = {

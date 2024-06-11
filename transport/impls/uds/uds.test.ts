@@ -1,4 +1,4 @@
-import { describe, test, expect, afterAll, onTestFinished, vi } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { UnixDomainSocketClientTransport } from './client';
 import { UnixDomainSocketServerTransport } from './server';
 import {
@@ -12,24 +12,33 @@ import {
   testFinishesCleanly,
 } from '../../../__tests__/fixtures/cleanup';
 import net from 'node:net';
+import { createPostTestChecks } from '../../../__tests__/cleanup.test';
 
 describe('sending and receiving across unix sockets works', async () => {
-  const socketPath = getUnixSocketPath();
-  const server = net.createServer();
-  await onUdsServeReady(server, socketPath);
+  let socketPath: string;
+  let server: net.Server;
 
-  afterAll(() => {
-    server.close();
+  const { onTestFinished, postTestChecks } = createPostTestChecks();
+  beforeEach(async () => {
+    socketPath = getUnixSocketPath();
+    server = net.createServer();
+    await onUdsServeReady(server, socketPath);
+
+    return async () => {
+      await postTestChecks();
+      server.close();
+    };
   });
 
-  const getTransports = () =>
-    [
-      new UnixDomainSocketClientTransport(socketPath, 'client'),
-      new UnixDomainSocketServerTransport(server, 'SERVER'),
-    ] as const;
-
   test('basic send/receive', async () => {
-    const [clientTransport, serverTransport] = getTransports();
+    const clientTransport = new UnixDomainSocketClientTransport(
+      socketPath,
+      'client',
+    );
+    const serverTransport = new UnixDomainSocketServerTransport(
+      server,
+      'SERVER',
+    );
     await clientTransport.connect(serverTransport.clientId);
     const messages = [
       {
@@ -58,16 +67,6 @@ describe('sending and receiving across unix sockets works', async () => {
         waitForMessage(serverTransport, (incoming) => incoming.id === msgId),
       ).resolves.toStrictEqual(transportMessage.payload);
     }
-  });
-});
-
-describe('network edge cases', async () => {
-  const socketPath = getUnixSocketPath();
-  const server = net.createServer();
-  await onUdsServeReady(server, socketPath);
-
-  afterAll(() => {
-    server.close();
   });
 
   test('hanging uds connection with no handshake is cleaned up after grace', async () => {

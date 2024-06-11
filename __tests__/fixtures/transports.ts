@@ -34,20 +34,22 @@ export interface TestTransportOptions {
   server?: ProvidedServerTransportOptions;
 }
 
+export interface TestSetupHelpers {
+  getClientTransport: (
+    id: TransportClientId,
+    handshakeOptions?: ClientHandshakeOptions,
+  ) => ClientTransport<Connection>;
+  getServerTransport: (
+    handshakeOptions?: ServerHandshakeOptions,
+  ) => ServerTransport<Connection>;
+  simulatePhantomDisconnect: () => void;
+  restartServer: () => Promise<void>;
+  cleanup: () => Promise<void> | void;
+}
+
 export interface TransportMatrixEntry {
   name: ValidTransports;
-  setup: (opts?: TestTransportOptions) => Promise<{
-    getClientTransport: (
-      id: TransportClientId,
-      handshakeOptions?: ClientHandshakeOptions,
-    ) => ClientTransport<Connection>;
-    getServerTransport: (
-      handshakeOptions?: ServerHandshakeOptions,
-    ) => ServerTransport<Connection>;
-    simulatePhantomDisconnect: () => void;
-    restartServer: () => Promise<void>;
-    cleanup: () => Promise<void> | void;
-  }>;
+  setup: (opts?: TestTransportOptions) => Promise<TestSetupHelpers>;
 }
 
 export const transports: Array<TransportMatrixEntry> = [

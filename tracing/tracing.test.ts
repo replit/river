@@ -1,13 +1,5 @@
 import { trace, context, propagation, Span } from '@opentelemetry/api';
-import {
-  describe,
-  test,
-  expect,
-  vi,
-  afterAll,
-  onTestFinished,
-  assert,
-} from 'vitest';
+import { describe, test, expect, vi, assert, beforeEach } from 'vitest';
 import { createDummyTransportMessage, dummySession } from '../util/testHelpers';
 
 import {
@@ -25,6 +17,8 @@ import tracer, {
 import { OpaqueTransportMessage } from '../transport';
 import { testMatrix } from '../__tests__/fixtures/matrix';
 import { testFinishesCleanly, waitFor } from '../__tests__/fixtures/cleanup';
+import { TestSetupHelpers } from '../__tests__/fixtures/transports';
+import { createPostTestChecks } from '../__tests__/cleanup.test';
 
 describe('Basic tracing tests', () => {
   const provider = new BasicTracerProvider();
@@ -77,9 +71,19 @@ describe.each(testMatrix())(
   'Integrated tracing tests ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
-    const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup({ client: opts, server: opts });
-    afterAll(cleanup);
+
+    const { onTestFinished, postTestChecks } = createPostTestChecks();
+    let getClientTransport: TestSetupHelpers['getClientTransport'];
+    let getServerTransport: TestSetupHelpers['getServerTransport'];
+    beforeEach(async () => {
+      const setup = await transport.setup({ client: opts, server: opts });
+      getClientTransport = setup.getClientTransport;
+      getServerTransport = setup.getServerTransport;
+      return async () => {
+        await postTestChecks();
+        await setup.cleanup();
+      };
+    });
 
     test('Traces sessions and connections across network boundary', async () => {
       const clientTransport = getClientTransport('client');

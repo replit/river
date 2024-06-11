@@ -1,4 +1,4 @@
-import { afterAll, assert, describe, expect, test, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 import { iterNext } from '../util/testHelpers';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
@@ -27,16 +27,28 @@ import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,
 } from '../router/handshake';
+import { TestSetupHelpers } from './fixtures/transports';
+import { createPostTestChecks } from './cleanup.test';
 
 describe.each(testMatrix())(
   'client <-> server integration test ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
-    const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup({ client: opts, server: opts });
-    afterAll(cleanup);
 
-    test('rpc', async ({ onTestFinished }) => {
+    const { onTestFinished, postTestChecks } = createPostTestChecks();
+    let getClientTransport: TestSetupHelpers['getClientTransport'];
+    let getServerTransport: TestSetupHelpers['getServerTransport'];
+    beforeEach(async () => {
+      const setup = await transport.setup({ client: opts, server: opts });
+      getClientTransport = setup.getClientTransport;
+      getServerTransport = setup.getServerTransport;
+      return async () => {
+        await postTestChecks();
+        await setup.cleanup();
+      };
+    });
+
+    test('rpc', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -60,7 +72,7 @@ describe.each(testMatrix())(
       expect(result.payload).toStrictEqual({ result: 3 });
     });
 
-    test('fallible rpc', async ({ onTestFinished }) => {
+    test('fallible rpc', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -95,7 +107,7 @@ describe.each(testMatrix())(
       });
     });
 
-    test('rpc with binary (uint8array)', async ({ onTestFinished }) => {
+    test('rpc with binary (uint8array)', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -124,7 +136,7 @@ describe.each(testMatrix())(
       );
     });
 
-    test('stream', async ({ onTestFinished }) => {
+    test('stream', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -168,7 +180,7 @@ describe.each(testMatrix())(
       close();
     });
 
-    test('stream with init message', async ({ onTestFinished }) => {
+    test('stream with init message', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -206,7 +218,7 @@ describe.each(testMatrix())(
       close();
     });
 
-    test('fallible stream', async ({ onTestFinished }) => {
+    test('fallible stream', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -249,7 +261,7 @@ describe.each(testMatrix())(
       close();
     });
 
-    test('subscription', async ({ onTestFinished }) => {
+    test('subscription', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -294,7 +306,7 @@ describe.each(testMatrix())(
       close();
     });
 
-    test('upload', async ({ onTestFinished }) => {
+    test('upload', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -325,7 +337,7 @@ describe.each(testMatrix())(
       expect(result.payload).toStrictEqual({ result: 3 });
     });
 
-    test('upload with init message', async ({ onTestFinished }) => {
+    test('upload with init message', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -358,9 +370,7 @@ describe.each(testMatrix())(
       expect(result.payload).toStrictEqual({ result: 'test 3' });
     });
 
-    test('message order is preserved in the face of disconnects', async ({
-      onTestFinished,
-    }) => {
+    test('message order is preserved in the face of disconnects', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -410,7 +420,7 @@ describe.each(testMatrix())(
     });
 
     const CONCURRENCY = 10;
-    test('concurrent rpcs', async ({ onTestFinished }) => {
+    test('concurrent rpcs', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -443,7 +453,7 @@ describe.each(testMatrix())(
       }
     });
 
-    test('concurrent streams', async ({ onTestFinished }) => {
+    test('concurrent streams', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -489,9 +499,7 @@ describe.each(testMatrix())(
       }
     });
 
-    test('eagerlyConnect should actually eagerly connect', async ({
-      onTestFinished,
-    }) => {
+    test('eagerlyConnect should actually eagerly connect', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -514,9 +522,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
     });
 
-    test('client reconnects even after session grace', async ({
-      onTestFinished,
-    }) => {
+    test('client reconnects even after session grace', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -559,9 +565,7 @@ describe.each(testMatrix())(
       expect(result.payload).toStrictEqual({ result: 7 });
     });
 
-    test("client doesn't reconnect after session grace if connectOnInvoke is false", async ({
-      onTestFinished,
-    }) => {
+    test("client doesn't reconnect after session grace if connectOnInvoke is false", async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -602,7 +606,7 @@ describe.each(testMatrix())(
       expect(connectMock).not.toHaveBeenCalled();
     });
 
-    test('works with non-object schemas', async ({ onTestFinished }) => {
+    test('works with non-object schemas', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -638,9 +642,7 @@ describe.each(testMatrix())(
       expect(result2.payload).toStrictEqual(weirdRecursivePayload);
     });
 
-    test('calls service dispose methods on cleanup', async ({
-      onTestFinished,
-    }) => {
+    test('calls service dispose methods on cleanup', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -662,7 +664,7 @@ describe.each(testMatrix())(
       expect(dispose).toBeCalledTimes(1);
     });
 
-    test('procedure can use metadata', async ({ onTestFinished }) => {
+    test('procedure can use metadata', async () => {
       // setup
       const requestSchema = Type.Object({
         data: Type.String(),
