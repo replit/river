@@ -24,8 +24,8 @@ export class UnixDomainSocketServerTransport extends ServerTransport<UdsConnecti
     this.handleConnection(conn);
   };
 
-  close() {
-    super.close();
+  destroy() {
+    super.destroy();
     this.server.removeListener('connection', this.connectionHandler);
   }
 }

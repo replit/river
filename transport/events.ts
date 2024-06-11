@@ -1,5 +1,6 @@
 import { OpaqueTransportMessage } from './message';
 import { Connection, Session } from './session';
+import { TransportStatus } from './transport';
 
 type ConnectionStatus = 'connect' | 'disconnect';
 export const ProtocolError = {
@@ -25,6 +26,9 @@ export interface EventMap {
   protocolError: {
     type: ProtocolErrorType;
     message: string;
+  };
+  transportStatus: {
+    status: TransportStatus;
   };
 }
 

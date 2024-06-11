@@ -21,7 +21,7 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
   async createNewOutgoingConnection(to: TransportClientId) {
     const oldConnection = this.connections.get(to);
     if (oldConnection) {
-      oldConnection.close();
+      oldConnection.destroy();
     }
 
     this.log?.info(`establishing a new uds to ${to}`, {

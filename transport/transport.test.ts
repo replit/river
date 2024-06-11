@@ -49,7 +49,7 @@ describe.each(testMatrix())(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
 
-      clientTransport.connections.forEach((conn) => conn.close());
+      clientTransport.connections.forEach((conn) => conn.destroy());
 
       // by this point the client should have reconnected
       const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
@@ -162,7 +162,7 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(first90.slice(0, 30).map((msg) => msg.payload));
 
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      clientTransport.connections.forEach((conn) => conn.destroy());
       await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
 
@@ -312,7 +312,7 @@ describe.each(testMatrix())(
       expect(serverSessStop).toHaveBeenCalledTimes(0);
 
       // clean disconnect + reconnect within grace period
-      clientTransport.connections.forEach((conn) => conn.close());
+      clientTransport.connections.forEach((conn) => conn.destroy());
 
       // wait for connection status to propagate to server
       // session    >  c------| (connected)
@@ -349,7 +349,7 @@ describe.each(testMatrix())(
       // connection >  c--x   c-----x  | (disconnected)
       vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      clientTransport.connections.forEach((conn) => conn.destroy());
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(serverConnStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(2));
@@ -375,7 +375,7 @@ describe.each(testMatrix())(
       clientTransport.destroy();
 
       // this is not expected to be clean because we destroyed the transport
-      expect(clientTransport.state).toEqual('destroyed');
+      expect(clientTransport.getStatus()).toEqual('destroyed');
       await waitFor(() =>
         expect(
           clientTransport.connections,
@@ -383,8 +383,8 @@ describe.each(testMatrix())(
         ).toStrictEqual(new Map()),
       );
 
-      clientTransport.close();
-      serverTransport.close();
+      clientTransport.destroy();
+      serverTransport.destroy();
     });
 
     test('multiple connections works', async () => {
@@ -500,8 +500,8 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(0));
 
       // kill the client
-      clientTransport.close();
-      serverTransport.connections.forEach((conn) => conn.close());
+      clientTransport.destroy();
+      serverTransport.connections.forEach((conn) => conn.destroy());
 
       // queue up some messages
       serverTransport.send(
@@ -593,7 +593,7 @@ describe.each(testMatrix())(
 
       // bring client side connections down and stop trying to reconnect
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      clientTransport.connections.forEach((conn) => conn.destroy());
 
       // buffer some messages
       clientTransport.send(
@@ -982,7 +982,7 @@ describe.each(testMatrix())(
       expect(serverTransport.connections.size).toBe(1);
 
       // now, let's wait until the connection is considered dead
-      clientTransport.connections.forEach((conn) => conn.close());
+      clientTransport.connections.forEach((conn) => conn.destroy());
       await waitFor(() => expect(clientTransport.connections.size).toBe(0));
 
       // should have reconnected by now

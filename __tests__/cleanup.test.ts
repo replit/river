@@ -62,7 +62,7 @@ describe.each(testMatrix())(
       // should be back to 0 connections after client closes
       vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.close();
+      clientTransport.destroy();
 
       await waitForTransportToFinish(clientTransport);
       await waitForTransportToFinish(serverTransport);
@@ -102,7 +102,7 @@ describe.each(testMatrix())(
       // should be back to 0 connections after client closes
       vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
-      serverTransport.close();
+      serverTransport.destroy();
 
       await waitForTransportToFinish(clientTransport);
       await waitForTransportToFinish(serverTransport);
@@ -193,10 +193,10 @@ describe.each(testMatrix())(
 
       // ensure we only have one stream despite pushing multiple messages.
       inputWriter.close();
-      await waitFor(() => expect(server.streams.size).toEqual(1));
+      await waitFor(() => expect(server.openStreams.size).toEqual(1));
       await outputReader.requestClose();
       // ensure we no longer have any streams since the input was closed.
-      await waitFor(() => expect(server.streams.size).toEqual(0));
+      await waitFor(() => expect(server.openStreams.size).toEqual(0));
 
       const result2 = await iterNext(outputIterator);
       assert(result2.ok);
@@ -376,7 +376,7 @@ describe.each(testMatrix())(
       // wait for session to disconnect
       vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      clientTransport.connections.forEach((conn) => conn.destroy());
       await advanceFakeTimersBySessionGrace();
 
       expect(clientTransport.sessions.size).toEqual(0);

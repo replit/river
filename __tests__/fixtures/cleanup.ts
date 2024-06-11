@@ -16,7 +16,7 @@ const waitUntilOptions = {
 };
 
 export async function waitForTransportToFinish(t: Transport<Connection>) {
-  t.close();
+  t.destroy();
   await waitFor(() =>
     expect(
       t.connections,
@@ -45,7 +45,7 @@ export async function advanceFakeTimersBySessionGrace() {
 
 async function ensureTransportIsClean(t: Transport<Connection>) {
   expect(
-    t.state,
+    t.getStatus(),
     `[post-test cleanup] transport ${t.clientId} should be closed after the test`,
   ).to.not.equal('open');
 
@@ -101,9 +101,9 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
 export async function ensureServerIsClean(s: Server<AnyServiceSchemaMap>) {
   return waitFor(() =>
     expect(
-      s.streams,
+      s.openStreams,
       `[post-test cleanup] server should not have any open streams after the test`,
-    ).toStrictEqual(new Map()),
+    ).toStrictEqual(new Set()),
   );
 }
 
@@ -136,7 +136,6 @@ export async function testFinishesCleanly({
   if (server) {
     await advanceFakeTimersBySessionGrace();
     await ensureServerIsClean(server);
-    await server.close();
   }
 
   if (serverTransport) {

@@ -85,7 +85,7 @@ export abstract class Connection {
   /**
    * Closes the connection.
    */
-  abstract close(): void;
+  abstract destroy(): void;
 }
 
 export interface SessionOptions {
@@ -305,7 +305,7 @@ export class Session<ConnType extends Connection> {
           connId: conn.id,
           tags: ['invariant-violation'],
         });
-        conn.close();
+        conn.destroy();
         return;
       }
     }
@@ -330,7 +330,7 @@ export class Session<ConnType extends Connection> {
       `closing old inner connection from session to ${this.to}`,
       this.loggingMetadata,
     );
-    this.connection.close();
+    this.connection.destroy();
     this.connection = undefined;
   }
 

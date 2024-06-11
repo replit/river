@@ -61,7 +61,7 @@ export class WebSocketConnection extends Connection {
     }
   }
 
-  close() {
+  destroy() {
     this.ws.close();
   }
 }

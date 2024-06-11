@@ -116,7 +116,7 @@ describe('should handle incompatabilities', async () => {
     onTestFinished(() => {
       wss.off('connection', serverWsConnHandler);
       clientTransport.removeEventListener('protocolError', errMock);
-      clientTransport.close();
+      clientTransport.destroy();
     });
 
     for (let i = 0; i < maxAttempts; i++) {

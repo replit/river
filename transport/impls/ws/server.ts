@@ -25,8 +25,8 @@ export class WebSocketServerTransport extends ServerTransport<WebSocketConnectio
     this.handleConnection(conn);
   };
 
-  close() {
-    super.close();
+  destroy() {
+    super.destroy();
     this.wss.off('connection', this.connectionHandler);
   }
 }

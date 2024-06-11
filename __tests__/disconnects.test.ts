@@ -57,7 +57,7 @@ describe.each(testMatrix())(
 
       vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      clientTransport.connections.forEach((conn) => conn.destroy());
 
       const procPromise = client.test.add.rpc({ n: 4 });
       // end procedure
@@ -106,7 +106,7 @@ describe.each(testMatrix())(
 
       vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      clientTransport.connections.forEach((conn) => conn.destroy());
 
       const nextResPromise = iterNext(outputIterator);
       // end procedure
@@ -186,7 +186,7 @@ describe.each(testMatrix())(
       // kill the connection for client2
       vi.useFakeTimers({ shouldAdvanceTime: true });
       client2Transport.reconnectOnConnectionDrop = false;
-      client2Transport.connections.forEach((conn) => conn.close());
+      client2Transport.connections.forEach((conn) => conn.destroy());
 
       // client1 who is still connected can still add values and receive updates
       const add2Promise = client1.subscribable.add.rpc({ n: 2 });
@@ -248,7 +248,7 @@ describe.each(testMatrix())(
 
       vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      clientTransport.connections.forEach((conn) => conn.destroy());
 
       // after we've disconnected, hit end of grace period
       await advanceFakeTimersBySessionGrace();

@@ -48,10 +48,9 @@ import {
 /**
  * Represents the possible states of a transport.
  * @property {'open'} open - The transport is open and operational (note that this doesn't mean it is actively connected)
- * @property {'closed'} closed - The transport is closed and not operational, but can be reopened.
  * @property {'destroyed'} destroyed - The transport is permanently destroyed and cannot be reopened.
  */
-export type TransportStatus = 'open' | 'closed' | 'destroyed';
+export type TransportStatus = 'open' | 'destroyed';
 
 type TransportOptions = SessionOptions;
 
@@ -98,7 +97,7 @@ const defaultServerTransportOptions: ServerTransportOptions = {
  *     From this point on, the {@link Connection} is responsible for *reading* and *writing*
  *     messages from the connection.
  *  3) When a connection is closed, the {@link Transport} calls {@link onDisconnect} which closes the
- *     connection via {@link Connection.close} and removes it from the {@link connections} map.
+ *     connection via {@link Connection.destroy} and removes it from the {@link connections} map.
 
  *
  * ```plaintext
@@ -124,7 +123,7 @@ export abstract class Transport<ConnType extends Connection> {
    * A flag indicating whether the transport has been destroyed.
    * A destroyed transport will not attempt to reconnect and cannot be used again.
    */
-  state: TransportStatus;
+  private status: TransportStatus;
 
   /**
    * The {@link Codec} used to encode and decode messages.
@@ -178,7 +177,7 @@ export abstract class Transport<ConnType extends Connection> {
     this.sessions = new Map();
     this.codec = this.options.codec;
     this.clientId = clientId;
-    this.state = 'open';
+    this.status = 'open';
   }
 
   bindLogger(fn: LogFn | Logger, level?: LoggingLevel) {
@@ -373,7 +372,7 @@ export abstract class Transport<ConnType extends Connection> {
    * @param msg The received message.
    */
   protected handleMsg(msg: OpaqueTransportMessage, conn: ConnType) {
-    if (this.state !== 'open') return;
+    if (this.getStatus() !== 'open') return;
     const session = this.sessions.get(msg.from);
     if (!session) {
       this.log?.error(`received message for unknown session from ${msg.from}`, {
@@ -470,7 +469,7 @@ export abstract class Transport<ConnType extends Connection> {
     to: TransportClientId,
     msg: PartialTransportMessage,
   ): string | undefined {
-    if (this.state === 'destroyed') {
+    if (this.getStatus() === 'destroyed') {
       const err = 'transport is destroyed, cant send';
       this.log?.error(err, {
         clientId: this.clientId,
@@ -478,12 +477,6 @@ export abstract class Transport<ConnType extends Connection> {
         tags: ['invariant-violation'],
       });
       this.protocolError(ProtocolError.UseAfterDestroy, err);
-      return undefined;
-    } else if (this.state === 'closed') {
-      this.log?.info(`transport closed when sending, discarding`, {
-        clientId: this.clientId,
-        transportMessage: msg,
-      });
       return undefined;
     }
 
@@ -516,31 +509,33 @@ export abstract class Transport<ConnType extends Connection> {
   }
 
   /**
-   * Default close implementation for transports. You should override this in the downstream
-   * implementation if you need to do any additional cleanup and call super.close() at the end.
-   * Closes the transport. Any messages sent while the transport is closed will be silently discarded.
-   */
-  close() {
-    this.state = 'closed';
-    for (const session of this.sessions.values()) {
-      this.deleteSession(session);
-    }
-
-    this.log?.info(`manually closed transport`, { clientId: this.clientId });
-  }
-
-  /**
    * Default destroy implementation for transports. You should override this in the downstream
    * implementation if you need to do any additional cleanup and call super.destroy() at the end.
    * Destroys the transport. Any messages sent while the transport is destroyed will throw an error.
    */
   destroy() {
-    this.state = 'destroyed';
+    this.setStatus('destroyed');
     for (const session of this.sessions.values()) {
       this.deleteSession(session);
     }
 
     this.log?.info(`manually destroyed transport`, { clientId: this.clientId });
+  }
+
+  private setStatus(status: TransportStatus) {
+    this.status = status;
+
+    this.eventDispatcher.dispatchEvent('transportStatus', {
+      status: status,
+    });
+  }
+
+  /**
+   * A flag indicating whether the transport has been destroyed.
+   * A destroyed transport will not attempt to reconnect and cannot be used again.
+   */
+  public getStatus(): TransportStatus {
+    return this.status;
   }
 }
 
@@ -589,7 +584,7 @@ export abstract class ClientTransport<
   }
 
   protected handleConnection(conn: ConnType, to: TransportClientId): void {
-    if (this.state !== 'open') return;
+    if (this.getStatus() !== 'open') return;
     let session: Session<ConnType> | undefined = undefined;
 
     // kill the conn after the grace period if we haven't received a handshake
@@ -599,14 +594,14 @@ export abstract class ClientTransport<
           `connection to ${to} timed out waiting for handshake, closing`,
           { ...conn.loggingMetadata, clientId: this.clientId, connectedTo: to },
         );
-        conn.close();
+        conn.destroy();
       }
     }, this.options.sessionDisconnectGraceMs);
 
     const handshakeHandler = (data: Uint8Array) => {
       const maybeSession = this.receiveHandshakeResponseMessage(data, conn);
       if (!maybeSession) {
-        conn.close();
+        conn.destroy();
         return;
       } else {
         session = maybeSession;
@@ -623,7 +618,7 @@ export abstract class ClientTransport<
             code: SpanStatusCode.ERROR,
             message: 'message parse failure',
           });
-          conn.close();
+          conn.destroy();
           return;
         }
 
@@ -762,7 +757,7 @@ export abstract class ClientTransport<
    * @param to The client ID of the node to connect to.
    */
   async connect(to: TransportClientId): Promise<void> {
-    const canProceedWithConnection = () => this.state === 'open';
+    const canProceedWithConnection = () => this.getStatus() === 'open';
     if (!canProceedWithConnection()) {
       this.log?.info(
         `transport state is no longer open, cancelling attempt to connect to ${to}`,
@@ -815,14 +810,14 @@ export abstract class ClientTransport<
                 connectedTo: to,
               },
             );
-            conn.close();
+            conn.destroy();
             throw new Error('transport state is no longer open');
           }
 
           span.addEvent('sending handshake');
           const ok = await this.sendHandshake(to, conn);
           if (!ok) {
-            conn.close();
+            conn.destroy();
             throw new Error('failed to send handshake');
           }
 
@@ -923,9 +918,9 @@ export abstract class ClientTransport<
     return true;
   }
 
-  close() {
+  destroy() {
     this.retryBudget.close();
-    super.close();
+    super.destroy();
   }
 }
 
@@ -968,7 +963,7 @@ export abstract class ServerTransport<
   }
 
   protected handleConnection(conn: ConnType) {
-    if (this.state !== 'open') return;
+    if (this.getStatus() !== 'open') return;
 
     this.log?.info(`new incoming connection`, {
       ...conn.loggingMetadata,
@@ -993,7 +988,7 @@ export abstract class ServerTransport<
           code: SpanStatusCode.ERROR,
           message: 'handshake timeout',
         });
-        conn.close();
+        conn.destroy();
       }
     }, this.options.sessionDisconnectGraceMs);
 
@@ -1013,7 +1008,7 @@ export abstract class ServerTransport<
       void this.receiveHandshakeRequestMessage(data, conn).then(
         (maybeSession) => {
           if (!maybeSession) {
-            conn.close();
+            conn.destroy();
             return;
           }
 
@@ -1024,7 +1019,7 @@ export abstract class ServerTransport<
           const dataHandler = (data: Uint8Array) => {
             const parsed = this.parseMsg(data, conn);
             if (!parsed) {
-              conn.close();
+              conn.destroy();
               return;
             }
 

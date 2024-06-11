@@ -20,7 +20,6 @@ import {
   UploadableServiceSchema,
   OrderingServiceSchema,
   NonObjectSchemas,
-  SchemaWithDisposableState,
 } from './fixtures/services';
 import {
   advanceFakeTimersBySessionGrace,
@@ -394,12 +393,12 @@ describe.each(testMatrix())(
 
         // randomly disconnect at some point
         if (i == 10) {
-          clientTransport.connections.forEach((conn) => conn.close());
+          clientTransport.connections.forEach((conn) => conn.destroy());
         }
 
         // again B)
         if (i == 42) {
-          clientTransport.connections.forEach((conn) => conn.close());
+          clientTransport.connections.forEach((conn) => conn.destroy());
         }
 
         promises.push(
@@ -546,7 +545,7 @@ describe.each(testMatrix())(
       // kill the session
       vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      clientTransport.connections.forEach((conn) => conn.destroy());
       await advanceFakeTimersBySessionGrace();
       clientTransport.reconnectOnConnectionDrop = true;
 
@@ -591,7 +590,7 @@ describe.each(testMatrix())(
       // kill the session
       vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      clientTransport.connections.forEach((conn) => conn.destroy());
       await advanceFakeTimersBySessionGrace();
 
       // we should have no connections
@@ -638,28 +637,6 @@ describe.each(testMatrix())(
       );
       assert(result2.ok);
       expect(result2.payload).toStrictEqual(weirdRecursivePayload);
-    });
-
-    test('calls service dispose methods on cleanup', async () => {
-      // setup
-      const clientTransport = getClientTransport('client');
-      const serverTransport = getServerTransport();
-      const dispose = vi.fn();
-      const services = {
-        disposable: SchemaWithDisposableState(dispose),
-      };
-      const server = createServer(serverTransport, services);
-      onTestFinished(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-          server,
-        });
-      });
-
-      // test
-      await server.close();
-      expect(dispose).toBeCalledTimes(1);
     });
 
     test('procedure can use metadata', async () => {
