@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test, vi } from 'vitest';
+import { afterAll, afterEach, describe, expect, test, vi } from 'vitest';
 import http from 'node:http';
 import { testFinishesCleanly, waitFor } from './fixtures/cleanup';
 import {
@@ -34,8 +34,21 @@ describe('should handle incompatabilities', async () => {
       server.close(accept);
     });
   });
+  const cleanups: Array<() => Promise<void> | void> = [];
 
-  test('emits use after destroy events', async ({ onTestFinished }) => {
+  afterEach(async () => {
+    while (cleanups.length > 0) {
+      await cleanups.pop()?.();
+    }
+  });
+  // vitest runs all the `onTestFinished` callbacks after all the repetitions of the test are
+  // done. That is definitely a choice that was made. Instead, we hand-roll it ourselves to avoid
+  // the callbacks from being run concurrently with each other, which causes a ton of mayhem.
+  const addCleanup = (f: () => Promise<void> | void) => {
+    cleanups.push(f);
+  };
+
+  test('emits use after destroy events', async () => {
     const clientTransport = new WebSocketClientTransport(
       () => Promise.resolve(createLocalWebSocketClient(port)),
       'client',
@@ -46,7 +59,7 @@ describe('should handle incompatabilities', async () => {
 
     const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
-    onTestFinished(async () => {
+    addCleanup(async () => {
       clientTransport.removeEventListener('protocolError', errMock);
 
       await testFinishesCleanly({
@@ -67,9 +80,7 @@ describe('should handle incompatabilities', async () => {
     );
   });
 
-  test('retrying single connection attempt should hit retry limit reached', async ({
-    onTestFinished,
-  }) => {
+  test('retrying single connection attempt should hit retry limit reached', async () => {
     const clientTransport = new WebSocketClientTransport(
       () => Promise.reject(new Error('fake connection failure')),
       'client',
@@ -77,7 +88,7 @@ describe('should handle incompatabilities', async () => {
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
-    onTestFinished(async () => {
+    addCleanup(async () => {
       clientTransport.removeEventListener('protocolError', errMock);
 
       await testFinishesCleanly({
@@ -101,9 +112,7 @@ describe('should handle incompatabilities', async () => {
     );
   });
 
-  test('repeated connections that close instantly still triggers backoff', async ({
-    onTestFinished,
-  }) => {
+  test('repeated connections that close instantly still triggers backoff', async () => {
     let conns = 0;
     const serverWsConnHandler = (ws: WsLike) => {
       conns += 1;
@@ -122,7 +131,7 @@ describe('should handle incompatabilities', async () => {
     const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
     const promises: Array<Promise<void>> = [];
-    onTestFinished(async () => {
+    addCleanup(async () => {
       wss.off('connection', serverWsConnHandler);
       clientTransport.removeEventListener('protocolError', errMock);
       clientTransport.close();
@@ -138,14 +147,14 @@ describe('should handle incompatabilities', async () => {
     expect(conns).toBeLessThan(maxAttempts);
   });
 
-  test('incorrect client handshake', async ({ onTestFinished }) => {
+  test('incorrect client handshake', async () => {
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     // add listeners
     const spy = vi.fn();
     const errMock = vi.fn();
     serverTransport.addEventListener('connectionStatus', spy);
     serverTransport.addEventListener('protocolError', errMock);
-    onTestFinished(async () => {
+    addCleanup(async () => {
       serverTransport.removeEventListener('connectionStatus', spy);
       serverTransport.removeEventListener('protocolError', errMock);
 
@@ -172,9 +181,7 @@ describe('should handle incompatabilities', async () => {
     );
   });
 
-  test('seq number in the future should raise protocol error', async ({
-    onTestFinished,
-  }) => {
+  test('seq number in the future should raise protocol error', async () => {
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
 
     // add listeners
@@ -182,7 +189,7 @@ describe('should handle incompatabilities', async () => {
     const errMock = vi.fn();
     serverTransport.addEventListener('connectionStatus', spy);
     serverTransport.addEventListener('protocolError', errMock);
-    onTestFinished(async () => {
+    addCleanup(async () => {
       serverTransport.removeEventListener('connectionStatus', spy);
       serverTransport.removeEventListener('protocolError', errMock);
 
@@ -227,14 +234,14 @@ describe('should handle incompatabilities', async () => {
     );
   });
 
-  test('mismatched protocol version', async ({ onTestFinished }) => {
+  test('mismatched protocol version', async () => {
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     // add listeners
     const spy = vi.fn();
     const errMock = vi.fn();
     serverTransport.addEventListener('connectionStatus', spy);
     serverTransport.addEventListener('protocolError', errMock);
-    onTestFinished(async () => {
+    addCleanup(async () => {
       serverTransport.removeEventListener('protocolError', errMock);
       serverTransport.removeEventListener('connectionStatus', spy);
 

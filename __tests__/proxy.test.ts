@@ -1,5 +1,5 @@
 // test a ws <-> uds multiplex proxy (many uds servers behind a ws server so there is only a single ws connection but multiple servers)
-import { describe, test, assert, expect } from 'vitest';
+import { describe, afterEach, test, assert, expect } from 'vitest';
 import net from 'node:net';
 import http from 'node:http';
 import {
@@ -20,7 +20,21 @@ import { UnixDomainSocketServerTransport } from '../transport/impls/uds/server';
 import { MessageFramer } from '../transport/transforms/messageFraming';
 
 describe('proxy', () => {
-  test('ws <-> uds proxy works', async ({ onTestFinished }) => {
+  const cleanups: Array<() => Promise<void> | void> = [];
+
+  afterEach(async () => {
+    while (cleanups.length > 0) {
+      await cleanups.pop()?.();
+    }
+  });
+  // vitest runs all the `onTestFinished` callbacks after all the repetitions of the test are
+  // done. That is definitely a choice that was made. Instead, we hand-roll it ourselves to avoid
+  // the callbacks from being run concurrently with each other, which causes a ton of mayhem.
+  const addCleanup = (f: () => Promise<void> | void) => {
+    cleanups.push(f);
+  };
+
+  test('ws <-> uds proxy works', async () => {
     // Setup uds server
     const socketPath = getUnixSocketPath();
     const udsServer = net.createServer();
@@ -80,7 +94,7 @@ describe('proxy', () => {
       clientTransport,
       serverTransport.clientId,
     );
-    onTestFinished(async () => {
+    addCleanup(async () => {
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,

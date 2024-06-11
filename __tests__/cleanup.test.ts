@@ -1,4 +1,12 @@
-import { afterAll, assert, describe, expect, test, vi } from 'vitest';
+import {
+  afterAll,
+  assert,
+  describe,
+  expect,
+  afterEach,
+  test,
+  vi,
+} from 'vitest';
 import { iterNext } from '../util/testHelpers';
 import {
   SubscribableServiceSchema,
@@ -22,10 +30,21 @@ describe.each(testMatrix())(
     const { getClientTransport, getServerTransport, cleanup } =
       await transport.setup({ client: opts, server: opts });
     afterAll(cleanup);
+    const cleanups: Array<() => Promise<void> | void> = [];
 
-    test('closing a transport from the client cleans up connection on the server', async ({
-      onTestFinished,
-    }) => {
+    afterEach(async () => {
+      while (cleanups.length > 0) {
+        await cleanups.pop()?.();
+      }
+    });
+    // vitest runs all the `onTestFinished` callbacks after all the repetitions of the test are
+    // done. That is definitely a choice that was made. Instead, we hand-roll it ourselves to avoid
+    // the callbacks from being run concurrently with each other, which causes a ton of mayhem.
+    const addCleanup = (f: () => Promise<void> | void) => {
+      cleanups.push(f);
+    };
+
+    test('closing a transport from the client cleans up connection on the server', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -35,7 +54,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -65,9 +84,7 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test('closing a transport from the server cleans up connection on the client', async ({
-      onTestFinished,
-    }) => {
+    test('closing a transport from the server cleans up connection on the client', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -77,7 +94,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -107,7 +124,7 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test('rpc', async ({ onTestFinished }) => {
+    test('rpc', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -117,7 +134,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -154,7 +171,7 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test('stream', async ({ onTestFinished }) => {
+    test('stream', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -164,7 +181,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -222,7 +239,7 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test('subscription', async ({ onTestFinished }) => {
+    test('subscription', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -234,7 +251,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -285,7 +302,7 @@ describe.each(testMatrix())(
       expect(server.services.subscribable.state.count.listenerCount).toEqual(0);
     });
 
-    test('upload', async ({ onTestFinished }) => {
+    test('upload', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -295,7 +312,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
+      addCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -340,9 +357,7 @@ describe.each(testMatrix())(
       await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
     });
 
-    test("shouldn't send messages across stale sessions", async ({
-      onTestFinished,
-    }) => {
+    test("shouldn't send messages across stale sessions", async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -353,7 +368,7 @@ describe.each(testMatrix())(
         serverTransport.clientId,
       );
 
-      onTestFinished(async () => {
+      addCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,

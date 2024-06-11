@@ -1,4 +1,12 @@
-import { describe, test, expect, afterAll, vi, assert } from 'vitest';
+import {
+  describe,
+  test,
+  expect,
+  afterAll,
+  afterEach,
+  vi,
+  assert,
+} from 'vitest';
 import {
   createDummyTransportMessage,
   payloadToTransportMessage,
@@ -22,13 +30,24 @@ describe.each(testMatrix())(
     const { getClientTransport, getServerTransport, cleanup } =
       await transport.setup({ client: opts, server: opts });
     afterAll(cleanup);
+    const cleanups: Array<() => Promise<void> | void> = [];
 
-    test('connection is recreated after clean client disconnect', async ({
-      onTestFinished,
-    }) => {
+    afterEach(async () => {
+      while (cleanups.length > 0) {
+        await cleanups.pop()?.();
+      }
+    });
+    // vitest runs all the `onTestFinished` callbacks after all the repetitions of the test are
+    // done. That is definitely a choice that was made. Instead, we hand-roll it ourselves to avoid
+    // the callbacks from being run concurrently with each other, which causes a ton of mayhem.
+    const addCleanup = (f: () => Promise<void> | void) => {
+      cleanups.push(f);
+    };
+
+    test('connection is recreated after clean client disconnect', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      onTestFinished(async () => {
+      addCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -52,11 +71,11 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(msg2.payload);
     });
 
-    test('idle transport cleans up nicely', async ({ onTestFinished }) => {
+    test('idle transport cleans up nicely', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       await waitFor(() => expect(serverTransport.connections.size).toBe(1));
-      onTestFinished(async () => {
+      addCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -64,12 +83,10 @@ describe.each(testMatrix())(
       });
     });
 
-    test('heartbeats should not interupt normal operation', async ({
-      onTestFinished,
-    }) => {
+    test('heartbeats should not interupt normal operation', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      onTestFinished(async () => {
+      addCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -93,9 +110,7 @@ describe.each(testMatrix())(
       }
     });
 
-    test('sending right after session event should not cause invalid handshake', async ({
-      onTestFinished,
-    }) => {
+    test('sending right after session event should not cause invalid handshake', async () => {
       const clientTransport = getClientTransport('client');
       const protocolError = vi.fn();
       clientTransport.addEventListener('protocolError', protocolError);
@@ -110,7 +125,7 @@ describe.each(testMatrix())(
       };
 
       clientTransport.addEventListener('sessionStatus', sendHandle);
-      onTestFinished(async () => {
+      addCleanup(async () => {
         clientTransport.removeEventListener('protocolError', protocolError);
         clientTransport.removeEventListener('sessionStatus', sendHandle);
         await testFinishesCleanly({
@@ -123,12 +138,10 @@ describe.each(testMatrix())(
       expect(protocolError).toHaveBeenCalledTimes(0);
     });
 
-    test('seq numbers should be persisted across transparent reconnects', async ({
-      onTestFinished,
-    }) => {
+    test('seq numbers should be persisted across transparent reconnects', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      onTestFinished(async () => {
+      addCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -196,9 +209,7 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(clientMsgs.map((msg) => msg.payload));
     });
 
-    test('both client and server transport get connect/disconnect notifs', async ({
-      onTestFinished,
-    }) => {
+    test('both client and server transport get connect/disconnect notifs', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const clientConnStart = vi.fn();
@@ -253,7 +264,7 @@ describe.each(testMatrix())(
         }
       };
 
-      onTestFinished(async () => {
+      addCleanup(async () => {
         // teardown
         clientTransport.removeEventListener(
           'connectionStatus',
@@ -389,7 +400,7 @@ describe.each(testMatrix())(
       serverTransport.close();
     });
 
-    test('multiple connections works', async ({ onTestFinished }) => {
+    test('multiple connections works', async () => {
       const clientId1 = 'client1';
       const clientId2 = 'client2';
       const serverId = 'SERVER';
@@ -413,7 +424,7 @@ describe.each(testMatrix())(
 
       const client1Transport = await initClient(clientId1);
       const client2Transport = await initClient(clientId2);
-      onTestFinished(async () => {
+      addCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [client1Transport, client2Transport],
           serverTransport,
@@ -441,13 +452,25 @@ describe.each(testMatrix())(
 describe.each(testMatrix())(
   'transport connection edge cases ($transport.name transport, $codec.name codec)',
   ({ transport, codec }) => {
-    test('messages should not be resent when the client loses all state and reconnects to the server', async ({
-      onTestFinished,
-    }) => {
+    const cleanups: Array<() => Promise<void> | void> = [];
+
+    afterEach(async () => {
+      while (cleanups.length > 0) {
+        await cleanups.pop()?.();
+      }
+    });
+    // vitest runs all the `onTestFinished` callbacks after all the repetitions of the test are
+    // done. That is definitely a choice that was made. Instead, we hand-roll it ourselves to avoid
+    // the callbacks from being run concurrently with each other, which causes a ton of mayhem.
+    const addCleanup = (f: () => Promise<void> | void) => {
+      cleanups.push(f);
+    };
+
+    test('messages should not be resent when the client loses all state and reconnects to the server', async () => {
       const opts = { codec: codec.codec };
       const { getClientTransport, getServerTransport, cleanup } =
         await transport.setup({ client: opts, server: opts });
-      onTestFinished(cleanup);
+      addCleanup(cleanup);
       let clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const serverConnStart = vi.fn();
@@ -478,7 +501,7 @@ describe.each(testMatrix())(
 
       serverTransport.addEventListener('connectionStatus', serverConnHandler);
       serverTransport.addEventListener('sessionStatus', serverSessHandler);
-      onTestFinished(async () => {
+      addCleanup(async () => {
         // teardown
         serverTransport.removeEventListener(
           'connectionStatus',
@@ -534,13 +557,11 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(msg4.payload);
     });
 
-    test('messages should not be resent when client reconnects to a different instance of the server', async ({
-      onTestFinished,
-    }) => {
+    test('messages should not be resent when client reconnects to a different instance of the server', async () => {
       const opts = { codec: codec.codec };
       const { getClientTransport, getServerTransport, restartServer, cleanup } =
         await transport.setup({ client: opts, server: opts });
-      onTestFinished(cleanup);
+      addCleanup(cleanup);
 
       const clientTransport = getClientTransport('client');
       let serverTransport = getServerTransport();
@@ -572,7 +593,7 @@ describe.each(testMatrix())(
 
       clientTransport.addEventListener('connectionStatus', clientConnHandler);
       clientTransport.addEventListener('sessionStatus', clientSessHandler);
-      onTestFinished(async () => {
+      addCleanup(async () => {
         // teardown
         clientTransport.removeEventListener(
           'connectionStatus',
@@ -639,7 +660,7 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(msg4.payload);
     });
 
-    test('recovers from phantom disconnects', async ({ onTestFinished }) => {
+    test('recovers from phantom disconnects', async () => {
       const opts = { codec: codec.codec };
       const {
         getClientTransport,
@@ -647,7 +668,7 @@ describe.each(testMatrix())(
         simulatePhantomDisconnect,
         cleanup,
       } = await transport.setup({ client: opts, server: opts });
-      onTestFinished(cleanup);
+      addCleanup(cleanup);
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -707,7 +728,7 @@ describe.each(testMatrix())(
       clientTransport.addEventListener('sessionStatus', clientSessHandler);
       serverTransport.addEventListener('connectionStatus', serverConnHandler);
       serverTransport.addEventListener('sessionStatus', serverSessHandler);
-      onTestFinished(async () => {
+      addCleanup(async () => {
         // teardown
         clientTransport.removeEventListener(
           'connectionStatus',
@@ -778,10 +799,21 @@ describe.each(testMatrix())(
     const { getClientTransport, getServerTransport, cleanup } =
       await transport.setup({ client: opts, server: opts });
     afterAll(cleanup);
+    const cleanups: Array<() => Promise<void> | void> = [];
 
-    test('handshakes and stores parsed metadata in session', async ({
-      onTestFinished,
-    }) => {
+    afterEach(async () => {
+      while (cleanups.length > 0) {
+        await cleanups.pop()?.();
+      }
+    });
+    // vitest runs all the `onTestFinished` callbacks after all the repetitions of the test are
+    // done. That is definitely a choice that was made. Instead, we hand-roll it ourselves to avoid
+    // the callbacks from being run concurrently with each other, which causes a ton of mayhem.
+    const addCleanup = (f: () => Promise<void> | void) => {
+      cleanups.push(f);
+    };
+
+    test('handshakes and stores parsed metadata in session', async () => {
       const schema = Type.Object({
         kept: Type.String(),
         discarded: Type.String(),
@@ -801,7 +833,7 @@ describe.each(testMatrix())(
         schema,
         construct: get,
       });
-      onTestFinished(async () => {
+      addCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -824,9 +856,7 @@ describe.each(testMatrix())(
       expect(serverTransport.connections.size).toBe(1);
     });
 
-    test('client checks request schema on construction', async ({
-      onTestFinished,
-    }) => {
+    test('client checks request schema on construction', async () => {
       const schema = Type.Object({
         foo: Type.String(),
       });
@@ -849,7 +879,7 @@ describe.each(testMatrix())(
       const clientHandshakeFailed = vi.fn();
       clientTransport.addEventListener('protocolError', clientHandshakeFailed);
 
-      onTestFinished(async () => {
+      addCleanup(async () => {
         clientTransport.removeEventListener(
           'protocolError',
           clientHandshakeFailed,
@@ -877,9 +907,7 @@ describe.each(testMatrix())(
       expect(serverTransport.connections.size).toBe(0);
     });
 
-    test('server checks request schema on receive', async ({
-      onTestFinished,
-    }) => {
+    test('server checks request schema on receive', async () => {
       const clientRequestSchema = Type.Object({
         foo: Type.Number(),
       });
@@ -909,7 +937,7 @@ describe.each(testMatrix())(
       const serverHandshakeFailed = vi.fn();
       serverTransport.addEventListener('protocolError', serverHandshakeFailed);
 
-      onTestFinished(async () => {
+      addCleanup(async () => {
         clientTransport.removeEventListener(
           'protocolError',
           clientHandshakeFailed,
@@ -943,9 +971,7 @@ describe.each(testMatrix())(
       });
     });
 
-    test('server gets previous parsed metadata on reconnect', async ({
-      onTestFinished,
-    }) => {
+    test('server gets previous parsed metadata on reconnect', async () => {
       const schema = Type.Object({
         kept: Type.String(),
         discarded: Type.String(),
@@ -967,7 +993,7 @@ describe.each(testMatrix())(
         construct,
       });
 
-      onTestFinished(async () => {
+      addCleanup(async () => {
         await testFinishesCleanly({
           clientTransports: [clientTransport],
           serverTransport,
@@ -1014,7 +1040,7 @@ describe.each(testMatrix())(
       );
     });
 
-    test('parse can reject connection', async ({ onTestFinished }) => {
+    test('parse can reject connection', async () => {
       const schema = Type.Object({
         foo: Type.String(),
       });
@@ -1039,7 +1065,7 @@ describe.each(testMatrix())(
         serverRejectedConnection,
       );
 
-      onTestFinished(async () => {
+      addCleanup(async () => {
         clientTransport.removeEventListener(
           'protocolError',
           clientHandshakeFailed,
