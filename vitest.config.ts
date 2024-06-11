@@ -10,6 +10,6 @@ export default defineConfig({
     sequence: {
       hooks: 'stack',
     },
-    fileParallelism: false,
+    pool: 'forks',
   },
 });
