@@ -497,6 +497,7 @@ export abstract class Transport<ConnType extends Connection> {
    * @param msg The message to send.
    * @returns The ID of the sent message or undefined if it wasn't sent
    */
+
   send(to: TransportClientId, msg: PartialTransportMessage): string {
     if (this.getStatus() === 'closed') {
       const err = 'transport is closed, cant send';

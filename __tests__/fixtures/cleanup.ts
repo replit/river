@@ -136,7 +136,6 @@ export async function testFinishesCleanly({
   if (server) {
     await advanceFakeTimersBySessionGrace();
     await ensureServerIsClean(server);
-    await server.close();
   }
 
   if (serverTransport) {
