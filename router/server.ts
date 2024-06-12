@@ -1,12 +1,13 @@
 import { Static } from '@sinclair/typebox';
 import { ServerTransport } from '../transport/transport';
 import {
-  AnyProcedure,
   PayloadType,
   ProcedureErrorSchemaType,
   OutputReaderErrorSchema,
   InputReaderErrorSchema,
   UNCAUGHT_ERROR_CODE,
+  UNEXPECTED_DISCONNECT_CODE,
+  AnyProcedure,
 } from './procedures';
 import {
   AnyService,
@@ -18,7 +19,6 @@ import {
   OpaqueTransportMessage,
   isStreamClose,
   isStreamOpen,
-  TransportClientId,
   ControlFlags,
   isStreamCloseRequest,
 } from '../transport/message';
@@ -43,37 +43,28 @@ import { ReadStreamImpl, WriteStreamImpl } from './streams';
  * @template Services - The type of services provided by the server.
  */
 export interface Server<Services extends AnyServiceSchemaMap> {
+  /**
+   * Services defined for this server.
+   */
   services: InstantiatedServiceSchemaMap<Services>;
-  streams: Map<string, ProcStream>;
+  /**
+   * A set of stream ids that are currently open.
+   */
+  openStreams: Set<string>;
 }
 
 type InputHandlerReturn = Promise<(() => void) | void>;
 
-interface ProcStream {
-  id: string;
-  serviceName: string;
-  procedureName: string;
-  inputReader: ReadStreamImpl<
-    Static<PayloadType>,
-    Static<typeof InputReaderErrorSchema>
-  >;
-  outputWriter: WriteStreamImpl<
-    Result<Static<PayloadType>, Static<ProcedureErrorSchemaType>>
-  >;
-  inputHandlerPromise: InputHandlerReturn;
-}
-
-class RiverServer<Services extends AnyServiceSchemaMap> {
-  transport: ServerTransport<Connection>;
-  services: InstantiatedServiceSchemaMap<Services>;
-  contextMap: Map<AnyService, ServiceContextWithState<object>>;
-  // map of streamId to ProcStream
-  streamMap: Map<string, ProcStream>;
-  // map of client to their open streams by streamId
-  clientStreams: Map<TransportClientId, Set<string>>;
-  disconnectedSessions: Set<TransportClientId>;
-
+class RiverServer<Services extends AnyServiceSchemaMap>
+  implements Server<Services>
+{
+  private transport: ServerTransport<Connection>;
+  private contextMap: Map<AnyService, ServiceContextWithState<object>>;
   private log?: Logger;
+
+  public openStreams: Set<string>;
+  public services: InstantiatedServiceSchemaMap<Services>;
+
   constructor(
     transport: ServerTransport<Connection>,
     services: Services,
@@ -100,75 +91,58 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     }
 
     this.transport = transport;
-    this.disconnectedSessions = new Set();
-    this.streamMap = new Map();
-    this.clientStreams = new Map();
-    this.transport.addEventListener('message', this.onMessage);
-    this.transport.addEventListener('sessionStatus', this.onSessionStatus);
+    this.openStreams = new Set();
     this.log = transport.log;
 
-    this.transport.addEventListener('transportStatus', async ({ status }) => {
-      if (status !== 'closed') {
+    const handleMessage = (msg: EventMap['message']) => {
+      if (msg.to !== this.transport.clientId) {
+        this.log?.info(
+          `got msg with destination that isn't this server, ignoring`,
+          {
+            clientId: this.transport.clientId,
+            transportMessage: msg,
+          },
+        );
         return;
       }
 
-      this.transport.removeEventListener('message', this.onMessage);
-      this.transport.removeEventListener('sessionStatus', this.onSessionStatus);
-      await Promise.all([...this.streamMap.keys()].map(this.cleanupStream));
+      if (this.openStreams.has(msg.streamId)) {
+        return;
+      }
+
+      this.createNewProcStream(msg);
+    };
+    this.transport.addEventListener('message', handleMessage);
+
+    const handleSessionStatus = (evt: EventMap['sessionStatus']) => {
+      if (evt.status !== 'disconnect') return;
+
+      const disconnectedClientId = evt.session.to;
+      this.log?.info(
+        `got session disconnect from ${disconnectedClientId}, cleaning up streams`,
+        evt.session.loggingMetadata,
+      );
+    };
+    this.transport.addEventListener('sessionStatus', handleSessionStatus);
+
+    this.transport.addEventListener('transportStatus', (evt) => {
+      if (evt.status !== 'closed') return;
+
+      this.transport.removeEventListener('message', handleMessage);
+      this.transport.removeEventListener('sessionStatus', handleSessionStatus);
     });
   }
 
-  get streams() {
-    return this.streamMap;
-  }
-
-  private onMessage = async (message: OpaqueTransportMessage) => {
-    if (message.to !== this.transport.clientId) {
-      this.log?.info(
-        `got msg with destination that isn't this server, ignoring`,
-        {
-          clientId: this.transport.clientId,
-          transportMessage: message,
-        },
-      );
-      return;
-    }
-
-    let procStream = this.streamMap.get(message.streamId);
-    const isInit = !procStream;
-
-    // create a proc stream if it doesnt exist
-    procStream ||= this.createNewProcStream(message);
-    if (!procStream) {
-      // if we fail to create a proc stream, just abort
-      return;
-    }
-
-    await this.pushToStream(procStream, message, isInit);
-  };
-
-  // cleanup streams on session close
-  private onSessionStatus = async (evt: EventMap['sessionStatus']) => {
-    if (evt.status !== 'disconnect') return;
-
-    const disconnectedClientId = evt.session.to;
-    this.log?.info(
-      `got session disconnect from ${disconnectedClientId}, cleaning up streams`,
-      evt.session.loggingMetadata,
-    );
-
-    const streamsFromThisClient = this.clientStreams.get(disconnectedClientId);
-    if (!streamsFromThisClient) return;
-
-    this.disconnectedSessions.add(disconnectedClientId);
-    await Promise.all(
-      Array.from(streamsFromThisClient).map(this.cleanupStream),
-    );
-    this.disconnectedSessions.delete(disconnectedClientId);
-    this.clientStreams.delete(disconnectedClientId);
-  };
-
   private createNewProcStream(initMessage: OpaqueTransportMessage) {
+    const {
+      streamId,
+      procedureName,
+      serviceName,
+      controlFlags,
+      payload: initPayload,
+      from,
+    } = initMessage;
+
     if (!isStreamOpen(initMessage.controlFlags)) {
       this.log?.error(
         `can't create a new procedure stream from a message that doesn't have the stream open bit set`,
@@ -181,7 +155,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       return;
     }
 
-    if (!initMessage.procedureName || !initMessage.serviceName) {
+    if (!procedureName || !serviceName) {
       this.log?.warn(
         `missing procedure or service name in stream open message`,
         {
@@ -192,18 +166,18 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       return;
     }
 
-    if (!(initMessage.serviceName in this.services)) {
-      this.log?.warn(`couldn't find service ${initMessage.serviceName}`, {
+    if (!(serviceName in this.services)) {
+      this.log?.warn(`couldn't find service ${serviceName}`, {
         clientId: this.transport.clientId,
         transportMessage: initMessage,
       });
       return;
     }
 
-    const service = this.services[initMessage.serviceName];
-    if (!(initMessage.procedureName in service.procedures)) {
+    const service = this.services[serviceName];
+    if (!(procedureName in service.procedures)) {
       this.log?.warn(
-        `couldn't find a matching procedure for ${initMessage.serviceName}.${initMessage.procedureName}`,
+        `couldn't find a matching procedure for ${serviceName}.${procedureName}`,
         {
           clientId: this.transport.clientId,
           transportMessage: initMessage,
@@ -212,18 +186,18 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       return;
     }
 
-    const session = this.transport.sessions.get(initMessage.from);
+    const session = this.transport.sessions.get(from);
     if (!session) {
-      this.log?.warn(`couldn't find session for ${initMessage.from}`, {
+      this.log?.warn(`couldn't find session for ${from}`, {
         clientId: this.transport.clientId,
         transportMessage: initMessage,
       });
       return;
     }
 
-    const procedure = service.procedures[initMessage.procedureName];
+    const procedure = service.procedures[procedureName];
 
-    if (!Value.Check(procedure.init, initMessage.payload)) {
+    if (!Value.Check(procedure.init, initPayload)) {
       this.log?.error(`procedure init failed validation`, {
         clientId: this.transport.clientId,
         transportMessage: initMessage,
@@ -232,28 +206,108 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       return;
     }
 
-    const maybeCleanup = () => {
-      if (!inputReader.isClosed() || !outputWriter.isClosed()) {
+    let didSessionDisconnect = false;
+    const onSessionStatus = (evt: EventMap['sessionStatus']) => {
+      if (evt.status !== 'disconnect') {
         return;
       }
 
-      removeOnCloseListener();
-      void this.cleanupStream(initMessage.streamId);
+      if (evt.session.to !== from) {
+        return;
+      }
+
+      didSessionDisconnect = true;
+
+      if (!inputReader.isClosed()) {
+        inputReader.pushValue(
+          Err({
+            code: UNEXPECTED_DISCONNECT_CODE,
+            message: `client unexpectedly disconnected`,
+          }),
+        );
+        inputReader.triggerClose();
+      }
+
+      outputWriter.close();
+    };
+    this.transport.addEventListener('sessionStatus', onSessionStatus);
+
+    const onMessage = (msg: OpaqueTransportMessage) => {
+      if (streamId !== msg.streamId) {
+        return;
+      }
+
+      if (msg.from !== from) {
+        this.log?.error('Got stream message from unexpected client', {
+          clientId: this.transport.clientId,
+          transportMessage: msg,
+        });
+
+        return;
+      }
+
+      if (isStreamCloseRequest(msg.controlFlags)) {
+        outputWriter.triggerCloseRequest();
+      }
+
+      if (inputReader.isClosed()) {
+        this.log?.error('Received message after input stream is closed', {
+          clientId: this.transport.clientId,
+          transportMessage: msg,
+        });
+
+        return;
+      }
+
+      if ('input' in procedure && Value.Check(procedure.input, msg.payload)) {
+        inputReader.pushValue(Ok(msg.payload));
+      } else if (!Value.Check(ControlMessagePayloadSchema, msg.payload)) {
+        this.log?.error(
+          `procedure ${serviceName}.${procedureName} received invalid payload`,
+          {
+            clientId: this.transport.clientId,
+            transportMessage: msg,
+          },
+        );
+      }
+
+      if (isStreamClose(msg.controlFlags)) {
+        inputReader.triggerClose();
+      }
+    };
+    this.transport.addEventListener('message', onMessage);
+
+    let procDispose: void | (() => void) = undefined;
+    const cleanup = () => {
+      this.transport.removeEventListener('message', onMessage);
+      this.transport.removeEventListener('sessionStatus', onSessionStatus);
+      this.openStreams.delete(streamId);
+
+      if (procDispose) {
+        procDispose();
+      }
     };
 
-    const inputReader: ProcStream['inputReader'] = new ReadStreamImpl(() => {
+    const inputReader = new ReadStreamImpl<
+      Static<PayloadType>,
+      Static<typeof InputReaderErrorSchema>
+    >(() => {
       this.transport.sendRequestCloseControl(session.to, initMessage.streamId);
     });
-    const removeOnCloseListener = inputReader.onClose(() => {
-      maybeCleanup();
+    inputReader.onClose(() => {
+      if (outputWriter.isClosed()) {
+        cleanup();
+      }
     });
 
     const procClosesWithResponse =
       procedure.type === 'rpc' || procedure.type === 'upload';
-    const outputWriter: ProcStream['outputWriter'] = new WriteStreamImpl(
+    const outputWriter = new WriteStreamImpl<
+      Result<Static<PayloadType>, Static<ProcedureErrorSchemaType>>
+    >(
       (response) => {
         this.transport.send(session.to, {
-          streamId: initMessage.streamId,
+          streamId,
           controlFlags: procClosesWithResponse
             ? ControlFlags.StreamClosedBit
             : 0,
@@ -261,23 +315,22 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
         });
       },
       () => {
-        if (
-          !procClosesWithResponse &&
-          !this.disconnectedSessions.has(initMessage.from)
-        ) {
+        if (!procClosesWithResponse && !didSessionDisconnect) {
           // we ended, send a close bit back to the client
           // also, if the client has disconnected, we don't need to send a close
-          this.transport.sendCloseControl(session.to, initMessage.streamId);
+          this.transport.sendCloseControl(session.to, streamId);
         }
 
-        maybeCleanup();
+        if (inputReader.isClosed()) {
+          cleanup();
+        }
       },
     );
 
     const errorHandler = (err: unknown, span: Span) => {
       const errorMsg = coerceErrorString(err);
       this.log?.error(
-        `procedure ${initMessage.serviceName}.${initMessage.procedureName} threw an uncaught error: ${errorMsg}`,
+        `procedure ${serviceName}.${procedureName} threw an uncaught error: ${errorMsg}`,
         session.loggingMetadata,
       );
 
@@ -304,11 +357,20 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       return;
     }
 
-    // pump incoming message stream -> handler -> outgoing message stream
-    let inputHandlerPromise: InputHandlerReturn;
+    if (isStreamClose(controlFlags)) {
+      inputReader.triggerClose();
+    } else if (procedure.type === 'rpc' || procedure.type === 'subscription') {
+      // Though things can work just fine if they eventually follow up with a stream
+      // control message with a close bit set, it's an unusual client implementation!
+      this.log?.warn(`${procedure.type} sent an init without a stream close`, {
+        clientId: this.transport.clientId,
+        transportMessage: initMessage,
+      });
+    }
+
     const serviceContextWithTransportInfo: ServiceContextWithTransportInfo<object> =
       {
-        ...this.getContext(service, initMessage.serviceName),
+        ...this.getContext(service, serviceName),
         to: initMessage.to,
         from: initMessage.from,
         streamId: initMessage.streamId,
@@ -316,16 +378,18 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
         metadata: sessionMeta,
       };
 
+    this.openStreams.add(streamId);
+
     switch (procedure.type) {
       case 'rpc':
-        inputHandlerPromise = createHandlerSpan(
+        void createHandlerSpan(
           procedure.type,
           initMessage,
           async (span): InputHandlerReturn => {
             try {
               const outputMessage = await procedure.handler(
                 serviceContextWithTransportInfo,
-                initMessage.payload,
+                initPayload,
               );
 
               if (outputWriter.isClosed()) {
@@ -344,19 +408,25 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
         );
         break;
       case 'stream':
-        inputHandlerPromise = createHandlerSpan(
+        void createHandlerSpan(
           procedure.type,
           initMessage,
           async (span): InputHandlerReturn => {
             try {
-              const dispose = await procedure.handler(
+              procDispose = await procedure.handler(
                 serviceContextWithTransportInfo,
-                initMessage.payload,
+                initPayload,
                 inputReader,
                 outputWriter,
               );
 
-              return dispose;
+              if (
+                procDispose &&
+                outputWriter.isClosed() &&
+                inputReader.isClosed()
+              ) {
+                procDispose();
+              }
             } catch (err) {
               errorHandler(err, span);
             } finally {
@@ -367,18 +437,24 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
 
         break;
       case 'subscription':
-        inputHandlerPromise = createHandlerSpan(
+        void createHandlerSpan(
           procedure.type,
           initMessage,
           async (span): InputHandlerReturn => {
             try {
-              const dispose = await procedure.handler(
+              procDispose = await procedure.handler(
                 serviceContextWithTransportInfo,
-                initMessage.payload,
+                initPayload,
                 outputWriter,
               );
 
-              return dispose;
+              if (
+                procDispose &&
+                outputWriter.isClosed() &&
+                inputReader.isClosed()
+              ) {
+                procDispose();
+              }
             } catch (err) {
               errorHandler(err, span);
             } finally {
@@ -388,14 +464,14 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
         );
         break;
       case 'upload':
-        inputHandlerPromise = createHandlerSpan(
+        void createHandlerSpan(
           procedure.type,
           initMessage,
           async (span): InputHandlerReturn => {
             try {
               const outputMessage = await procedure.handler(
                 serviceContextWithTransportInfo,
-                initMessage.payload,
+                initPayload,
                 inputReader,
               );
 
@@ -415,74 +491,14 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
 
         break;
       default:
-        // procedure is inferred to be never here as this is not a valid procedure type
-        // we cast just to this.log
         this.log?.warn(
           `got request for invalid procedure type ${
             (procedure as AnyProcedure).type
-          } at ${initMessage.serviceName}.${initMessage.procedureName}`,
+          } at ${serviceName}.${procedureName}`,
           { ...session.loggingMetadata, transportMessage: initMessage },
         );
+
         return;
-    }
-
-    const procStream: ProcStream = {
-      id: initMessage.streamId,
-      inputReader: inputReader,
-      outputWriter: outputWriter,
-      serviceName: initMessage.serviceName,
-      procedureName: initMessage.procedureName,
-      inputHandlerPromise,
-    };
-
-    this.streamMap.set(initMessage.streamId, procStream);
-
-    // add this stream to ones from that client so we can clean it up in the case of a disconnect without close
-    const streamsFromThisClient =
-      this.clientStreams.get(initMessage.from) ?? new Set();
-    streamsFromThisClient.add(initMessage.streamId);
-    this.clientStreams.set(initMessage.from, streamsFromThisClient);
-
-    return procStream;
-  }
-
-  private async pushToStream(
-    procStream: ProcStream,
-    message: OpaqueTransportMessage,
-    isInit?: boolean,
-  ) {
-    const { serviceName, procedureName } = procStream;
-    const procedure = this.services[serviceName].procedures[procedureName];
-
-    // Init message is consumed during stream instantiation
-    if (!isInit) {
-      if (
-        'input' in procedure &&
-        Value.Check(procedure.input, message.payload)
-      ) {
-        procStream.inputReader.pushValue(Ok(message.payload));
-      } else if (!Value.Check(ControlMessagePayloadSchema, message.payload)) {
-        // whelp we got a message that isn't a control message and doesn't match the procedure input
-        // so definitely not a valid payload
-        this.log?.error(
-          `procedure ${serviceName}.${procedureName} received invalid payload`,
-          {
-            clientId: this.transport.clientId,
-            transportMessage: message,
-            validationErrors: [
-              ...Value.Errors(procedure.init, message.payload),
-            ],
-          },
-        );
-      }
-    }
-
-    if (isStreamClose(message.controlFlags)) {
-      procStream.inputReader.triggerClose();
-    }
-
-    if (isStreamCloseRequest(message.controlFlags)) {
-      procStream.outputWriter.triggerCloseRequest();
     }
   }
 
@@ -499,30 +515,6 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
 
     return context;
   }
-
-  private cleanupStream = async (id: string) => {
-    const stream = this.streamMap.get(id);
-    if (!stream) {
-      return;
-    }
-
-    // end the streams and wait for the handlers to finish
-    if (!stream.inputReader.isClosed()) {
-      // Drain will make sure any read leads to an error instead of looking like
-      // the stream cleanly closed.
-      stream.inputReader.drain();
-      stream.inputReader.triggerClose();
-    }
-    // We wait for the handler because we want to ensure that we have all the disposables
-    void stream.inputHandlerPromise.then((maybeDispose) => {
-      maybeDispose?.();
-    });
-
-    if (!stream.outputWriter.isClosed()) {
-      stream.outputWriter.close();
-    }
-    this.streamMap.delete(id);
-  };
 }
 
 /**

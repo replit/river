@@ -177,10 +177,10 @@ describe.each(testMatrix())(
 
       // ensure we only have one stream despite pushing multiple messages.
       inputWriter.close();
-      await waitFor(() => expect(server.streams.size).toEqual(1));
+      await waitFor(() => expect(server.openStreams.size).toEqual(1));
       await outputReader.requestClose();
-      // ensure we no longer have any streams since the input was closed.
-      await waitFor(() => expect(server.streams.size).toEqual(0));
+      // ensure we no longer have any open streams since the input was closed.
+      await waitFor(() => expect(server.openStreams.size).toEqual(0));
 
       const result2 = await iterNext(outputIterator);
       assert(result2.ok);
