@@ -1,4 +1,4 @@
-import { afterAll, assert, describe, expect, test, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, test } from 'vitest';
 import { iterNext } from '../util/testHelpers';
 import {
   SubscribableServiceSchema,
@@ -8,24 +8,33 @@ import {
 import { createClient, createServer } from '../router';
 import {
   advanceFakeTimersBySessionGrace,
-  ensureTransportBuffersAreEventuallyEmpty,
+  cleanupTransports,
+  createPostTestCleanups,
   testFinishesCleanly,
   waitFor,
-  waitForTransportToFinish,
 } from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
+import { TestSetupHelpers } from './fixtures/transports';
 
 describe.each(testMatrix())(
   'procedures should clean up after themselves ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
-    const { getClientTransport, getServerTransport, cleanup } =
-      await transport.setup({ client: opts, server: opts });
-    afterAll(cleanup);
 
-    test('closing a transport from the client cleans up connection on the server', async ({
-      onTestFinished,
-    }) => {
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
+    let getClientTransport: TestSetupHelpers['getClientTransport'];
+    let getServerTransport: TestSetupHelpers['getServerTransport'];
+    beforeEach(async () => {
+      const setup = await transport.setup({ client: opts, server: opts });
+      getClientTransport = setup.getClientTransport;
+      getServerTransport = setup.getServerTransport;
+      return async () => {
+        await postTestCleanup();
+        await setup.cleanup();
+      };
+    });
+
+    test('closing a transport from the client cleans up connection on the server', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -35,12 +44,8 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-          server,
-        });
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       expect(clientTransport.connections.size).toEqual(0);
@@ -54,20 +59,17 @@ describe.each(testMatrix())(
       expect(serverTransport.connections.size).toEqual(1);
 
       // should be back to 0 connections after client closes
-      vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
       clientTransport.close();
 
-      await waitForTransportToFinish(clientTransport);
-      await waitForTransportToFinish(serverTransport);
-      await advanceFakeTimersBySessionGrace();
-      await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
-      await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
     });
 
-    test('closing a transport from the server cleans up connection on the client', async ({
-      onTestFinished,
-    }) => {
+    test('closing a transport from the server cleans up connection on the client', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -77,12 +79,8 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-          server,
-        });
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       expect(clientTransport.connections.size).toEqual(0);
@@ -96,18 +94,17 @@ describe.each(testMatrix())(
       expect(serverTransport.connections.size).toEqual(1);
 
       // should be back to 0 connections after client closes
-      vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
       serverTransport.close();
 
-      await waitForTransportToFinish(clientTransport);
-      await waitForTransportToFinish(serverTransport);
-      await advanceFakeTimersBySessionGrace();
-      await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
-      await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
     });
 
-    test('rpc', async ({ onTestFinished }) => {
+    test('rpc', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -117,12 +114,8 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-          server,
-        });
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       const serverListeners =
@@ -146,15 +139,14 @@ describe.each(testMatrix())(
       expect(serverTransport.connections.size).toEqual(1);
       expect(clientTransport.connections.size).toEqual(1);
 
-      vi.useFakeTimers({ shouldAdvanceTime: true });
-      await waitForTransportToFinish(clientTransport);
-      await waitForTransportToFinish(serverTransport);
-      await advanceFakeTimersBySessionGrace();
-      await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
-      await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
     });
 
-    test('stream', async ({ onTestFinished }) => {
+    test('stream', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -164,12 +156,8 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-          server,
-        });
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       const serverListeners =
@@ -214,15 +202,14 @@ describe.each(testMatrix())(
       expect(serverTransport.connections.size).toEqual(1);
       expect(clientTransport.connections.size).toEqual(1);
 
-      vi.useFakeTimers({ shouldAdvanceTime: true });
-      await waitForTransportToFinish(clientTransport);
-      await waitForTransportToFinish(serverTransport);
-      await advanceFakeTimersBySessionGrace();
-      await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
-      await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
     });
 
-    test('subscription', async ({ onTestFinished }) => {
+    test('subscription', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -234,12 +221,8 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-          server,
-        });
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       const serverListeners =
@@ -274,18 +257,16 @@ describe.each(testMatrix())(
       expect(serverTransport.connections.size).toEqual(1);
       expect(clientTransport.connections.size).toEqual(1);
 
-      vi.useFakeTimers({ shouldAdvanceTime: true });
-      await waitForTransportToFinish(clientTransport);
-      await waitForTransportToFinish(serverTransport);
-      await advanceFakeTimersBySessionGrace();
-      await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
-      await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
-
       // no observers should remain subscribed to the observable
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
       expect(server.services.subscribable.state.count.listenerCount).toEqual(0);
     });
 
-    test('upload', async ({ onTestFinished }) => {
+    test('upload', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -295,12 +276,8 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
-      onTestFinished(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-          server,
-        });
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       const serverListeners =
@@ -332,17 +309,14 @@ describe.each(testMatrix())(
       expect(serverTransport.connections.size).toEqual(1);
       expect(clientTransport.connections.size).toEqual(1);
 
-      vi.useFakeTimers({ shouldAdvanceTime: true });
-      await waitForTransportToFinish(clientTransport);
-      await waitForTransportToFinish(serverTransport);
-      await advanceFakeTimersBySessionGrace();
-      await ensureTransportBuffersAreEventuallyEmpty(clientTransport);
-      await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
     });
 
-    test("shouldn't send messages across stale sessions", async ({
-      onTestFinished,
-    }) => {
+    test("shouldn't send messages across stale sessions", async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -353,12 +327,8 @@ describe.each(testMatrix())(
         serverTransport.clientId,
       );
 
-      onTestFinished(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-          server,
-        });
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       // start a stream
@@ -370,7 +340,6 @@ describe.each(testMatrix())(
       expect(result1.payload).toStrictEqual({ response: '1' });
 
       // wait for session to disconnect
-      vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
       clientTransport.connections.forEach((conn) => conn.close());
       await advanceFakeTimersBySessionGrace();
@@ -387,6 +356,11 @@ describe.each(testMatrix())(
       input.push({ msg: '2', ignore: false });
       const result2 = await iterNext(output);
       assert(!result2.ok);
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
     });
   },
 );

@@ -10,6 +10,8 @@ export default defineConfig({
     sequence: {
       hooks: 'stack',
     },
-    fileParallelism: false,
+    pool: 'forks',
+    testTimeout: 1000,
+    setupFiles: './__tests__/globalSetup.ts',
   },
 });

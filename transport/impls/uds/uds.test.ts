@@ -1,4 +1,4 @@
-import { describe, test, expect, afterAll, onTestFinished, vi } from 'vitest';
+import { describe, test, expect, beforeEach } from 'vitest';
 import { UnixDomainSocketClientTransport } from './client';
 import { UnixDomainSocketServerTransport } from './server';
 import {
@@ -9,27 +9,37 @@ import {
 } from '../../../util/testHelpers';
 import {
   advanceFakeTimersBySessionGrace,
+  cleanupTransports,
   testFinishesCleanly,
 } from '../../../__tests__/fixtures/cleanup';
 import net from 'node:net';
+import { createPostTestCleanups } from '../../../__tests__/fixtures/cleanup';
 
 describe('sending and receiving across unix sockets works', async () => {
-  const socketPath = getUnixSocketPath();
-  const server = net.createServer();
-  await onUdsServeReady(server, socketPath);
+  let socketPath: string;
+  let server: net.Server;
 
-  afterAll(() => {
-    server.close();
+  const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
+  beforeEach(async () => {
+    socketPath = getUnixSocketPath();
+    server = net.createServer();
+    await onUdsServeReady(server, socketPath);
+
+    return async () => {
+      await postTestCleanup();
+      server.close();
+    };
   });
 
-  const getTransports = () =>
-    [
-      new UnixDomainSocketClientTransport(socketPath, 'client'),
-      new UnixDomainSocketServerTransport(server, 'SERVER'),
-    ] as const;
-
   test('basic send/receive', async () => {
-    const [clientTransport, serverTransport] = getTransports();
+    const clientTransport = new UnixDomainSocketClientTransport(
+      socketPath,
+      'client',
+    );
+    const serverTransport = new UnixDomainSocketServerTransport(
+      server,
+      'SERVER',
+    );
     await clientTransport.connect(serverTransport.clientId);
     const messages = [
       {
@@ -41,11 +51,8 @@ describe('sending and receiving across unix sockets works', async () => {
         test: [1, 2, 3, 4],
       },
     ];
-    onTestFinished(async () => {
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-      });
+    addPostTestCleanup(async () => {
+      await cleanupTransports([clientTransport, serverTransport]);
     });
 
     for (const msg of messages) {
@@ -58,16 +65,11 @@ describe('sending and receiving across unix sockets works', async () => {
         waitForMessage(serverTransport, (incoming) => incoming.id === msgId),
       ).resolves.toStrictEqual(transportMessage.payload);
     }
-  });
-});
 
-describe('network edge cases', async () => {
-  const socketPath = getUnixSocketPath();
-  const server = net.createServer();
-  await onUdsServeReady(server, socketPath);
-
-  afterAll(() => {
-    server.close();
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
   });
 
   test('hanging uds connection with no handshake is cleaned up after grace', async () => {
@@ -75,14 +77,10 @@ describe('network edge cases', async () => {
       server,
       'SERVER',
     );
-    onTestFinished(async () => {
-      await testFinishesCleanly({
-        clientTransports: [],
-        serverTransport,
-      });
+    addPostTestCleanup(async () => {
+      await cleanupTransports([serverTransport]);
     });
 
-    vi.useFakeTimers({ shouldAdvanceTime: true });
     const sock = await new Promise<net.Socket>((resolve, reject) => {
       const sock = new net.Socket();
       sock.on('connect', () => resolve(sock));
@@ -103,5 +101,10 @@ describe('network edge cases', async () => {
     expect(serverTransport.connections.size).toBe(0);
     expect(serverTransport.sessions.size).toBe(0);
     expect(sock.readyState).toBe('closed');
+
+    await testFinishesCleanly({
+      clientTransports: [],
+      serverTransport,
+    });
   });
 });

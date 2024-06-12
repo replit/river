@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { describe, test, expect, afterAll, onTestFinished, vi } from 'vitest';
+import { describe, test, expect, beforeEach } from 'vitest';
 import {
   createWebSocketServer,
   onWsServerReady,
@@ -12,19 +12,29 @@ import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
 import {
   advanceFakeTimersBySessionGrace,
+  cleanupTransports,
   testFinishesCleanly,
 } from '../../../__tests__/fixtures/cleanup';
 import { PartialTransportMessage } from '../../message';
 import type NodeWs from 'ws';
+import { createPostTestCleanups } from '../../../__tests__/fixtures/cleanup';
 
 describe('sending and receiving across websockets works', async () => {
-  const server = http.createServer();
-  const port = await onWsServerReady(server);
-  const wss = createWebSocketServer(server);
+  let server: http.Server;
+  let port: number;
+  let wss: NodeWs.Server;
 
-  afterAll(() => {
-    wss.close();
-    server.close();
+  const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
+  beforeEach(async () => {
+    server = http.createServer();
+    port = await onWsServerReady(server);
+    wss = createWebSocketServer(server);
+
+    return async () => {
+      await postTestCleanup();
+      wss.close();
+      server.close();
+    };
   });
 
   test('basic send/receive', async () => {
@@ -34,11 +44,8 @@ describe('sending and receiving across websockets works', async () => {
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     await clientTransport.connect(serverTransport.clientId);
-    onTestFinished(async () => {
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-      });
+    addPostTestCleanup(async () => {
+      await cleanupTransports([clientTransport, serverTransport]);
     });
 
     const msg = createDummyTransportMessage();
@@ -46,6 +53,11 @@ describe('sending and receiving across websockets works', async () => {
     await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msgId),
     ).resolves.toStrictEqual(msg.payload);
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
   });
 
   test('sending respects to/from fields', async () => {
@@ -76,11 +88,8 @@ describe('sending and receiving across websockets works', async () => {
 
     const client1 = await initClient(clientId1);
     const client2 = await initClient(clientId2);
-    onTestFinished(async () => {
-      await testFinishesCleanly({
-        clientTransports: [client1, client2],
-        serverTransport,
-      });
+    addPostTestCleanup(async () => {
+      await cleanupTransports([client1, client2, serverTransport]);
     });
 
     // sending messages from server to client shouldn't leak between clients
@@ -96,29 +105,19 @@ describe('sending and receiving across websockets works', async () => {
     await expect(promises).resolves.toStrictEqual(
       expect.arrayContaining([msg1.payload, msg2.payload]),
     );
-  });
-});
 
-describe('network edge cases', async () => {
-  const server = http.createServer();
-  const port = await onWsServerReady(server);
-  const wss = createWebSocketServer(server);
-
-  afterAll(() => {
-    wss.close();
-    server.close();
+    await testFinishesCleanly({
+      clientTransports: [client1, client2],
+      serverTransport,
+    });
   });
 
   test('hanging ws connection with no handshake is cleaned up after grace', async () => {
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
-    onTestFinished(async () => {
-      await testFinishesCleanly({
-        clientTransports: [],
-        serverTransport,
-      });
+    addPostTestCleanup(async () => {
+      await cleanupTransports([serverTransport]);
     });
 
-    vi.useFakeTimers({ shouldAdvanceTime: true });
     const ws = createLocalWebSocketClient(port);
 
     // wait for ws to be open
@@ -135,6 +134,11 @@ describe('network edge cases', async () => {
     expect(serverTransport.connections.size).toBe(0);
     expect(serverTransport.sessions.size).toBe(0);
     expect(ws.readyState).toBe(ws.CLOSED);
+
+    await testFinishesCleanly({
+      clientTransports: [],
+      serverTransport,
+    });
   });
 
   test('ws connection is recreated after unclean disconnect', async () => {
@@ -144,11 +148,8 @@ describe('network edge cases', async () => {
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     await clientTransport.connect(serverTransport.clientId);
-    onTestFinished(async () => {
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-      });
+    addPostTestCleanup(async () => {
+      await cleanupTransports([clientTransport, serverTransport]);
     });
 
     const msg1 = createDummyTransportMessage();
@@ -169,6 +170,11 @@ describe('network edge cases', async () => {
     await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
     ).resolves.toStrictEqual(msg2.payload);
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
   });
 
   test('ws connection always calls the close callback', async () => {
@@ -178,11 +184,8 @@ describe('network edge cases', async () => {
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     await clientTransport.connect(serverTransport.clientId);
-    onTestFinished(async () => {
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-      });
+    addPostTestCleanup(async () => {
+      await cleanupTransports([clientTransport, serverTransport]);
     });
 
     const msg1 = createDummyTransportMessage();
@@ -205,5 +208,10 @@ describe('network edge cases', async () => {
     await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
     ).resolves.toStrictEqual(msg2.payload);
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
   });
 });

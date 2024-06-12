@@ -59,6 +59,10 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
       ws.onclose = (evt) => {
         reject(new Error(evt.reason));
       };
+
+      ws.onerror = (err) => {
+        reject(new Error(err.message));
+      };
     });
 
     const conn = new WebSocketConnection(ws);
