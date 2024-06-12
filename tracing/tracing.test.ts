@@ -16,7 +16,11 @@ import tracer, {
 } from './index';
 import { OpaqueTransportMessage } from '../transport';
 import { testMatrix } from '../__tests__/fixtures/matrix';
-import { testFinishesCleanly, waitFor } from '../__tests__/fixtures/cleanup';
+import {
+  cleanupTransports,
+  testFinishesCleanly,
+  waitFor,
+} from '../__tests__/fixtures/cleanup';
 import { TestSetupHelpers } from '../__tests__/fixtures/transports';
 import { createPostTestCleanups } from '../__tests__/fixtures/cleanup';
 
@@ -89,10 +93,7 @@ describe.each(testMatrix())(
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       addPostTestCleanup(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       await clientTransport.connect(serverTransport.clientId);
@@ -117,6 +118,10 @@ describe.each(testMatrix())(
       // ensure server span is a child of client span
       // @ts-expect-error: hacking to get parentSpanId
       expect(serverSpan.parentSpanId).toBe(clientSpan.spanContext().spanId);
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
     });
   },
 );

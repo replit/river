@@ -35,7 +35,6 @@ describe('LeakyBucketRateLimit', () => {
   });
 
   test('keeps growing until startRestoringBudget', () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
     const rateLimit = new LeakyBucketRateLimit(options);
     const user = 'user1';
     rateLimit.consumeBudget(user);
@@ -53,7 +52,6 @@ describe('LeakyBucketRateLimit', () => {
   });
 
   test('stops restoring budget when we consume budget again', () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
     const rateLimit = new LeakyBucketRateLimit(options);
     const user = 'user1';
     rateLimit.consumeBudget(user);

@@ -8,6 +8,7 @@ import {
 import { EventMap, ProtocolError } from '../transport/events';
 import {
   advanceFakeTimersBySessionGrace,
+  cleanupTransports,
   testFinishesCleanly,
   waitFor,
 } from '../__tests__/fixtures/cleanup';
@@ -39,10 +40,7 @@ describe.each(testMatrix())(
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       addPostTestCleanup(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       const msg1 = createDummyTransportMessage();
@@ -60,17 +58,24 @@ describe.each(testMatrix())(
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
       ).resolves.toStrictEqual(msg2.payload);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
     });
 
     test('idle transport cleans up nicely', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      await waitFor(() => expect(serverTransport.connections.size).toBe(1));
       addPostTestCleanup(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => expect(serverTransport.connections.size).toBe(1));
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
       });
     });
 
@@ -78,13 +83,9 @@ describe.each(testMatrix())(
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       addPostTestCleanup(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
-      vi.useFakeTimers();
       await clientTransport.connect(serverTransport.clientId);
       for (let i = 0; i < 5; i++) {
         const msg = createDummyTransportMessage();
@@ -99,6 +100,11 @@ describe.each(testMatrix())(
           testingSessionOptions.heartbeatIntervalMs * (1 + Math.random()),
         );
       }
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
     });
 
     test('sending right after session event should not cause invalid handshake', async () => {
@@ -119,24 +125,23 @@ describe.each(testMatrix())(
       addPostTestCleanup(async () => {
         clientTransport.removeEventListener('protocolError', protocolError);
         clientTransport.removeEventListener('sessionStatus', sendHandle);
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       await expect(msgPromise).resolves.toStrictEqual(msg.payload);
       expect(protocolError).toHaveBeenCalledTimes(0);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
     });
 
     test('seq numbers should be persisted across transparent reconnects', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       addPostTestCleanup(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
@@ -198,6 +203,11 @@ describe.each(testMatrix())(
       await expect(
         Promise.all([...first90Promises, ...last10Promises]),
       ).resolves.toStrictEqual(clientMsgs.map((msg) => msg.payload));
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
     });
 
     test('both client and server transport get connect/disconnect notifs', async () => {
@@ -267,10 +277,7 @@ describe.each(testMatrix())(
           serverConnHandler,
         );
         serverTransport.removeEventListener('sessionStatus', serverSessHandler);
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       clientTransport.addEventListener('connectionStatus', clientConnHandler);
@@ -351,7 +358,6 @@ describe.each(testMatrix())(
       // disconnect session entirely
       // session    >  c------------x  | (disconnected)
       // connection >  c--x   c-----x  | (disconnected)
-      vi.useFakeTimers({ shouldAdvanceTime: true });
       clientTransport.reconnectOnConnectionDrop = false;
       clientTransport.connections.forEach((conn) => conn.close());
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
@@ -364,11 +370,19 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverSessStart).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(1));
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
     });
 
     test('transport connection is not recreated after destroy', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
       const msg1 = createDummyTransportMessage();
 
       const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
@@ -389,6 +403,10 @@ describe.each(testMatrix())(
 
       clientTransport.close();
       serverTransport.close();
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
     });
 
     test('multiple connections works', async () => {
@@ -416,10 +434,11 @@ describe.each(testMatrix())(
       const client1Transport = await initClient(clientId1);
       const client2Transport = await initClient(clientId2);
       addPostTestCleanup(async () => {
-        await testFinishesCleanly({
-          clientTransports: [client1Transport, client2Transport],
+        await cleanupTransports([
+          client1Transport,
+          client2Transport,
           serverTransport,
-        });
+        ]);
       });
 
       // sending messages from server to client shouldn't leak between clients
@@ -436,6 +455,11 @@ describe.each(testMatrix())(
       await expect(promises).resolves.toStrictEqual(
         expect.arrayContaining([msg1.payload, msg2.payload]),
       );
+
+      await testFinishesCleanly({
+        clientTransports: [client1Transport, client2Transport],
+        serverTransport,
+      });
     });
   },
 );
@@ -492,10 +516,7 @@ describe.each(testMatrix())(
           serverConnHandler,
         );
         serverTransport.removeEventListener('sessionStatus', serverSessHandler);
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       const msg1 = createDummyTransportMessage();
@@ -539,6 +560,11 @@ describe.each(testMatrix())(
         // true indicates to reject any other messages
         waitForMessage(clientTransport, (recv) => recv.id === msg4Id, true),
       ).resolves.toStrictEqual(msg4.payload);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
     });
 
     test('messages should not be resent when client reconnects to a different instance of the server', async () => {
@@ -579,10 +605,7 @@ describe.each(testMatrix())(
           clientConnHandler,
         );
         clientTransport.removeEventListener('sessionStatus', clientSessHandler);
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       const msg1 = createDummyTransportMessage();
@@ -622,7 +645,7 @@ describe.each(testMatrix())(
 
       // eagerly reconnect client
       clientTransport.reconnectOnConnectionDrop = true;
-      await clientTransport.connect('SERVER');
+      void clientTransport.connect('SERVER');
 
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(2));
@@ -637,10 +660,14 @@ describe.each(testMatrix())(
         // true indicates to reject any other messages
         waitForMessage(serverTransport, (recv) => recv.id === msg4Id, true),
       ).resolves.toStrictEqual(msg4.payload);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
     });
 
     test('recovers from phantom disconnects', async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true });
       const clientTransport = testHelpers.getClientTransport('client');
       const serverTransport = testHelpers.getServerTransport();
       const clientConnStart = vi.fn();
@@ -711,11 +738,7 @@ describe.each(testMatrix())(
           serverConnHandler,
         );
         serverTransport.removeEventListener('sessionStatus', serverSessHandler);
-
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       const msg1 = createDummyTransportMessage();
@@ -759,6 +782,11 @@ describe.each(testMatrix())(
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
       ).resolves.toStrictEqual(msg2.payload);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
     });
   },
 );
@@ -802,10 +830,7 @@ describe.each(testMatrix())(
         construct: get,
       });
       addPostTestCleanup(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       await waitFor(() => {
@@ -822,6 +847,11 @@ describe.each(testMatrix())(
 
       await waitFor(() => expect(clientTransport.connections.size).toBe(1));
       expect(serverTransport.connections.size).toBe(1);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
     });
 
     test('client checks request schema on construction', async () => {
@@ -852,11 +882,7 @@ describe.each(testMatrix())(
           'protocolError',
           clientHandshakeFailed,
         );
-
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       await waitFor(() => {
@@ -873,6 +899,11 @@ describe.each(testMatrix())(
 
       expect(clientTransport.connections.size).toBe(0);
       expect(serverTransport.connections.size).toBe(0);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
     });
 
     test('server checks request schema on receive', async () => {
@@ -914,11 +945,7 @@ describe.each(testMatrix())(
           'protocolError',
           serverHandshakeFailed,
         );
-
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       await waitFor(() => {
@@ -936,6 +963,11 @@ describe.each(testMatrix())(
             type: ProtocolError.HandshakeFailed,
           }),
         );
+      });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
       });
     });
 
@@ -962,10 +994,7 @@ describe.each(testMatrix())(
       });
 
       addPostTestCleanup(async () => {
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       await waitFor(() => expect(serverTransport.sessions.size).toBe(1));
@@ -1006,6 +1035,11 @@ describe.each(testMatrix())(
           kept: 'kept',
         },
       );
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
     });
 
     test('parse can reject connection', async () => {
@@ -1042,11 +1076,7 @@ describe.each(testMatrix())(
           'protocolError',
           serverRejectedConnection,
         );
-
-        await testFinishesCleanly({
-          clientTransports: [clientTransport],
-          serverTransport,
-        });
+        await cleanupTransports([clientTransport, serverTransport]);
       });
 
       await waitFor(() => {
@@ -1061,6 +1091,11 @@ describe.each(testMatrix())(
           type: ProtocolError.HandshakeFailed,
           message: 'rejected by handshake handler',
         });
+      });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
       });
     });
   },

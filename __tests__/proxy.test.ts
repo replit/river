@@ -80,13 +80,8 @@ describe('proxy', () => {
       clientTransport,
       serverTransport.clientId,
     );
-    onTestFinished(async () => {
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-        server,
-      });
 
+    onTestFinished(async () => {
       udsServer.close();
       wss.close();
       proxyServer.close();
@@ -96,5 +91,11 @@ describe('proxy', () => {
     const result = await client.test.add.rpc({ n: 3 });
     assert(result.ok);
     expect(result.payload).toStrictEqual({ result: 3 });
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+      server,
+    });
   });
 });

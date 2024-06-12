@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, beforeEach } from 'vitest';
 import { UnixDomainSocketClientTransport } from './client';
 import { UnixDomainSocketServerTransport } from './server';
 import {
@@ -9,6 +9,7 @@ import {
 } from '../../../util/testHelpers';
 import {
   advanceFakeTimersBySessionGrace,
+  cleanupTransports,
   testFinishesCleanly,
 } from '../../../__tests__/fixtures/cleanup';
 import net from 'node:net';
@@ -51,10 +52,7 @@ describe('sending and receiving across unix sockets works', async () => {
       },
     ];
     addPostTestCleanup(async () => {
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-      });
+      await cleanupTransports([clientTransport, serverTransport]);
     });
 
     for (const msg of messages) {
@@ -67,6 +65,11 @@ describe('sending and receiving across unix sockets works', async () => {
         waitForMessage(serverTransport, (incoming) => incoming.id === msgId),
       ).resolves.toStrictEqual(transportMessage.payload);
     }
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
   });
 
   test('hanging uds connection with no handshake is cleaned up after grace', async () => {
@@ -75,13 +78,9 @@ describe('sending and receiving across unix sockets works', async () => {
       'SERVER',
     );
     addPostTestCleanup(async () => {
-      await testFinishesCleanly({
-        clientTransports: [],
-        serverTransport,
-      });
+      await cleanupTransports([serverTransport]);
     });
 
-    vi.useFakeTimers({ shouldAdvanceTime: true });
     const sock = await new Promise<net.Socket>((resolve, reject) => {
       const sock = new net.Socket();
       sock.on('connect', () => resolve(sock));
@@ -102,5 +101,10 @@ describe('sending and receiving across unix sockets works', async () => {
     expect(serverTransport.connections.size).toBe(0);
     expect(serverTransport.sessions.size).toBe(0);
     expect(sock.readyState).toBe('closed');
+
+    await testFinishesCleanly({
+      clientTransports: [],
+      serverTransport,
+    });
   });
 });

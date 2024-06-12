@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import http from 'node:http';
-import { testFinishesCleanly, waitFor } from './fixtures/cleanup';
+import {
+  cleanupTransports,
+  testFinishesCleanly,
+  waitFor,
+} from './fixtures/cleanup';
 import {
   createDummyTransportMessage,
   createLocalWebSocketClient,
@@ -53,12 +57,7 @@ describe('should handle incompatabilities', async () => {
     const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
     addPostTestCleanup(async () => {
-      clientTransport.removeEventListener('protocolError', errMock);
-
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-      });
+      await cleanupTransports([clientTransport, serverTransport]);
     });
 
     clientTransport.close();
@@ -68,6 +67,12 @@ describe('should handle incompatabilities', async () => {
         createDummyTransportMessage(),
       ),
     ).toThrow();
+
+    clientTransport.removeEventListener('protocolError', errMock);
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
   });
 
   test('retrying single connection attempt should hit retry limit reached', async () => {
@@ -80,16 +85,11 @@ describe('should handle incompatabilities', async () => {
     clientTransport.addEventListener('protocolError', errMock);
     addPostTestCleanup(async () => {
       clientTransport.removeEventListener('protocolError', errMock);
-
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-      });
+      await cleanupTransports([clientTransport, serverTransport]);
     });
 
     // try connecting and make sure we get the fake connection failure
     expect(errMock).toHaveBeenCalledTimes(0);
-    vi.useFakeTimers({ shouldAdvanceTime: true });
     const connectionPromise = clientTransport.connect(serverTransport.clientId);
     await vi.runAllTimersAsync();
     await connectionPromise;
@@ -100,6 +100,11 @@ describe('should handle incompatabilities', async () => {
         type: ProtocolError.RetriesExceeded,
       }),
     );
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
   });
 
   test('repeated connections that close instantly still triggers backoff', async () => {
@@ -125,9 +130,7 @@ describe('should handle incompatabilities', async () => {
     addPostTestCleanup(async () => {
       wss.off('connection', serverWsConnHandler);
       clientTransport.removeEventListener('protocolError', errMock);
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-      });
+      await cleanupTransports([clientTransport]);
     });
 
     for (let i = 0; i < maxAttempts; i++) {
@@ -135,6 +138,9 @@ describe('should handle incompatabilities', async () => {
     }
 
     expect(conns).toBeLessThan(maxAttempts);
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+    });
   });
 
   test('incorrect client handshake', async () => {
@@ -147,11 +153,7 @@ describe('should handle incompatabilities', async () => {
     addPostTestCleanup(async () => {
       serverTransport.removeEventListener('connectionStatus', spy);
       serverTransport.removeEventListener('protocolError', errMock);
-
-      await testFinishesCleanly({
-        clientTransports: [],
-        serverTransport,
-      });
+      await cleanupTransports([serverTransport]);
     });
 
     const ws = createLocalWebSocketClient(port);
@@ -169,6 +171,11 @@ describe('should handle incompatabilities', async () => {
         type: ProtocolError.HandshakeFailed,
       }),
     );
+
+    await testFinishesCleanly({
+      clientTransports: [],
+      serverTransport,
+    });
   });
 
   test('seq number in the future should raise protocol error', async () => {
@@ -182,11 +189,7 @@ describe('should handle incompatabilities', async () => {
     addPostTestCleanup(async () => {
       serverTransport.removeEventListener('connectionStatus', spy);
       serverTransport.removeEventListener('protocolError', errMock);
-
-      await testFinishesCleanly({
-        clientTransports: [],
-        serverTransport,
-      });
+      await cleanupTransports([serverTransport]);
     });
 
     const ws = createLocalWebSocketClient(port);
@@ -222,6 +225,11 @@ describe('should handle incompatabilities', async () => {
         type: ProtocolError.MessageOrderingViolated,
       }),
     );
+
+    await testFinishesCleanly({
+      clientTransports: [],
+      serverTransport,
+    });
   });
 
   test('mismatched protocol version', async () => {
@@ -234,11 +242,7 @@ describe('should handle incompatabilities', async () => {
     addPostTestCleanup(async () => {
       serverTransport.removeEventListener('protocolError', errMock);
       serverTransport.removeEventListener('connectionStatus', spy);
-
-      await testFinishesCleanly({
-        clientTransports: [],
-        serverTransport,
-      });
+      await cleanupTransports([serverTransport]);
     });
 
     const ws = createLocalWebSocketClient(port);
@@ -271,5 +275,10 @@ describe('should handle incompatabilities', async () => {
         type: ProtocolError.HandshakeFailed,
       }),
     );
+
+    await testFinishesCleanly({
+      clientTransports: [],
+      serverTransport,
+    });
   });
 });

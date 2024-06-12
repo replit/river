@@ -11,5 +11,7 @@ export default defineConfig({
       hooks: 'stack',
     },
     pool: 'forks',
+    testTimeout: 1000,
+    setupFiles: './__tests__/globalSetup.ts',
   },
 });
