@@ -23,9 +23,9 @@ export const enum ControlFlags {
    */
   StreamCloseRequestBit = 0b10000,
   /**
-   * Used when an abort happens due to cancellation or errors
+   * Used when a stream is aborted due to cancellation or errors
    */
-  AbortBit = 0b00100,
+  StreamAbortBit = 0b00100,
 }
 
 /**
@@ -126,8 +126,8 @@ export const OpaqueTransportMessageSchema = TransportMessageSchema(
  */
 export interface TransportMessage<Payload = unknown> {
   id: string;
-  from: string;
-  to: string;
+  from: TransportClientId;
+  to: TransportClientId;
   seq: number;
   ack: number;
   serviceName?: string;
@@ -240,5 +240,17 @@ export function isStreamCloseRequest(controlFlag: number): boolean {
     /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
     (controlFlag & ControlFlags.StreamCloseRequestBit) ===
     ControlFlags.StreamCloseRequestBit
+  );
+}
+
+/**
+ * Checks if the given control flag (usually found in msg.controlFlag) is an abort message.
+ * @param controlFlag - The control flag to check.
+ * @returns True if the control flag contains the AbortBit, false otherwise
+ */
+export function isStreamAbort(controlFlag: number): boolean {
+  return (
+    /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
+    (controlFlag & ControlFlags.StreamAbortBit) === ControlFlags.StreamAbortBit
   );
 }

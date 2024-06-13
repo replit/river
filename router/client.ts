@@ -16,10 +16,17 @@ import {
   isStreamClose,
   ControlMessageCloseSchema,
   isStreamCloseRequest,
+  isStreamAbort,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
-import { BaseErrorSchemaType, Err, Result, AnyResultSchema } from './result';
+import {
+  BaseErrorSchemaType,
+  Err,
+  Result,
+  AnyResultSchema,
+  ErrResultSchema,
+} from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { Logger } from '../logging';
@@ -33,16 +40,25 @@ import {
 } from './streams';
 import { Value } from '@sinclair/typebox/value';
 import {
+  ABORT_CODE,
+  OutputReaderErrorSchema,
   PayloadType,
   UNEXPECTED_DISCONNECT_CODE,
   ValidProcType,
 } from './procedures';
+
+const OutputErrResultSchema = ErrResultSchema(OutputReaderErrorSchema);
+
+interface CallOptions {
+  signal?: AbortSignal;
+}
 
 type RpcFn<
   Router extends AnyService,
   ProcName extends keyof Router['procedures'],
 > = (
   init: ProcInit<Router, ProcName>,
+  options?: CallOptions,
 ) => Promise<
   Result<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>
 >;
@@ -52,6 +68,7 @@ type UploadFn<
   ProcName extends keyof Router['procedures'],
 > = (
   init: ProcInit<Router, ProcName>,
+  options?: CallOptions,
 ) => [
   WriteStream<ProcInput<Router, ProcName>>,
   () => Promise<
@@ -64,6 +81,7 @@ type StreamFn<
   ProcName extends keyof Router['procedures'],
 > = (
   init: ProcInit<Router, ProcName>,
+  options?: CallOptions,
 ) => [
   WriteStream<ProcInput<Router, ProcName>>,
   ReadStream<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>,
@@ -74,6 +92,7 @@ type SubscriptionFn<
   ProcName extends keyof Router['procedures'],
 > = (
   init: ProcInit<Router, ProcName>,
+  options?: CallOptions,
 ) => ReadStream<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>;
 
 /**
@@ -201,8 +220,8 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
     transport.extendHandshake(providedClientOptions.handshakeOptions);
   }
 
-  const options = { ...defaultClientOptions, ...providedClientOptions };
-  if (options.eagerlyConnect) {
+  const clientOptions = { ...defaultClientOptions, ...providedClientOptions };
+  if (clientOptions.eagerlyConnect) {
     void transport.connect(serverId);
   }
 
@@ -214,9 +233,9 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
       );
     }
 
-    const [init] = opts.args;
+    const [init, callOptions] = opts.args;
 
-    if (options.connectOnInvoke && !transport.connections.has(serverId)) {
+    if (clientOptions.connectOnInvoke && !transport.connections.has(serverId)) {
       void transport.connect(serverId);
     }
 
@@ -238,6 +257,7 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
       init,
       serviceName,
       procName,
+      callOptions ? (callOptions as CallOptions).signal : undefined,
     );
   }, []) as Client<ServiceSchemaMap>;
 }
@@ -261,6 +281,7 @@ function handleProc(
   init: Static<PayloadType>,
   serviceName: string,
   procedureName: string,
+  abortSignal?: AbortSignal,
 ): ClientProcReturn<ValidProcType> {
   const procClosesWithInit = procType === 'rpc' || procType === 'subscription';
 
@@ -272,7 +293,7 @@ function handleProc(
     procedureName,
     streamId,
   );
-  let didSessionDisconnect = false;
+  let cleanClose = true;
   const inputWriter = new WriteStreamImpl<Static<PayloadType>>(
     (rawIn) => {
       transport.send(serverId, {
@@ -285,13 +306,13 @@ function handleProc(
     () => {
       span.addEvent('inputWriter closed');
 
-      if (!procClosesWithInit && !didSessionDisconnect) {
-        //
-        // If the session ended, we don't need to be sending any more messages.
+      if (!procClosesWithInit && cleanClose) {
         transport.sendCloseControl(serverId, streamId);
       }
 
-      maybeCleanup();
+      if (outputReader.isClosed()) {
+        cleanup();
+      }
     },
   );
 
@@ -301,28 +322,98 @@ function handleProc(
   >(() => {
     transport.sendRequestCloseControl(serverId, streamId);
   });
-  const removeOnCloseListener = outputReader.onClose(() => {
+  outputReader.onClose(() => {
     span.addEvent('outputReader closed');
-    maybeCleanup();
+
+    if (inputWriter.isClosed()) {
+      cleanup();
+    }
   });
 
-  function maybeCleanup() {
-    if (!inputWriter.isClosed() || !outputReader.isClosed()) {
+  function cleanup() {
+    transport.removeEventListener('message', onMessage);
+    transport.removeEventListener('sessionStatus', onSessionStatus);
+    abortSignal?.removeEventListener('abort', onClientAbort);
+    span.end();
+  }
+
+  function onClientAbort() {
+    if (outputReader.isClosed() && inputWriter.isClosed()) {
       return;
     }
 
-    transport.removeEventListener('message', onMessage);
-    transport.removeEventListener('sessionStatus', onSessionStatus);
-    removeOnCloseListener();
-    span.end();
+    span.addEvent('sending abort');
+
+    cleanClose = false;
+
+    if (!outputReader.isClosed()) {
+      outputReader.pushValue(
+        Err({
+          code: ABORT_CODE,
+          message: 'Aborted by client',
+        }),
+      );
+      outputReader.triggerClose();
+    }
+
+    inputWriter.close();
+    transport.sendAbort(serverId, streamId);
   }
 
   function onMessage(msg: OpaqueTransportMessage) {
     if (msg.streamId !== streamId) return;
-    if (msg.to !== transport.clientId) return;
+    if (msg.to !== transport.clientId) {
+      transport.log?.error('Got stream message from unexpected client', {
+        clientId: transport.clientId,
+        transportMessage: msg,
+      });
+
+      return;
+    }
+
+    if (isStreamCloseRequest(msg.controlFlags)) {
+      inputWriter.triggerCloseRequest();
+    }
+
+    if (isStreamAbort(msg.controlFlags)) {
+      cleanClose = false;
+
+      span.addEvent('received abort');
+      let abortResult: Static<typeof OutputErrResultSchema>;
+
+      if (Value.Check(OutputErrResultSchema, msg.payload)) {
+        abortResult = msg.payload;
+      } else {
+        abortResult = Err({
+          code: ABORT_CODE,
+          message: 'Stream aborted with invalid payload',
+        });
+        transport.log?.error(
+          'Got stream abort without a valid protocol error',
+          {
+            clientId: transport.clientId,
+            transportMessage: msg,
+            validationErrors: [
+              ...Value.Errors(OutputErrResultSchema, msg.payload),
+            ],
+          },
+        );
+      }
+
+      if (!outputReader.isClosed()) {
+        outputReader.pushValue(abortResult);
+        outputReader.triggerClose();
+      }
+
+      inputWriter.close();
+
+      return;
+    }
 
     if (outputReader.isClosed()) {
-      transport.log?.error('Received message after stream is closed', {
+      span.recordException('Received message after output stream is closed');
+
+      transport.log?.error('Received message after output stream is closed', {
         clientId: transport.clientId,
         transportMessage: msg,
       });
@@ -346,11 +437,9 @@ function handleProc(
     }
 
     if (isStreamClose(msg.controlFlags)) {
-      outputReader.triggerClose();
-    }
+      span.addEvent('received output close');
 
-    if (isStreamCloseRequest(msg.controlFlags)) {
-      inputWriter.triggerCloseRequest();
+      outputReader.triggerClose();
     }
   }
 
@@ -363,7 +452,7 @@ function handleProc(
       return;
     }
 
-    didSessionDisconnect = true;
+    cleanClose = false;
     if (!outputReader.isClosed()) {
       outputReader.pushValue(
         Err({
@@ -376,6 +465,7 @@ function handleProc(
     outputReader.triggerClose();
   }
 
+  abortSignal?.addEventListener('abort', onClientAbort);
   transport.addEventListener('message', onMessage);
   transport.addEventListener('sessionStatus', onSessionStatus);
 
