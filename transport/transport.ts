@@ -32,6 +32,8 @@ import {
   TransportOptions,
   defaultTransportOptions,
 } from './options';
+import { Err } from '../router';
+import { ABORT_CODE } from '../router/procedures';
 
 /**
  * Represents the possible states of a transport.
@@ -593,6 +595,17 @@ export abstract class Transport<ConnType extends Connection> {
       payload: {
         type: 'CLOSE' as const,
       } satisfies Static<typeof ControlMessagePayloadSchema>,
+    });
+  }
+
+  sendAbort(to: TransportClientId, streamId: string) {
+    return this.send(to, {
+      streamId: streamId,
+      controlFlags: ControlFlags.StreamAbortBit,
+      payload: Err({
+        code: ABORT_CODE,
+        message: 'Stream aborted',
+      }),
     });
   }
 
