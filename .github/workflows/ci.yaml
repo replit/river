@@ -46,7 +46,6 @@ jobs:
       - name: Results
         uses: dorny/test-reporter@v1
         with:
-          artifact: /test-results-(.*)/
           name: 'Test Results ($1)'
           path: '*.xml'
           reporter: jest-junit
