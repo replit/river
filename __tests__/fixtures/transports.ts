@@ -1,6 +1,7 @@
 import {
   ClientTransport,
   Connection,
+  OpaqueTransportMessageSchema,
   ServerTransport,
   TransportClientId,
 } from '../../transport';
@@ -26,8 +27,11 @@ import {
   ClientHandshakeOptions,
   ServerHandshakeOptions,
 } from '../../router/handshake';
+import { MessageFramer } from '../../transport/transforms/messageFraming';
+import { BinaryCodec } from '../../codec';
+import { Value } from '@sinclair/typebox/value';
 
-export type ValidTransports = 'ws' | 'unix sockets';
+export type ValidTransports = 'ws' | 'unix sockets' | 'ws + uds proxy';
 
 export interface TestTransportOptions {
   client?: ProvidedClientTransportOptions;
@@ -104,9 +108,7 @@ export const transports: Array<TransportMatrixEntry> = [
         async restartServer() {
           for (const transport of transports) {
             if (transport.clientId !== 'SERVER') continue;
-            for (const conn of transport.connections.values()) {
-              (conn.ws as NodeWs).terminate();
-            }
+            transport.close();
           }
 
           await new Promise<void>((resolve) => {
@@ -186,6 +188,130 @@ export const transports: Array<TransportMatrixEntry> = [
         },
         cleanup: async () => {
           server.close();
+        },
+      };
+    },
+  },
+  {
+    name: 'ws + uds proxy',
+    setup: async (opts) => {
+      const socketPath = getUnixSocketPath();
+      let udsServer: net.Server;
+
+      let proxyServer: http.Server;
+      let port: number;
+      let wss: NodeWs.Server;
+
+      const codec = opts?.client?.codec ?? BinaryCodec;
+
+      async function setupProxyServer() {
+        udsServer = net.createServer();
+        await onUdsServeReady(udsServer, socketPath);
+
+        proxyServer = http.createServer();
+        if (!port) {
+          port = await onWsServerReady(proxyServer);
+        } else {
+          await new Promise<void>((resolve) => {
+            proxyServer.listen(port, resolve);
+          });
+        }
+        wss = createWebSocketServer(proxyServer);
+
+        // dumb proxy
+        // assume that we are using the binary msgpack protocol
+        wss.on('connection', (ws) => {
+          const framer = MessageFramer.createFramedStream();
+          const uds = net.createConnection(socketPath);
+          uds.on('error', (err) => {
+            if (err instanceof Error && 'code' in err && err.code === 'EPIPE') {
+              // Ignore EPIPE errors
+              return;
+            }
+          });
+
+          // ws -> uds
+          ws.onmessage = (msg) => {
+            const data = msg.data as Uint8Array;
+            const res = codec.fromBuffer(data);
+            if (!res) return;
+            if (!Value.Check(OpaqueTransportMessageSchema, res)) {
+              return;
+            }
+
+            uds.write(MessageFramer.write(data));
+          };
+
+          // ws <- uds
+          uds.pipe(framer).on('data', (data: Uint8Array) => {
+            const res = codec.fromBuffer(data);
+            if (!res) return;
+            if (!Value.Check(OpaqueTransportMessageSchema, res)) {
+              return;
+            }
+
+            ws.send(data);
+          });
+
+          uds.on('close', () => {
+            ws.terminate();
+          });
+
+          ws.onclose = () => {
+            uds.destroy();
+          };
+        });
+      }
+
+      await setupProxyServer();
+      return {
+        simulatePhantomDisconnect() {
+          // pause the proxy
+          for (const conn of wss.clients) {
+            conn.pause();
+          }
+        },
+        getClientTransport(id, handshakeOptions) {
+          const clientTransport = new WebSocketClientTransport(
+            () => Promise.resolve(createLocalWebSocketClient(port)),
+            id,
+            opts?.client,
+          );
+
+          if (handshakeOptions) {
+            clientTransport.extendHandshake(handshakeOptions);
+          }
+
+          void clientTransport.connect('SERVER');
+
+          return clientTransport;
+        },
+        getServerTransport(handshakeOptions) {
+          const serverTransport = new UnixDomainSocketServerTransport(
+            udsServer,
+            'SERVER',
+            opts?.server,
+          );
+
+          if (handshakeOptions) {
+            serverTransport.extendHandshake(handshakeOptions);
+          }
+
+          return serverTransport;
+        },
+        async restartServer() {
+          for (const conn of wss.clients) {
+            conn.terminate();
+          }
+
+          await new Promise((resolve) => proxyServer.close(resolve));
+          await new Promise((resolve) => udsServer.close(resolve));
+          await setupProxyServer();
+        },
+        cleanup: async () => {
+          udsServer.close();
+          wss.close();
+          proxyServer.close();
         },
       };
     },

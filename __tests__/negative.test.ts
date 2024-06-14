@@ -23,7 +23,6 @@ import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
-import { WsLike } from '../transport/impls/ws/wslike';
 import NodeWs from 'ws';
 import { createPostTestCleanups } from './fixtures/cleanup';
 
@@ -107,39 +106,35 @@ describe('should handle incompatabilities', async () => {
     });
   });
 
-  test('repeated connections that close instantly still triggers backoff', async () => {
-    let conns = 0;
-    const serverWsConnHandler = (ws: WsLike) => {
-      conns += 1;
-      ws.close();
-    };
-
-    const maxAttempts = 3;
-    wss.on('connection', serverWsConnHandler);
+  test('calling connect consecutively should reuse the same connection', async () => {
+    let connectCalls = 0;
     const clientTransport = new WebSocketClientTransport(
-      () => Promise.resolve(createLocalWebSocketClient(port)),
+      () => {
+        connectCalls++;
+        return Promise.resolve(createLocalWebSocketClient(port));
+      },
       'client',
-      { attemptBudgetCapacity: maxAttempts },
+      { attemptBudgetCapacity: 3 },
     );
-
-    clientTransport.reconnectOnConnectionDrop = false;
-
+    const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
-    const promises: Array<Promise<void>> = [];
     addPostTestCleanup(async () => {
-      wss.off('connection', serverWsConnHandler);
       clientTransport.removeEventListener('protocolError', errMock);
-      await cleanupTransports([clientTransport]);
+      await cleanupTransports([clientTransport, serverTransport]);
     });
 
-    for (let i = 0; i < maxAttempts; i++) {
-      promises.push(clientTransport.connect('SERVER'));
+    for (let i = 0; i < 3; i++) {
+      await clientTransport.connect(serverTransport.clientId);
     }
 
-    expect(conns).toBeLessThan(maxAttempts);
+    expect(errMock).toHaveBeenCalledTimes(0);
+    await waitFor(() => expect(serverTransport.connections.size).toBe(1));
+    expect(connectCalls).toBe(1);
+
     await testFinishesCleanly({
       clientTransports: [clientTransport],
+      serverTransport,
     });
   });
 

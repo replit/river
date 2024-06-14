@@ -100,7 +100,7 @@ export async function cleanupTransports(
 ) {
   for (const t of transports) {
     if (t.getStatus() !== 'closed') {
-      t.log?.info('*** end of test cleanup ***');
+      t.log?.info('*** end of test cleanup ***', { clientId: t.clientId });
       t.close();
     }
   }
@@ -122,7 +122,10 @@ export async function testFinishesCleanly({
   ];
 
   for (const t of allTransports) {
-    t.log?.info('*** end of test invariant checks ***');
+    t.log?.info('*** end of test invariant checks ***', {
+      clientId: t.clientId,
+    });
+
     // wait for one round of heartbeat
     await vi.runOnlyPendingTimersAsync();
     await vi.advanceTimersByTimeAsync(

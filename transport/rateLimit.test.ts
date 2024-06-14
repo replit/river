@@ -102,14 +102,10 @@ describe('LeakyBucketRateLimit', () => {
     });
     const user = 'user1';
 
-    expect(rateLimit.hasBudget(user)).toBe(true);
-    rateLimit.consumeBudget(user);
-
-    expect(rateLimit.hasBudget(user)).toBe(true);
-    rateLimit.consumeBudget(user);
-
-    expect(rateLimit.hasBudget(user)).toBe(true);
-    rateLimit.consumeBudget(user);
+    for (let i = 0; i < maxAttempts; i++) {
+      expect(rateLimit.hasBudget(user)).toBe(true);
+      rateLimit.consumeBudget(user);
+    }
 
     expect(rateLimit.hasBudget(user)).toBe(false);
     rateLimit.consumeBudget(user);
