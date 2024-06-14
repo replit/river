@@ -3,7 +3,6 @@ import { ServerTransport } from '../transport';
 import {
   PayloadType,
   ProcedureErrorSchemaType,
-  OutputReaderErrorSchema,
   InputReaderErrorSchema,
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
@@ -211,7 +210,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
     let cleanClose = true;
 
-    const onHandlerAbort = () => {
+    const onServerAbort = (errResult: Static<typeof InputErrResultSchema>) => {
       if (inputReader.isClosed() && outputWriter.isClosed()) {
         // Everything already closed, no-op.
         return;
@@ -220,17 +219,21 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       cleanClose = false;
 
       if (!inputReader.isClosed()) {
-        inputReader.pushValue(
-          Err({
-            code: ABORT_CODE,
-            message: 'Aborted by server procedure handler',
-          }),
-        );
+        inputReader.pushValue(errResult);
         inputReader.triggerClose();
       }
 
       outputWriter.close();
-      this.transport.sendAbort(session.to, streamId);
+      this.transport.sendAbort(session.to, streamId, errResult);
+    };
+
+    const onHandlerAbort = () => {
+      onServerAbort(
+        Err({
+          code: ABORT_CODE,
+          message: 'Aborted by server procedure handler',
+        }),
+      );
     };
     const handlerAbortController = new AbortController();
     handlerAbortController.signal.addEventListener('abort', onHandlerAbort);
@@ -390,7 +393,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       },
     );
 
-    const errorHandler = (err: unknown, span: Span) => {
+    const onHandlerError = (err: unknown, span: Span) => {
       const errorMsg = coerceErrorString(err);
       this.log?.error(
         `procedure ${serviceName}.${procedureName} threw an uncaught error: ${errorMsg}`,
@@ -400,15 +403,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       span.recordException(err instanceof Error ? err : new Error(errorMsg));
       span.setStatus({ code: SpanStatusCode.ERROR });
 
-      if (!outputWriter.isClosed()) {
-        outputWriter.write(
-          Err({
-            code: UNCAUGHT_ERROR_CODE,
-            message: errorMsg,
-          } satisfies Static<typeof OutputReaderErrorSchema>),
-        );
-        outputWriter.close();
-      }
+      onServerAbort(
+        Err({
+          code: UNCAUGHT_ERROR_CODE,
+          message: errorMsg,
+        }),
+      );
     };
 
     const sessionMeta = this.transport.sessionHandshakeMetadata.get(session);
@@ -463,7 +463,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               outputWriter.write(outputMessage);
               outputWriter.close();
             } catch (err) {
-              errorHandler(err, span);
+              onHandlerError(err, span);
             } finally {
               span.end();
             }
@@ -493,7 +493,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
                 procDispose();
               }
             } catch (err) {
-              errorHandler(err, span);
+              onHandlerError(err, span);
             } finally {
               span.end();
             }
@@ -523,7 +523,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
                 procDispose();
               }
             } catch (err) {
-              errorHandler(err, span);
+              onHandlerError(err, span);
             } finally {
               span.end();
             }
@@ -551,7 +551,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               outputWriter.write(outputMessage);
               outputWriter.close();
             } catch (err) {
-              errorHandler(err, span);
+              onHandlerError(err, span);
             } finally {
               span.end();
             }
