@@ -1,17 +1,10 @@
-import { TransportClientId } from '../transport/message';
 import { Connection, Session } from '../transport/session';
 
 /**
- * The context for services/procedures. This is used only on
- * the server.
+ * ServiceContext exist for the purpose of declaration merging
+ * to extend the context with additional properties.
  *
- * An important detail is that the state prop is always on
- * this interface and it shouldn't be changed, removed, or
- * extended. This prop is for the state of a service.
- *
- * You should use declaration merging to extend this interface
- * with whatever you need. For example, if you need to access
- * a database, you could do:
+ * For example:
  *
  * ```ts
  * declare module '@replit/river' {
@@ -19,7 +12,11 @@ import { Connection, Session } from '../transport/session';
  *     db: Database;
  *   }
  * }
+ *
+ * createServer(someTransport, myServices, { extendedContext: { db: myDb } });
  * ```
+ *
+ * Once you do this, your {@link ProcedureHandlerContext} will have `db` property on it.
  */
 /* eslint-disable-next-line @typescript-eslint/no-empty-interface */
 export interface ServiceContext {}
@@ -28,7 +25,7 @@ export interface ServiceContext {}
  * The parsed metadata schema for a service. This is the
  * return value of the {@link ServerHandshakeOptions.validate}
  * if the handshake extension is used.
-
+ *
  * You should use declaration merging to extend this interface
  * with the sanitized metadata.
  *
@@ -44,15 +41,52 @@ export interface ServiceContext {}
 export interface ParsedMetadata {}
 
 /**
- * The {@link ServiceContext} with state. This is what is passed to procedures.
+ * This is passed to every procedure handler and contains various context-level
+ * information and utilities. This may be extended, see {@link ServiceContext}
  */
-export type ServiceContextWithState<State> = ServiceContext & { state: State };
-
-export type ServiceContextWithTransportInfo<State> = ServiceContext & {
+export type ProcedureHandlerContext<State> = ServiceContext & {
+  /**
+   * State for this service as defined by the service definition.
+   */
   state: State;
-  to: TransportClientId;
-  from: TransportClientId;
-  streamId: string;
-  session: Session<Connection>;
+  /**
+   * Metadata parsed on the server. See {@link ParsedMetadata}
+   */
   metadata: ParsedMetadata;
+  /**
+   * The session for this stream. Can be used to identify the request
+   * sender via `session.from`, however, we recommend using the
+   * handshake metadata with some auth mechanism to identify the
+   * the request sender.
+   */
+  session: Session<Connection>; // TODO: only expose a subset interface of session
+  /**
+   * An AbortController for this stream. This is used to abort the stream from the
+   * handler and notify the client that the stream was aborted.
+   *
+   * Important to note that this controller is owned by the handler, if you
+   * want to listen to aborts coming from the client, you should use the
+   * {@link clientAbortSignal}.
+   *
+   * Aborts are not the same as closing streams gracefully, please refer to
+   * the river documentation to understand the difference between the two concepts.
+   */
+  abortController: AbortController;
+  /**
+   * You can listen to clientAbortSignal this to check if the client aborted the request,
+   * or if the request was aborted due to an unexpected disconnect from the calling
+   * session.
+   *
+   * If the procedure has a read stream (e.g. upload or stream), the procedure will
+   * notified of aborts as part of the stream, but you may still want to use
+   * this signal as it is triggered immediately after an abort comes in,
+   * in readStreams some data may be buffered before the abort result shows up.
+   *
+   * Important to note that this signal is owned by the client, you have a separate
+   * signal inside {@link abortController} for aborts triggered within the handler.
+   *
+   * Aborts are not the same as closing streams gracefully, please refer to
+   * the river documentation to understand the difference between the two concepts.
+   */
+  clientAbortSignal: AbortSignal;
 };

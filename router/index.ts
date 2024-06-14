@@ -48,8 +48,7 @@ export type { Server } from './server';
 export type {
   ParsedMetadata,
   ServiceContext,
-  ServiceContextWithState,
-  ServiceContextWithTransportInfo,
+  ProcedureHandlerContext,
 } from './context';
 export { Ok, Err } from './result';
 export type {
