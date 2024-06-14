@@ -167,7 +167,7 @@ export interface SubscriptionProcedure<
     context: ProcedureHandlerContext<State>,
     init: Static<Init>,
     output: WriteStream<Result<Static<Output>, Static<Err>>>,
-  ): Promise<(() => void) | void>;
+  ): Promise<void | undefined>;
 }
 
 /**
@@ -198,7 +198,7 @@ export interface StreamProcedure<
     init: Static<Init>,
     input: ReadStream<Static<Input>, Static<typeof InputReaderErrorSchema>>,
     output: WriteStream<Result<Static<Output>, Static<Err>>>,
-  ): Promise<(() => void) | void>;
+  ): Promise<void | undefined>;
 }
 
 /**
