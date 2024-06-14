@@ -10,6 +10,9 @@ export default defineConfig({
     sequence: {
       hooks: 'stack',
     },
+    reporters: process.env.GITHUB_ACTIONS
+      ? ['basic', 'github-actions', 'junit']
+      : ['default'],
     pool: 'forks',
     testTimeout: 1000,
     setupFiles: './__tests__/globalSetup.ts',

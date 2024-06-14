@@ -17,6 +17,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
+      actions: read
+      checks: write
     steps:
       - uses: actions/checkout@v3
         with:
@@ -41,4 +43,12 @@ jobs:
         run: npm run check
 
       - name: Test
-        run: npm test
+        run: npm test -- --outputFile.junit=./test-results.xml
+
+      - name: Test Report
+        uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: Test Report (${{ matrix.os }})
+          path: ./test-results.xml
+          reporter: jest-junit
