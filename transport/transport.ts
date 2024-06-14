@@ -44,8 +44,11 @@ import {
   ClientHandshakeOptions,
   ServerHandshakeOptions,
 } from '../router/handshake';
-import { Err } from '../router';
-import { ABORT_CODE } from '../router/procedures';
+import { ErrResult } from '../router';
+import {
+  InputReaderErrorSchema,
+  OutputReaderErrorSchema,
+} from '../router/procedures';
 
 /**
  * Represents the possible states of a transport.
@@ -536,14 +539,17 @@ export abstract class Transport<ConnType extends Connection> {
     });
   }
 
-  sendAbort(to: TransportClientId, streamId: string) {
+  sendAbort(
+    to: TransportClientId,
+    streamId: string,
+    payload: ErrResult<
+      Static<typeof OutputReaderErrorSchema | typeof InputReaderErrorSchema>
+    >,
+  ) {
     return this.send(to, {
       streamId: streamId,
       controlFlags: ControlFlags.StreamAbortBit,
-      payload: Err({
-        code: ABORT_CODE,
-        message: 'Stream aborted',
-      }),
+      payload: payload,
     });
   }
 
