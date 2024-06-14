@@ -51,4 +51,4 @@ jobs:
         with:
           name: Test Report (${{ matrix.os }})
           path: ./test-results.xml
-          reporter: jest-junit
+          reporter: java-junit
