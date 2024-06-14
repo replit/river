@@ -41,7 +41,7 @@ jobs:
         run: npm run check
 
       - name: Test
-        run: npm test --outputFile.junit=./test-results-${{ matrix.os }}.xml
+        run: npm test -- --outputFile.junit=./test-results-${{ matrix.os }}.xml
 
       - name: Upload results
         uses: actions/upload-artifact@v4
