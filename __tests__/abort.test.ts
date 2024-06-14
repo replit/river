@@ -1,6 +1,7 @@
 import { Type } from '@sinclair/typebox';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
+  Err,
   Procedure,
   ServiceSchema,
   createClient,
@@ -13,7 +14,11 @@ import {
   waitFor,
 } from './fixtures/cleanup';
 import { EventMap } from '../transport';
-import { ABORT_CODE, StreamProcedure } from '../router/procedures';
+import {
+  ABORT_CODE,
+  StreamProcedure,
+  UNCAUGHT_ERROR_CODE,
+} from '../router/procedures';
 import { ControlFlags } from '../transport/message';
 import { TestSetupHelpers } from './fixtures/transports';
 import { nanoid } from 'nanoid';
@@ -387,7 +392,14 @@ describe.each(testMatrix())(
           const onClientAbort = vi.fn();
           ctx.clientAbortSignal.onabort = onClientAbort;
 
-          clientTransport.sendAbort(serverId, streamId);
+          clientTransport.sendAbort(
+            serverId,
+            streamId,
+            Err({
+              code: ABORT_CODE,
+              message: '',
+            }),
+          );
 
           await waitFor(() => {
             expect(serverOnMessage).toHaveBeenCalledTimes(2);
@@ -534,7 +546,14 @@ describe.each(testMatrix())(
 
         const initStreamId = serverOnMessage.mock.calls[0][0].streamId;
 
-        serverTransport.sendAbort('client', initStreamId);
+        serverTransport.sendAbort(
+          'client',
+          initStreamId,
+          Err({
+            code: ABORT_CODE,
+            message: '',
+          }),
+        );
 
         await expect(resP).resolves.toEqual({
           ok: false,
@@ -580,7 +599,14 @@ describe.each(testMatrix())(
 
         const initStreamId = serverOnMessage.mock.calls[0][0].streamId;
 
-        serverTransport.sendAbort('client', initStreamId);
+        serverTransport.sendAbort(
+          'client',
+          initStreamId,
+          Err({
+            code: ABORT_CODE,
+            message: '',
+          }),
+        );
 
         await expect(finalize()).resolves.toEqual({
           ok: false,
@@ -627,7 +653,14 @@ describe.each(testMatrix())(
 
         const initStreamId = serverOnMessage.mock.calls[0][0].streamId;
 
-        serverTransport.sendAbort('client', initStreamId);
+        serverTransport.sendAbort(
+          'client',
+          initStreamId,
+          Err({
+            code: ABORT_CODE,
+            message: '',
+          }),
+        );
 
         await expect(outputReader.asArray()).resolves.toEqual([
           {
@@ -675,7 +708,14 @@ describe.each(testMatrix())(
 
         const initStreamId = serverOnMessage.mock.calls[0][0].streamId;
 
-        serverTransport.sendAbort('client', initStreamId);
+        serverTransport.sendAbort(
+          'client',
+          initStreamId,
+          Err({
+            code: ABORT_CODE,
+            message: '',
+          }),
+        );
 
         await expect(outputReader.asArray()).resolves.toEqual([
           {
@@ -844,6 +884,188 @@ describe.each(testMatrix())(
               code: ABORT_CODE,
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               message: expect.any(String),
+            },
+          },
+        ]);
+        expect(clientOutputReader.isClosed());
+        expect(clientInputWriter.isClosed());
+      });
+    });
+  },
+);
+
+const createRejectable = () => {
+  let reject: (reason: Error) => void;
+  const promise = new Promise((_res, rej) => {
+    reject = rej;
+  });
+
+  // @ts-expect-error promises callback are invoked immediately
+  return { promise, reject };
+};
+
+describe.each(testMatrix())(
+  'handler uncaught exception error abort ($transport.name transport, $codec.name codec)',
+  async ({ transport, codec }) => {
+    const opts = { codec: codec.codec };
+
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
+    let getClientTransport: TestSetupHelpers['getClientTransport'];
+    let getServerTransport: TestSetupHelpers['getServerTransport'];
+    beforeEach(async () => {
+      const setup = await transport.setup({ client: opts, server: opts });
+      getClientTransport = setup.getClientTransport;
+      getServerTransport = setup.getServerTransport;
+      return async () => {
+        await postTestCleanup();
+        await setup.cleanup();
+      };
+    });
+
+    describe('real server, mock client', () => {
+      test.each([
+        { procedureType: 'rpc' },
+        { procedureType: 'subscription' },
+        { procedureType: 'stream' },
+        { procedureType: 'upload' },
+      ] as const)('$procedureType', async ({ procedureType }) => {
+        const clientTransport = getClientTransport('client');
+        const serverTransport = getServerTransport();
+
+        const serverId = 'SERVER';
+        const serviceName = 'service';
+        const procedureName = procedureType;
+
+        const rejectable = createRejectable();
+        const services = {
+          [serviceName]: ServiceSchema.define({
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any
+            [procedureType]: (Procedure[procedureType] as any)({
+              init: Type.Object({}),
+              ...(procedureType === 'stream' || procedureType === 'upload'
+                ? {
+                    input: Type.Object({}),
+                  }
+                : {}),
+              output: Type.Object({}),
+              async handler() {
+                return rejectable.promise;
+              },
+            }),
+          }),
+        };
+
+        const server = createServer(serverTransport, services);
+
+        addPostTestCleanup(async () => {
+          await cleanupTransports([clientTransport, serverTransport]);
+        });
+
+        const streamId = nanoid();
+        clientTransport.send(serverId, {
+          streamId,
+          serviceName,
+          procedureName,
+          payload: {},
+          controlFlags:
+            ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit,
+        });
+
+        const serverOnMessage = vi.fn<[EventMap['message']]>();
+        serverTransport.addEventListener('message', serverOnMessage);
+
+        const clientOnMessage = vi.fn<[EventMap['message']]>();
+        clientTransport.addEventListener('message', clientOnMessage);
+
+        await waitFor(() => {
+          expect(serverOnMessage).toHaveBeenCalledTimes(1);
+        });
+
+        expect(server.openStreams.size).toEqual(1);
+        const errorMessage = Math.random().toString();
+        rejectable.reject(new Error(errorMessage));
+
+        await waitFor(() => {
+          expect(clientOnMessage).toHaveBeenCalledTimes(1);
+        });
+
+        expect(clientOnMessage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            ack: 1,
+            controlFlags: ControlFlags.StreamAbortBit,
+            streamId,
+            payload: {
+              ok: false,
+              payload: {
+                code: UNCAUGHT_ERROR_CODE,
+                message: errorMessage,
+              },
+            },
+          }),
+        );
+
+        expect(server.openStreams.size).toEqual(0);
+      });
+    });
+
+    describe('e2e', () => {
+      // testing stream only e2e as it's the most general case
+      test('stream', async () => {
+        const clientTransport = getClientTransport('client');
+        const serverTransport = getServerTransport();
+        const rejectable = createRejectable();
+        const handler = vi
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .fn<Parameters<StreamProcedure<any, any, any, any, any>['handler']>>()
+          .mockImplementation(() => rejectable.promise);
+        const services = {
+          service: ServiceSchema.define({
+            stream: Procedure.stream({
+              init: Type.Object({}),
+              input: Type.Object({}),
+              output: Type.Object({}),
+              handler,
+            }),
+          }),
+        };
+        createServer(serverTransport, services);
+        const client = createClient<typeof services>(
+          clientTransport,
+          serverTransport.clientId,
+        );
+
+        const [clientInputWriter, clientOutputReader] =
+          client.service.stream.stream({});
+
+        await waitFor(() => {
+          expect(handler).toHaveBeenCalledTimes(1);
+        });
+
+        const [, , serverInputReader, serverOutputWriter] =
+          handler.mock.calls[0];
+
+        const errorMessage = Math.random().toString();
+        rejectable.reject(new Error(errorMessage));
+        // this should be ignored by the server since it already aborted
+        clientInputWriter.write({ ok: true, payload: {} });
+        expect(await serverInputReader.asArray()).toEqual([
+          {
+            ok: false,
+            payload: {
+              code: UNCAUGHT_ERROR_CODE,
+              message: errorMessage,
+            },
+          },
+        ]);
+        expect(serverInputReader.isClosed());
+        expect(serverOutputWriter.isClosed());
+
+        expect(await clientOutputReader.asArray()).toEqual([
+          {
+            ok: false,
+            payload: {
+              code: UNCAUGHT_ERROR_CODE,
+              message: errorMessage,
             },
           },
         ]);
