@@ -10,7 +10,7 @@ import {
   InputReaderErrorSchema,
   OutputReaderErrorSchema,
   ServiceContext,
-  ServiceContextWithTransportInfo,
+  ProcedureHandlerContext,
   UNCAUGHT_ERROR_CODE,
 } from '../router';
 import { Static } from '@sinclair/typebox';
@@ -178,15 +178,14 @@ function dummyCtx<State>(
   state: State,
   session: Session<Connection>,
   extendedContext?: Omit<ServiceContext, 'state'>,
-): ServiceContextWithTransportInfo<State> {
+): ProcedureHandlerContext<State> {
   return {
     ...extendedContext,
     state,
-    to: session.to,
-    from: session.from,
-    streamId: nanoid(),
     session,
     metadata: {},
+    abortController: new AbortController(),
+    clientAbortSignal: new AbortController().signal,
   };
 }
 
