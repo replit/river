@@ -241,14 +241,13 @@ export const SubscribableServiceSchema = ServiceSchema.define(
           returnStream.write(Ok({ result: count }));
         });
 
+        ctx.addCleanup(dispose1);
+
         const dispose2 = returnStream.onCloseRequest(() => {
           returnStream.close();
         });
 
-        return () => {
-          dispose1();
-          dispose2();
-        };
+        ctx.addCleanup(dispose2);
       },
     }),
   },

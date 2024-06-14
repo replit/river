@@ -341,17 +341,21 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     };
     this.transport.addEventListener('message', onMessage);
 
-    let procDispose: void | (() => void) = undefined;
+    const handlerCleanups: Array<() => void> = [];
     const cleanup = () => {
       this.transport.removeEventListener('message', onMessage);
       this.transport.removeEventListener('sessionStatus', onSessionStatus);
       handlerAbortController.signal.addEventListener('abort', onHandlerAbort);
 
       this.openStreams.delete(streamId);
-
-      if (procDispose) {
-        procDispose();
-      }
+      handlerCleanups.forEach((c) => {
+        try {
+          c();
+        } catch {
+          // ignore user cleanup errors
+        }
+      });
+      handlerCleanups.length = 0;
     };
 
     const inputReader = new ReadStreamImpl<
@@ -437,6 +441,16 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       metadata: sessionMeta,
       abortController: handlerAbortController,
       clientAbortSignal: clientAbortController.signal,
+      addCleanup: (c) => {
+        if (inputReader.isClosed() && outputWriter.isClosed()) {
+          // Everything already closed, call cleanup immediately.
+          c();
+
+          return;
+        }
+
+        handlerCleanups.push(c);
+      },
     };
 
     this.openStreams.add(streamId);
@@ -478,20 +492,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
             try {
               // TODO handle never resolving after cleanup/full close
               // which would lead to us holding on to the closure forever
-              procDispose = await procedure.handler(
+              await procedure.handler(
                 serviceContextWithTransportInfo,
                 initPayload,
                 inputReader,
                 outputWriter,
               );
-
-              if (
-                procDispose &&
-                outputWriter.isClosed() &&
-                inputReader.isClosed()
-              ) {
-                procDispose();
-              }
             } catch (err) {
               onHandlerError(err, span);
             } finally {
@@ -509,19 +515,11 @@ class RiverServer<Services extends AnyServiceSchemaMap>
             try {
               // TODO handle never resolving after cleanup/full close
               // which would lead to us holding on to the closure forever
-              procDispose = await procedure.handler(
+              await procedure.handler(
                 serviceContextWithTransportInfo,
                 initPayload,
                 outputWriter,
               );
-
-              if (
-                procDispose &&
-                outputWriter.isClosed() &&
-                inputReader.isClosed()
-              ) {
-                procDispose();
-              }
             } catch (err) {
               onHandlerError(err, span);
             } finally {
