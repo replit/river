@@ -22,8 +22,7 @@ import { nanoid } from 'nanoid';
 import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
-import { EventMap, ProtocolError } from '../transport/events';
-import { WsLike } from '../transport/impls/ws/wslike';
+import { ProtocolError } from '../transport/events';
 import NodeWs from 'ws';
 import { createPostTestCleanups } from './fixtures/cleanup';
 
