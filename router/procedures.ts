@@ -1,5 +1,5 @@
 import { Static, TNever, TSchema, TUnion, Type } from '@sinclair/typebox';
-import { ServiceContextWithTransportInfo } from './context';
+import { ProcedureHandlerContext } from './context';
 import { BaseErrorSchemaType, Result } from './result';
 import { ReadStream, WriteStream } from './streams';
 
@@ -71,7 +71,10 @@ export const OutputReaderErrorSchema = Type.Object({
  * emitted in the Input ReadStream on the server.
  */
 export const InputReaderErrorSchema = Type.Object({
-  code: Type.Union([Type.Literal(UNEXPECTED_DISCONNECT_CODE)]),
+  code: Type.Union([
+    Type.Literal(UNEXPECTED_DISCONNECT_CODE),
+    Type.Literal(ABORT_CODE),
+  ]),
   message: Type.String(),
 });
 
@@ -104,7 +107,7 @@ export interface RpcProcedure<
   errors: Err;
   description?: string;
   handler(
-    context: ServiceContextWithTransportInfo<State>,
+    context: ProcedureHandlerContext<State>,
     init: Static<Init>,
   ): Promise<Result<Static<Output>, Static<Err>>>;
 }
@@ -133,7 +136,7 @@ export interface UploadProcedure<
   errors: Err;
   description?: string;
   handler(
-    context: ServiceContextWithTransportInfo<State>,
+    context: ProcedureHandlerContext<State>,
     init: Static<Init>,
     input: ReadStream<Static<Input>, Static<typeof InputReaderErrorSchema>>,
   ): Promise<Result<Static<Output>, Static<Err>>>;
@@ -159,7 +162,7 @@ export interface SubscriptionProcedure<
   errors: Err;
   description?: string;
   handler(
-    context: ServiceContextWithTransportInfo<State>,
+    context: ProcedureHandlerContext<State>,
     init: Static<Init>,
     output: WriteStream<Result<Static<Output>, Static<Err>>>,
   ): Promise<(() => void) | void>;
@@ -189,7 +192,7 @@ export interface StreamProcedure<
   errors: Err;
   description?: string;
   handler(
-    context: ServiceContextWithTransportInfo<State>,
+    context: ProcedureHandlerContext<State>,
     init: Static<Init>,
     input: ReadStream<Static<Input>, Static<typeof InputReaderErrorSchema>>,
     output: WriteStream<Result<Static<Output>, Static<Err>>>,
