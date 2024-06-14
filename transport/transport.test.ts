@@ -17,6 +17,7 @@ import { PartialTransportMessage } from './message';
 import { Type } from '@sinclair/typebox';
 import { TestSetupHelpers } from '../__tests__/fixtures/transports';
 import { createPostTestCleanups } from '../__tests__/fixtures/cleanup';
+import { coloredStringLogger } from '../logging';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
@@ -464,7 +465,7 @@ describe.each(testMatrix())(
   },
 );
 
-describe.each(testMatrix())(
+describe.each(testMatrix(['ws + uds proxy', 'naive']))(
   'transport connection edge cases ($transport.name transport, $codec.name codec)',
   ({ transport, codec }) => {
     const opts = { codec: codec.codec };

@@ -108,9 +108,7 @@ export const transports: Array<TransportMatrixEntry> = [
         async restartServer() {
           for (const transport of transports) {
             if (transport.clientId !== 'SERVER') continue;
-            for (const conn of transport.connections.values()) {
-              (conn.ws as NodeWs).terminate();
-            }
+            transport.close();
           }
 
           await new Promise<void>((resolve) => {
@@ -198,8 +196,7 @@ export const transports: Array<TransportMatrixEntry> = [
     name: 'ws + uds proxy',
     setup: async (opts) => {
       const socketPath = getUnixSocketPath();
-      const udsServer = net.createServer();
-      await onUdsServeReady(udsServer, socketPath);
+      let udsServer: net.Server;
 
       let proxyServer: http.Server;
       let port: number;
@@ -208,8 +205,17 @@ export const transports: Array<TransportMatrixEntry> = [
       const codec = opts?.client?.codec ?? BinaryCodec;
 
       async function setupProxyServer() {
+        udsServer = net.createServer();
+        await onUdsServeReady(udsServer, socketPath);
+
         proxyServer = http.createServer();
-        port = await onWsServerReady(proxyServer);
+        if (!port) {
+          port = await onWsServerReady(proxyServer);
+        } else {
+          await new Promise<void>((resolve) => {
+            proxyServer.listen(port, resolve);
+          });
+        }
         wss = createWebSocketServer(proxyServer);
 
         // dumb proxy
@@ -223,6 +229,8 @@ export const transports: Array<TransportMatrixEntry> = [
               return;
             }
           });
+
+          // ws -> uds
           ws.onmessage = (msg) => {
             const data = msg.data as Uint8Array;
             const res = codec.fromBuffer(data);
@@ -234,7 +242,7 @@ export const transports: Array<TransportMatrixEntry> = [
             uds.write(MessageFramer.write(data));
           };
 
-          // forward messages from uds servers to ws
+          // ws <- uds
           uds.pipe(framer).on('data', (data: Uint8Array) => {
             const res = codec.fromBuffer(data);
             if (!res) return;
@@ -246,7 +254,7 @@ export const transports: Array<TransportMatrixEntry> = [
           });
 
           uds.on('close', () => {
-            ws.close();
+            ws.terminate();
           });
 
           ws.onclose = () => {
@@ -256,7 +264,6 @@ export const transports: Array<TransportMatrixEntry> = [
       }
 
       await setupProxyServer();
-
       return {
         simulatePhantomDisconnect() {
           // pause the proxy
@@ -298,6 +305,7 @@ export const transports: Array<TransportMatrixEntry> = [
           }
 
           await new Promise((resolve) => proxyServer.close(resolve));
+          await new Promise((resolve) => udsServer.close(resolve));
           await setupProxyServer();
         },
         cleanup: async () => {
