@@ -344,6 +344,7 @@ export class Session<ConnType extends Connection> {
     this.cancelGrace();
     this.sendBufferedMessages(newConn);
     this.connection = newConn;
+
     // we only call replaceWithNewConnection after
     // having successfully completed a handshake so we clear
     // it here
@@ -359,20 +360,10 @@ export class Session<ConnType extends Connection> {
       `starting ${this.options.sessionDisconnectGraceMs}ms grace period until session to ${this.to} is closed`,
       this.loggingMetadata,
     );
+
     // Replace any old timeouts to prevent this from firing twice.
-    this.cancelGrace({ keepHeartbeatMisses: true });
+    this.cancelGrace();
     this.disconnectionGrace = setTimeout(() => {
-      if (this.connection !== undefined) {
-        this.log?.warn(
-          `grace period for ${this.to} elapsed while connected. not calling callback`,
-          {
-            ...this.loggingMetadata,
-            connId: this.connection.id,
-            tags: ['invariant-violation'],
-          },
-        );
-        return;
-      }
       this.log?.info(
         `grace period for ${this.to} elapsed`,
         this.loggingMetadata,
@@ -382,15 +373,8 @@ export class Session<ConnType extends Connection> {
   }
 
   // called on reconnect of the underlying session
-  cancelGrace(
-    { keepHeartbeatMisses }: { keepHeartbeatMisses: boolean } = {
-      keepHeartbeatMisses: false,
-    },
-  ) {
-    if (!keepHeartbeatMisses) {
-      this.heartbeatMisses = 0;
-    }
-    if (this.disconnectionGrace === undefined) return;
+  cancelGrace() {
+    this.heartbeatMisses = 0;
     clearTimeout(this.disconnectionGrace);
     this.disconnectionGrace = undefined;
   }

@@ -464,7 +464,7 @@ describe.each(testMatrix())(
   },
 );
 
-describe.each(testMatrix())(
+describe.each(testMatrix(['ws', 'naive']))(
   'transport connection edge cases ($transport.name transport, $codec.name codec)',
   ({ transport, codec }) => {
     const opts = { codec: codec.codec };
@@ -476,6 +476,35 @@ describe.each(testMatrix())(
         await postTestCleanup();
         await testHelpers.cleanup();
       };
+    });
+
+    test('reconnecting before grace period ends should leave session intact', async () => {
+      const clientTransport = testHelpers.getClientTransport('client');
+      const onConnect = vi.fn();
+      clientTransport.addEventListener('connectionStatus', (evt) => {
+        if (evt.status === 'connect') {
+          onConnect();
+        }
+      });
+
+      const serverTransport = testHelpers.getServerTransport();
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => expect(onConnect).toHaveBeenCalledTimes(1));
+      clientTransport.connections.forEach((conn) => conn.close());
+      await waitFor(() => expect(onConnect).toHaveBeenCalledTimes(2));
+
+      // make sure our connection is still intact even after session grace elapses
+      await advanceFakeTimersBySessionGrace();
+      expect(clientTransport.connections.size).toEqual(1);
+      expect(serverTransport.connections.size).toEqual(1);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
     });
 
     test('messages should not be resent when the client loses all state and reconnects to the server', async () => {

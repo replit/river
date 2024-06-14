@@ -210,7 +210,6 @@ export abstract class Transport<ConnType extends Connection> {
    */
   protected onConnect(
     conn: ConnType,
-    connectedTo: TransportClientId,
     session: Session<ConnType>,
     isReconnect: boolean,
   ) {
@@ -223,13 +222,12 @@ export abstract class Transport<ConnType extends Connection> {
 
     if (isReconnect) {
       session.replaceWithNewConnection(conn);
-      this.log?.info(`reconnected to ${connectedTo}`, {
-        ...conn.loggingMetadata,
-        ...session.loggingMetadata,
-        clientId: this.clientId,
-        connectedTo,
-      });
     }
+
+    this.log?.info(`connected to ${session.to}`, {
+      ...conn.loggingMetadata,
+      ...session.loggingMetadata,
+    });
   }
 
   protected createSession(
@@ -645,12 +643,21 @@ export abstract class ClientTransport<
       if (session) {
         this.onDisconnect(conn, session);
       }
-      this.log?.info(`connection to ${to} disconnected`, {
-        ...conn.loggingMetadata,
-        ...session?.loggingMetadata,
-        clientId: this.clientId,
-        connectedTo: to,
-      });
+
+      const willReconnect =
+        this.reconnectOnConnectionDrop && this.getStatus() === 'open';
+
+      this.log?.info(
+        `connection to ${to} disconnected` +
+          (willReconnect ? ', reconnecting' : ''),
+        {
+          ...conn.loggingMetadata,
+          ...session?.loggingMetadata,
+          clientId: this.clientId,
+          connectedTo: to,
+        },
+      );
+
       this.inflightConnectionPromises.delete(to);
       if (this.reconnectOnConnectionDrop) {
         void this.connect(to);
@@ -745,12 +752,12 @@ export abstract class ClientTransport<
       sessionId: parsed.payload.status.sessionId,
     });
 
-    this.onConnect(conn, parsed.from, session, isReconnect);
+    this.onConnect(conn, session, isReconnect);
 
     // After a successful connection, we start restoring the budget
     // so that the next time we try to connect, we don't hit the client
     // with backoff forever.
-    this.retryBudget.startRestoringBudget(parsed.from);
+    this.retryBudget.startRestoringBudget(session.to);
     return session;
   }
 
@@ -771,6 +778,14 @@ export abstract class ClientTransport<
    * @param to The client ID of the node to connect to.
    */
   async connect(to: TransportClientId): Promise<void> {
+    if (this.connections.has(to)) {
+      this.log?.info(`already connected to ${to}, skipping connect attempt`, {
+        clientId: this.clientId,
+        connectedTo: to,
+      });
+      return;
+    }
+
     const canProceedWithConnection = () => this.getStatus() === 'open';
     if (!canProceedWithConnection()) {
       this.log?.info(
@@ -783,8 +798,8 @@ export abstract class ClientTransport<
     let reconnectPromise = this.inflightConnectionPromises.get(to);
     if (!reconnectPromise) {
       // check budget
-      const budgetConsumed = this.retryBudget.getBudgetConsumed(to);
       if (!this.retryBudget.hasBudget(to)) {
+        const budgetConsumed = this.retryBudget.getBudgetConsumed(to);
         const errMsg = `tried to connect to ${to} but retry budget exceeded (more than ${budgetConsumed} attempts in the last ${this.retryBudget.totalBudgetRestoreTime}ms)`;
         this.log?.error(errMsg, { clientId: this.clientId, connectedTo: to });
         this.protocolError(ProtocolError.RetriesExceeded, errMsg);
@@ -875,7 +890,7 @@ export abstract class ClientTransport<
           clientId: this.clientId,
           connectedTo: to,
         });
-        return this.connect(to);
+        await this.connect(to);
       }
     }
   }
@@ -1251,7 +1266,7 @@ export abstract class ServerTransport<
       sessionId: session.id,
     });
     conn.send(this.codec.toBuffer(responseMsg));
-    this.onConnect(conn, parsed.from, session, isReconnect);
+    this.onConnect(conn, session, isReconnect);
 
     return session;
   }
