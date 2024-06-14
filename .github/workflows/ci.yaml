@@ -46,6 +46,6 @@ jobs:
       - name: Results
         uses: dorny/test-reporter@v1
         with:
-          name: 'Test Results ($1)'
-          path: '*.xml'
+          name: 'Test Results (${{ matrix.os }})'
+          path: test-results-${{ matrix.os }}.xml
           reporter: jest-junit
