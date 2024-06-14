@@ -2674,6 +2674,65 @@ describe('schema backwards compatible changes', () => {
     const diff = diffServerSchema(oldSchema, newSchema);
     expect(diff).toBeNull();
   });
+
+  test('service removal is compatible when explicitly allowed', () => {
+    const oldSchema = serializeSchema({
+      adder: ServiceSchema.define(
+        {
+          initializeState: () => ({}),
+        },
+        {
+          add: Procedure.rpc({
+            input: Type.Object({}),
+            output: Type.Object({
+              total: Type.Optional(Type.Number()),
+            }),
+            handler: async (_) => ({ ok: true, payload: { total: 0 } }),
+          }),
+        },
+      ),
+    });
+
+    const newSchema = serializeSchema({});
+
+    const diff = diffServerSchema(oldSchema, newSchema, {
+      allowServiceRemoval: true,
+    });
+    expect(diff).toBeNull();
+  });
+
+  test('procedure removal is compatible when explicitly allowed', () => {
+    const oldSchema = serializeSchema({
+      adder: ServiceSchema.define(
+        {
+          initializeState: () => ({}),
+        },
+        {
+          add: Procedure.rpc({
+            input: Type.Object({}),
+            output: Type.Object({
+              total: Type.Optional(Type.Number()),
+            }),
+            handler: async (_) => ({ ok: true, payload: { total: 0 } }),
+          }),
+        },
+      ),
+    });
+
+    const newSchema = serializeSchema({
+      adder: ServiceSchema.define(
+        {
+          initializeState: () => ({}),
+        },
+        {},
+      ),
+    });
+
+    const diff = diffServerSchema(oldSchema, newSchema, {
+      allowProcedureRemoval: true,
+    });
+    expect(diff).toBeNull();
+  });
 });
 
 describe('unsupported schema', () => {
