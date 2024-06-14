@@ -13,7 +13,6 @@ export default defineConfig({
     reporters: process.env.GITHUB_ACTIONS
       ? ['basic', 'github-actions', 'junit']
       : ['default'],
-    outputFile: 'test-results.xml',
     pool: 'forks',
     testTimeout: 1000,
     setupFiles: './__tests__/globalSetup.ts',
