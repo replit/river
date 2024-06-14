@@ -43,17 +43,13 @@ jobs:
       - name: Test
         run: npm test -- --outputFile.junit=./test-results-${{ matrix.os }}.xml
 
-      - name: Upload results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results-${{ matrix.os }}
-          path: test-results-${{ matrix.os }}.xml
-
       - name: Report results
         uses: dorny/test-reporter@v1
+        permissions:
+          contents: read
+          actions: read
+          checks: write
         with:
-          artifact: /test-results-(.*)/
           name: 'Tests ($1)'
           path: '*.xml'
           reporter: jest-junit
