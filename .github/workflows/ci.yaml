@@ -17,6 +17,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
+      actions: read
+      checks: write
     steps:
       - uses: actions/checkout@v3
         with:
@@ -47,4 +49,5 @@ jobs:
         uses: test-summary/action@v2
         with:
           paths: 'test-results.xml'
+          show: 'all'
         if: always()
