@@ -8,6 +8,7 @@ import {
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
   AnyProcedure,
+  ABORT_CODE,
 } from './procedures';
 import {
   AnyService,
@@ -21,15 +22,12 @@ import {
   isStreamOpen,
   ControlFlags,
   isStreamCloseRequest,
+  isStreamAbort,
 } from '../transport/message';
-import {
-  ServiceContext,
-  ServiceContextWithState,
-  ServiceContextWithTransportInfo,
-} from './context';
+import { ServiceContext, ProcedureHandlerContext } from './context';
 import { Logger } from '../logging/log';
 import { Value } from '@sinclair/typebox/value';
-import { Err, Result, Ok } from './result';
+import { Err, Result, Ok, ErrResultSchema } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { coerceErrorString } from '../util/stringify';
@@ -37,6 +35,11 @@ import { Span, SpanStatusCode } from '@opentelemetry/api';
 import { createHandlerSpan } from '../tracing';
 import { ServerHandshakeOptions } from './handshake';
 import { ReadStreamImpl, WriteStreamImpl } from './streams';
+
+/**
+ * A result schema for errors that can be passed to input's readstream
+ */
+const InputErrResultSchema = ErrResultSchema(InputReaderErrorSchema);
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -59,7 +62,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
   implements Server<Services>
 {
   private transport: ServerTransport<Connection>;
-  private contextMap: Map<AnyService, ServiceContextWithState<object>>;
+  private contextMap: Map<AnyService, ServiceContext & { state: object }>;
   private log?: Logger;
 
   public openStreams: Set<string>;
@@ -206,7 +209,34 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       return;
     }
 
-    let didSessionDisconnect = false;
+    let cleanClose = true;
+
+    const onHandlerAbort = () => {
+      if (inputReader.isClosed() && outputWriter.isClosed()) {
+        // Everything already closed, no-op.
+        return;
+      }
+
+      cleanClose = false;
+
+      if (!inputReader.isClosed()) {
+        inputReader.pushValue(
+          Err({
+            code: ABORT_CODE,
+            message: 'Aborted by server procedure handler',
+          }),
+        );
+        inputReader.triggerClose();
+      }
+
+      outputWriter.close();
+      this.transport.sendAbort(session.to, streamId);
+    };
+    const handlerAbortController = new AbortController();
+    handlerAbortController.signal.addEventListener('abort', onHandlerAbort);
+
+    const clientAbortController = new AbortController();
+
     const onSessionStatus = (evt: EventMap['sessionStatus']) => {
       if (evt.status !== 'disconnect') {
         return;
@@ -216,17 +246,18 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         return;
       }
 
-      didSessionDisconnect = true;
+      cleanClose = false;
 
+      const errPayload = {
+        code: UNEXPECTED_DISCONNECT_CODE,
+        message: `client unexpectedly disconnected`,
+      } as const;
       if (!inputReader.isClosed()) {
-        inputReader.pushValue(
-          Err({
-            code: UNEXPECTED_DISCONNECT_CODE,
-            message: `client unexpectedly disconnected`,
-          }),
-        );
+        inputReader.pushValue(Err(errPayload));
         inputReader.triggerClose();
       }
+
+      clientAbortController.abort(errPayload);
 
       outputWriter.close();
     };
@@ -248,6 +279,36 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
       if (isStreamCloseRequest(msg.controlFlags)) {
         outputWriter.triggerCloseRequest();
+      }
+
+      if (isStreamAbort(msg.controlFlags)) {
+        let abortResult: Static<typeof InputErrResultSchema>;
+        if (Value.Check(InputErrResultSchema, msg.payload)) {
+          abortResult = msg.payload;
+        } else {
+          abortResult = Err({
+            code: ABORT_CODE,
+            message: 'Stream aborted, client sent invalid payload',
+          });
+          this.log?.error('Got stream abort without a valid protocol error', {
+            clientId: this.transport.clientId,
+            transportMessage: msg,
+            validationErrors: [
+              ...Value.Errors(InputErrResultSchema, msg.payload),
+            ],
+          });
+        }
+
+        if (!inputReader.isClosed()) {
+          inputReader.pushValue(abortResult);
+          inputReader.triggerClose();
+        }
+
+        outputWriter.close();
+
+        clientAbortController.abort(abortResult.payload);
+
+        return;
       }
 
       if (inputReader.isClosed()) {
@@ -281,6 +342,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     const cleanup = () => {
       this.transport.removeEventListener('message', onMessage);
       this.transport.removeEventListener('sessionStatus', onSessionStatus);
+      handlerAbortController.signal.addEventListener('abort', onHandlerAbort);
+
       this.openStreams.delete(streamId);
 
       if (procDispose) {
@@ -315,7 +378,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         });
       },
       () => {
-        if (!procClosesWithResponse && !didSessionDisconnect) {
+        if (!procClosesWithResponse && cleanClose) {
           // we ended, send a close bit back to the client
           // also, if the client has disconnected, we don't need to send a close
           this.transport.sendCloseControl(session.to, streamId);
@@ -368,15 +431,13 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       });
     }
 
-    const serviceContextWithTransportInfo: ServiceContextWithTransportInfo<object> =
-      {
-        ...this.getContext(service, serviceName),
-        to: initMessage.to,
-        from: initMessage.from,
-        streamId: initMessage.streamId,
-        session,
-        metadata: sessionMeta,
-      };
+    const serviceContextWithTransportInfo: ProcedureHandlerContext<object> = {
+      ...this.getContext(service, serviceName),
+      session,
+      metadata: sessionMeta,
+      abortController: handlerAbortController,
+      clientAbortSignal: clientAbortController.signal,
+    };
 
     this.openStreams.add(streamId);
 
@@ -387,6 +448,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           initMessage,
           async (span): InputHandlerReturn => {
             try {
+              // TODO handle never resolving after cleanup/full close
+              // which would lead to us holding on to the closure forever
               const outputMessage = await procedure.handler(
                 serviceContextWithTransportInfo,
                 initPayload,
@@ -413,6 +476,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           initMessage,
           async (span): InputHandlerReturn => {
             try {
+              // TODO handle never resolving after cleanup/full close
+              // which would lead to us holding on to the closure forever
               procDispose = await procedure.handler(
                 serviceContextWithTransportInfo,
                 initPayload,
@@ -442,6 +507,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           initMessage,
           async (span): InputHandlerReturn => {
             try {
+              // TODO handle never resolving after cleanup/full close
+              // which would lead to us holding on to the closure forever
               procDispose = await procedure.handler(
                 serviceContextWithTransportInfo,
                 initPayload,
@@ -469,6 +536,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           initMessage,
           async (span): InputHandlerReturn => {
             try {
+              // TODO handle never resolving after cleanup/full close
+              // which would lead to us holding on to the closure forever
               const outputMessage = await procedure.handler(
                 serviceContextWithTransportInfo,
                 initPayload,
