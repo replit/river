@@ -89,4 +89,10 @@ export type ProcedureHandlerContext<State> = ServiceContext & {
    * the river documentation to understand the difference between the two concepts.
    */
   clientAbortSignal: AbortSignal;
+  /**
+   * Lets you add a function that will run when the stream is cleaned up due to
+   * it ending. If a cleanup is added after the stream has ended, it will
+   * run immediately.
+   */
+  addCleanup: (cleanup: () => void) => void;
 };
