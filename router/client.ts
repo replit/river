@@ -357,7 +357,14 @@ function handleProc(
     }
 
     inputWriter.close();
-    transport.sendAbort(serverId, streamId);
+    transport.sendAbort(
+      serverId,
+      streamId,
+      Err({
+        code: ABORT_CODE,
+        message: 'Aborted by client',
+      }),
+    );
   }
 
   function onMessage(msg: OpaqueTransportMessage) {

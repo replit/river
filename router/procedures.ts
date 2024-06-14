@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 import { Static, TNever, TSchema, TUnion, Type } from '@sinclair/typebox';
 import { ProcedureHandlerContext } from './context';
 import { BaseErrorSchemaType, Result } from './result';
@@ -37,20 +38,20 @@ export type PayloadType = TSchema;
  * UNCAUGHT_ERROR_CODE is the code that is used when an error is thrown
  * inside a procedure handler that's not required.
  */
-export const UNCAUGHT_ERROR_CODE = 'UNCAUGHT_ERROR';
+export const UNCAUGHT_ERROR_CODE = 'UNCAUGHT_ERROR' as const;
 /**
  * UNEXPECTED_DISCONNECT_CODE is the code used the stream's session
  * disconnect unexpetedly.
  */
-export const UNEXPECTED_DISCONNECT_CODE = 'UNEXPECTED_DISCONNECT';
+export const UNEXPECTED_DISCONNECT_CODE = 'UNEXPECTED_DISCONNECT' as const;
 /**
  * INVALID_REQUEST_CODE is the code used when a client's request is invalid.
  */
-export const INVALID_REQUEST_CODE = 'INVALID_REQUEST';
+export const INVALID_REQUEST_CODE = 'INVALID_REQUEST' as const;
 /**
  * ABORT_CODE is the code used when either server or client aborts the stream.
  */
-export const ABORT_CODE = 'ABORT';
+export const ABORT_CODE = 'ABORT' as const;
 
 /**
  * OutputReaderErrorSchema is the schema for all the errors that can be
@@ -72,6 +73,7 @@ export const OutputReaderErrorSchema = Type.Object({
  */
 export const InputReaderErrorSchema = Type.Object({
   code: Type.Union([
+    Type.Literal(UNCAUGHT_ERROR_CODE),
     Type.Literal(UNEXPECTED_DISCONNECT_CODE),
     Type.Literal(ABORT_CODE),
   ]),
