@@ -48,9 +48,15 @@ export type PayloadBreakage =
       fieldBreakages: Record<string, PayloadBreakage>;
     };
 
+export interface DiffOptions {
+  allowServiceRemoval?: boolean;
+  allowProcedureRemoval?: boolean;
+}
+
 export function diffServerSchema(
   oldServer: SerializedServerSchema,
   newServer: SerializedServerSchema,
+  options?: DiffOptions,
 ): ServerBreakage | null {
   const allServices = new Set([
     ...Object.keys(oldServer.services),
@@ -62,7 +68,7 @@ export function diffServerSchema(
     const oldService = oldServer.services[serviceName];
     const newService = newServer.services[serviceName];
 
-    const breakage = diffService(oldService, newService);
+    const breakage = diffService(oldService, newService, options);
     if (breakage) {
       breakages[serviceName] = breakage;
     }
@@ -78,9 +84,10 @@ export function diffServerSchema(
 function diffService(
   oldService: SerializedServiceSchema | null,
   newService: SerializedServiceSchema | null,
+  options?: DiffOptions,
 ): ServiceBreakage | null {
   if (!newService) {
-    return { reason: 'removed' };
+    return options?.allowServiceRemoval ? null : { reason: 'removed' };
   }
   // New service, perfectly fine.
   if (!oldService) {
@@ -97,7 +104,7 @@ function diffService(
     const aProcedure = oldService.procedures[procedureName];
     const bProcedure = newService.procedures[procedureName];
 
-    const breakage = diffProcedure(aProcedure, bProcedure);
+    const breakage = diffProcedure(aProcedure, bProcedure, options);
     if (breakage) {
       breakages[procedureName] = breakage;
     }
@@ -112,9 +119,10 @@ function diffService(
 function diffProcedure(
   oldProcedure: SerializedProcedureSchema | null,
   newProcedure: SerializedProcedureSchema | null,
+  options?: DiffOptions,
 ): ProcedureBreakage | null {
   if (!newProcedure) {
-    return { reason: 'removed' };
+    return options?.allowProcedureRemoval ? null : { reason: 'removed' };
   }
   // New service, perfectly fine.
   if (!oldProcedure) {

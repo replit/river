@@ -17,6 +17,7 @@ export {
 } from './services';
 export {
   diffServerSchema,
+  DiffOptions,
   ServerBreakage,
   ServiceBreakage,
   ProcedureBreakage,
