@@ -15,6 +15,14 @@ export {
   SerializedServiceSchema,
   SerializedProcedureSchema,
 } from './services';
+export {
+  diffServerSchema,
+  DiffOptions,
+  ServerBreakage,
+  ServiceBreakage,
+  ProcedureBreakage,
+  PayloadBreakage,
+} from './diff';
 export type {
   ValidProcType,
   PayloadType,
