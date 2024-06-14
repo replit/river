@@ -186,6 +186,7 @@ function dummyCtx<State>(
     metadata: {},
     abortController: new AbortController(),
     clientAbortSignal: new AbortController().signal,
+    addCleanup: () => undefined,
   };
 }
 

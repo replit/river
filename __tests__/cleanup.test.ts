@@ -1,11 +1,17 @@
-import { assert, beforeEach, describe, expect, test } from 'vitest';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 import { getIteratorFromStream, iterNext } from '../util/testHelpers';
 import {
   SubscribableServiceSchema,
   TestServiceSchema,
   UploadableServiceSchema,
 } from './fixtures/services';
-import { createClient, createServer } from '../router';
+import {
+  Procedure,
+  ProcedureHandlerContext,
+  ServiceSchema,
+  createClient,
+  createServer,
+} from '../router';
 import {
   advanceFakeTimersBySessionGrace,
   cleanupTransports,
@@ -15,6 +21,9 @@ import {
 } from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
 import { TestSetupHelpers } from './fixtures/transports';
+import { ControlFlags } from '../transport/message';
+import { Type } from '@sinclair/typebox';
+import { nanoid } from 'nanoid';
 
 describe.each(testMatrix())(
   'procedures should clean up after themselves ($transport.name transport, $codec.name codec)',
@@ -366,3 +375,114 @@ describe.each(testMatrix())(
     });
   },
 );
+
+describe('handler registered cleanups', async () => {
+  const { transport, codec } = testMatrix()[0];
+  const opts = { codec: codec.codec };
+
+  const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
+  let getClientTransport: TestSetupHelpers['getClientTransport'];
+  let getServerTransport: TestSetupHelpers['getServerTransport'];
+  beforeEach(async () => {
+    const setup = await transport.setup({ client: opts, server: opts });
+    getClientTransport = setup.getClientTransport;
+    getServerTransport = setup.getServerTransport;
+    return async () => {
+      await postTestCleanup();
+      await setup.cleanup();
+    };
+  });
+
+  test.each([
+    { procedureType: 'rpc' },
+    { procedureType: 'subscription' },
+    { procedureType: 'stream' },
+    { procedureType: 'upload' },
+  ] as const)('$procedureType', async ({ procedureType }) => {
+    const clientTransport = getClientTransport('client');
+    const serverTransport = getServerTransport();
+    const handler = vi.fn<[ProcedureHandlerContext<object>]>();
+    const serverId = 'SERVER';
+    const serviceName = 'service';
+    const procedureName = procedureType;
+
+    const services = {
+      [serviceName]: ServiceSchema.define({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any
+        [procedureType]: (Procedure[procedureType] as any)({
+          init: Type.Object({}),
+          ...(procedureType === 'stream' || procedureType === 'upload'
+            ? {
+                input: Type.Object({}),
+              }
+            : {}),
+          output: Type.Object({}),
+          async handler(ctx: ProcedureHandlerContext<object>) {
+            handler(ctx);
+
+            return new Promise(() => {
+              // never resolves
+            });
+          },
+        }),
+      }),
+    };
+
+    createServer(serverTransport, services);
+
+    addPostTestCleanup(async () => {
+      await cleanupTransports([clientTransport, serverTransport]);
+    });
+
+    clientTransport.send(serverId, {
+      streamId: nanoid(),
+      serviceName,
+      procedureName,
+      payload: {},
+      controlFlags: ControlFlags.StreamOpenBit,
+    });
+
+    await waitFor(() => {
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    const [ctx] = handler.mock.calls[0];
+
+    const callOrder: Array<string> = [];
+    const neverResolvesCleanup = vi.fn().mockImplementation(() => {
+      callOrder.push('neverResolvesCleanup');
+      return new Promise(() => {
+        //
+      });
+    });
+    ctx.addCleanup(neverResolvesCleanup);
+    expect(neverResolvesCleanup).not.toHaveBeenCalled();
+
+    const throwsErrorCleanup = vi.fn().mockImplementation(() => {
+      callOrder.push('throwsErrorCleanup');
+      throw new Error('wat');
+    });
+    ctx.addCleanup(throwsErrorCleanup);
+    expect(throwsErrorCleanup).not.toHaveBeenCalled();
+
+    const normalCleanup = vi.fn().mockImplementation(() => {
+      callOrder.push('normalCleanup');
+    });
+    ctx.addCleanup(normalCleanup);
+    expect(normalCleanup).not.toHaveBeenCalled();
+
+    ctx.abortController.abort();
+    expect(neverResolvesCleanup).toHaveBeenCalledOnce();
+    expect(throwsErrorCleanup).toHaveBeenCalledOnce();
+    expect(normalCleanup).toHaveBeenCalledOnce();
+    expect(callOrder).toStrictEqual([
+      'neverResolvesCleanup',
+      'throwsErrorCleanup',
+      'normalCleanup',
+    ]);
+
+    const registeredAfterClose = vi.fn();
+    ctx.addCleanup(registeredAfterClose);
+    expect(registeredAfterClose).toHaveBeenCalledOnce();
+  });
+});
