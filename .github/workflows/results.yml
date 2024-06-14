@@ -1,7 +1,7 @@
 name: 'Test Report'
 on:
   workflow_run:
-    workflows: ['Build and Test']
+    workflows: ['build-and-test']
     types:
       - completed
 permissions:
