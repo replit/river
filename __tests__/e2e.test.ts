@@ -64,8 +64,7 @@ describe.each(testMatrix())(
 
       // test
       const result = await client.test.add.rpc({ n: 3 });
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 3 });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -91,15 +90,16 @@ describe.each(testMatrix())(
 
       // test
       const result = await client.fallible.divide.rpc({ a: 10, b: 2 });
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 5 });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 5 } });
       const result2 = await client.fallible.divide.rpc({ a: 10, b: 0 });
-      assert(!result2.ok);
-      expect(result2.payload).toStrictEqual({
-        code: DIV_BY_ZERO,
-        message: 'Cannot divide by zero',
-        extras: {
-          test: 'abc',
+      expect(result2).toStrictEqual({
+        ok: false,
+        payload: {
+          code: DIV_BY_ZERO,
+          message: 'Cannot divide by zero',
+          extras: {
+            test: 'abc',
+          },
         },
       });
       await testFinishesCleanly({
@@ -127,8 +127,9 @@ describe.each(testMatrix())(
 
       // test
       const result = await client.bin.getFile.rpc({ file: 'test.py' });
+      expect(result).toMatchObject({ ok: true });
       assert(result.ok);
-      assert(result.payload.contents instanceof Uint8Array);
+      expect(result.payload.contents).toBeInstanceOf(Uint8Array);
       expect(new TextDecoder().decode(result.payload.contents)).toStrictEqual(
         'contents for file test.py',
       );
@@ -163,20 +164,17 @@ describe.each(testMatrix())(
       input.end();
 
       const result1 = await iterNext(output);
-      assert(result1.ok);
-      expect(result1.payload).toStrictEqual({ response: 'abc' });
+      expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
       const result2 = await iterNext(output);
-      assert(result2.ok);
-      expect(result2.payload).toStrictEqual({ response: 'ghi' });
+      expect(result2).toStrictEqual({ ok: true, payload: { response: 'ghi' } });
 
       const result3 = await iterNext(output);
-      assert(result3.ok);
-      expect(result3.payload).toStrictEqual({ response: 'end' });
+      expect(result3).toStrictEqual({ ok: true, payload: { response: 'end' } });
 
       // after the server stream is ended, the client stream should be ended too
       const result4 = await output.next();
-      assert(result4.done);
+      expect(result4).toStrictEqual({ done: true, value: undefined });
       close();
 
       await testFinishesCleanly({
@@ -210,12 +208,16 @@ describe.each(testMatrix())(
       input.end();
 
       const result1 = await iterNext(output);
-      assert(result1.ok);
-      expect(result1.payload).toStrictEqual({ response: 'test abc' });
+      expect(result1).toStrictEqual({
+        ok: true,
+        payload: { response: 'test abc' },
+      });
 
       const result2 = await iterNext(output);
-      assert(result2.ok);
-      expect(result2.payload).toStrictEqual({ response: 'test ghi' });
+      expect(result2).toStrictEqual({
+        ok: true,
+        payload: { response: 'test ghi' },
+      });
       close();
 
       await testFinishesCleanly({
@@ -245,20 +247,23 @@ describe.each(testMatrix())(
       const [input, output, close] = await client.fallible.echo.stream();
       input.push({ msg: 'abc', throwResult: false, throwError: false });
       const result1 = await iterNext(output);
-      assert(result1.ok);
-      expect(result1.payload).toStrictEqual({ response: 'abc' });
+      expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
       input.push({ msg: 'def', throwResult: true, throwError: false });
       const result2 = await iterNext(output);
-      assert(!result2.ok);
-      expect(result2.payload.code).toStrictEqual(STREAM_ERROR);
+      expect(result2).toMatchObject({
+        ok: false,
+        payload: { code: STREAM_ERROR },
+      });
 
       input.push({ msg: 'ghi', throwResult: false, throwError: true });
       const result3 = await iterNext(output);
-      assert(!result3.ok);
-      expect(result3.payload).toStrictEqual({
-        code: UNCAUGHT_ERROR,
-        message: 'some message',
+      expect(result3).toStrictEqual({
+        ok: false,
+        payload: {
+          code: UNCAUGHT_ERROR,
+          message: 'some message',
+        },
       });
 
       close();
@@ -291,22 +296,19 @@ describe.each(testMatrix())(
         {},
       );
       let result = await iterNext(subscription);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 0 });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 0 } });
 
       const add1 = await client.subscribable.add.rpc({ n: 1 });
-      assert(add1.ok);
+      expect(add1).toMatchObject({ ok: true });
 
       result = await iterNext(subscription);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 1 });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 1 } });
 
       const add2 = await client.subscribable.add.rpc({ n: 3 });
-      assert(add2.ok);
+      expect(add2).toMatchObject({ ok: true });
 
       result = await iterNext(subscription);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 4 });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 4 } });
 
       close();
 
@@ -340,8 +342,7 @@ describe.each(testMatrix())(
       addStream.push({ n: 2 });
       addStream.end();
       const result = await addResult;
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 3 });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -375,8 +376,7 @@ describe.each(testMatrix())(
       addStream.push({ n: 2 });
       addStream.end();
       const result = await addResult;
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 'test 3' });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 'test 3' } });
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -425,8 +425,7 @@ describe.each(testMatrix())(
 
       await Promise.all(promises);
       const res = await client.test.getAll.rpc({});
-      assert(res.ok);
-      expect(res.payload.msgs).toStrictEqual(expected);
+      expect(res).toMatchObject({ ok: true, payload: { msgs: expected } });
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -459,8 +458,7 @@ describe.each(testMatrix())(
 
       for (let i = 0; i < CONCURRENCY; i++) {
         const result = await promises[i];
-        assert(result.ok);
-        expect(result.payload).toStrictEqual({ n: i });
+        expect(result).toStrictEqual({ ok: true, payload: { n: i } });
       }
 
       await testFinishesCleanly({
@@ -497,12 +495,16 @@ describe.each(testMatrix())(
       for (let i = 0; i < CONCURRENCY; i++) {
         const output = openStreams[i][1];
         const result1 = await iterNext(output);
-        assert(result1.ok);
-        expect(result1.payload).toStrictEqual({ response: `${i}-1` });
+        expect(result1).toStrictEqual({
+          ok: true,
+          payload: { response: `${i}-1` },
+        });
 
         const result2 = await iterNext(output);
-        assert(result2.ok);
-        expect(result2.payload).toStrictEqual({ response: `${i}-2` });
+        expect(result2).toStrictEqual({
+          ok: true,
+          payload: { response: `${i}-2` },
+        });
       }
 
       // cleanup
@@ -576,8 +578,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
       await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
       const result = await resultPromise;
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 7 });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 7 } });
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -623,8 +624,7 @@ describe.each(testMatrix())(
       // connect and ensure that we still get the result
       await clientTransport.connect(serverTransport.clientId);
       const result = await resultPromise;
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 4 });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 4 } });
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -651,8 +651,7 @@ describe.each(testMatrix())(
 
       // test
       const result = await client.nonObject.add.rpc(3);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual(4);
+      expect(result).toStrictEqual({ ok: true, payload: 4 });
 
       const weirdRecursivePayload = {
         n: 1,
@@ -661,8 +660,10 @@ describe.each(testMatrix())(
       const result2 = await client.nonObject.echoRecursive.rpc(
         weirdRecursivePayload,
       );
-      assert(result2.ok);
-      expect(result2.payload).toStrictEqual(weirdRecursivePayload);
+      expect(result2).toStrictEqual({
+        ok: true,
+        payload: weirdRecursivePayload,
+      });
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -715,8 +716,10 @@ describe.each(testMatrix())(
 
       // test
       const result = await client.test.getData.rpc({});
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ data: 'foobar', extra: 42 });
+      expect(result).toStrictEqual({
+        ok: true,
+        payload: { data: 'foobar', extra: 42 },
+      });
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
