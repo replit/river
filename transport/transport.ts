@@ -738,6 +738,37 @@ export abstract class ClientTransport<
       return false;
     }
 
+    // before we claim victory and we deem that the handshake is fully established, check that our
+    // session matches the remote's. if they do not match, proactively close the connection.
+    // otherwise we will end up breaking a lot of invariants.
+    //
+    // note that there may be a way to convey the expectation of the client that this is a
+    // transparent reconnect to the server so that the server can do the same in a single roundtrip,
+    // but that requires a bit more surgery to the handshake.
+    const previousSession = this.sessions.get(parsed.from);
+    if (
+      previousSession?.advertisedSessionId &&
+      previousSession.advertisedSessionId !== parsed.payload.status.sessionId
+    ) {
+      this.deleteSession({
+        session: previousSession,
+        closeHandshakingConnection: true,
+      });
+
+      conn.telemetry?.span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'session id mismatch',
+      });
+      this.log?.warn(`handshake from ${parsed.from} session id mismatch`, {
+        ...conn.loggingMetadata,
+        clientId: this.clientId,
+        connectedTo: parsed.from,
+        transportMessage: parsed,
+      });
+      this.protocolError(ProtocolError.HandshakeFailed, 'session id mismatch');
+      return false;
+    }
+
     this.log?.debug(`handshake from ${parsed.from} ok`, {
       ...conn.loggingMetadata,
       clientId: this.clientId,

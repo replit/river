@@ -643,6 +643,16 @@ describe.each(testMatrix(['ws + uds proxy', 'naive']))(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
 
+      // make sure both sides agree on the session id.
+      const oldClientSession = serverTransport.sessions.get('client');
+      const oldServerSession = clientTransport.sessions.get('SERVER');
+      expect(oldClientSession).toMatchObject({
+        id: oldServerSession?.advertisedSessionId,
+      });
+      expect(oldServerSession).toMatchObject({
+        id: oldClientSession?.advertisedSessionId,
+      });
+
       expect(clientConnStart).toHaveBeenCalledTimes(1);
       expect(clientSessStart).toHaveBeenCalledTimes(1);
       expect(clientConnStop).toHaveBeenCalledTimes(0);
@@ -674,12 +684,28 @@ describe.each(testMatrix(['ws + uds proxy', 'naive']))(
 
       // eagerly reconnect client
       clientTransport.reconnectOnConnectionDrop = true;
-      void clientTransport.connect('SERVER');
+      await clientTransport.connect('SERVER');
 
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(1));
+
+      // make sure both sides agree on the session id after the reconnect
+      const newClientSession = serverTransport.sessions.get('client');
+      const newServerSession = clientTransport.sessions.get('SERVER');
+      expect(newClientSession).not.toMatchObject({
+        id: oldClientSession?.id,
+      });
+      expect(newClientSession).toMatchObject({
+        id: newServerSession?.advertisedSessionId,
+      });
+      expect(newServerSession).not.toMatchObject({
+        id: oldServerSession?.id,
+      });
+      expect(newServerSession).toMatchObject({
+        id: newClientSession?.advertisedSessionId,
+      });
 
       // when we reconnect, send another message
       const msg4 = createDummyTransportMessage();
