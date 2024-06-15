@@ -643,6 +643,16 @@ describe.each(testMatrix(['ws + uds proxy', 'naive']))(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
 
+      // make sure both sides agree on the session id.
+      const oldClientSession = serverTransport.sessions.get('client');
+      const oldServerSession = clientTransport.sessions.get('SERVER');
+      expect(oldClientSession).toMatchObject({
+        id: oldServerSession?.advertisedSessionId,
+      });
+      expect(oldServerSession).toMatchObject({
+        id: oldClientSession?.advertisedSessionId,
+      });
+
       expect(clientConnStart).toHaveBeenCalledTimes(1);
       expect(clientSessStart).toHaveBeenCalledTimes(1);
       expect(clientConnStop).toHaveBeenCalledTimes(0);
@@ -674,12 +684,28 @@ describe.each(testMatrix(['ws + uds proxy', 'naive']))(
 
       // eagerly reconnect client
       clientTransport.reconnectOnConnectionDrop = true;
-      void clientTransport.connect('SERVER');
+      await clientTransport.connect('SERVER');
 
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(1));
+
+      // make sure both sides agree on the session id after the reconnect
+      const newClientSession = serverTransport.sessions.get('client');
+      const newServerSession = clientTransport.sessions.get('SERVER');
+      expect(newClientSession).not.toMatchObject({
+        id: oldClientSession?.id,
+      });
+      expect(newClientSession).toMatchObject({
+        id: newServerSession?.advertisedSessionId,
+      });
+      expect(newServerSession).not.toMatchObject({
+        id: oldServerSession?.id,
+      });
+      expect(newServerSession).toMatchObject({
+        id: newClientSession?.advertisedSessionId,
+      });
 
       // when we reconnect, send another message
       const msg4 = createDummyTransportMessage();
@@ -689,6 +715,32 @@ describe.each(testMatrix(['ws + uds proxy', 'naive']))(
         // true indicates to reject any other messages
         waitForMessage(serverTransport, (recv) => recv.id === msg4Id, true),
       ).resolves.toStrictEqual(msg4.payload);
+
+      // Disconnect and wait for reconnection.
+      clientTransport.connections.forEach((conn) => conn.close());
+      await waitFor(() => expect(clientTransport.connections.size).toBe(0));
+      await vi.runOnlyPendingTimersAsync();
+      await waitFor(() => expect(clientTransport.connections.size).toBe(1));
+
+      // Ensure that the session survived the reconnection. And not just that a session was not
+      // created, that it's the same session from before the reconnection.
+      expect(clientSessStart).toHaveBeenCalledTimes(2);
+      expect(clientConnStart).toHaveBeenCalledTimes(3);
+      expect(clientSessStop).toHaveBeenCalledTimes(1);
+      expect(clientConnStop).toHaveBeenCalledTimes(2);
+      const reconnectedClientSession = serverTransport.sessions.get('client');
+      const reconnectedServerSession = clientTransport.sessions.get('SERVER');
+      expect(reconnectedClientSession).toBe(newClientSession);
+      expect(reconnectedServerSession).toBe(newServerSession);
+
+      // send one more message to ensure that the message delivery is still working
+      const msg5 = createDummyTransportMessage();
+      const msg5Id = clientTransport.send(serverTransport.clientId, msg5);
+      await expect(
+        // ensure that when the server gets it, it's not an older message
+        // true indicates to reject any other messages
+        waitForMessage(serverTransport, (recv) => recv.id === msg5Id, true),
+      ).resolves.toStrictEqual(msg5.payload);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
