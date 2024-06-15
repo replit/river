@@ -83,6 +83,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
   private transport: ServerTransport<Connection>;
   private contextMap: Map<AnyService, ServiceContext & { state: object }>;
   private log?: Logger;
+  /**
+   * We create a tombstones for streams aborted by the server
+   * so that we don't hit errors when the client has inflight
+   * requests it sent before it saw the abort.
+   */
+  private serverAbortedStreams: LRUSet;
 
   public openStreams: Set<string>;
   public services: InstantiatedServiceSchemaMap<Services>;
@@ -92,6 +98,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     services: Services,
     handshakeOptions?: ServerHandshakeOptions,
     extendedContext?: Omit<ServiceContext, 'state'>,
+    abortedStreamsMaxTombstones?: number,
   ) {
     const instances: Record<string, AnyService> = {};
 
@@ -114,6 +121,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
     this.transport = transport;
     this.openStreams = new Set();
+    this.serverAbortedStreams = new LRUSet(abortedStreamsMaxTombstones ?? 100);
     this.log = transport.log;
 
     const handleMessage = (msg: EventMap['message']) => {
@@ -133,9 +141,15 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         return;
       }
 
+      if (this.serverAbortedStreams.has(msg.streamId)) {
+        return;
+      }
+
       const validated = this.validateNewProcStream(msg);
 
       if (!validated) {
+        this.serverAbortedStreams.add(msg.streamId);
+
         return;
       }
 
@@ -184,6 +198,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         // Everything already closed, no-op.
         return;
       }
+
+      this.serverAbortedStreams.add(streamId);
 
       cleanClose = false;
 
@@ -763,6 +779,32 @@ class RiverServer<Services extends AnyServiceSchemaMap>
   }
 }
 
+class LRUSet {
+  private items: Set<string>;
+  private maxItems: number;
+
+  constructor(maxItems: number) {
+    this.items = new Set();
+    this.maxItems = maxItems;
+  }
+
+  add(item: string) {
+    if (this.items.has(item)) {
+      this.items.delete(item);
+    } else if (this.items.size >= this.maxItems) {
+      const first = this.items.values().next();
+      if (!first.done) {
+        this.items.delete(first.value);
+      }
+    }
+    this.items.add(item);
+  }
+
+  has(item: string) {
+    return this.items.has(item);
+  }
+}
+
 /**
  * Creates a server instance that listens for incoming messages from a transport and routes them to the appropriate service and procedure.
  * The server tracks the state of each service along with open streams and the extended context object.
@@ -778,6 +820,11 @@ export function createServer<Services extends AnyServiceSchemaMap>(
   providedServerOptions?: Partial<{
     handshakeOptions?: ServerHandshakeOptions;
     extendedContext?: Omit<ServiceContext, 'state'>;
+    /**
+     * Maximum number of aborted streams to keep track of to avoid
+     * cascading stream errors.
+     */
+    abortedStreamsMaxTombstones: number;
   }>,
 ): Server<Services> {
   return new RiverServer(
@@ -785,5 +832,6 @@ export function createServer<Services extends AnyServiceSchemaMap>(
     services,
     providedServerOptions?.handshakeOptions,
     providedServerOptions?.extendedContext,
+    providedServerOptions?.abortedStreamsMaxTombstones,
   );
 }

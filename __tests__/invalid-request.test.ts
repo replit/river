@@ -18,7 +18,7 @@ import { ControlFlags } from '../transport/message';
 import { TestSetupHelpers } from './fixtures/transports';
 import { nanoid } from 'nanoid';
 
-describe('invalid request', () => {
+describe('aborts invalid request', () => {
   const { transport, codec } = testMatrix()[0];
   const opts = { codec: codec.codec };
 
@@ -583,5 +583,188 @@ describe('invalid request', () => {
         },
       },
     ]);
+  });
+
+  describe('tombestones invalid request', () => {
+    test('responds to multiple invalid requests for the same stream only once', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      addPostTestCleanup(() =>
+        cleanupTransports([clientTransport, serverTransport]),
+      );
+      const serverId = 'SERVER';
+
+      const services = {
+        service: ServiceSchema.define({
+          stream: Procedure.stream({
+            init: Type.Object({}),
+            input: Type.Object({}),
+            output: Type.Object({}),
+            handler: async () => undefined,
+          }),
+        }),
+      };
+
+      createServer(serverTransport, services);
+
+      const serverSendAbortSpy = vi.spyOn(serverTransport, 'sendAbort');
+
+      const streamId = nanoid();
+      clientTransport.send(serverId, {
+        streamId,
+        procedureName: 'stream',
+        payload: {},
+        controlFlags: ControlFlags.StreamOpenBit,
+      });
+      clientTransport.send(serverId, {
+        streamId,
+        procedureName: 'stream',
+        payload: {},
+        controlFlags: ControlFlags.StreamOpenBit,
+      });
+      clientTransport.send(serverId, {
+        streamId,
+        procedureName: 'stream',
+        payload: {},
+        controlFlags: ControlFlags.StreamOpenBit,
+      });
+
+      await waitFor(() => {
+        expect(serverSendAbortSpy).toHaveBeenCalledTimes(1);
+      });
+
+      const anotherStreamId = nanoid();
+      clientTransport.send(serverId, {
+        streamId: anotherStreamId,
+        procedureName: 'stream',
+        payload: {},
+        controlFlags: ControlFlags.StreamOpenBit,
+      });
+
+      await waitFor(() => {
+        expect(serverSendAbortSpy).toHaveBeenCalledTimes(2);
+      });
+
+      expect(serverSendAbortSpy).toHaveBeenNthCalledWith(
+        1,
+        'client',
+        streamId,
+        {
+          ok: false,
+          payload: {
+            code: INVALID_REQUEST_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.stringContaining('missing service name'),
+          },
+        },
+      );
+
+      expect(serverSendAbortSpy).toHaveBeenNthCalledWith(
+        2,
+        'client',
+        anotherStreamId,
+        {
+          ok: false,
+          payload: {
+            code: INVALID_REQUEST_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.stringContaining('missing service name'),
+          },
+        },
+      );
+    });
+
+    test('starts responding to same stream after tombstones are evicted', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      addPostTestCleanup(() =>
+        cleanupTransports([clientTransport, serverTransport]),
+      );
+      const serverId = 'SERVER';
+
+      const services = {
+        service: ServiceSchema.define({
+          stream: Procedure.stream({
+            init: Type.Object({}),
+            input: Type.Object({}),
+            output: Type.Object({}),
+            handler: async () => undefined,
+          }),
+        }),
+      };
+
+      const abortedStreamsMaxTombstones = 5;
+      createServer(serverTransport, services, { abortedStreamsMaxTombstones });
+
+      const serverSendAbortSpy = vi.spyOn(serverTransport, 'sendAbort');
+
+      const firstStreamId = nanoid();
+      clientTransport.send(serverId, {
+        streamId: firstStreamId,
+        procedureName: 'stream',
+        payload: {},
+        controlFlags: ControlFlags.StreamOpenBit,
+      });
+
+      await waitFor(() => {
+        expect(serverSendAbortSpy).toHaveBeenCalledTimes(1);
+      });
+
+      expect(serverSendAbortSpy).toHaveBeenNthCalledWith(
+        1,
+        'client',
+        firstStreamId,
+        {
+          ok: false,
+          payload: {
+            code: INVALID_REQUEST_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.stringContaining('missing service name'),
+          },
+        },
+      );
+
+      for (let i = 0; i < abortedStreamsMaxTombstones; i++) {
+        clientTransport.send(serverId, {
+          streamId: nanoid(), // new streams
+          procedureName: 'stream',
+          payload: {},
+          controlFlags: ControlFlags.StreamOpenBit,
+        });
+      }
+
+      await waitFor(() => {
+        expect(serverSendAbortSpy).toHaveBeenCalledTimes(
+          abortedStreamsMaxTombstones + 1,
+        );
+      });
+
+      clientTransport.send(serverId, {
+        streamId: firstStreamId,
+        procedureName: 'stream',
+        payload: {},
+        controlFlags: ControlFlags.StreamOpenBit,
+      });
+
+      await waitFor(() => {
+        expect(serverSendAbortSpy).toHaveBeenCalledTimes(
+          abortedStreamsMaxTombstones + 2,
+        );
+      });
+
+      expect(serverSendAbortSpy).toHaveBeenNthCalledWith(
+        abortedStreamsMaxTombstones + 2,
+        'client',
+        firstStreamId,
+        {
+          ok: false,
+          payload: {
+            code: INVALID_REQUEST_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.stringContaining('missing service name'),
+          },
+        },
+      );
+    });
   });
 });

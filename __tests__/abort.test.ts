@@ -819,6 +819,95 @@ describe.each(testMatrix())(
 
         expect(server.openStreams.size).toEqual(0);
       });
+
+      test('tombstones aborted stream', async () => {
+        const clientTransport = getClientTransport('client');
+        const serverTransport = getServerTransport();
+        addPostTestCleanup(() =>
+          cleanupTransports([clientTransport, serverTransport]),
+        );
+        const serverId = 'SERVER';
+
+        const handler = vi
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .fn<Parameters<StreamProcedure<any, any, any, any, any>['handler']>>()
+          .mockImplementation(
+            () =>
+              new Promise(() => {
+                // never resolves
+              }),
+          );
+        const services = {
+          service: ServiceSchema.define({
+            stream: Procedure.stream({
+              init: Type.Object({}),
+              input: Type.Object({}),
+              output: Type.Object({}),
+              handler,
+            }),
+          }),
+        };
+
+        createServer(serverTransport, services);
+
+        const serverSendAbortSpy = vi.spyOn(serverTransport, 'sendAbort');
+
+        const serverOnMessage = vi.fn<[EventMap['message']]>();
+        serverTransport.addEventListener('message', serverOnMessage);
+
+        const clientOnMessage = vi.fn<[EventMap['message']]>();
+        clientTransport.addEventListener('message', clientOnMessage);
+
+        const streamId = nanoid();
+        clientTransport.send(serverId, {
+          streamId,
+          serviceName: 'service',
+          procedureName: 'stream',
+          payload: {},
+          controlFlags: ControlFlags.StreamOpenBit,
+        });
+
+        await waitFor(() => {
+          expect(handler).toHaveBeenCalledTimes(1);
+        });
+
+        const [ctx] = handler.mock.calls[0];
+        ctx.abortController.abort();
+        // input for the stream should be ignored
+        // instead of leading to an error response
+        clientTransport.send(serverId, {
+          streamId,
+          payload: {},
+          controlFlags: 0,
+        });
+
+        await waitFor(() => {
+          expect(serverOnMessage).toHaveBeenCalledTimes(2);
+        });
+
+        expect(handler).toHaveBeenCalledTimes(1);
+        expect(serverSendAbortSpy).toHaveBeenCalledTimes(1);
+
+        await waitFor(() => {
+          expect(clientOnMessage).toHaveBeenCalledTimes(1);
+        });
+
+        expect(clientOnMessage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            ack: 1,
+            controlFlags: ControlFlags.StreamAbortBit,
+            streamId,
+            payload: {
+              ok: false,
+              payload: {
+                code: ABORT_CODE,
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                message: expect.any(String),
+              },
+            },
+          }),
+        );
+      });
     });
 
     describe('e2e', () => {
