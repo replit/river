@@ -35,6 +35,12 @@ export type ValidProcType =
 export type PayloadType = TSchema;
 
 /**
+ * INTERNAL_RIVER_ERROR_CODE is the code that is used when an internal error occurs,
+ * this means that some invariants expected by the river server implementation have
+ * been violated. When encountering this error please report this to river maintainers.
+ */
+export const INTERNAL_RIVER_ERROR_CODE = 'INTERNAL_RIVER_ERROR';
+/**
  * UNCAUGHT_ERROR_CODE is the code that is used when an error is thrown
  * inside a procedure handler that's not required.
  */
@@ -59,6 +65,7 @@ export const ABORT_CODE = 'ABORT' as const;
  */
 export const OutputReaderErrorSchema = Type.Object({
   code: Type.Union([
+    Type.Literal(INTERNAL_RIVER_ERROR_CODE),
     Type.Literal(UNCAUGHT_ERROR_CODE),
     Type.Literal(UNEXPECTED_DISCONNECT_CODE),
     Type.Literal(INVALID_REQUEST_CODE),
@@ -75,6 +82,7 @@ export const InputReaderErrorSchema = Type.Object({
   code: Type.Union([
     Type.Literal(UNCAUGHT_ERROR_CODE),
     Type.Literal(UNEXPECTED_DISCONNECT_CODE),
+    Type.Literal(INVALID_REQUEST_CODE),
     Type.Literal(ABORT_CODE),
   ]),
   message: Type.String(),
