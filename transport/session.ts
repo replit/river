@@ -340,10 +340,16 @@ export class Session<ConnType extends Connection> {
     this.connection = undefined;
   }
 
-  replaceWithNewConnection(newConn: ConnType) {
+  replaceWithNewConnection(newConn: ConnType, isTransparentReconnect: boolean) {
     this.closeStaleConnection(newConn);
     this.cancelGrace();
-    this.sendBufferedMessages(newConn);
+    if (isTransparentReconnect) {
+      // only send the buffered messages if this is considered a transparent reconnect. there are
+      // cases where the cient reconnects but with a different session id. for those cases we should
+      // not send messages from a previous session.
+
+      this.sendBufferedMessages(newConn);
+    }
     this.connection = newConn;
 
     // we only call replaceWithNewConnection after
