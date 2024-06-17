@@ -1,10 +1,8 @@
 import { type Server, type Socket } from 'node:net';
-import {
-  ServerTransport,
-  ProvidedServerTransportOptions,
-} from '../../transport';
 import { TransportClientId } from '../../message';
 import { UdsConnection } from './connection';
+import { ServerTransport } from '../../server';
+import { ProvidedServerTransportOptions } from '../../options';
 
 export class UnixDomainSocketServerTransport extends ServerTransport<UdsConnection> {
   server: Server;

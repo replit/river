@@ -1,4 +1,3 @@
-import { ClientTransport } from '../transport/transport';
 import {
   AnyService,
   ProcErrors,
@@ -26,6 +25,7 @@ import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { createProcTelemetryInfo, getPropagationContext } from '../tracing';
 import { ClientHandshakeOptions } from './handshake';
+import { ClientTransport } from '../transport';
 
 // helper to make next, yield, and return all the same type
 export type AsyncIter<T> = AsyncGenerator<T, T>;

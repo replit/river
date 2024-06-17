@@ -1,8 +1,6 @@
-import {
-  ClientTransport,
-  ProvidedClientTransportOptions,
-} from '../../transport';
+import { ClientTransport } from '../../client';
 import { TransportClientId } from '../../message';
+import { ProvidedClientTransportOptions } from '../../options';
 import { WebSocketConnection } from './connection';
 import { WsLike } from './wslike';
 

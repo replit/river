@@ -1,5 +1,5 @@
 import { Static } from '@sinclair/typebox';
-import { ServerTransport } from '../transport/transport';
+import { ServerTransport } from '../transport';
 import { AnyProcedure, PayloadType } from './procedures';
 import {
   AnyService,

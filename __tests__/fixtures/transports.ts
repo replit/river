@@ -17,9 +17,9 @@ import {
 import { UnixDomainSocketClientTransport } from '../../transport/impls/uds/client';
 import { UnixDomainSocketServerTransport } from '../../transport/impls/uds/server';
 import {
-  ProvidedClientTransportOptions,
-  ProvidedServerTransportOptions,
-} from '../../transport/transport';
+  ClientTransportOptions,
+  ServerTransportOptions,
+} from '../../transport';
 import { WebSocketClientTransport } from '../../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../../transport/impls/ws/server';
 import NodeWs from 'ws';
@@ -34,8 +34,8 @@ import { Value } from '@sinclair/typebox/value';
 export type ValidTransports = 'ws' | 'unix sockets' | 'ws + uds proxy';
 
 export interface TestTransportOptions {
-  client?: ProvidedClientTransportOptions;
-  server?: ProvidedServerTransportOptions;
+  client?: ClientTransportOptions;
+  server?: ServerTransportOptions;
 }
 
 export interface TestSetupHelpers {

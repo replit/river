@@ -1,11 +1,9 @@
 import { TransportClientId } from '../../message';
-import {
-  ServerTransport,
-  ProvidedServerTransportOptions,
-} from '../../transport';
 import { WebSocketServer } from 'ws';
 import { WebSocketConnection } from './connection';
 import { WsLike } from './wslike';
+import { ServerTransport } from '../../server';
+import { ProvidedServerTransportOptions } from '../../options';
 
 export class WebSocketServerTransport extends ServerTransport<WebSocketConnection> {
   wss: WebSocketServer;

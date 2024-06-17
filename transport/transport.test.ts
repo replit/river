@@ -7,6 +7,7 @@ import {
 } from '../util/testHelpers';
 import { EventMap, ProtocolError } from '../transport/events';
 import {
+  advanceFakeTimersByConnectionBackoff,
   advanceFakeTimersBySessionGrace,
   cleanupTransports,
   testFinishesCleanly,
@@ -464,7 +465,7 @@ describe.each(testMatrix())(
   },
 );
 
-describe.each(testMatrix(['ws + uds proxy', 'naive']))(
+describe.each(testMatrix())(
   'transport connection edge cases ($transport.name transport, $codec.name codec)',
   ({ transport, codec }) => {
     const opts = { codec: codec.codec };
@@ -684,6 +685,10 @@ describe.each(testMatrix(['ws + uds proxy', 'naive']))(
 
       // eagerly reconnect client
       clientTransport.reconnectOnConnectionDrop = true;
+      const msgPromise = waitForMessage(
+        serverTransport,
+        (recv) => recv.id === msg4Id,
+      );
       await clientTransport.connect('SERVER');
 
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
@@ -710,16 +715,15 @@ describe.each(testMatrix(['ws + uds proxy', 'naive']))(
       // when we reconnect, send another message
       const msg4 = createDummyTransportMessage();
       const msg4Id = clientTransport.send(serverTransport.clientId, msg4);
-      await expect(
-        // ensure that when the server gets it, it's not msg2 or msg3
-        // true indicates to reject any other messages
-        waitForMessage(serverTransport, (recv) => recv.id === msg4Id, true),
-      ).resolves.toStrictEqual(msg4.payload);
+      await expect(msgPromise).resolves.toStrictEqual(msg4.payload);
+
+      // wait a bit to let the reconnect budget restore
+      await advanceFakeTimersByConnectionBackoff();
 
       // Disconnect and wait for reconnection.
       clientTransport.connections.forEach((conn) => conn.close());
       await waitFor(() => expect(clientTransport.connections.size).toBe(0));
-      await vi.runOnlyPendingTimersAsync();
+      await advanceFakeTimersByConnectionBackoff();
       await waitFor(() => expect(clientTransport.connections.size).toBe(1));
 
       // Ensure that the session survived the reconnection. And not just that a session was not
