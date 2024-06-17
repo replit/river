@@ -293,6 +293,18 @@ export abstract class Transport<ConnType extends Connection> {
    * @param connectedTo The peer we are connected to.
    */
   protected onDisconnect(conn: ConnType, session: Session<ConnType>) {
+    if (session.connection !== undefined && session.connection.id !== conn.id) {
+      // it is completely legal for us to receive the onDisconnect notification later down the line
+      // and accidentally try to install the grace notification into an already-reconnected session.
+      session.telemetry.span.addEvent('onDisconnect race');
+      this.log?.warn('onDisconnect race', {
+        clientId: this.clientId,
+        ...session.loggingMetadata,
+        ...conn.loggingMetadata,
+        tags: ['invariant-violation'],
+      });
+      return;
+    }
     conn.telemetry?.span.end();
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'disconnect',
@@ -301,6 +313,18 @@ export abstract class Transport<ConnType extends Connection> {
 
     session.connection = undefined;
     session.beginGrace(() => {
+      if (session.connection !== undefined) {
+        // if for whatever reason the session has a connection, it means that we accidentally
+        // installed a grace period in a session that already had reconnected. oops.
+        session.telemetry.span.addEvent('session grace period race');
+        this.log?.warn('session grace period race', {
+          clientId: this.clientId,
+          ...session.loggingMetadata,
+          ...conn.loggingMetadata,
+          tags: ['invariant-violation'],
+        });
+        return;
+      }
       session.telemetry.span.addEvent('session grace period expired');
       this.deleteSession({
         session,
