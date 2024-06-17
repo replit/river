@@ -211,7 +211,7 @@ export abstract class Transport<ConnType extends Connection> {
   protected onConnect(
     conn: ConnType,
     session: Session<ConnType>,
-    isReconnect: boolean,
+    isTransparentReconnect: boolean,
   ) {
     this.eventDispatcher.dispatchEvent('connectionStatus', {
       status: 'connect',
@@ -220,9 +220,7 @@ export abstract class Transport<ConnType extends Connection> {
 
     conn.telemetry = createConnectionTelemetryInfo(conn, session.telemetry);
 
-    if (isReconnect) {
-      session.replaceWithNewConnection(conn);
-    }
+    session.replaceWithNewConnection(conn, isTransparentReconnect);
 
     this.log?.info(`connected to ${session.to}`, {
       ...conn.loggingMetadata,
@@ -269,7 +267,8 @@ export abstract class Transport<ConnType extends Connection> {
     propagationCtx?: PropagationContext;
   }) {
     let session = this.sessions.get(to);
-    let isReconnect = session !== undefined;
+    const isReconnect = session !== undefined;
+    let isTransparentReconnect = isReconnect;
 
     if (
       session?.advertisedSessionId !== undefined &&
@@ -289,7 +288,7 @@ export abstract class Transport<ConnType extends Connection> {
         closeHandshakingConnection: handshakingConn !== undefined,
         handshakingConn,
       });
-      isReconnect = false;
+      isTransparentReconnect = false;
       session = undefined;
     }
 
@@ -308,7 +307,7 @@ export abstract class Transport<ConnType extends Connection> {
     if (handshakingConn !== undefined) {
       session.replaceWithNewHandshakingConnection(handshakingConn);
     }
-    return { session, isReconnect };
+    return { session, isReconnect, isTransparentReconnect };
   }
 
   protected deleteSession({
@@ -746,13 +745,13 @@ export abstract class ClientTransport<
       transportMessage: parsed,
     });
 
-    const { session, isReconnect } = this.getOrCreateSession({
+    const { session, isTransparentReconnect } = this.getOrCreateSession({
       to: parsed.from,
       conn,
       sessionId: parsed.payload.status.sessionId,
     });
 
-    this.onConnect(conn, session, isReconnect);
+    this.onConnect(conn, session, isTransparentReconnect);
 
     // After a successful connection, we start restoring the budget
     // so that the next time we try to connect, we don't hit the client
@@ -1248,7 +1247,7 @@ export abstract class ServerTransport<
       return false;
     }
 
-    const { session, isReconnect } = this.getOrCreateSession({
+    const { session, isTransparentReconnect } = this.getOrCreateSession({
       to: parsed.from,
       conn,
       sessionId: parsed.payload.sessionId,
@@ -1266,7 +1265,7 @@ export abstract class ServerTransport<
       sessionId: session.id,
     });
     conn.send(this.codec.toBuffer(responseMsg));
-    this.onConnect(conn, session, isReconnect);
+    this.onConnect(conn, session, isTransparentReconnect);
 
     return session;
   }
