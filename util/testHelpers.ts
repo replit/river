@@ -19,8 +19,9 @@ import {
 } from '../transport/message';
 import { coerceErrorString } from './stringify';
 import { Connection, Session, SessionOptions } from '../transport/session';
-import { Transport, defaultTransportOptions } from '../transport/transport';
+import { Transport } from '../transport/transport';
 import { WsLike } from '../transport/impls/ws/wslike';
+import { defaultTransportOptions } from '../transport/options';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
