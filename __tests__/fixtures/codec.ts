@@ -1,10 +1,7 @@
-import { BinaryCodec, Codec, NaiveJsonCodec } from '../../codec';
+import { BinaryCodec, Codec } from '../../codec';
 
-export type ValidCodecs = 'naive' | 'binary';
+export type ValidCodecs = 'binary';
 export const codecs: Array<{
   name: ValidCodecs;
   codec: Codec;
-}> = [
-  { name: 'naive', codec: NaiveJsonCodec },
-  { name: 'binary', codec: BinaryCodec },
-];
+}> = [{ name: 'binary', codec: BinaryCodec }];

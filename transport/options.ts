@@ -1,4 +1,4 @@
-import { NaiveJsonCodec } from '../codec/json';
+import { BinaryCodec } from '../codec/binary';
 import { ConnectionRetryOptions } from './rateLimit';
 import { SessionOptions } from './session';
 
@@ -10,7 +10,7 @@ export const defaultTransportOptions: TransportOptions = {
   heartbeatIntervalMs: 1_000,
   heartbeatsUntilDead: 2,
   sessionDisconnectGraceMs: 5_000,
-  codec: NaiveJsonCodec,
+  codec: BinaryCodec,
 };
 
 export type ClientTransportOptions = TransportOptions & ConnectionRetryOptions;
