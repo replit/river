@@ -63,6 +63,21 @@ export const ControlMessageHandshakeRequestSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_REQ'),
   protocolVersion: Type.String(),
   sessionId: Type.String(),
+  /**
+   * Specifies what the server's expected session state (from the pov of the client). This can be
+   * used by the server to know whether this is a new or a reestablished connection, and whether it
+   * is compatible with what it already has.
+   */
+  expectedSessionState: Type.Optional(
+    Type.Object({
+      /**
+       * reconnect is set to true if the client explicitly wants to reestablish an existing
+       * connection.
+       */
+      reconnect: Type.Boolean(),
+      nextExpectedSeq: Type.Integer(),
+    }),
+  ),
   metadata: Type.Optional(Type.Unknown()),
 });
 
@@ -130,13 +145,23 @@ export type PartialTransportMessage<Payload = unknown> = Omit<
   'id' | 'from' | 'to' | 'seq' | 'ack'
 >;
 
-export function handshakeRequestMessage(
-  from: TransportClientId,
-  to: TransportClientId,
-  sessionId: string,
-  metadata?: unknown,
-  tracing?: PropagationContext,
-): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {
+export function handshakeRequestMessage({
+  from,
+  to,
+  sessionId,
+  expectedSessionState,
+  metadata,
+  tracing,
+}: {
+  from: TransportClientId;
+  to: TransportClientId;
+  sessionId: string;
+  expectedSessionState: Static<
+    typeof ControlMessageHandshakeRequestSchema
+  >['expectedSessionState'];
+  metadata?: unknown;
+  tracing?: PropagationContext;
+}): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {
   return {
     id: nanoid(),
     from,
@@ -150,16 +175,27 @@ export function handshakeRequestMessage(
       type: 'HANDSHAKE_REQ',
       protocolVersion: PROTOCOL_VERSION,
       sessionId,
+      expectedSessionState,
       metadata,
     } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
   };
 }
 
-export function handshakeResponseMessage(
-  from: TransportClientId,
-  to: TransportClientId,
-  status: Static<typeof ControlMessageHandshakeResponseSchema>['status'],
-): TransportMessage<Static<typeof ControlMessageHandshakeResponseSchema>> {
+/**
+ * This is a reason that can be given during the handshake to indicate that the peer has the wrong
+ * session state.
+ */
+export const SESSION_STATE_MISMATCH = 'session state mismatch';
+
+export function handshakeResponseMessage({
+  from,
+  to,
+  status,
+}: {
+  from: TransportClientId;
+  to: TransportClientId;
+  status: Static<typeof ControlMessageHandshakeResponseSchema>['status'];
+}): TransportMessage<Static<typeof ControlMessageHandshakeResponseSchema>> {
   return {
     id: nanoid(),
     from,

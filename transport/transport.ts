@@ -205,6 +205,67 @@ export abstract class Transport<ConnType extends Connection> {
     return session;
   }
 
+  protected createNewSession({
+    to,
+    conn,
+    sessionId,
+    propagationCtx,
+  }: {
+    to: TransportClientId;
+    conn: ConnType;
+    sessionId: string;
+    propagationCtx?: PropagationContext;
+  }) {
+    let session = this.sessions.get(to);
+    if (session !== undefined) {
+      // this is a new session. if the client already had one, delete it before continuing
+      this.log?.info(
+        `session for ${to} already exists, replacing it with a new session as requested`,
+        session.loggingMetadata,
+      );
+      this.deleteSession({
+        session,
+        closeHandshakingConnection: false,
+      });
+      session = undefined;
+    }
+
+    session = this.createSession(to, conn, propagationCtx);
+    session.advertisedSessionId = sessionId;
+    this.log?.info(`created new session for ${to}`, session.loggingMetadata);
+
+    return session;
+  }
+
+  protected getExistingSession({
+    to,
+    sessionId,
+    nextExpectedSeq,
+  }: {
+    to: TransportClientId;
+    sessionId: string;
+    nextExpectedSeq: number;
+  }) {
+    const session = this.sessions.get(to);
+    if (
+      // reject this request if there was no previous session to replace
+      session === undefined ||
+      // or if both parties do not agree about the next expected sequence number
+      session.nextExpectedAck < nextExpectedSeq ||
+      // or if both parties do not agree on the advertised session id
+      session.advertisedSessionId !== sessionId
+    ) {
+      return false;
+    }
+
+    this.log?.info(
+      `reused existing session for ${to}`,
+      session.loggingMetadata,
+    );
+
+    return session;
+  }
+
   protected getOrCreateSession({
     to,
     conn,

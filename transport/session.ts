@@ -415,8 +415,17 @@ export class Session<ConnType extends Connection> {
     return this.connection !== undefined;
   }
 
+  get nextExpectedAck() {
+    return this.seq;
+  }
+
   get nextExpectedSeq() {
     return this.ack;
+  }
+
+  // This is only used in tests to make the session misbehave.
+  /* @internal */ advanceAckForTesting(by: number) {
+    this.ack += by;
   }
 
   constructMsg<Payload>(

@@ -52,6 +52,16 @@ describe.each(testMatrix())(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
 
+      // make sure both sides agree on the session id.
+      const oldClientSession = serverTransport.sessions.get('client');
+      const oldServerSession = clientTransport.sessions.get('SERVER');
+      expect(oldClientSession).toMatchObject({
+        id: oldServerSession?.advertisedSessionId,
+      });
+      expect(oldServerSession).toMatchObject({
+        id: oldClientSession?.advertisedSessionId,
+      });
+
       clientTransport.connections.forEach((conn) => conn.close());
 
       // by this point the client should have reconnected
@@ -59,6 +69,67 @@ describe.each(testMatrix())(
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
       ).resolves.toStrictEqual(msg2.payload);
+
+      // make sure both sides still have the same sessions
+      const newClientSession = serverTransport.sessions.get('client');
+      const newServerSession = clientTransport.sessions.get('SERVER');
+      expect(newClientSession).toBe(oldClientSession);
+      expect(newServerSession).toBe(oldServerSession);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
+    test('misbehaving clients get their sessions recreated after reconnect', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      const msg1 = createDummyTransportMessage();
+      const msg2 = createDummyTransportMessage();
+
+      const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+      await expect(
+        waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
+      ).resolves.toStrictEqual(msg1.payload);
+
+      // make sure both sides agree on the session id.
+      const oldClientSession = serverTransport.sessions.get('client');
+      const oldServerSession = clientTransport.sessions.get('SERVER');
+      expect(oldClientSession).toMatchObject({
+        id: oldServerSession?.advertisedSessionId,
+      });
+      expect(oldServerSession).toMatchObject({
+        id: oldClientSession?.advertisedSessionId,
+      });
+
+      // wait a bit to let the reconnect budget restore
+      await advanceFakeTimersByConnectionBackoff();
+
+      // make this client misbehave by advancing its ack counter a few times
+      oldServerSession?.advanceAckForTesting(10);
+
+      // Disconnect and wait for reconnection.
+      clientTransport.connections.forEach((conn) => conn.close());
+      await waitFor(() => expect(clientTransport.connections.size).toBe(0));
+      await advanceFakeTimersByConnectionBackoff();
+      await waitFor(() => expect(clientTransport.connections.size).toBe(1));
+
+      // by this point the client should have reconnected
+      const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
+      await expect(
+        waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
+      ).resolves.toStrictEqual(msg2.payload);
+
+      // make sure both sides now have different sessions
+      const newClientSession = serverTransport.sessions.get('client');
+      const newServerSession = clientTransport.sessions.get('SERVER');
+      expect(newClientSession).not.toBe(oldClientSession);
+      expect(newServerSession).not.toBe(oldServerSession);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],

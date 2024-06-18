@@ -299,9 +299,10 @@ The process differs slightly between the client and server:
 - The protocol handshake is initiated and sent as soon as the `Connection` is created, followed by attaching a message listener to the `Connection`.
   - Initially, only protocol handshake responses are listened for. (Further details on the protocol handshake can be found under the 'Handshake' heading below).
   - If the handshake fails, the `Connection` is closed immediately.
+    - If the server detected a session state mismatch, any previous `Session`s will be destroyed.
   - Otherwise, consider the handshake successful and proceed to the next step.
   - The client should check for an existing `Session` for the `clientId` associated with the `Connection`.
-    - If an existing `Session` is found, it is verified whether the last `sessionId` associated with the previous `Session` matches the `sessionId` in the handshake response.
+    - If an existing `Session` is found and that `Session`, it is verified whether the last `sessionId` associated with the previous `Session` matches the `sessionId` in the handshake response.
       - A match in `sessionId` means a reconnection to the same session, and that the server still has the state for this session.
         - The stale `Connection` object associated with the `Session` is closed, and replaced with the new `Connection` object.
         - Any buffered messages are resent.
@@ -344,6 +345,10 @@ type HandshakeRequest = {
   type: 'HANDSHAKE_REQ';
   protocolVersion: string;
   sessionId: string;
+  expectedSessionState?: {
+    reconnect: boolean;
+    nextExpectedSeq: number;
+  };
 };
 ```
 
@@ -364,13 +369,20 @@ type HandshakeResponse = {
 };
 ```
 
-The server will send an error response if the handshake request is malformed (i.e. doesn't conform to the schema) or the protocol version in the request does not match the protocol version of the server.
+The server will send an error response if either:
+
+- the handshake request is malformed (i.e. doesn't conform to the schema)
+- the protocol version in the request does not match the protocol version of the server
+- the expected session state does not match the server's session state. examples:
+  - the client wanted a reconnection, but the server doesn't know about that particular session
+  - the client's next expected seq exceeds the server's last acked message
 
 When the client receives a status with `ok: false`, it should consider the handshake failed and close the connection.
 
 ### Transparent reconnections
 
-River handles disconnections and reconnections in a transparent manner wherever possible.
+River handles disconnections and reconnections in a transparent manner wherever possible when
+explicitly requested.
 To do this, it uses a combination of a send buffer, heartbeats, acknowledgements, and sequence numbers.
 This metadata is tracked within the `Session` object.
 
