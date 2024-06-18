@@ -197,6 +197,21 @@ export abstract class Transport<ConnType extends Connection> {
       session.bindLogger(this.log);
     }
 
+    const currentSession = this.sessions.get(session.to);
+    if (currentSession) {
+      // something went very wrong, and we were asked to replace an active session with another one
+      this.log?.warn(
+        `session ${session.id} from ${session.to} surreptitiously replacing ${currentSession.id}`,
+        {
+          ...currentSession.loggingMetadata,
+          tags: ['invariant-violation'],
+        },
+      );
+      this.deleteSession({
+        session: currentSession,
+        closeHandshakingConnection: false,
+      });
+    }
     this.sessions.set(session.to, session);
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'connect',
@@ -337,6 +352,19 @@ export abstract class Transport<ConnType extends Connection> {
     }
     session.close();
     session.telemetry.span.end();
+    const currentSession = this.sessions.get(session.to);
+    if (currentSession && currentSession.id !== session.id) {
+      // something went very wrong, and we were asked to delete a session that was not the currently
+      // active one
+      this.log?.warn(
+        `session ${session.id} disconnect from ${session.to}, mismatch with ${currentSession.id}`,
+        {
+          ...session.loggingMetadata,
+          tags: ['invariant-violation'],
+        },
+      );
+      return;
+    }
     this.sessions.delete(session.to);
     this.log?.info(
       `session ${session.id} disconnect from ${session.to}`,
