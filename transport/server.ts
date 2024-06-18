@@ -4,6 +4,7 @@ import { ServerHandshakeOptions } from '../router/handshake';
 import {
   ControlMessageHandshakeRequestSchema,
   PROTOCOL_VERSION,
+  SESSION_STATE_MISMATCH,
   TransportClientId,
   handshakeResponseMessage,
 } from './message';
@@ -173,9 +174,13 @@ export abstract class ServerTransport<
           message: 'malformed handshake meta',
         });
         const reason = 'received malformed handshake metadata';
-        const responseMsg = handshakeResponseMessage(this.clientId, from, {
-          ok: false,
-          reason,
+        const responseMsg = handshakeResponseMessage({
+          from: this.clientId,
+          to: from,
+          status: {
+            ok: false,
+            reason,
+          },
         });
         conn.send(this.codec.toBuffer(responseMsg));
         this.log?.warn(`received malformed handshake metadata from ${from}`, {
@@ -205,9 +210,13 @@ export abstract class ServerTransport<
           code: SpanStatusCode.ERROR,
           message: reason,
         });
-        const responseMsg = handshakeResponseMessage(this.clientId, from, {
-          ok: false,
-          reason,
+        const responseMsg = handshakeResponseMessage({
+          from: this.clientId,
+          to: from,
+          status: {
+            ok: false,
+            reason,
+          },
         });
         conn.send(this.codec.toBuffer(responseMsg));
         this.log?.warn(`rejected handshake from ${from}`, {
@@ -245,9 +254,13 @@ export abstract class ServerTransport<
         message: 'invalid handshake request',
       });
       const reason = 'received invalid handshake msg';
-      const responseMsg = handshakeResponseMessage(this.clientId, parsed.from, {
-        ok: false,
-        reason,
+      const responseMsg = handshakeResponseMessage({
+        from: this.clientId,
+        to: parsed.from,
+        status: {
+          ok: false,
+          reason,
+        },
       });
       conn.send(this.codec.toBuffer(responseMsg));
       this.log?.warn(reason, {
@@ -276,9 +289,13 @@ export abstract class ServerTransport<
       });
 
       const reason = `incorrect version (got: ${gotVersion} wanted ${PROTOCOL_VERSION})`;
-      const responseMsg = handshakeResponseMessage(this.clientId, parsed.from, {
-        ok: false,
-        reason,
+      const responseMsg = handshakeResponseMessage({
+        from: this.clientId,
+        to: parsed.from,
+        status: {
+          ok: false,
+          reason,
+        },
       });
       conn.send(this.codec.toBuffer(responseMsg));
       this.log?.warn(
@@ -301,12 +318,60 @@ export abstract class ServerTransport<
       return false;
     }
 
-    const { session, isTransparentReconnect } = this.getOrCreateSession({
-      to: parsed.from,
-      conn,
-      sessionId: parsed.payload.sessionId,
-      propagationCtx: parsed.tracing,
-    });
+    let session: Session<ConnType>;
+    let isTransparentReconnect: boolean;
+    if (!parsed.payload.expectedSessionState) {
+      // TODO: remove once we have upgraded all clients.
+      ({ session, isTransparentReconnect } = this.getOrCreateSession({
+        to: parsed.from,
+        conn,
+        sessionId: parsed.payload.sessionId,
+        propagationCtx: parsed.tracing,
+      }));
+    } else if (parsed.payload.expectedSessionState.reconnect) {
+      // this has to be an existing session. if it doesn't match what we expect, reject the
+      // handshake
+      const existingSession = this.getExistingSession({
+        to: parsed.from,
+        sessionId: parsed.payload.sessionId,
+        nextExpectedSeq: parsed.payload.expectedSessionState.nextExpectedSeq,
+      });
+      if (existingSession === false) {
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: SESSION_STATE_MISMATCH,
+        });
+
+        const reason = SESSION_STATE_MISMATCH;
+        const responseMsg = handshakeResponseMessage({
+          from: this.clientId,
+          to: parsed.from,
+          status: {
+            ok: false,
+            reason,
+          },
+        });
+        conn.send(this.codec.toBuffer(responseMsg));
+        this.log?.warn(
+          `'received handshake msg with incompatible existing session state: ${parsed.payload.sessionId}`,
+          { ...conn.loggingMetadata, clientId: this.clientId },
+        );
+        this.protocolError(ProtocolError.HandshakeFailed, reason);
+        return false;
+      }
+      session = existingSession;
+      isTransparentReconnect = false;
+    } else {
+      // this has to be a new session. if one already exists, it will be replaced silently
+      const createdSession = this.createNewSession({
+        to: parsed.from,
+        conn,
+        sessionId: parsed.payload.sessionId,
+        propagationCtx: parsed.tracing,
+      });
+      session = createdSession;
+      isTransparentReconnect = false;
+    }
 
     this.sessionHandshakeMetadata.set(session, parsedMetadata);
 
@@ -314,9 +379,13 @@ export abstract class ServerTransport<
       `handshake from ${parsed.from} ok, responding with handshake success`,
       conn.loggingMetadata,
     );
-    const responseMsg = handshakeResponseMessage(this.clientId, parsed.from, {
-      ok: true,
-      sessionId: session.id,
+    const responseMsg = handshakeResponseMessage({
+      from: this.clientId,
+      to: parsed.from,
+      status: {
+        ok: true,
+        sessionId: session.id,
+      },
     });
     conn.send(this.codec.toBuffer(responseMsg));
     this.onConnect(conn, session, isTransparentReconnect);

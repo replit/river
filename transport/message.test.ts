@@ -58,21 +58,41 @@ describe('message helpers', () => {
   });
 
   test('handshakeRequestMessage', () => {
-    const m = handshakeRequestMessage('a', 'b', 'sess');
+    const m = handshakeRequestMessage({
+      from: 'a',
+      to: 'b',
+      expectedSessionState: {
+        reconnect: false,
+        nextExpectedSeq: 0,
+      },
+      sessionId: 'sess',
+    });
 
-    expect(m.from).toBe('a');
-    expect(m.to).toBe('b');
-    expect(m.payload.sessionId).toBe('sess');
+    expect(m).toMatchObject({
+      from: 'a',
+      to: 'b',
+      payload: {
+        sessionId: 'sess',
+      },
+    });
   });
 
   test('handshakeResponseMessage', () => {
-    const mSuccess = handshakeResponseMessage('a', 'b', {
-      ok: true,
-      sessionId: 'sess',
+    const mSuccess = handshakeResponseMessage({
+      from: 'a',
+      to: 'b',
+      status: {
+        ok: true,
+        sessionId: 'sess',
+      },
     });
-    const mFail = handshakeResponseMessage('a', 'b', {
-      ok: false,
-      reason: 'bad',
+    const mFail = handshakeResponseMessage({
+      from: 'a',
+      to: 'b',
+      status: {
+        ok: false,
+        reason: 'bad',
+      },
     });
 
     expect(mSuccess.from).toBe('a');

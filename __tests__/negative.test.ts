@@ -189,7 +189,15 @@ describe('should handle incompatabilities', async () => {
 
     const ws = createLocalWebSocketClient(port);
     await new Promise((resolve) => (ws.onopen = resolve));
-    const requestMsg = handshakeRequestMessage('client', 'SERVER', 'sessionId');
+    const requestMsg = handshakeRequestMessage({
+      from: 'client',
+      to: 'SERVER',
+      expectedSessionState: {
+        reconnect: false,
+        nextExpectedSeq: 0,
+      },
+      sessionId: 'sessionId',
+    });
     ws.send(NaiveJsonCodec.toBuffer(requestMsg));
 
     // wait for both sides to be happy

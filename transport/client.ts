@@ -2,6 +2,7 @@ import { SpanStatusCode } from '@opentelemetry/api';
 import { ClientHandshakeOptions } from '../router/handshake';
 import {
   ControlMessageHandshakeResponseSchema,
+  SESSION_STATE_MISMATCH,
   TransportClientId,
   handshakeRequestMessage,
 } from './message';
@@ -187,17 +188,37 @@ export abstract class ClientTransport<
       return false;
     }
 
+    const previousSession = this.sessions.get(parsed.from);
     if (!parsed.payload.status.ok) {
-      conn.telemetry?.span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: 'handshake rejected',
-      });
-      this.log?.warn(`received handshake rejection`, {
-        ...conn.loggingMetadata,
-        clientId: this.clientId,
-        connectedTo: parsed.from,
-        transportMessage: parsed,
-      });
+      if (parsed.payload.status.reason === SESSION_STATE_MISMATCH) {
+        if (previousSession) {
+          // The server has told us that we cannot continue with the session because it has the
+          // wrong state. We should delete this session and start fresh.
+          this.deleteSession({
+            session: previousSession,
+            closeHandshakingConnection: true,
+          });
+        }
+
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: parsed.payload.status.reason,
+        });
+      } else {
+        conn.telemetry?.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'handshake rejected',
+        });
+      }
+      this.log?.warn(
+        `received handshake rejection: ${parsed.payload.status.reason}`,
+        {
+          ...conn.loggingMetadata,
+          clientId: this.clientId,
+          connectedTo: parsed.from,
+          transportMessage: parsed,
+        },
+      );
       this.protocolError(
         ProtocolError.HandshakeFailed,
         parsed.payload.status.reason,
@@ -209,10 +230,7 @@ export abstract class ClientTransport<
     // session matches the remote's. if they do not match, proactively close the connection.
     // otherwise we will end up breaking a lot of invariants.
     //
-    // note that there may be a way to convey the expectation of the client that this is a
-    // transparent reconnect to the server so that the server can do the same in a single roundtrip,
-    // but that requires a bit more surgery to the handshake.
-    const previousSession = this.sessions.get(parsed.from);
+    // TODO: Remove this once we finish rolling out the handshake-initiated session agreement.
     if (
       previousSession?.advertisedSessionId &&
       previousSession.advertisedSessionId !== parsed.payload.status.sessionId
@@ -436,17 +454,21 @@ export abstract class ClientTransport<
       }
     }
 
-    // dont pass conn here as we dont want the session to start using the conn
+    // don't pass conn here as we dont want the session to start using the conn
     // until we have finished the handshake. Still, let the session know that
     // it is semi-associated with the conn, and it can close it if .close() is called.
     const { session } = this.getOrCreateSession({ to, handshakingConn: conn });
-    const requestMsg = handshakeRequestMessage(
-      this.clientId,
+    const requestMsg = handshakeRequestMessage({
+      from: this.clientId,
       to,
-      session.id,
+      sessionId: session.id,
+      expectedSessionState: {
+        reconnect: session.advertisedSessionId !== undefined,
+        nextExpectedSeq: session.nextExpectedSeq,
+      },
       metadata,
-      getPropagationContext(session.telemetry.ctx),
-    );
+      tracing: getPropagationContext(session.telemetry.ctx),
+    });
     this.log?.debug(`sending handshake request to ${to}`, {
       ...conn.loggingMetadata,
       clientId: this.clientId,
