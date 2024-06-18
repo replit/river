@@ -693,8 +693,10 @@ describe('aborts invalid request', () => {
         }),
       };
 
-      const abortedStreamsMaxTombstones = 5;
-      createServer(serverTransport, services, { abortedStreamsMaxTombstones });
+      const maxAbortedStreamTombstonesPerSession = 5;
+      createServer(serverTransport, services, {
+        maxAbortedStreamTombstonesPerSession,
+      });
 
       const serverSendAbortSpy = vi.spyOn(serverTransport, 'sendAbort');
 
@@ -724,7 +726,7 @@ describe('aborts invalid request', () => {
         },
       );
 
-      for (let i = 0; i < abortedStreamsMaxTombstones; i++) {
+      for (let i = 0; i < maxAbortedStreamTombstonesPerSession; i++) {
         clientTransport.send(serverId, {
           streamId: nanoid(), // new streams
           procedureName: 'stream',
@@ -735,7 +737,7 @@ describe('aborts invalid request', () => {
 
       await waitFor(() => {
         expect(serverSendAbortSpy).toHaveBeenCalledTimes(
-          abortedStreamsMaxTombstones + 1,
+          maxAbortedStreamTombstonesPerSession + 1,
         );
       });
 
@@ -748,14 +750,105 @@ describe('aborts invalid request', () => {
 
       await waitFor(() => {
         expect(serverSendAbortSpy).toHaveBeenCalledTimes(
-          abortedStreamsMaxTombstones + 2,
+          maxAbortedStreamTombstonesPerSession + 2,
         );
       });
 
       expect(serverSendAbortSpy).toHaveBeenNthCalledWith(
-        abortedStreamsMaxTombstones + 2,
+        maxAbortedStreamTombstonesPerSession + 2,
         'client',
         firstStreamId,
+        {
+          ok: false,
+          payload: {
+            code: INVALID_REQUEST_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.stringContaining('missing service name'),
+          },
+        },
+      );
+    });
+
+    test("separate sessions don't evict tombstones", async () => {
+      const client1Transport = getClientTransport('client1');
+      const client2Transport = getClientTransport('client2');
+      const serverTransport = getServerTransport();
+      addPostTestCleanup(() =>
+        cleanupTransports([
+          client1Transport,
+          client2Transport,
+          serverTransport,
+        ]),
+      );
+      const serverId = 'SERVER';
+
+      const services = {
+        service: ServiceSchema.define({
+          stream: Procedure.stream({
+            init: Type.Object({}),
+            input: Type.Object({}),
+            output: Type.Object({}),
+            handler: async () => undefined,
+          }),
+        }),
+      };
+
+      const maxAbortedStreamTombstonesPerSession = 5;
+      createServer(serverTransport, services, {
+        maxAbortedStreamTombstonesPerSession,
+      });
+
+      const serverSendAbortSpy = vi.spyOn(serverTransport, 'sendAbort');
+
+      const client1FirstStreamId = nanoid();
+      client1Transport.send(serverId, {
+        streamId: client1FirstStreamId,
+        procedureName: 'stream',
+        payload: {},
+        controlFlags: ControlFlags.StreamOpenBit,
+      });
+
+      for (let i = 0; i < maxAbortedStreamTombstonesPerSession; i++) {
+        client2Transport.send(serverId, {
+          streamId: nanoid(), // new streams
+          procedureName: 'stream',
+          payload: {},
+          controlFlags: ControlFlags.StreamOpenBit,
+        });
+      }
+
+      await waitFor(() => {
+        expect(serverSendAbortSpy).toHaveBeenCalledTimes(
+          maxAbortedStreamTombstonesPerSession + 1,
+        );
+      });
+
+      // server should ignore this
+      client1Transport.send(serverId, {
+        streamId: client1FirstStreamId,
+        procedureName: 'stream',
+        payload: {},
+        controlFlags: ControlFlags.StreamOpenBit,
+      });
+
+      const client1LastStreamId = nanoid();
+      client1Transport.send(serverId, {
+        streamId: client1LastStreamId,
+        procedureName: 'stream',
+        payload: {},
+        controlFlags: ControlFlags.StreamOpenBit,
+      });
+
+      await waitFor(() => {
+        expect(serverSendAbortSpy).toHaveBeenCalledTimes(
+          maxAbortedStreamTombstonesPerSession + 2,
+        );
+      });
+
+      expect(serverSendAbortSpy).toHaveBeenNthCalledWith(
+        maxAbortedStreamTombstonesPerSession + 2,
+        'client1',
+        client1LastStreamId,
         {
           ok: false,
           payload: {

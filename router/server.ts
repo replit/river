@@ -4,6 +4,7 @@ import {
   PayloadType,
   ProcedureErrorSchemaType,
   InputReaderErrorSchema,
+  OutputReaderErrorSchema,
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
   AnyProcedure,
@@ -32,7 +33,7 @@ import {
 } from './context';
 import { Logger, MessageMetadata } from '../logging/log';
 import { Value } from '@sinclair/typebox/value';
-import { Err, Result, Ok, ErrResultSchema } from './result';
+import { Err, Result, Ok, ErrResultSchema, ErrResult } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { coerceErrorString } from '../util/stringify';
@@ -87,8 +88,11 @@ class RiverServer<Services extends AnyServiceSchemaMap>
    * We create a tombstones for streams aborted by the server
    * so that we don't hit errors when the client has inflight
    * requests it sent before it saw the abort.
+   * We track aborted streams for every session separately, so
+   * that bad clients don't affect good clients.
    */
-  private serverAbortedStreams: LRUSet;
+  private serverAbortedStreams: Map<string, LRUSet>;
+  private maxAbortedStreamTombstonesPerSession: number;
 
   public openStreams: Set<string>;
   public services: InstantiatedServiceSchemaMap<Services>;
@@ -98,7 +102,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     services: Services,
     handshakeOptions?: ServerHandshakeOptions,
     extendedContext?: Omit<ServiceContext, 'state'>,
-    abortedStreamsMaxTombstones?: number,
+    maxAbortedStreamTombstonesPerSession = 200,
   ) {
     const instances: Record<string, AnyService> = {};
 
@@ -121,7 +125,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
     this.transport = transport;
     this.openStreams = new Set();
-    this.serverAbortedStreams = new LRUSet(abortedStreamsMaxTombstones ?? 100);
+    this.serverAbortedStreams = new Map();
+    this.maxAbortedStreamTombstonesPerSession =
+      maxAbortedStreamTombstonesPerSession;
     this.log = transport.log;
 
     const handleMessage = (msg: EventMap['message']) => {
@@ -141,15 +147,13 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         return;
       }
 
-      if (this.serverAbortedStreams.has(msg.streamId)) {
+      if (this.serverAbortedStreams.get(msg.from)?.has(msg.streamId)) {
         return;
       }
 
       const validated = this.validateNewProcStream(msg);
 
       if (!validated) {
-        this.serverAbortedStreams.add(msg.streamId);
-
         return;
       }
 
@@ -165,6 +169,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         `got session disconnect from ${disconnectedClientId}, cleaning up streams`,
         evt.session.loggingMetadata,
       );
+
+      this.serverAbortedStreams.delete(disconnectedClientId);
     };
     this.transport.addEventListener('sessionStatus', handleSessionStatus);
 
@@ -199,8 +205,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         return;
       }
 
-      this.serverAbortedStreams.add(streamId);
-
       cleanClose = false;
 
       if (!inputReader.isClosed()) {
@@ -209,7 +213,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       outputWriter.close();
-      this.transport.sendAbort(from, streamId, errResult);
+      this.abortStream(from, streamId, errResult);
     };
 
     const onHandlerAbort = () => {
@@ -604,7 +608,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invariant-violation'],
       });
 
-      this.transport.sendAbort(
+      this.abortStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -625,7 +629,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invariant-violation'],
       });
 
-      this.transport.sendAbort(
+      this.abortStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -645,7 +649,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         transportMessage: initMessage,
       });
 
-      this.transport.sendAbort(
+      this.abortStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -665,7 +669,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         transportMessage: initMessage,
       });
 
-      this.transport.sendAbort(
+      this.abortStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -685,7 +689,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         transportMessage: initMessage,
       });
 
-      this.transport.sendAbort(
+      this.abortStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -705,7 +709,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         transportMessage: initMessage,
       });
 
-      this.transport.sendAbort(
+      this.abortStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -726,7 +730,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         transportMessage: initMessage,
       });
 
-      this.transport.sendAbort(
+      this.abortStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -748,7 +752,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         transportMessage: initMessage,
       });
 
-      this.transport.sendAbort(
+      this.abortStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -776,6 +780,24 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       initPayload: initMessage.payload,
       from: initMessage.from,
     };
+  }
+
+  abortStream(
+    to: string,
+    streamId: string,
+    payload: ErrResult<Static<typeof OutputReaderErrorSchema>>,
+  ) {
+    let abortedForSession = this.serverAbortedStreams.get(to);
+
+    if (!abortedForSession) {
+      abortedForSession = new LRUSet(this.maxAbortedStreamTombstonesPerSession);
+
+      this.serverAbortedStreams.set(to, abortedForSession);
+    }
+
+    abortedForSession.add(streamId);
+
+    this.transport.sendAbort(to, streamId, payload);
   }
 }
 
@@ -824,7 +846,7 @@ export function createServer<Services extends AnyServiceSchemaMap>(
      * Maximum number of aborted streams to keep track of to avoid
      * cascading stream errors.
      */
-    abortedStreamsMaxTombstones: number;
+    maxAbortedStreamTombstonesPerSession?: number;
   }>,
 ): Server<Services> {
   return new RiverServer(
@@ -832,6 +854,6 @@ export function createServer<Services extends AnyServiceSchemaMap>(
     services,
     providedServerOptions?.handshakeOptions,
     providedServerOptions?.extendedContext,
-    providedServerOptions?.abortedStreamsMaxTombstones,
+    providedServerOptions?.maxAbortedStreamTombstonesPerSession,
   );
 }
