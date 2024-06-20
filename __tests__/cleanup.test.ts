@@ -484,5 +484,11 @@ describe('handler registered cleanups', async () => {
     const registeredAfterClose = vi.fn();
     ctx.onRequestFinished(registeredAfterClose);
     expect(registeredAfterClose).toHaveBeenCalledOnce();
+
+    const registeredAfterCloseThrows = vi.fn().mockImplementation(() => {
+      throw new Error('wat');
+    });
+    ctx.onRequestFinished(registeredAfterCloseThrows);
+    expect(registeredAfterCloseThrows).toHaveBeenCalledOnce();
   });
 });
