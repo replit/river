@@ -1,6 +1,6 @@
 import { trace, context, propagation, Span } from '@opentelemetry/api';
 import { describe, test, expect, vi, assert, beforeEach } from 'vitest';
-import { createDummyTransportMessage, dummySession } from '../util/testHelpers';
+import { dummySession } from '../util/testHelpers';
 
 import {
   BasicTracerProvider,
@@ -14,7 +14,6 @@ import tracer, {
   getPropagationContext,
   createHandlerSpan,
 } from './index';
-import { OpaqueTransportMessage } from '../transport';
 import { testMatrix } from '../__tests__/fixtures/matrix';
 import {
   cleanupTransports,
@@ -58,12 +57,18 @@ describe('Basic tracing tests', () => {
     const span = tracer.startSpan('testing span', {}, parentCtx);
     const ctx = trace.setSpan(parentCtx, span);
 
-    const msg = createDummyTransportMessage() as OpaqueTransportMessage;
-    msg.tracing = getPropagationContext(ctx);
-    expect(msg.tracing?.traceparent).toBeTruthy();
+    const propagationContext = getPropagationContext(ctx);
+    expect(propagationContext?.traceparent).toBeTruthy();
 
     const spanMock = vi.fn<[Span]>();
-    void createHandlerSpan('rpc', msg, spanMock);
+    void createHandlerSpan(
+      'rpc',
+      'myservice',
+      'myprocedure',
+      'mystream',
+      propagationContext,
+      spanMock,
+    );
     expect(spanMock).toHaveBeenCalledTimes(1);
     const createdSpan = spanMock.mock.calls[0][0];
     // @ts-expect-error: hacking to get parentSpanId

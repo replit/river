@@ -1,4 +1,4 @@
-import { Connection, Session } from '../transport/session';
+import { TransportClientId } from '../transport';
 
 /**
  * ServiceContext exist for the purpose of declaration merging
@@ -54,12 +54,9 @@ export type ProcedureHandlerContext<State> = ServiceContext & {
    */
   metadata: ParsedMetadata;
   /**
-   * The session for this stream. Can be used to identify the request
-   * sender via `session.from`, however, we recommend using the
-   * handshake metadata with some auth mechanism to identify the
-   * the request sender.
+   * The ID of the client that sent this request.
    */
-  session: Session<Connection>; // TODO: only expose a subset interface of session
+  from: TransportClientId;
   /**
    * An AbortController for this stream. This is used to abort the stream from the
    * handler and notify the client that the stream was aborted.
