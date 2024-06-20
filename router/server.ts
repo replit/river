@@ -357,21 +357,21 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     };
     this.transport.addEventListener('message', onMessage);
 
-    const handlerCleanups: Array<() => void> = [];
+    const onFinishedCallbacks: Array<() => void> = [];
     const cleanup = () => {
       this.transport.removeEventListener('message', onMessage);
       this.transport.removeEventListener('sessionStatus', onSessionStatus);
       handlerAbortController.signal.addEventListener('abort', onHandlerAbort);
 
       this.openStreams.delete(streamId);
-      handlerCleanups.forEach((c) => {
+      onFinishedCallbacks.forEach((cb) => {
         try {
-          c();
+          cb();
         } catch {
           // ignore user cleanup errors
         }
       });
-      handlerCleanups.length = 0;
+      onFinishedCallbacks.length = 0;
     };
 
     const inputReader = new ReadStreamImpl<
@@ -444,15 +444,15 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       metadata: sessionMetadata,
       abortController: handlerAbortController,
       clientAbortSignal: clientAbortController.signal,
-      addCleanup: (c) => {
+      onRequestFinished: (cb) => {
         if (inputReader.isClosed() && outputWriter.isClosed()) {
           // Everything already closed, call cleanup immediately.
-          c();
+          cb();
 
           return;
         }
 
-        handlerCleanups.push(c);
+        onFinishedCallbacks.push(cb);
       },
     };
 

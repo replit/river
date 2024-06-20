@@ -87,9 +87,9 @@ export type ProcedureHandlerContext<State> = ServiceContext & {
    */
   clientAbortSignal: AbortSignal;
   /**
-   * Lets you add a function that will run when the stream is cleaned up due to
-   * it ending. If a cleanup is added after the stream has ended, it will
-   * run immediately.
+   * Lets you add a function that will run when the request is done, this can be
+   * due to an abort (from either side), error, or success. If the callback is
+   * added after the stream ended, it will run immediately.
    */
-  addCleanup: (cleanup: () => void) => void;
+  onRequestFinished: (callback: () => void) => void;
 };
