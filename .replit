@@ -16,6 +16,26 @@ externalPort = 80
 localPort = 24678
 externalPort = 3000
 
+[[ports]]
+localPort = 36235
+externalPort = 3003
+
+[[ports]]
+localPort = 39589
+externalPort = 3002
+
+[[ports]]
+localPort = 44347
+externalPort = 5173
+
+[[ports]]
+localPort = 45035
+externalPort = 6800
+
+[[ports]]
+localPort = 46789
+externalPort = 5000
+
 [languages.eslint]
 pattern = "**{*.ts,*.js,*.tsx,*.jsx}"
 [languages.eslint.languageServer]
