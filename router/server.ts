@@ -368,7 +368,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         try {
           cb();
         } catch {
-          // ignore user cleanup errors
+          // ignore user errors
         }
       });
       onFinishedCallbacks.length = 0;
@@ -447,7 +447,11 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       onRequestFinished: (cb) => {
         if (inputReader.isClosed() && outputWriter.isClosed()) {
           // Everything already closed, call cleanup immediately.
-          cb();
+          try {
+            cb();
+          } catch {
+            // ignore user errors
+          }
 
           return;
         }
