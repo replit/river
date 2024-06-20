@@ -181,8 +181,8 @@ function dummyCtx<State>(
 ): ProcedureHandlerContext<State> {
   return {
     ...extendedContext,
+    from: session.from,
     state,
-    session,
     metadata: {},
     abortController: new AbortController(),
     clientAbortSignal: new AbortController().signal,

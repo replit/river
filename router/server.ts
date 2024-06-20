@@ -8,6 +8,8 @@ import {
   UNEXPECTED_DISCONNECT_CODE,
   AnyProcedure,
   ABORT_CODE,
+  INVALID_REQUEST_CODE,
+  INTERNAL_RIVER_ERROR_CODE,
 } from './procedures';
 import {
   AnyService,
@@ -23,15 +25,19 @@ import {
   isStreamCloseRequest,
   isStreamAbort,
 } from '../transport/message';
-import { ServiceContext, ProcedureHandlerContext } from './context';
-import { Logger } from '../logging/log';
+import {
+  ServiceContext,
+  ProcedureHandlerContext,
+  ParsedMetadata,
+} from './context';
+import { Logger, MessageMetadata } from '../logging/log';
 import { Value } from '@sinclair/typebox/value';
 import { Err, Result, Ok, ErrResultSchema } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/session';
 import { coerceErrorString } from '../util/stringify';
 import { Span, SpanStatusCode } from '@opentelemetry/api';
-import { createHandlerSpan } from '../tracing';
+import { PropagationContext, createHandlerSpan } from '../tracing';
 import { ServerHandshakeOptions } from './handshake';
 import { ReadStreamImpl, WriteStreamImpl } from './streams';
 
@@ -56,6 +62,20 @@ export interface Server<Services extends AnyServiceSchemaMap> {
 }
 
 type InputHandlerReturn = Promise<(() => void) | void>;
+
+interface NewProcStreamInput {
+  procedure: AnyProcedure;
+  procedureName: string;
+  service: AnyService;
+  serviceName: string;
+  sessionMetadata: ParsedMetadata;
+  loggingMetadata: MessageMetadata;
+  streamId: string;
+  controlFlags: number;
+  tracingCtx?: PropagationContext;
+  initPayload: Static<PayloadType>;
+  from: string;
+}
 
 class RiverServer<Services extends AnyServiceSchemaMap>
   implements Server<Services>
@@ -109,10 +129,17 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       if (this.openStreams.has(msg.streamId)) {
+        // has its own message handler
         return;
       }
 
-      this.createNewProcStream(msg);
+      const validated = this.validateNewProcStream(msg);
+
+      if (!validated) {
+        return;
+      }
+
+      this.createNewProcStream(validated);
     };
     this.transport.addEventListener('message', handleMessage);
 
@@ -135,78 +162,20 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     });
   }
 
-  private createNewProcStream(initMessage: OpaqueTransportMessage) {
-    const {
-      streamId,
-      procedureName,
-      serviceName,
-      controlFlags,
-      payload: initPayload,
-      from,
-    } = initMessage;
-
-    if (!isStreamOpen(initMessage.controlFlags)) {
-      this.log?.error(
-        `can't create a new procedure stream from a message that doesn't have the stream open bit set`,
-        {
-          clientId: this.transport.clientId,
-          transportMessage: initMessage,
-          tags: ['invariant-violation'],
-        },
-      );
-      return;
-    }
-
-    if (!procedureName || !serviceName) {
-      this.log?.warn(
-        `missing procedure or service name in stream open message`,
-        {
-          clientId: this.transport.clientId,
-          transportMessage: initMessage,
-        },
-      );
-      return;
-    }
-
-    if (!(serviceName in this.services)) {
-      this.log?.warn(`couldn't find service ${serviceName}`, {
-        clientId: this.transport.clientId,
-        transportMessage: initMessage,
-      });
-      return;
-    }
-
-    const service = this.services[serviceName];
-    if (!(procedureName in service.procedures)) {
-      this.log?.warn(
-        `couldn't find a matching procedure for ${serviceName}.${procedureName}`,
-        {
-          clientId: this.transport.clientId,
-          transportMessage: initMessage,
-        },
-      );
-      return;
-    }
-
-    const session = this.transport.sessions.get(from);
-    if (!session) {
-      this.log?.warn(`couldn't find session for ${from}`, {
-        clientId: this.transport.clientId,
-        transportMessage: initMessage,
-      });
-      return;
-    }
-
-    const procedure = service.procedures[procedureName];
-
-    if (!Value.Check(procedure.init, initPayload)) {
-      this.log?.error(`procedure init failed validation`, {
-        clientId: this.transport.clientId,
-        transportMessage: initMessage,
-      });
-
-      return;
-    }
+  private createNewProcStream({
+    procedure,
+    procedureName,
+    service,
+    serviceName,
+    sessionMetadata,
+    loggingMetadata,
+    streamId,
+    controlFlags,
+    initPayload,
+    from,
+    tracingCtx,
+  }: NewProcStreamInput) {
+    this.openStreams.add(streamId);
 
     let cleanClose = true;
 
@@ -224,7 +193,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       outputWriter.close();
-      this.transport.sendAbort(session.to, streamId, errResult);
+      this.transport.sendAbort(from, streamId, errResult);
     };
 
     const onHandlerAbort = () => {
@@ -273,8 +242,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
       if (msg.from !== from) {
         this.log?.error('Got stream message from unexpected client', {
+          ...loggingMetadata,
           clientId: this.transport.clientId,
           transportMessage: msg,
+          tags: ['invariant-violation'],
         });
 
         return;
@@ -293,7 +264,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
             code: ABORT_CODE,
             message: 'Stream aborted, client sent invalid payload',
           });
-          this.log?.error('Got stream abort without a valid protocol error', {
+          this.log?.warn('Got stream abort without a valid protocol error', {
+            ...loggingMetadata,
             clientId: this.transport.clientId,
             transportMessage: msg,
             validationErrors: [
@@ -315,10 +287,18 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       if (inputReader.isClosed()) {
-        this.log?.error('Received message after input stream is closed', {
+        this.log?.warn('Received message after input stream is closed', {
+          ...loggingMetadata,
           clientId: this.transport.clientId,
           transportMessage: msg,
         });
+
+        onServerAbort(
+          Err({
+            code: INVALID_REQUEST_CODE,
+            message: 'Received message after input stream is closed',
+          }),
+        );
 
         return;
       }
@@ -326,12 +306,28 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       if ('input' in procedure && Value.Check(procedure.input, msg.payload)) {
         inputReader.pushValue(Ok(msg.payload));
       } else if (!Value.Check(ControlMessagePayloadSchema, msg.payload)) {
-        this.log?.error(
-          `procedure ${serviceName}.${procedureName} received invalid payload`,
-          {
-            clientId: this.transport.clientId,
-            transportMessage: msg,
-          },
+        const validationErrors = [
+          ...Value.Errors(ControlMessagePayloadSchema, msg.payload),
+        ];
+        let errMessage = 'Expected control payload for procedure with no input';
+        if ('input' in procedure) {
+          errMessage =
+            'Expected either control or input payload, validation failed for both';
+          validationErrors.push(...Value.Errors(procedure.input, msg.payload));
+        }
+
+        this.log?.warn(errMessage, {
+          ...loggingMetadata,
+          clientId: this.transport.clientId,
+          transportMessage: msg,
+          validationErrors,
+        });
+
+        onServerAbort(
+          Err({
+            code: INVALID_REQUEST_CODE,
+            message: errMessage,
+          }),
         );
       }
 
@@ -362,7 +358,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       Static<PayloadType>,
       Static<typeof InputReaderErrorSchema>
     >(() => {
-      this.transport.sendRequestCloseControl(session.to, initMessage.streamId);
+      this.transport.sendRequestCloseControl(from, streamId);
     });
     inputReader.onClose(() => {
       if (outputWriter.isClosed()) {
@@ -376,7 +372,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       Result<Static<PayloadType>, Static<ProcedureErrorSchemaType>>
     >(
       (response) => {
-        this.transport.send(session.to, {
+        this.transport.send(from, {
           streamId,
           controlFlags: procClosesWithResponse
             ? ControlFlags.StreamClosedBit
@@ -388,7 +384,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         if (!procClosesWithResponse && cleanClose) {
           // we ended, send a close bit back to the client
           // also, if the client has disconnected, we don't need to send a close
-          this.transport.sendCloseControl(session.to, streamId);
+          this.transport.sendCloseControl(from, streamId);
         }
 
         if (inputReader.isClosed()) {
@@ -399,10 +395,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
     const onHandlerError = (err: unknown, span: Span) => {
       const errorMsg = coerceErrorString(err);
-      this.log?.error(
-        `procedure ${serviceName}.${procedureName} threw an uncaught error: ${errorMsg}`,
-        session.loggingMetadata,
-      );
 
       span.recordException(err instanceof Error ? err : new Error(errorMsg));
       span.setStatus({ code: SpanStatusCode.ERROR });
@@ -415,30 +407,21 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       );
     };
 
-    const sessionMeta = this.transport.sessionHandshakeMetadata.get(session);
-    if (!sessionMeta) {
-      this.log?.error(`session doesn't have handshake metadata`, {
-        ...session.loggingMetadata,
-        tags: ['invariant-violation'],
-      });
-      return;
-    }
-
     if (isStreamClose(controlFlags)) {
       inputReader.triggerClose();
     } else if (procedure.type === 'rpc' || procedure.type === 'subscription') {
       // Though things can work just fine if they eventually follow up with a stream
       // control message with a close bit set, it's an unusual client implementation!
       this.log?.warn(`${procedure.type} sent an init without a stream close`, {
+        ...loggingMetadata,
         clientId: this.transport.clientId,
-        transportMessage: initMessage,
       });
     }
 
     const serviceContextWithTransportInfo: ProcedureHandlerContext<object> = {
       ...this.getContext(service, serviceName),
-      session,
-      metadata: sessionMeta,
+      from,
+      metadata: sessionMetadata,
       abortController: handlerAbortController,
       clientAbortSignal: clientAbortController.signal,
       addCleanup: (c) => {
@@ -453,13 +436,14 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       },
     };
 
-    this.openStreams.add(streamId);
-
     switch (procedure.type) {
       case 'rpc':
         void createHandlerSpan(
           procedure.type,
-          initMessage,
+          serviceName,
+          procedureName,
+          streamId,
+          tracingCtx,
           async (span): InputHandlerReturn => {
             try {
               // TODO handle never resolving after cleanup/full close
@@ -487,7 +471,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       case 'stream':
         void createHandlerSpan(
           procedure.type,
-          initMessage,
+          serviceName,
+          procedureName,
+          streamId,
+          tracingCtx,
           async (span): InputHandlerReturn => {
             try {
               // TODO handle never resolving after cleanup/full close
@@ -510,7 +497,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       case 'subscription':
         void createHandlerSpan(
           procedure.type,
-          initMessage,
+          serviceName,
+          procedureName,
+          streamId,
+          tracingCtx,
           async (span): InputHandlerReturn => {
             try {
               // TODO handle never resolving after cleanup/full close
@@ -531,7 +521,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       case 'upload':
         void createHandlerSpan(
           procedure.type,
-          initMessage,
+          serviceName,
+          procedureName,
+          streamId,
+          tracingCtx,
           async (span): InputHandlerReturn => {
             try {
               // TODO handle never resolving after cleanup/full close
@@ -558,11 +551,11 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
         break;
       default:
-        this.log?.warn(
+        this.log?.error(
           `got request for invalid procedure type ${
             (procedure as AnyProcedure).type
           } at ${serviceName}.${procedureName}`,
-          { ...session.loggingMetadata, transportMessage: initMessage },
+          loggingMetadata,
         );
 
         return;
@@ -581,6 +574,192 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     }
 
     return context;
+  }
+
+  private validateNewProcStream(
+    initMessage: OpaqueTransportMessage,
+  ): null | NewProcStreamInput {
+    const session = this.transport.sessions.get(initMessage.from);
+    if (!session) {
+      const errMessage = `couldn't find a session for ${initMessage.from}`;
+      this.log?.error(`couldn't find session for ${initMessage.from}`, {
+        clientId: this.transport.clientId,
+        transportMessage: initMessage,
+        tags: ['invariant-violation'],
+      });
+
+      this.transport.sendAbort(
+        initMessage.from,
+        initMessage.streamId,
+        Err({
+          code: INTERNAL_RIVER_ERROR_CODE,
+          message: errMessage,
+        }),
+      );
+
+      return null;
+    }
+
+    const sessionMetadata =
+      this.transport.sessionHandshakeMetadata.get(session);
+    if (!sessionMetadata) {
+      const errMessage = `session doesn't have handshake metadata`;
+      this.log?.error(errMessage, {
+        ...session.loggingMetadata,
+        tags: ['invariant-violation'],
+      });
+
+      this.transport.sendAbort(
+        initMessage.from,
+        initMessage.streamId,
+        Err({
+          code: INTERNAL_RIVER_ERROR_CODE,
+          message: errMessage,
+        }),
+      );
+
+      return null;
+    }
+
+    if (!isStreamOpen(initMessage.controlFlags)) {
+      const errMessage = `can't create a new procedure stream from a message that doesn't have the stream open bit set`;
+      this.log?.warn(errMessage, {
+        ...session.loggingMetadata,
+        clientId: this.transport.clientId,
+        transportMessage: initMessage,
+      });
+
+      this.transport.sendAbort(
+        initMessage.from,
+        initMessage.streamId,
+        Err({
+          code: INVALID_REQUEST_CODE,
+          message: errMessage,
+        }),
+      );
+
+      return null;
+    }
+
+    if (!initMessage.serviceName) {
+      const errMessage = `missing service name in stream open message`;
+      this.log?.warn(errMessage, {
+        ...session.loggingMetadata,
+        clientId: this.transport.clientId,
+        transportMessage: initMessage,
+      });
+
+      this.transport.sendAbort(
+        initMessage.from,
+        initMessage.streamId,
+        Err({
+          code: INVALID_REQUEST_CODE,
+          message: errMessage,
+        }),
+      );
+
+      return null;
+    }
+
+    if (!initMessage.procedureName) {
+      const errMessage = `missing procedure name in stream open message`;
+      this.log?.warn(errMessage, {
+        ...session.loggingMetadata,
+        clientId: this.transport.clientId,
+        transportMessage: initMessage,
+      });
+
+      this.transport.sendAbort(
+        initMessage.from,
+        initMessage.streamId,
+        Err({
+          code: INVALID_REQUEST_CODE,
+          message: errMessage,
+        }),
+      );
+
+      return null;
+    }
+
+    if (!(initMessage.serviceName in this.services)) {
+      const errMessage = `couldn't find service ${initMessage.serviceName}`;
+      this.log?.warn(errMessage, {
+        ...session.loggingMetadata,
+        clientId: this.transport.clientId,
+        transportMessage: initMessage,
+      });
+
+      this.transport.sendAbort(
+        initMessage.from,
+        initMessage.streamId,
+        Err({
+          code: INVALID_REQUEST_CODE,
+          message: errMessage,
+        }),
+      );
+
+      return null;
+    }
+
+    const service = this.services[initMessage.serviceName];
+    if (!(initMessage.procedureName in service.procedures)) {
+      const errMessage = `couldn't find a matching procedure for ${initMessage.serviceName}.${initMessage.procedureName}`;
+      this.log?.warn(errMessage, {
+        ...session.loggingMetadata,
+        clientId: this.transport.clientId,
+        transportMessage: initMessage,
+      });
+
+      this.transport.sendAbort(
+        initMessage.from,
+        initMessage.streamId,
+        Err({
+          code: INVALID_REQUEST_CODE,
+          message: errMessage,
+        }),
+      );
+
+      return null;
+    }
+
+    const procedure = service.procedures[initMessage.procedureName];
+
+    if (!Value.Check(procedure.init, initMessage.payload)) {
+      const errMessage = `procedure init failed validation`;
+      this.log?.warn(errMessage, {
+        ...session.loggingMetadata,
+        clientId: this.transport.clientId,
+        transportMessage: initMessage,
+      });
+
+      this.transport.sendAbort(
+        initMessage.from,
+        initMessage.streamId,
+        Err({
+          code: INVALID_REQUEST_CODE,
+          message: errMessage,
+        }),
+      );
+
+      return null;
+    }
+
+    return {
+      sessionMetadata,
+      procedure,
+      procedureName: initMessage.procedureName,
+      service,
+      serviceName: initMessage.serviceName,
+      loggingMetadata: {
+        ...session.loggingMetadata,
+        transportMessage: initMessage,
+      },
+      streamId: initMessage.streamId,
+      controlFlags: initMessage.controlFlags,
+      tracingCtx: initMessage.tracing,
+      initPayload: initMessage.payload,
+      from: initMessage.from,
+    };
   }
 }
 
