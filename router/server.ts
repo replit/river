@@ -291,6 +291,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
             validationErrors: [
               ...Value.Errors(InputErrResultSchema, msg.payload),
             ],
+            tags: ['invalid-request'],
           });
         }
 
@@ -311,6 +312,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           ...loggingMetadata,
           clientId: this.transport.clientId,
           transportMessage: msg,
+          tags: ['invalid-request'],
         });
 
         onServerAbort(
@@ -341,6 +343,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           clientId: this.transport.clientId,
           transportMessage: msg,
           validationErrors,
+          tags: ['invalid-request'],
         });
 
         onServerAbort(
@@ -579,7 +582,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           `got request for invalid procedure type ${
             (procedure as AnyProcedure).type
           } at ${serviceName}.${procedureName}`,
-          loggingMetadata,
+          {
+            ...loggingMetadata,
+            tags: ['invariant-violation'],
+          },
         );
 
         return;
@@ -651,6 +657,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         ...session.loggingMetadata,
         clientId: this.transport.clientId,
         transportMessage: initMessage,
+        tags: ['invalid-request'],
       });
 
       this.abortStream(
@@ -671,6 +678,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         ...session.loggingMetadata,
         clientId: this.transport.clientId,
         transportMessage: initMessage,
+        tags: ['invalid-request'],
       });
 
       this.abortStream(
@@ -691,6 +699,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         ...session.loggingMetadata,
         clientId: this.transport.clientId,
         transportMessage: initMessage,
+        tags: ['invalid-request'],
       });
 
       this.abortStream(
@@ -711,6 +720,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         ...session.loggingMetadata,
         clientId: this.transport.clientId,
         transportMessage: initMessage,
+        tags: ['invalid-request'],
       });
 
       this.abortStream(
@@ -732,6 +742,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         ...session.loggingMetadata,
         clientId: this.transport.clientId,
         transportMessage: initMessage,
+        tags: ['invalid-request'],
       });
 
       this.abortStream(
@@ -754,6 +765,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         ...session.loggingMetadata,
         clientId: this.transport.clientId,
         transportMessage: initMessage,
+        tags: ['invalid-request'],
       });
 
       this.abortStream(
