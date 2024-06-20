@@ -423,6 +423,19 @@ export class Session<ConnType extends Connection> {
     return this.ack;
   }
 
+  /**
+   * Check that the peer's next expected seq number matches something that is in our send buffer
+   * _or_ matches our actual next seq.
+   */
+  nextExpectedSeqInRange(nextExpectedSeq: number) {
+    for (const msg of this.sendBuffer) {
+      if (nextExpectedSeq === msg.seq) {
+        return true;
+      }
+    }
+    return nextExpectedSeq === this.seq;
+  }
+
   // This is only used in tests to make the session misbehave.
   /* @internal */ advanceAckForTesting(by: number) {
     this.ack += by;
