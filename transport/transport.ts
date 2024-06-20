@@ -266,7 +266,7 @@ export abstract class Transport<ConnType extends Connection> {
       // reject this request if there was no previous session to replace
       session === undefined ||
       // or if both parties do not agree about the next expected sequence number
-      session.nextExpectedAck < nextExpectedSeq ||
+      !session.nextExpectedSeqInRange(nextExpectedSeq) ||
       // or if both parties do not agree on the advertised session id
       session.advertisedSessionId !== sessionId
     ) {
