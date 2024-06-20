@@ -455,20 +455,20 @@ describe('handler registered cleanups', async () => {
         //
       });
     });
-    ctx.addCleanup(neverResolvesCleanup);
+    ctx.onRequestFinished(neverResolvesCleanup);
     expect(neverResolvesCleanup).not.toHaveBeenCalled();
 
     const throwsErrorCleanup = vi.fn().mockImplementation(() => {
       callOrder.push('throwsErrorCleanup');
       throw new Error('wat');
     });
-    ctx.addCleanup(throwsErrorCleanup);
+    ctx.onRequestFinished(throwsErrorCleanup);
     expect(throwsErrorCleanup).not.toHaveBeenCalled();
 
     const normalCleanup = vi.fn().mockImplementation(() => {
       callOrder.push('normalCleanup');
     });
-    ctx.addCleanup(normalCleanup);
+    ctx.onRequestFinished(normalCleanup);
     expect(normalCleanup).not.toHaveBeenCalled();
 
     ctx.abortController.abort();
@@ -482,7 +482,7 @@ describe('handler registered cleanups', async () => {
     ]);
 
     const registeredAfterClose = vi.fn();
-    ctx.addCleanup(registeredAfterClose);
+    ctx.onRequestFinished(registeredAfterClose);
     expect(registeredAfterClose).toHaveBeenCalledOnce();
   });
 });
