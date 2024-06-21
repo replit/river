@@ -7,6 +7,7 @@ import {
   AnyProcedure,
   PayloadType,
 } from './procedures';
+import { ServiceContext } from './context';
 
 /**
  * An instantiated service, probably from a {@link ServiceSchema}.
@@ -134,7 +135,7 @@ export interface ServiceConfiguration<State extends object> {
   /**
    * A factory function for creating a fresh state.
    */
-  initializeState: () => State;
+  initializeState: (extendedContext: ServiceContext) => State;
 }
 
 export interface SerializedProcedureSchema {
@@ -201,7 +202,9 @@ export class ServiceSchema<
   /**
    * Factory function for creating a fresh state.
    */
-  protected readonly initializeState: () => State;
+  protected readonly initializeState: (
+    extendedContext: ServiceContext,
+  ) => State;
 
   /**
    * The procedures for this service.
@@ -412,9 +415,9 @@ export class ServiceSchema<
    * You probably don't need this, usually the River server will handle this
    * for you.
    */
-  instantiate(): Service<State, Procedures> {
+  instantiate(extendedContext: ServiceContext): Service<State, Procedures> {
     return Object.freeze({
-      state: this.initializeState(),
+      state: this.initializeState(extendedContext),
       procedures: this.procedures,
     });
   }

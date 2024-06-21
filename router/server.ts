@@ -81,7 +81,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     this.contextMap = new Map();
 
     for (const [name, service] of Object.entries(services)) {
-      const instance = service.instantiate();
+      const instance = service.instantiate(extendedContext ?? {});
       instances[name] = instance;
 
       this.contextMap.set(instance, {
