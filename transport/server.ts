@@ -86,7 +86,7 @@ export abstract class ServerTransport<
         });
         conn.close();
       }
-    }, this.options.sessionDisconnectGraceMs);
+    }, this.options.handshakeGraceMs);
 
     const buffer: Array<Uint8Array> = [];
     let receivedHandshakeMessage = false;

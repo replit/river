@@ -10,6 +10,7 @@ export const defaultTransportOptions: TransportOptions = {
   heartbeatIntervalMs: 1_000,
   heartbeatsUntilDead: 2,
   sessionDisconnectGraceMs: 5_000,
+  handshakeGraceMs: 5_000,
   codec: NaiveJsonCodec,
 };
 
