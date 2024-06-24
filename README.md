@@ -80,7 +80,7 @@ Before proceeding, ensure you have TypeScript 5 installed and configured appropr
 First, we create a service using `ServiceSchema`:
 
 ```ts
-import { ServicaSchema, Procedure, Ok } from '@replit/river';
+import { ServiceSchema, Procedure, Ok } from '@replit/river';
 import { Type } from '@sinclair/typebox';
 
 export const ExampleService = ServiceSchema.define(
@@ -134,17 +134,17 @@ In another file for the client (to create a separate entrypoint),
 ```ts
 import { WebSocketClientTransport } from '@replit/river/transport/ws/client';
 import { createClient } from '@replit/river';
-import type ServiceSurface from './server';
+import { WebSocket } from 'ws';
 
 const transport = new WebSocketClientTransport(
   async () => new WebSocket('ws://localhost:3000'),
   'my-client-id',
 );
 
-const client = createClient<ServiceSurface>(
+const client = createClient(
   transport,
   'SERVER', // transport id of the server in the previous step
-  true, // whether to eagerly connect to the server on creation (optional argument)
+  {eagerlyConnect: true}, // whether to eagerly connect to the server on creation (optional argument)
 );
 
 // we get full type safety on `client`
