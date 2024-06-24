@@ -49,7 +49,6 @@
   ],
   "dependencies": {
     "@msgpack/msgpack": "^3.0.0-beta2",
-    "it-pushable": "^3.2.3",
     "nanoid": "^4.0.2",
     "ws": "^8.17.0"
   },
@@ -58,9 +57,9 @@
     "@sinclair/typebox": "~0.32.8"
   },
   "devDependencies": {
+    "@opentelemetry/core": "^1.7.0",
     "@opentelemetry/sdk-trace-base": "^1.24.1",
     "@opentelemetry/sdk-trace-web": "^1.24.1",
-    "@opentelemetry/core": "^1.7.0",
     "@types/ws": "^8.5.5",
     "@typescript-eslint/eslint-plugin": "^7.8.0",
     "@typescript-eslint/parser": "^7.8.0",
