@@ -22,7 +22,18 @@ export class SessionPendingIdentification<
     super(...args);
     this.conn = conn;
     this.listeners = listeners;
+
+    this.conn.addDataListener(this.onHandshakeData);
+    this.conn.addErrorListener(listeners.onConnectionErrored);
+    this.conn.addCloseListener(listeners.onConnectionClosed);
   }
+
+  onHandshakeData = (msg: Uint8Array) => {
+    const parsedMsg = this.parseMsg(msg);
+    if (parsedMsg === null) return;
+
+    this.listeners.onHandshake(parsedMsg);
+  };
 
   get loggingMetadata(): MessageMetadata {
     return {
@@ -36,7 +47,9 @@ export class SessionPendingIdentification<
   }
 
   _onStateExit(): void {
-    // noop
+    this.conn.removeDataListener(this.onHandshakeData);
+    this.conn.removeErrorListener(this.listeners.onConnectionErrored);
+    this.conn.removeCloseListener(this.listeners.onConnectionClosed);
   }
 
   _onClose(): void {

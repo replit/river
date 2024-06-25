@@ -34,7 +34,13 @@ export class SessionConnecting<
     );
   }
 
+  _onStateExit(): void {
+    super._onStateExit();
+  }
+
   _onClose(): void {
+    super._onClose();
+
     // close the pending connection if it resolves
     bestEffortClose(this.connPromise);
   }

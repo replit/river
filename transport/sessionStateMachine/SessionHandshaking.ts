@@ -1,3 +1,4 @@
+import { TransportMessage } from '../message';
 import { Connection } from '../session';
 import {
   IdentifiedSession,
@@ -33,13 +34,19 @@ export class SessionHandshaking<
     this.listeners.onHandshake(parsedMsg);
   };
 
+  sendHandshake(msg: TransportMessage): boolean {
+    return this.conn.send(this.options.codec.toBuffer(msg));
+  }
+
   _onStateExit(): void {
+    super._onStateExit();
     this.conn.removeDataListener(this.onHandshakeData);
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
   }
 
   _onClose(): void {
+    super._onClose();
     this.conn.close();
   }
 }

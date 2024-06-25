@@ -68,16 +68,15 @@ export const ControlMessageHandshakeRequestSchema = Type.Object({
    * used by the server to know whether this is a new or a reestablished connection, and whether it
    * is compatible with what it already has.
    */
-  expectedSessionState: Type.Optional(
-    Type.Object({
-      /**
-       * reconnect is set to true if the client explicitly wants to reestablish an existing
-       * connection.
-       */
-      reconnect: Type.Boolean(),
-      nextExpectedSeq: Type.Integer(),
-    }),
-  ),
+  expectedSessionState: Type.Object({
+    /**
+     * reconnect is set to true if the client explicitly wants to reestablish an existing
+     * connection.
+     */
+    reconnect: Type.Boolean(),
+    nextExpectedSeq: Type.Integer(),
+  }),
+
   metadata: Type.Optional(Type.Unknown()),
 });
 

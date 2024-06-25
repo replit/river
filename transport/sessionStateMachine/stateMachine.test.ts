@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { Mock, describe, expect, test, vi } from 'vitest';
 import {
   Session,
   SessionPendingIdentification,
@@ -11,6 +11,7 @@ import {
 } from '../../util/testHelpers';
 import { Connection } from '../session';
 import { waitFor } from '../../__tests__/fixtures/cleanup';
+import { handshakeRequestMessage } from '../message';
 
 function persistedSessionState<ConnType extends Connection>(
   session: Session<ConnType>,
@@ -696,23 +697,251 @@ describe('session state machine', () => {
       expect(session.state).toBe(SessionState.Connecting);
     });
 
-    test.todo('handshaking event listeners: connectionErrored', async () => {});
-    test.todo('handshaking event listeners: connectionClosed', async () => {});
-    test.todo('handshaking event listeners: onHandshakeData', async () => {});
-    test.todo(
-      'pending identification event listeners: connectionErrored',
-      async () => {},
-    );
-    test.todo(
-      'pending identification event listeners: connectionClosed',
-      async () => {},
-    );
-    test.todo(
-      'pending identification event listeners: onHandshakeData',
-      async () => {},
-    );
-    test.todo('connected event listeners: connectionErrored', async () => {});
-    test.todo('connected event listeners: connectionClosed', async () => {});
-    test.todo('connected event listeners: onMessageData', async () => {});
+    test('handshaking event listeners: connectionErrored', async () => {
+      const sessionHandle = await createSessionHandshaking();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const conn = session.conn;
+      const { onHandshake, onConnectionClosed, onConnectionErrored } =
+        sessionHandle;
+      expect(session.state).toBe(SessionState.Handshaking);
+      expect(onHandshake).not.toHaveBeenCalled();
+      expect(onConnectionClosed).not.toHaveBeenCalled();
+      expect(onConnectionErrored).not.toHaveBeenCalled();
+
+      conn.emitError(new Error('test error'));
+
+      await waitFor(async () => {
+        expect(onConnectionErrored).toHaveBeenCalledTimes(1);
+        expect(onConnectionErrored).toHaveBeenCalledWith(
+          new Error('test error'),
+        );
+        expect(onConnectionClosed).toHaveBeenCalledTimes(1);
+        expect(onHandshake).not.toHaveBeenCalled();
+      });
+
+      // should not have transitioned to the next state
+      expect(session.state).toBe(SessionState.Handshaking);
+    });
+
+    test('handshaking event listeners: connectionClosed', async () => {
+      const sessionHandle = await createSessionHandshaking();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const conn = session.conn;
+      const { onHandshake, onConnectionClosed, onConnectionErrored } =
+        sessionHandle;
+      expect(session.state).toBe(SessionState.Handshaking);
+      expect(onHandshake).not.toHaveBeenCalled();
+      expect(onConnectionClosed).not.toHaveBeenCalled();
+      expect(onConnectionErrored).not.toHaveBeenCalled();
+
+      conn.emitClose();
+
+      await waitFor(async () => {
+        expect(onConnectionClosed).toHaveBeenCalledTimes(1);
+        expect(onConnectionErrored).not.toHaveBeenCalled();
+        expect(onHandshake).not.toHaveBeenCalled();
+      });
+
+      // should not have transitioned to the next state
+      expect(session.state).toBe(SessionState.Handshaking);
+    });
+
+    test('handshaking event listeners: onHandshakeData', async () => {
+      const sessionHandle = await createSessionHandshaking();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const { onHandshake, onConnectionClosed, onConnectionErrored } =
+        sessionHandle;
+      expect(session.state).toBe(SessionState.Handshaking);
+      expect(onHandshake).not.toHaveBeenCalled();
+      expect(onConnectionClosed).not.toHaveBeenCalled();
+      expect(onConnectionErrored).not.toHaveBeenCalled();
+
+      session.conn.emitData(
+        session.options.codec.toBuffer(
+          handshakeRequestMessage({
+            from: 'from',
+            to: 'to',
+            sessionId: 'clientSessionId',
+            expectedSessionState: {
+              reconnect: false,
+              nextExpectedSeq: 0,
+            },
+          }),
+        ),
+      );
+
+      await waitFor(async () => {
+        expect(onHandshake).toHaveBeenCalledTimes(1);
+        expect(onConnectionClosed).not.toHaveBeenCalled();
+        expect(onConnectionErrored).not.toHaveBeenCalled();
+      });
+
+      // should not have transitioned to the next state
+      expect(session.state).toBe(SessionState.Handshaking);
+    });
+
+    test('pending identification event listeners: connectionErrored', async () => {
+      const sessionHandle = await createSessionPendingIdentification();
+      const session:
+        | Session<MockConnection>
+        | SessionPendingIdentification<MockConnection> = sessionHandle.session;
+
+      const conn = session.conn;
+      const { onHandshake, onConnectionClosed, onConnectionErrored } =
+        sessionHandle;
+      expect(session.state).toBe(SessionState.PendingIdentification);
+      expect(onHandshake).not.toHaveBeenCalled();
+      expect(onConnectionClosed).not.toHaveBeenCalled();
+      expect(onConnectionErrored).not.toHaveBeenCalled();
+
+      conn.emitError(new Error('test error'));
+
+      await waitFor(async () => {
+        expect(onConnectionErrored).toHaveBeenCalledTimes(1);
+        expect(onConnectionErrored).toHaveBeenCalledWith(
+          new Error('test error'),
+        );
+        expect(onConnectionClosed).toHaveBeenCalledTimes(1);
+        expect(onHandshake).not.toHaveBeenCalled();
+      });
+
+      // should not have transitioned to the next state
+      expect(session.state).toBe(SessionState.PendingIdentification);
+    });
+
+    test('pending identification event listeners: connectionClosed', async () => {
+      const sessionHandle = await createSessionPendingIdentification();
+      const session:
+        | Session<MockConnection>
+        | SessionPendingIdentification<MockConnection> = sessionHandle.session;
+
+      const conn = session.conn;
+      const { onHandshake, onConnectionClosed, onConnectionErrored } =
+        sessionHandle;
+      expect(session.state).toBe(SessionState.PendingIdentification);
+      expect(onHandshake).not.toHaveBeenCalled();
+      expect(onConnectionClosed).not.toHaveBeenCalled();
+      expect(onConnectionErrored).not.toHaveBeenCalled();
+
+      conn.emitClose();
+
+      await waitFor(async () => {
+        expect(onConnectionClosed).toHaveBeenCalledTimes(1);
+        expect(onConnectionErrored).not.toHaveBeenCalled();
+        expect(onHandshake).not.toHaveBeenCalled();
+      });
+
+      // should not have transitioned to the next state
+      expect(session.state).toBe(SessionState.PendingIdentification);
+    });
+
+    test('pending identification event listeners: onHandshakeData', async () => {
+      const sessionHandle = await createSessionPendingIdentification();
+      const session:
+        | Session<MockConnection>
+        | SessionPendingIdentification<MockConnection> = sessionHandle.session;
+
+      const { onHandshake, onConnectionClosed, onConnectionErrored } =
+        sessionHandle;
+      expect(session.state).toBe(SessionState.PendingIdentification);
+      expect(onHandshake).not.toHaveBeenCalled();
+      expect(onConnectionClosed).not.toHaveBeenCalled();
+      expect(onConnectionErrored).not.toHaveBeenCalled();
+
+      session.conn.emitData(
+        session.options.codec.toBuffer(
+          handshakeRequestMessage({
+            from: 'from',
+            to: 'to',
+            sessionId: 'clientSessionId',
+            expectedSessionState: {
+              reconnect: false,
+              nextExpectedSeq: 0,
+            },
+          }),
+        ),
+      );
+
+      await waitFor(async () => {
+        expect(onHandshake).toHaveBeenCalledTimes(1);
+        expect(onConnectionClosed).not.toHaveBeenCalled();
+        expect(onConnectionErrored).not.toHaveBeenCalled();
+      });
+
+      // should not have transitioned to the next state
+      expect(session.state).toBe(SessionState.PendingIdentification);
+    });
+
+    test('connected event listeners: connectionErrored', async () => {
+      const sessionHandle = await createSessionConnected();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const conn = session.conn;
+      const { onMessage, onConnectionClosed, onConnectionErrored } =
+        sessionHandle;
+      expect(session.state).toBe(SessionState.Connected);
+      expect(onMessage).not.toHaveBeenCalled();
+      expect(onConnectionClosed).not.toHaveBeenCalled();
+      expect(onConnectionErrored).not.toHaveBeenCalled();
+
+      conn.emitError(new Error('test error'));
+
+      await waitFor(async () => {
+        expect(onConnectionErrored).toHaveBeenCalledTimes(1);
+        expect(onConnectionErrored).toHaveBeenCalledWith(
+          new Error('test error'),
+        );
+        expect(onConnectionClosed).toHaveBeenCalledTimes(1);
+        expect(onMessage).not.toHaveBeenCalled();
+      });
+
+      // should not have transitioned to the next state
+      expect(session.state).toBe(SessionState.Connected);
+    });
+
+    test('connected event listeners: connectionClosed', async () => {
+      const sessionHandle = await createSessionConnected();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const conn = session.conn;
+      const { onMessage, onConnectionClosed, onConnectionErrored } =
+        sessionHandle;
+      expect(session.state).toBe(SessionState.Connected);
+      expect(onMessage).not.toHaveBeenCalled();
+      expect(onConnectionClosed).not.toHaveBeenCalled();
+      expect(onConnectionErrored).not.toHaveBeenCalled();
+
+      conn.emitClose();
+
+      await waitFor(async () => {
+        expect(onConnectionClosed).toHaveBeenCalledTimes(1);
+        expect(onConnectionErrored).not.toHaveBeenCalled();
+        expect(onMessage).not.toHaveBeenCalled();
+      });
+
+      // should not have transitioned to the next state
+      expect(session.state).toBe(SessionState.Connected);
+    });
+
+    test('connected event listeners: onMessageData', async () => {
+      const sessionHandle = await createSessionConnected();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const { onMessage, onConnectionClosed, onConnectionErrored } =
+        sessionHandle;
+      expect(session.state).toBe(SessionState.Connected);
+      expect(onMessage).not.toHaveBeenCalled();
+      expect(onConnectionClosed).not.toHaveBeenCalled();
+      expect(onConnectionErrored).not.toHaveBeenCalled();
+
+      const msg = session.constructMsg(payloadToTransportMessage('hello'));
+      session.conn.emitData(session.options.codec.toBuffer(msg));
+
+      await waitFor(async () => {
+        expect(onMessage).toHaveBeenCalledTimes(1);
+        expect(onConnectionClosed).not.toHaveBeenCalled();
+        expect(onConnectionErrored).not.toHaveBeenCalled();
+      });
+
+      // should not have transitioned to the next state
+      expect(session.state).toBe(SessionState.Connected);
+    });
   });
 });

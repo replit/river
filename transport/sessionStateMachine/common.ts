@@ -146,6 +146,32 @@ export abstract class CommonSession extends StateMachineState {
     this.from = from;
     this.options = options;
   }
+
+  parseMsg(msg: Uint8Array): OpaqueTransportMessage | null {
+    const parsedMsg = this.options.codec.fromBuffer(msg);
+
+    if (parsedMsg === null) {
+      const decodedBuffer = new TextDecoder().decode(Buffer.from(msg));
+      this.log?.error(
+        `received malformed msg: ${decodedBuffer}`,
+        this.loggingMetadata,
+      );
+      return null;
+    }
+
+    if (!Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
+      this.log?.error(`received invalid msg: ${JSON.stringify(parsedMsg)}`, {
+        ...this.loggingMetadata,
+        validationErrors: [
+          ...Value.Errors(OpaqueTransportMessageSchema, parsedMsg),
+        ],
+      });
+
+      return null;
+    }
+
+    return parsedMsg;
+  }
 }
 
 export type InheritedProperties = Pick<
@@ -216,32 +242,6 @@ export abstract class IdentifiedSession extends CommonSession {
     const constructedMsg = this.constructMsg(msg);
     this.sendBuffer.push(constructedMsg);
     return constructedMsg.id;
-  }
-
-  parseMsg(msg: Uint8Array): OpaqueTransportMessage | null {
-    const parsedMsg = this.options.codec.fromBuffer(msg);
-
-    if (parsedMsg === null) {
-      const decodedBuffer = new TextDecoder().decode(Buffer.from(msg));
-      this.log?.error(
-        `received malformed msg, killing conn: ${decodedBuffer}`,
-        this.loggingMetadata,
-      );
-      return null;
-    }
-
-    if (!Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
-      this.log?.error(`received invalid msg: ${JSON.stringify(parsedMsg)}`, {
-        ...this.loggingMetadata,
-        validationErrors: [
-          ...Value.Errors(OpaqueTransportMessageSchema, parsedMsg),
-        ],
-      });
-
-      return null;
-    }
-
-    return parsedMsg;
   }
 
   _onStateExit(): void {

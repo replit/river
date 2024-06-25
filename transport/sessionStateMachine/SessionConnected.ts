@@ -1,3 +1,4 @@
+import { PartialTransportMessage } from '../message';
 import { Connection } from '../session';
 import {
   IdentifiedSession,
@@ -23,6 +24,13 @@ export class SessionConnected<
 
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
     this.ack = seq + 1;
+  }
+
+  send(msg: PartialTransportMessage): string {
+    const constructedMsg = this.constructMsg(msg);
+    this.sendBuffer.push(constructedMsg);
+    this.conn.send(this.options.codec.toBuffer(constructedMsg));
+    return constructedMsg.id;
   }
 
   constructor(
@@ -53,12 +61,14 @@ export class SessionConnected<
   };
 
   _onStateExit(): void {
+    super._onStateExit();
     this.conn.removeDataListener(this.onMessageData);
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
   }
 
   _onClose(): void {
+    super._onClose();
     this.conn.close();
   }
 }
