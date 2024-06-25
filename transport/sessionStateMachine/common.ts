@@ -74,8 +74,10 @@ export const ERR_CONSUMED = `session state has been consumed and is no longer va
 abstract class StateMachineState {
   abstract readonly state: SessionState;
 
-  // whether this state has been consumed
-  // and we've moved on to another state
+  /*
+   * Whether this state has been consumed
+   * and we've moved on to another state
+   */
   _isConsumed: boolean;
 
   // called when we're transitioning to another state
@@ -91,7 +93,9 @@ abstract class StateMachineState {
   constructor() {
     this._isConsumed = false;
 
-    // proxy should check if the state has been consumed
+    // proxy helps us prevent access to properties after the state has been consumed
+    // e.g. if we hold a reference to a state and try to access it after it's been consumed
+    // we intercept the access and throw an error to help catch bugs
     return new Proxy(this, {
       get(target, prop) {
         // always allow access to _isConsumed

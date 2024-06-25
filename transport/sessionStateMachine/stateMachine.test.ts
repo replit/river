@@ -41,34 +41,6 @@ function persistedSessionState<ConnType extends Connection>(
 
 class MockConnection extends Connection {
   status: 'open' | 'closed' = 'open';
-  dataListeners = new Set<(msg: Uint8Array) => void>();
-  closeListeners = new Set<() => void>();
-  errorListeners = new Set<(err: Error) => void>();
-
-  addDataListener(cb: (msg: Uint8Array) => void): void {
-    this.dataListeners.add(cb);
-  }
-
-  removeDataListener(cb: (msg: Uint8Array) => void): void {
-    this.dataListeners.delete(cb);
-  }
-
-  addCloseListener(cb: () => void): void {
-    this.closeListeners.add(cb);
-  }
-
-  removeCloseListener(cb: () => void): void {
-    this.closeListeners.delete(cb);
-  }
-
-  addErrorListener(cb: (err: Error) => void): void {
-    this.errorListeners.add(cb);
-  }
-
-  removeErrorListener(cb: (err: Error) => void): void {
-    this.errorListeners.delete(cb);
-  }
-
   send = vi.fn();
 
   close(): void {

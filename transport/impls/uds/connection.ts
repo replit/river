@@ -10,43 +10,34 @@ export class UdsConnection extends Connection {
   sock: Socket;
   input: stream.Readable;
   framer: Uint32LengthPrefixFraming;
-
   constructor(sock: Socket) {
     super();
     this.framer = MessageFramer.createFramedStream();
     this.sock = sock;
     this.input = sock.pipe(this.framer);
-  }
 
-  addDataListener(cb: (msg: Uint8Array) => void) {
-    this.input.on('data', cb);
-  }
+    this.sock.on('close', () => {
+      for (const cb of this.closeListeners) {
+        cb();
+      }
+    });
 
-  removeDataListener(cb: (msg: Uint8Array) => void): void {
-    this.input.off('data', cb);
-  }
-
-  addCloseListener(cb: () => void): void {
-    this.sock.on('close', cb);
-  }
-
-  removeCloseListener(cb: () => void): void {
-    this.sock.off('close', cb);
-  }
-
-  addErrorListener(cb: (err: Error) => void): void {
     this.sock.on('error', (err) => {
       if (err instanceof Error && 'code' in err && err.code === 'EPIPE') {
         // Ignore EPIPE errors
         return;
       }
 
-      cb(err);
+      for (const cb of this.errorListeners) {
+        cb(err);
+      }
     });
-  }
 
-  removeErrorListener(cb: (err: Error) => void): void {
-    this.sock.off('error', cb);
+    this.input.on('data', (msg: Uint8Array) => {
+      for (const cb of this.dataListeners) {
+        cb(msg);
+      }
+    });
   }
 
   send(payload: Uint8Array) {
