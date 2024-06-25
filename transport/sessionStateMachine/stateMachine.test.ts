@@ -4,13 +4,27 @@ import {
   SessionPendingIdentification,
   SessionState,
   SessionStateMachine,
-} from './stateMachine';
+} from './index';
 import {
   payloadToTransportMessage,
   testingSessionOptions,
 } from '../../util/testHelpers';
 import { Connection } from '../session';
 import { waitFor } from '../../__tests__/fixtures/cleanup';
+
+function persistedSessionState<ConnType extends Connection>(
+  session: Session<ConnType>,
+) {
+  return {
+    id: session.id,
+    from: session.from,
+    to: session.to,
+    seq: session.seq,
+    ack: session.ack,
+    options: session.options,
+    telemetry: session.telemetry,
+  };
+}
 
 class MockConnection extends Connection {
   status: 'open' | 'closed' = 'open';
@@ -88,20 +102,6 @@ function getPendingMockConnection(): PendingMockConnectionHandle {
   };
 }
 
-function persistedSessionState<ConnType extends Connection>(
-  session: Session<ConnType>,
-) {
-  return {
-    id: session.id,
-    from: session.from,
-    to: session.to,
-    seq: session.seq,
-    ack: session.ack,
-    options: session.options,
-    telemetry: session.telemetry,
-  };
-}
-
 describe('session state machine', () => {
   const createSessionNoConnection = () => {
     const session = SessionStateMachine.entrypoints.NoConnection(
@@ -138,7 +138,7 @@ describe('session state machine', () => {
     connect();
     const conn = await session.connPromise;
     const listeners = {
-      onHandshakeData: vi.fn(),
+      onHandshake: vi.fn(),
       onConnectionClosed: vi.fn(),
       onConnectionErrored: vi.fn(),
     };
@@ -156,7 +156,7 @@ describe('session state machine', () => {
     const sessionHandle = await createSessionHandshaking();
     let session: Session<MockConnection> = sessionHandle.session;
     const listeners = {
-      onMessageData: vi.fn(),
+      onMessage: vi.fn(),
       onConnectionClosed: vi.fn(),
       onConnectionErrored: vi.fn(),
     };
@@ -172,7 +172,7 @@ describe('session state machine', () => {
   const createSessionPendingIdentification = async () => {
     const conn = new MockConnection();
     const listeners = {
-      onHandshakeData: vi.fn(),
+      onHandshake: vi.fn(),
       onConnectionClosed: vi.fn(),
       onConnectionErrored: vi.fn(),
     };
