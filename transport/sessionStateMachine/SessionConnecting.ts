@@ -3,7 +3,6 @@ import {
   IdentifiedSession,
   SessionConnectingListeners,
   SessionState,
-  bestEffortClose,
 } from './common';
 
 export class SessionConnecting<
@@ -40,15 +39,24 @@ export class SessionConnecting<
     );
   }
 
+  // close a pending connection if it resolves, ignore errors if the promise
+  // ends up rejected anyways
+  bestEffortClose() {
+    void this.connPromise
+      .then((conn) => conn.close())
+      .catch(() => {
+        // ignore errors
+      });
+  }
+
   _onStateExit(): void {
     super._onStateExit();
     clearTimeout(this.connectionTimeout);
   }
 
   _onClose(): void {
-    super._onClose();
-
     // close the pending connection if it resolves
-    bestEffortClose(this.connPromise);
+    this.bestEffortClose();
+    super._onClose();
   }
 }

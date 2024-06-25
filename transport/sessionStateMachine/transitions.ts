@@ -9,7 +9,6 @@ import {
   SessionConnectingListeners,
   SessionHandshakingListeners,
   SessionNoConnectionListeners,
-  bestEffortClose,
 } from './common';
 import { createSessionTelemetryInfo } from '../../tracing';
 import { SessionPendingIdentification } from './SessionPendingIdentification';
@@ -138,7 +137,7 @@ export const SessionStateMachine = {
       listeners: SessionNoConnectionListeners,
     ): SessionNoConnection {
       const carriedState = inheritSharedSession(oldSession);
-      bestEffortClose(oldSession.connPromise);
+      oldSession.bestEffortClose();
       oldSession._onStateExit();
       return new SessionNoConnection(listeners, ...carriedState);
     },

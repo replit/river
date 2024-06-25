@@ -57,18 +57,6 @@ export type Session<ConnType extends Connection> =
   | SessionHandshaking<ConnType>
   | SessionConnected<ConnType>;
 
-// close a pending connection if it resolves, ignore errors if the promise
-// ends up rejected anyways
-export function bestEffortClose<ConnType extends Connection>(
-  prom: Promise<ConnType>,
-) {
-  void prom
-    .then((conn) => conn.close())
-    .catch(() => {
-      // ignore errors
-    });
-}
-
 export const ERR_CONSUMED = `session state has been consumed and is no longer valid`;
 
 abstract class StateMachineState {
