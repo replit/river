@@ -13,6 +13,8 @@ export class SessionHandshaking<
   conn: ConnType;
   listeners: SessionHandshakingListeners;
 
+  handshakeTimeout: ReturnType<typeof setTimeout>;
+
   constructor(
     conn: ConnType,
     listeners: SessionHandshakingListeners,
@@ -21,6 +23,10 @@ export class SessionHandshaking<
     super(...args);
     this.conn = conn;
     this.listeners = listeners;
+
+    this.handshakeTimeout = setTimeout(() => {
+      listeners.onHandshakeTimeout();
+    }, this.options.handshakeTimeoutMs);
 
     this.conn.addDataListener(this.onHandshakeData);
     this.conn.addErrorListener(listeners.onConnectionErrored);
@@ -43,6 +49,7 @@ export class SessionHandshaking<
     this.conn.removeDataListener(this.onHandshakeData);
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
+    clearTimeout(this.handshakeTimeout);
   }
 
   _onClose(): void {

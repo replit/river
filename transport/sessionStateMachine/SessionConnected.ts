@@ -1,4 +1,10 @@
-import { PartialTransportMessage } from '../message';
+import { Static } from '@sinclair/typebox';
+import {
+  ControlFlags,
+  ControlMessageAckSchema,
+  PartialTransportMessage,
+  isAck,
+} from '../message';
 import { Connection } from '../session';
 import {
   IdentifiedSession,
@@ -13,6 +19,13 @@ export class SessionConnected<
   conn: ConnType;
   listeners: SessionConnectedListeners;
 
+  heartbeatHandle?: ReturnType<typeof setInterval> | undefined;
+  heartbeatMisses = 0;
+
+  get isActivelyHeartbeating() {
+    return this.heartbeatHandle !== undefined;
+  }
+
   updateBookkeeping(ack: number, seq: number) {
     if (seq + 1 < this.ack) {
       this.log?.error(`received stale seq ${seq} + 1 < ${this.ack}`, {
@@ -24,6 +37,7 @@ export class SessionConnected<
 
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
     this.ack = seq + 1;
+    this.heartbeatMisses = 0;
   }
 
   send(msg: PartialTransportMessage): string {
@@ -50,6 +64,38 @@ export class SessionConnected<
     for (const msg of this.sendBuffer) {
       conn.send(this.options.codec.toBuffer(msg));
     }
+
+    // dont explicity clear the buffer, we'll just filter out old messages
+    // when we receive an ack
+  }
+
+  startActiveHeartbeat() {
+    this.heartbeatHandle = setInterval(() => {
+      const misses = this.heartbeatMisses;
+      const missDuration = misses * this.options.heartbeatIntervalMs;
+      if (misses > this.options.heartbeatsUntilDead) {
+        this.log?.info(
+          `closing connection to ${this.to} due to inactivity (missed ${misses} heartbeats which is ${missDuration}ms)`,
+          this.loggingMetadata,
+        );
+        this.telemetry.span.addEvent('closing connection due to inactivity');
+        this.conn.close();
+        return;
+      }
+
+      this.sendHeartbeat();
+      this.heartbeatMisses++;
+    }, this.options.heartbeatIntervalMs);
+  }
+
+  private sendHeartbeat() {
+    this.send({
+      streamId: 'heartbeat',
+      controlFlags: ControlFlags.AckBit,
+      payload: {
+        type: 'ACK',
+      } satisfies Static<typeof ControlMessageAckSchema>,
+    });
   }
 
   onMessageData = (msg: Uint8Array) => {
@@ -57,7 +103,24 @@ export class SessionConnected<
     if (parsedMsg === null) return;
 
     this.updateBookkeeping(parsedMsg.ack, parsedMsg.seq);
-    this.listeners.onMessage(parsedMsg);
+
+    // dispatch directly if its not an explicit ack
+    if (!isAck(parsedMsg.controlFlags)) {
+      this.listeners.onMessage(parsedMsg);
+      return;
+    }
+
+    // handle acks specially
+    this.log?.debug(`discarding msg (ack bit set)`, {
+      ...this.loggingMetadata,
+      transportMessage: parsedMsg,
+    });
+
+    // if we are not actively heartbeating, we are in passive
+    // heartbeat mode and should send a response to the ack
+    if (!this.isActivelyHeartbeating) {
+      this.sendHeartbeat();
+    }
   };
 
   _onStateExit(): void {
@@ -65,6 +128,7 @@ export class SessionConnected<
     this.conn.removeDataListener(this.onMessageData);
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
+    clearInterval(this.heartbeatHandle);
   }
 
   _onClose(): void {

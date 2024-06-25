@@ -1,4 +1,4 @@
-import { Mock, describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import {
   Session,
   SessionPendingIdentification,
@@ -12,7 +12,13 @@ import {
 import { Connection } from '../session';
 import { waitFor } from '../../__tests__/fixtures/cleanup';
 import { handshakeRequestMessage } from '../message';
-import { ERR_CONSUMED } from './common';
+import {
+  ERR_CONSUMED,
+  SessionConnectedListeners,
+  SessionConnectingListeners,
+  SessionHandshakingListeners,
+  SessionNoConnectionListeners,
+} from './common';
 
 function persistedSessionState<ConnType extends Connection>(
   session: Session<ConnType>,
@@ -104,24 +110,54 @@ function getPendingMockConnection(): PendingMockConnectionHandle {
   };
 }
 
+function createSessionNoConnectionListeners(): SessionNoConnectionListeners {
+  return {
+    onSessionGracePeriodElapsed: vi.fn(),
+  };
+}
+
+function createSessionConnectingListeners(): SessionConnectingListeners<MockConnection> {
+  return {
+    onConnectionEstablished: vi.fn(),
+    onConnectionFailed: vi.fn(),
+    onConnectionTimeout: vi.fn(),
+  };
+}
+
+function createSessionHandshakingListeners(): SessionHandshakingListeners {
+  return {
+    onHandshake: vi.fn(),
+    onConnectionClosed: vi.fn(),
+    onConnectionErrored: vi.fn(),
+    onHandshakeTimeout: vi.fn(),
+  };
+}
+
+function createSessionConnectedListeners(): SessionConnectedListeners {
+  return {
+    onMessage: vi.fn(),
+    onConnectionClosed: vi.fn(),
+    onConnectionErrored: vi.fn(),
+  };
+}
+
 describe('session state machine', () => {
   const createSessionNoConnection = () => {
+    const listeners = createSessionNoConnectionListeners();
     const session = SessionStateMachine.entrypoints.NoConnection(
       'to',
       'from',
+      listeners,
       testingSessionOptions,
     );
 
-    return { session };
+    return { session, ...listeners };
   };
 
   const createSessionConnecting = async () => {
     let session: Session<MockConnection> = createSessionNoConnection().session;
     const { pendingConn, connect, error } = getPendingMockConnection();
-    const listeners = {
-      onConnectionEstablished: vi.fn(),
-      onConnectionFailed: vi.fn(),
-    };
+    const listeners = createSessionConnectingListeners();
 
     session = SessionStateMachine.transition.NoConnectionToConnecting(
       session,
@@ -139,12 +175,7 @@ describe('session state machine', () => {
 
     connect();
     const conn = await session.connPromise;
-    const listeners = {
-      onHandshake: vi.fn(),
-      onConnectionClosed: vi.fn(),
-      onConnectionErrored: vi.fn(),
-    };
-
+    const listeners = createSessionHandshakingListeners();
     session = SessionStateMachine.transition.ConnectingToHandshaking(
       session,
       conn,
@@ -157,11 +188,7 @@ describe('session state machine', () => {
   const createSessionConnected = async () => {
     const sessionHandle = await createSessionHandshaking();
     let session: Session<MockConnection> = sessionHandle.session;
-    const listeners = {
-      onMessage: vi.fn(),
-      onConnectionClosed: vi.fn(),
-      onConnectionErrored: vi.fn(),
-    };
+    const listeners = createSessionConnectedListeners();
 
     session = SessionStateMachine.transition.HandshakingToConnected(
       session,
@@ -173,12 +200,7 @@ describe('session state machine', () => {
 
   const createSessionPendingIdentification = async () => {
     const conn = new MockConnection();
-    const listeners = {
-      onHandshake: vi.fn(),
-      onConnectionClosed: vi.fn(),
-      onConnectionErrored: vi.fn(),
-    };
-
+    const listeners = createSessionHandshakingListeners();
     const session = SessionStateMachine.entrypoints.PendingIdentification(
       'from',
       conn,
@@ -224,10 +246,7 @@ describe('session state machine', () => {
       const sessionStateToBePersisted = persistedSessionState(session);
 
       const { pendingConn } = getPendingMockConnection();
-      const listeners = {
-        onConnectionEstablished: vi.fn(),
-        onConnectionFailed: vi.fn(),
-      };
+      const listeners = createSessionConnectingListeners();
       session = SessionStateMachine.transition.NoConnectionToConnecting(
         session,
         pendingConn,
@@ -252,11 +271,7 @@ describe('session state machine', () => {
 
       connect();
       const conn = await session.connPromise;
-      const listeners = {
-        onHandshake: vi.fn(),
-        onConnectionClosed: vi.fn(),
-        onConnectionErrored: vi.fn(),
-      };
+      const listeners = createSessionHandshakingListeners();
       session = SessionStateMachine.transition.ConnectingToHandshaking(
         session,
         conn,
@@ -287,11 +302,7 @@ describe('session state machine', () => {
 
       const sessionStateToBePersisted = persistedSessionState(session);
 
-      const listeners = {
-        onMessage: vi.fn(),
-        onConnectionClosed: vi.fn(),
-        onConnectionErrored: vi.fn(),
-      };
+      const listeners = createSessionConnectedListeners();
       session = SessionStateMachine.transition.HandshakingToConnected(
         session,
         listeners,
@@ -336,11 +347,7 @@ describe('session state machine', () => {
         onConnectionErrored: [...session.conn.errorListeners],
       };
 
-      const listeners = {
-        onMessage: vi.fn(),
-        onConnectionClosed: vi.fn(),
-        onConnectionErrored: vi.fn(),
-      };
+      const listeners = createSessionConnectedListeners();
       session = SessionStateMachine.transition.PendingIdentificationToConnected(
         session,
         'clientSessionId',
@@ -381,8 +388,11 @@ describe('session state machine', () => {
       const sessionStateToBePersisted = persistedSessionState(session);
       error(new Error('test error'));
 
-      session =
-        SessionStateMachine.transition.ConnectingToNoConnection(session);
+      const listeners = createSessionNoConnectionListeners();
+      session = SessionStateMachine.transition.ConnectingToNoConnection(
+        session,
+        listeners,
+      );
 
       expect(session.state).toBe(SessionState.NoConnection);
       await expect(connPromise).rejects.toThrowError('test error');
@@ -402,8 +412,11 @@ describe('session state machine', () => {
       const sessionStateToBePersisted = persistedSessionState(session);
       connect();
 
-      session =
-        SessionStateMachine.transition.ConnectingToNoConnection(session);
+      const listeners = createSessionNoConnectionListeners();
+      session = SessionStateMachine.transition.ConnectingToNoConnection(
+        session,
+        listeners,
+      );
 
       expect(session.state).toBe(SessionState.NoConnection);
       const conn = await connPromise;
@@ -430,9 +443,12 @@ describe('session state machine', () => {
         onConnectionErrored: [...conn.errorListeners],
       };
 
+      const listeners = createSessionNoConnectionListeners();
       const sessionStateToBePersisted = persistedSessionState(session);
-      session =
-        SessionStateMachine.transition.HandshakingToNoConnection(session);
+      session = SessionStateMachine.transition.HandshakingToNoConnection(
+        session,
+        listeners,
+      );
 
       expect(session.state).toBe(SessionState.NoConnection);
       expect(conn.status).toBe('closed');
@@ -471,8 +487,12 @@ describe('session state machine', () => {
         onConnectionErrored: [...conn.errorListeners],
       };
 
+      const listeners = createSessionNoConnectionListeners();
       const sessionStateToBePersisted = persistedSessionState(session);
-      session = SessionStateMachine.transition.ConnectedToNoConnection(session);
+      session = SessionStateMachine.transition.ConnectedToNoConnection(
+        session,
+        listeners,
+      );
 
       expect(session.state).toBe(SessionState.NoConnection);
       expect(conn.status).toBe('closed');
@@ -516,10 +536,7 @@ describe('session state machine', () => {
       session = SessionStateMachine.transition.NoConnectionToConnecting(
         session,
         pendingConn,
-        {
-          onConnectionEstablished: vi.fn(),
-          onConnectionFailed: vi.fn(),
-        },
+        createSessionConnectingListeners(),
       );
 
       expect(session.sendBuffer.length).toBe(2);
@@ -542,11 +559,7 @@ describe('session state machine', () => {
       session = SessionStateMachine.transition.ConnectingToHandshaking(
         session,
         conn,
-        {
-          onHandshake: vi.fn(),
-          onConnectionClosed: vi.fn(),
-          onConnectionErrored: vi.fn(),
-        },
+        createSessionHandshakingListeners(),
       );
 
       expect(session.sendBuffer.length).toBe(2);
@@ -565,11 +578,10 @@ describe('session state machine', () => {
       expect(session.seq).toBe(2);
       expect(session.ack).toBe(0);
 
-      session = SessionStateMachine.transition.HandshakingToConnected(session, {
-        onMessage: vi.fn(),
-        onConnectionClosed: vi.fn(),
-        onConnectionErrored: vi.fn(),
-      });
+      session = SessionStateMachine.transition.HandshakingToConnected(
+        session,
+        createSessionConnectedListeners(),
+      );
 
       expect(sendBuffer.length).toBe(2);
       expect(session.seq).toBe(2);
@@ -585,8 +597,10 @@ describe('session state machine', () => {
       expect(session.seq).toBe(2);
       expect(session.ack).toBe(0);
 
-      session =
-        SessionStateMachine.transition.ConnectingToNoConnection(session);
+      session = SessionStateMachine.transition.ConnectingToNoConnection(
+        session,
+        createSessionNoConnectionListeners(),
+      );
 
       expect(session.sendBuffer.length).toBe(2);
       expect(session.seq).toBe(2);
@@ -604,8 +618,10 @@ describe('session state machine', () => {
       expect(session.seq).toBe(2);
       expect(session.ack).toBe(0);
 
-      session =
-        SessionStateMachine.transition.HandshakingToNoConnection(session);
+      session = SessionStateMachine.transition.HandshakingToNoConnection(
+        session,
+        createSessionNoConnectionListeners(),
+      );
 
       expect(sendBuffer.length).toBe(2);
       expect(session.seq).toBe(2);
@@ -622,7 +638,10 @@ describe('session state machine', () => {
       expect(session.seq).toBe(2);
       expect(session.ack).toBe(0);
 
-      session = SessionStateMachine.transition.ConnectedToNoConnection(session);
+      session = SessionStateMachine.transition.ConnectedToNoConnection(
+        session,
+        createSessionNoConnectionListeners(),
+      );
 
       expect(sendBuffer.length).toBe(2);
       expect(session.seq).toBe(2);
@@ -635,10 +654,7 @@ describe('session state machine', () => {
       const sessionHandle = createSessionNoConnection();
       const session: Session<MockConnection> = sessionHandle.session;
       const { pendingConn } = getPendingMockConnection();
-      const listeners = {
-        onConnectionEstablished: vi.fn(),
-        onConnectionFailed: vi.fn(),
-      };
+      const listeners = createSessionConnectingListeners();
 
       SessionStateMachine.transition.NoConnectionToConnecting(
         session,
@@ -660,11 +676,7 @@ describe('session state machine', () => {
 
       connect();
       const conn = await session.connPromise;
-      const listeners = {
-        onHandshake: vi.fn(),
-        onConnectionClosed: vi.fn(),
-        onConnectionErrored: vi.fn(),
-      };
+      const listeners = createSessionHandshakingListeners();
       SessionStateMachine.transition.ConnectingToHandshaking(
         session,
         conn,
@@ -681,11 +693,7 @@ describe('session state machine', () => {
     test('handshaking -> connected: stale handle', async () => {
       const sessionHandle = await createSessionHandshaking();
       const session: Session<MockConnection> = sessionHandle.session;
-      const listeners = {
-        onMessage: vi.fn(),
-        onConnectionClosed: vi.fn(),
-        onConnectionErrored: vi.fn(),
-      };
+      const listeners = createSessionConnectedListeners();
       SessionStateMachine.transition.HandshakingToConnected(session, listeners);
 
       // doing anything on the old session should throw
@@ -700,11 +708,7 @@ describe('session state machine', () => {
       const session:
         | Session<MockConnection>
         | SessionPendingIdentification<MockConnection> = sessionHandle.session;
-      const listeners = {
-        onMessage: vi.fn(),
-        onConnectionClosed: vi.fn(),
-        onConnectionErrored: vi.fn(),
-      };
+      const listeners = createSessionConnectedListeners();
       SessionStateMachine.transition.PendingIdentificationToConnected(
         session,
         'clientSessionId',
@@ -719,7 +723,11 @@ describe('session state machine', () => {
     test('connecting -> no connection: stale handle', async () => {
       const sessionHandle = await createSessionConnecting();
       const session: Session<MockConnection> = sessionHandle.session;
-      SessionStateMachine.transition.ConnectingToNoConnection(session);
+      const listeners = createSessionNoConnectionListeners();
+      SessionStateMachine.transition.ConnectingToNoConnection(
+        session,
+        listeners,
+      );
 
       // doing anything on the old session should throw
       expect(() => session.id).toThrowError(ERR_CONSUMED);
@@ -731,7 +739,11 @@ describe('session state machine', () => {
     test('handshaking -> no connection: stale handle', async () => {
       const sessionHandle = await createSessionHandshaking();
       const session: Session<MockConnection> = sessionHandle.session;
-      SessionStateMachine.transition.HandshakingToNoConnection(session);
+      const listeners = createSessionNoConnectionListeners();
+      SessionStateMachine.transition.HandshakingToNoConnection(
+        session,
+        listeners,
+      );
 
       // doing anything on the old session should throw
       expect(() => session.id).toThrowError(ERR_CONSUMED);
@@ -743,7 +755,11 @@ describe('session state machine', () => {
     test('connected -> no connection: stale handle', async () => {
       const sessionHandle = await createSessionConnected();
       const session: Session<MockConnection> = sessionHandle.session;
-      SessionStateMachine.transition.ConnectedToNoConnection(session);
+      const listeners = createSessionNoConnectionListeners();
+      SessionStateMachine.transition.ConnectedToNoConnection(
+        session,
+        listeners,
+      );
 
       // doing anything on the old session should throw
       expect(() => session.id).toThrowError(ERR_CONSUMED);

@@ -8,6 +8,7 @@ import {
   SessionConnectedListeners,
   SessionConnectingListeners,
   SessionHandshakingListeners,
+  SessionNoConnectionListeners,
   bestEffortClose,
 } from './common';
 import { createSessionTelemetryInfo } from '../../tracing';
@@ -30,11 +31,24 @@ function inheritSharedSession(
   ];
 }
 
+/**
+ *                   0. SessionNoConnection         ◄──┐
+ *                   │  reconnect / connect attempt    │
+ *                   ▼                                 │
+ *                   1. SessionConnecting      ────────┤ connect failure
+ *                   │  connect success                │
+ *                   ▼                                 │ handshake failure
+ *                   2. SessionHandshaking     ────────┤ connection drop
+ * 4. PendingSession │  handshake success              │
+ * │  server-side    ▼                                 │ connection drop
+ * └───────────────► 3. SessionConnected   ────────────┘ heartbeat misses
+ */
 export const SessionStateMachine = {
   entrypoints: {
     NoConnection(
       to: TransportClientId,
       from: TransportClientId,
+      listeners: SessionNoConnectionListeners,
       options: SessionOptions,
     ) {
       const id = `session-${nanoid(12)}`;
@@ -42,6 +56,7 @@ export const SessionStateMachine = {
       const sendBuffer: Array<OpaqueTransportMessage> = [];
 
       return new SessionNoConnection(
+        listeners,
         id,
         from,
         to,
@@ -120,27 +135,30 @@ export const SessionStateMachine = {
     // disconnect paths
     ConnectingToNoConnection<ConnType extends Connection>(
       oldSession: SessionConnecting<ConnType>,
+      listeners: SessionNoConnectionListeners,
     ): SessionNoConnection {
       const carriedState = inheritSharedSession(oldSession);
       bestEffortClose(oldSession.connPromise);
       oldSession._onStateExit();
-      return new SessionNoConnection(...carriedState);
+      return new SessionNoConnection(listeners, ...carriedState);
     },
     HandshakingToNoConnection<ConnType extends Connection>(
       oldSession: SessionHandshaking<ConnType>,
+      listeners: SessionNoConnectionListeners,
     ): SessionNoConnection {
       const carriedState = inheritSharedSession(oldSession);
       oldSession.conn.close();
       oldSession._onStateExit();
-      return new SessionNoConnection(...carriedState);
+      return new SessionNoConnection(listeners, ...carriedState);
     },
     ConnectedToNoConnection<ConnType extends Connection>(
       oldSession: SessionConnected<ConnType>,
+      listeners: SessionNoConnectionListeners,
     ): SessionNoConnection {
       const carriedState = inheritSharedSession(oldSession);
       oldSession.conn.close();
       oldSession._onStateExit();
-      return new SessionNoConnection(...carriedState);
+      return new SessionNoConnection(listeners, ...carriedState);
     },
   },
 } as const;

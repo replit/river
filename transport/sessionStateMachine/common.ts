@@ -23,15 +23,26 @@ export const enum SessionState {
 }
 
 // callback interfaces for various states
+export interface SessionNoConnectionListeners {
+  // timeout related
+  onSessionGracePeriodElapsed: () => void;
+}
+
 export interface SessionConnectingListeners<ConnType extends Connection> {
   onConnectionEstablished: (conn: ConnType) => void;
   onConnectionFailed: (err: unknown) => void;
+
+  // timeout related
+  onConnectionTimeout: () => void;
 }
 
 export interface SessionHandshakingListeners {
   onConnectionErrored: (err: unknown) => void;
   onConnectionClosed: () => void;
   onHandshake: (msg: OpaqueTransportMessage) => void;
+
+  // timeout related
+  onHandshakeTimeout: () => void;
 }
 
 export interface SessionConnectedListeners {
@@ -60,18 +71,6 @@ export function bestEffortClose<ConnType extends Connection>(
 
 export const ERR_CONSUMED = `session state has been consumed and is no longer valid`;
 
-/**
- *                   0. SessionNoConnection         ◄──┐
- *                   │  reconnect / connect attempt    │
- *                   ▼                                 │
- *                   1. SessionConnecting      ────────┤ connect failure
- *                   │  connect success                │
- *                   ▼                                 │ handshake failure
- *                   2. SessionHandshaking     ────────┤ connection drop
- * 4. PendingSession │  handshake success              │
- * │  server-side    ▼                                 │ connection drop
- * └───────────────► 3. SessionConnected   ────────────┘ heartbeat misses
- */
 abstract class StateMachineState {
   abstract readonly state: SessionState;
 

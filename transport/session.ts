@@ -106,6 +106,10 @@ export interface SessionOptions {
    */
   sessionDisconnectGraceMs: number;
   /**
+   * Connection timeout in milliseconds
+   */
+  connectionTimeoutMs: number;
+  /**
    * Handshake timeout in milliseconds
    */
   handshakeTimeoutMs: number;

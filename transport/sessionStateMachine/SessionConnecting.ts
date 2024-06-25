@@ -13,6 +13,8 @@ export class SessionConnecting<
   connPromise: Promise<ConnType>;
   listeners: SessionConnectingListeners<ConnType>;
 
+  connectionTimeout: ReturnType<typeof setTimeout>;
+
   constructor(
     connPromise: Promise<ConnType>,
     listeners: SessionConnectingListeners<ConnType>,
@@ -21,6 +23,10 @@ export class SessionConnecting<
     super(...args);
     this.connPromise = connPromise;
     this.listeners = listeners;
+
+    this.connectionTimeout = setTimeout(() => {
+      listeners.onConnectionTimeout();
+    }, this.options.connectionTimeoutMs);
 
     connPromise.then(
       (conn) => {
@@ -36,6 +42,7 @@ export class SessionConnecting<
 
   _onStateExit(): void {
     super._onStateExit();
+    clearTimeout(this.connectionTimeout);
   }
 
   _onClose(): void {
