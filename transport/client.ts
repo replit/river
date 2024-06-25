@@ -229,8 +229,6 @@ export abstract class ClientTransport<
     // before we claim victory and we deem that the handshake is fully established, check that our
     // session matches the remote's. if they do not match, proactively close the connection.
     // otherwise we will end up breaking a lot of invariants.
-    //
-    // TODO: Remove this once we finish rolling out the handshake-initiated session agreement.
     if (
       previousSession?.advertisedSessionId &&
       previousSession.advertisedSessionId !== parsed.payload.status.sessionId

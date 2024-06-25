@@ -320,15 +320,7 @@ export abstract class ServerTransport<
 
     let session: Session<ConnType>;
     let isTransparentReconnect: boolean;
-    if (!parsed.payload.expectedSessionState) {
-      // TODO: remove once we have upgraded all clients.
-      ({ session, isTransparentReconnect } = this.getOrCreateSession({
-        to: parsed.from,
-        conn,
-        sessionId: parsed.payload.sessionId,
-        propagationCtx: parsed.tracing,
-      }));
-    } else if (parsed.payload.expectedSessionState.reconnect) {
+    if (parsed.payload.expectedSessionState.reconnect) {
       // this has to be an existing session. if it doesn't match what we expect, reject the
       // handshake
       const existingSession = this.getExistingSession({
