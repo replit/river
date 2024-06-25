@@ -8,7 +8,7 @@ export class SessionNoConnection extends IdentifiedSession {
   readonly state = SessionState.NoConnection as const;
   listeners: SessionNoConnectionListeners;
 
-  gracePeriodTimeout: ReturnType<typeof setTimeout>;
+  gracePeriodTimeout?: ReturnType<typeof setTimeout>;
 
   constructor(
     listeners: SessionNoConnectionListeners,
@@ -28,6 +28,10 @@ export class SessionNoConnection extends IdentifiedSession {
 
   _onStateExit(): void {
     super._onStateExit();
-    clearTimeout(this.gracePeriodTimeout);
+
+    if (this.gracePeriodTimeout) {
+      clearTimeout(this.gracePeriodTimeout);
+      this.gracePeriodTimeout = undefined;
+    }
   }
 }

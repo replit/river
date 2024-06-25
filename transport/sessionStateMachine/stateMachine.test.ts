@@ -11,7 +11,11 @@ import {
 } from '../../util/testHelpers';
 import { Connection } from '../session';
 import { waitFor } from '../../__tests__/fixtures/cleanup';
-import { handshakeRequestMessage } from '../message';
+import {
+  ControlFlags,
+  ControlMessageAckSchema,
+  handshakeRequestMessage,
+} from '../message';
 import {
   ERR_CONSUMED,
   SessionConnectedListeners,
@@ -19,6 +23,7 @@ import {
   SessionHandshakingListeners,
   SessionNoConnectionListeners,
 } from './common';
+import { Static } from '@sinclair/typebox';
 
 function persistedSessionState<ConnType extends Connection>(
   session: Session<ConnType>,
@@ -64,9 +69,7 @@ class MockConnection extends Connection {
     this.errorListeners.delete(cb);
   }
 
-  send(_msg: Uint8Array): boolean {
-    return true;
-  }
+  send = vi.fn();
 
   close(): void {
     this.status = 'closed';
@@ -244,6 +247,8 @@ describe('session state machine', () => {
       let session: Session<MockConnection> = sessionHandle.session;
       expect(session.state).toBe(SessionState.NoConnection);
       const sessionStateToBePersisted = persistedSessionState(session);
+      const onSessionGracePeriodElapsed =
+        sessionHandle.onSessionGracePeriodElapsed;
 
       const { pendingConn } = getPendingMockConnection();
       const listeners = createSessionConnectingListeners();
@@ -256,11 +261,16 @@ describe('session state machine', () => {
       expect(session.state).toBe(SessionState.Connecting);
       expect(listeners.onConnectionEstablished).not.toHaveBeenCalled();
       expect(listeners.onConnectionFailed).not.toHaveBeenCalled();
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
 
       // make sure the persisted state is the same
       expect(persistedSessionState(session)).toStrictEqual(
         sessionStateToBePersisted,
       );
+
+      // advance time and make sure timer doesn't go off
+      vi.advanceTimersByTime(testingSessionOptions.sessionDisconnectGraceMs);
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
     });
 
     test('connecting -> handshaking', async () => {
@@ -268,6 +278,7 @@ describe('session state machine', () => {
       let session: Session<MockConnection> = sessionHandle.session;
       const { connect } = sessionHandle;
       const sessionStateToBePersisted = persistedSessionState(session);
+      const onConnectionTimeout = sessionHandle.onConnectionTimeout;
 
       connect();
       const conn = await session.connPromise;
@@ -279,6 +290,7 @@ describe('session state machine', () => {
       );
 
       expect(session.state).toBe(SessionState.Handshaking);
+      expect(onConnectionTimeout).not.toHaveBeenCalled();
 
       // make sure the persisted state is the same
       expect(persistedSessionState(session)).toStrictEqual(
@@ -289,6 +301,10 @@ describe('session state machine', () => {
       expect(conn.dataListeners.size).toBe(1);
       expect(conn.closeListeners.size).toBe(1);
       expect(conn.errorListeners.size).toBe(1);
+
+      // advance time and make sure timer doesn't go off
+      vi.advanceTimersByTime(testingSessionOptions.connectionTimeoutMs);
+      expect(onConnectionTimeout).not.toHaveBeenCalled();
     });
 
     test('handshaking -> connected', async () => {
@@ -301,6 +317,7 @@ describe('session state machine', () => {
       };
 
       const sessionStateToBePersisted = persistedSessionState(session);
+      const onHandshakeTimeout = sessionHandle.onHandshakeTimeout;
 
       const listeners = createSessionConnectedListeners();
       session = SessionStateMachine.transition.HandshakingToConnected(
@@ -309,6 +326,7 @@ describe('session state machine', () => {
       );
 
       expect(session.state).toBe(SessionState.Connected);
+      expect(onHandshakeTimeout).not.toHaveBeenCalled();
 
       // make sure the persisted state is the same
       expect(persistedSessionState(session)).toStrictEqual(
@@ -333,6 +351,10 @@ describe('session state machine', () => {
       for (const listener of oldListeners.onConnectionErrored) {
         expect(conn.errorListeners.has(listener)).toBe(false);
       }
+
+      // advance time and make sure timer doesn't go off
+      vi.advanceTimersByTime(testingSessionOptions.handshakeTimeoutMs);
+      expect(onHandshakeTimeout).not.toHaveBeenCalled();
     });
 
     test('pending -> connected', async () => {
@@ -347,6 +369,7 @@ describe('session state machine', () => {
         onConnectionErrored: [...session.conn.errorListeners],
       };
 
+      const onHandshakeTimeout = sessionHandle.onHandshakeTimeout;
       const listeners = createSessionConnectedListeners();
       session = SessionStateMachine.transition.PendingIdentificationToConnected(
         session,
@@ -358,6 +381,7 @@ describe('session state machine', () => {
       expect(session.state).toBe(SessionState.Connected);
       expect(session.id).toBe('clientSessionId');
       expect(session.to).toBe('to');
+      expect(onHandshakeTimeout).not.toHaveBeenCalled();
 
       // check handlers on the connection
       const conn = session.conn;
@@ -377,6 +401,10 @@ describe('session state machine', () => {
       for (const listener of oldListeners.onConnectionErrored) {
         expect(conn.errorListeners.has(listener)).toBe(false);
       }
+
+      // advance time and make sure timer doesn't go off
+      vi.advanceTimersByTime(testingSessionOptions.handshakeTimeoutMs);
+      expect(onHandshakeTimeout).not.toHaveBeenCalled();
     });
 
     test('connecting (conn failed) -> no connection', async () => {
@@ -385,6 +413,7 @@ describe('session state machine', () => {
       const connPromise = session.connPromise;
       const { error } = sessionHandle;
 
+      const onConnectionTimeout = sessionHandle.onConnectionTimeout;
       const sessionStateToBePersisted = persistedSessionState(session);
       error(new Error('test error'));
 
@@ -395,12 +424,17 @@ describe('session state machine', () => {
       );
 
       expect(session.state).toBe(SessionState.NoConnection);
+      expect(onConnectionTimeout).not.toHaveBeenCalled();
       await expect(connPromise).rejects.toThrowError('test error');
 
       // make sure the persisted state is the same
       expect(persistedSessionState(session)).toStrictEqual(
         sessionStateToBePersisted,
       );
+
+      // advance time and make sure timer doesn't go off
+      vi.advanceTimersByTime(testingSessionOptions.connectionTimeoutMs);
+      expect(onConnectionTimeout).not.toHaveBeenCalled();
     });
 
     test('connecting (conn ok) -> no connection', async () => {
@@ -409,6 +443,7 @@ describe('session state machine', () => {
       const connPromise = session.connPromise;
       const { connect } = sessionHandle;
 
+      const onConnectionTimeout = sessionHandle.onConnectionTimeout;
       const sessionStateToBePersisted = persistedSessionState(session);
       connect();
 
@@ -419,6 +454,7 @@ describe('session state machine', () => {
       );
 
       expect(session.state).toBe(SessionState.NoConnection);
+      expect(onConnectionTimeout).not.toHaveBeenCalled();
       const conn = await connPromise;
       expect(conn.status).toBe('closed');
 
@@ -431,6 +467,10 @@ describe('session state machine', () => {
       expect(persistedSessionState(session)).toStrictEqual(
         sessionStateToBePersisted,
       );
+
+      // advance time and make sure timer doesn't go off
+      vi.advanceTimersByTime(testingSessionOptions.connectionTimeoutMs);
+      expect(onConnectionTimeout).not.toHaveBeenCalled();
     });
 
     test('handshaking -> no connection', async () => {
@@ -443,6 +483,7 @@ describe('session state machine', () => {
         onConnectionErrored: [...conn.errorListeners],
       };
 
+      const onHandshakeTimeout = sessionHandle.onHandshakeTimeout;
       const listeners = createSessionNoConnectionListeners();
       const sessionStateToBePersisted = persistedSessionState(session);
       session = SessionStateMachine.transition.HandshakingToNoConnection(
@@ -451,6 +492,7 @@ describe('session state machine', () => {
       );
 
       expect(session.state).toBe(SessionState.NoConnection);
+      expect(onHandshakeTimeout).not.toHaveBeenCalled();
       expect(conn.status).toBe('closed');
 
       // check handlers on the connection
@@ -475,6 +517,10 @@ describe('session state machine', () => {
       expect(persistedSessionState(session)).toStrictEqual(
         sessionStateToBePersisted,
       );
+
+      // advance time and make sure timer doesn't go off
+      vi.advanceTimersByTime(testingSessionOptions.handshakeTimeoutMs);
+      expect(onHandshakeTimeout).not.toHaveBeenCalled();
     });
 
     test('connected -> no connection', async () => {
@@ -883,6 +929,25 @@ describe('session state machine', () => {
       expect(session.state).toBe(SessionState.Connecting);
     });
 
+    test('connecting event listeners: connectionTimeout', async () => {
+      const sessionHandle = await createSessionConnecting();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const {
+        onConnectionEstablished,
+        onConnectionFailed,
+        onConnectionTimeout,
+      } = sessionHandle;
+      expect(session.state).toBe(SessionState.Connecting);
+      expect(onConnectionEstablished).not.toHaveBeenCalled();
+      expect(onConnectionFailed).not.toHaveBeenCalled();
+      expect(onConnectionTimeout).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(testingSessionOptions.connectionTimeoutMs);
+      expect(onConnectionTimeout).toHaveBeenCalled();
+      expect(onConnectionEstablished).not.toHaveBeenCalled();
+      expect(onConnectionFailed).not.toHaveBeenCalled();
+    });
+
     test('handshaking event listeners: connectionErrored', async () => {
       const sessionHandle = await createSessionHandshaking();
       const session: Session<MockConnection> = sessionHandle.session;
@@ -964,6 +1029,30 @@ describe('session state machine', () => {
 
       // should not have transitioned to the next state
       expect(session.state).toBe(SessionState.Handshaking);
+    });
+
+    test('handshaking event listeners: handshakeTimeout', async () => {
+      const sessionHandle = await createSessionHandshaking();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const {
+        onHandshake,
+        onConnectionClosed,
+        onConnectionErrored,
+        onHandshakeTimeout,
+      } = sessionHandle;
+      expect(session.state).toBe(SessionState.Handshaking);
+      expect(onHandshake).not.toHaveBeenCalled();
+      expect(onConnectionClosed).not.toHaveBeenCalled();
+      expect(onConnectionErrored).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(testingSessionOptions.handshakeTimeoutMs);
+
+      await waitFor(async () => {
+        expect(onHandshake).not.toHaveBeenCalled();
+        expect(onConnectionClosed).not.toHaveBeenCalled();
+        expect(onConnectionErrored).not.toHaveBeenCalled();
+        expect(onHandshakeTimeout).toHaveBeenCalledTimes(1);
+      });
     });
 
     test('pending identification event listeners: connectionErrored', async () => {
@@ -1058,6 +1147,33 @@ describe('session state machine', () => {
       expect(session.state).toBe(SessionState.PendingIdentification);
     });
 
+    test('pending identification event listeners: handshakeTimeout', async () => {
+      const sessionHandle = await createSessionPendingIdentification();
+      const session:
+        | Session<MockConnection>
+        | SessionPendingIdentification<MockConnection> = sessionHandle.session;
+
+      const {
+        onHandshake,
+        onConnectionClosed,
+        onConnectionErrored,
+        onHandshakeTimeout,
+      } = sessionHandle;
+      expect(session.state).toBe(SessionState.PendingIdentification);
+      expect(onHandshake).not.toHaveBeenCalled();
+      expect(onConnectionClosed).not.toHaveBeenCalled();
+      expect(onConnectionErrored).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(testingSessionOptions.handshakeTimeoutMs);
+
+      await waitFor(async () => {
+        expect(onHandshake).not.toHaveBeenCalled();
+        expect(onConnectionClosed).not.toHaveBeenCalled();
+        expect(onConnectionErrored).not.toHaveBeenCalled();
+        expect(onHandshakeTimeout).toHaveBeenCalledTimes(1);
+      });
+    });
+
     test('connected event listeners: connectionErrored', async () => {
       const sessionHandle = await createSessionConnected();
       const session: Session<MockConnection> = sessionHandle.session;
@@ -1128,6 +1244,60 @@ describe('session state machine', () => {
 
       // should not have transitioned to the next state
       expect(session.state).toBe(SessionState.Connected);
+    });
+  });
+
+  describe('heartbeats', () => {
+    test('active heartbeating works and is cleared on state transition', async () => {
+      const sessionHandle = await createSessionConnected();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const conn = session.conn;
+
+      // wait for heartbeat timer
+      session.startActiveHeartbeat();
+      vi.advanceTimersByTime(testingSessionOptions.heartbeatIntervalMs);
+
+      // make sure conn has received the heartbeat
+      expect(conn.send).toHaveBeenCalledTimes(1);
+
+      // transition to no connection
+      const listeners = createSessionNoConnectionListeners();
+      SessionStateMachine.transition.ConnectedToNoConnection(
+        session,
+        listeners,
+      );
+
+      // send another heartbeat
+      vi.advanceTimersByTime(testingSessionOptions.heartbeatIntervalMs);
+
+      // should not have sent another heartbeat
+      expect(conn.send).toHaveBeenCalledTimes(1);
+    });
+
+    test('passive heartbeating echoes back acks', async () => {
+      const sessionHandle = await createSessionConnected();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const conn = session.conn;
+
+      // wait for heartbeat timer
+      vi.advanceTimersByTime(testingSessionOptions.heartbeatIntervalMs);
+      expect(conn.send).toHaveBeenCalledTimes(0);
+
+      // send a heartbeat
+      conn.emitData(
+        session.options.codec.toBuffer(
+          session.constructMsg({
+            streamId: 'heartbeat',
+            controlFlags: ControlFlags.AckBit,
+            payload: {
+              type: 'ACK',
+            } satisfies Static<typeof ControlMessageAckSchema>,
+          }),
+        ),
+      );
+
+      // make sure the session acks the heartbeat
+      expect(conn.send).toHaveBeenCalledTimes(1);
     });
   });
 });
