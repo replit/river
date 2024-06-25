@@ -67,16 +67,16 @@ abstract class StateMachineState {
           return target._isConsumed;
         }
 
-        // modify _onStateExit
-        if (prop === '_onStateExit') {
+        // modify _handleStateExit
+        if (prop === '_handleStateExit') {
           return () => {
             target._isConsumed = true;
             target._handleStateExit();
           };
         }
 
-        // modify _onClose
-        if (prop === '_onClose') {
+        // modify _handleClose
+        if (prop === '_handleClose') {
           return () => {
             target._handleStateExit();
             target._handleClose();
