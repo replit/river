@@ -12,6 +12,7 @@ import {
 import { Connection } from '../session';
 import { waitFor } from '../../__tests__/fixtures/cleanup';
 import { handshakeRequestMessage } from '../message';
+import { ERR_CONSUMED } from './common';
 
 function persistedSessionState<ConnType extends Connection>(
   session: Session<ConnType>,
@@ -630,21 +631,190 @@ describe('session state machine', () => {
   });
 
   describe('stale handles post-transition', () => {
-    test.todo('no connection -> connecting: stale handle', async () => {});
-    test.todo('connecting -> handshaking: stale handle', async () => {});
-    test.todo('handshaking -> connected: stale handle', async () => {});
-    test.todo('pending -> connected: stale handle', async () => {});
-    test.todo('connecting -> no connection: stale handle', async () => {});
-    test.todo('handshaking -> no connection: stale handle', async () => {});
-    test.todo('connected -> no connection: stale handle', async () => {});
+    test('no connection -> connecting: stale handle', async () => {
+      const sessionHandle = createSessionNoConnection();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const { pendingConn } = getPendingMockConnection();
+      const listeners = {
+        onConnectionEstablished: vi.fn(),
+        onConnectionFailed: vi.fn(),
+      };
+
+      SessionStateMachine.transition.NoConnectionToConnecting(
+        session,
+        pendingConn,
+        listeners,
+      );
+
+      // doing anything on the old session should throw
+      expect(() => session.id).toThrowError(ERR_CONSUMED);
+      expect(() => {
+        session.send(payloadToTransportMessage('hello'));
+      }).toThrowError(ERR_CONSUMED);
+    });
+
+    test('connecting -> handshaking: stale handle', async () => {
+      const sessionHandle = await createSessionConnecting();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const { connect } = sessionHandle;
+
+      connect();
+      const conn = await session.connPromise;
+      const listeners = {
+        onHandshake: vi.fn(),
+        onConnectionClosed: vi.fn(),
+        onConnectionErrored: vi.fn(),
+      };
+      SessionStateMachine.transition.ConnectingToHandshaking(
+        session,
+        conn,
+        listeners,
+      );
+
+      // doing anything on the old session should throw
+      expect(() => session.id).toThrowError(ERR_CONSUMED);
+      expect(() => {
+        session.send(payloadToTransportMessage('hello'));
+      }).toThrowError(ERR_CONSUMED);
+    });
+
+    test('handshaking -> connected: stale handle', async () => {
+      const sessionHandle = await createSessionHandshaking();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const listeners = {
+        onMessage: vi.fn(),
+        onConnectionClosed: vi.fn(),
+        onConnectionErrored: vi.fn(),
+      };
+      SessionStateMachine.transition.HandshakingToConnected(session, listeners);
+
+      // doing anything on the old session should throw
+      expect(() => session.id).toThrowError(ERR_CONSUMED);
+      expect(() => {
+        session.send(payloadToTransportMessage('hello'));
+      }).toThrowError(ERR_CONSUMED);
+    });
+
+    test('pending -> connected: stale handle', async () => {
+      const sessionHandle = await createSessionPendingIdentification();
+      const session:
+        | Session<MockConnection>
+        | SessionPendingIdentification<MockConnection> = sessionHandle.session;
+      const listeners = {
+        onMessage: vi.fn(),
+        onConnectionClosed: vi.fn(),
+        onConnectionErrored: vi.fn(),
+      };
+      SessionStateMachine.transition.PendingIdentificationToConnected(
+        session,
+        'clientSessionId',
+        'to',
+        listeners,
+      );
+
+      // doing anything on the old session should throw
+      expect(() => session.conn).toThrowError(ERR_CONSUMED);
+    });
+
+    test('connecting -> no connection: stale handle', async () => {
+      const sessionHandle = await createSessionConnecting();
+      const session: Session<MockConnection> = sessionHandle.session;
+      SessionStateMachine.transition.ConnectingToNoConnection(session);
+
+      // doing anything on the old session should throw
+      expect(() => session.id).toThrowError(ERR_CONSUMED);
+      expect(() => {
+        session.send(payloadToTransportMessage('hello'));
+      }).toThrowError(ERR_CONSUMED);
+    });
+
+    test('handshaking -> no connection: stale handle', async () => {
+      const sessionHandle = await createSessionHandshaking();
+      const session: Session<MockConnection> = sessionHandle.session;
+      SessionStateMachine.transition.HandshakingToNoConnection(session);
+
+      // doing anything on the old session should throw
+      expect(() => session.id).toThrowError(ERR_CONSUMED);
+      expect(() => {
+        session.send(payloadToTransportMessage('hello'));
+      }).toThrowError(ERR_CONSUMED);
+    });
+
+    test('connected -> no connection: stale handle', async () => {
+      const sessionHandle = await createSessionConnected();
+      const session: Session<MockConnection> = sessionHandle.session;
+      SessionStateMachine.transition.ConnectedToNoConnection(session);
+
+      // doing anything on the old session should throw
+      expect(() => session.id).toThrowError(ERR_CONSUMED);
+      expect(() => {
+        session.send(payloadToTransportMessage('hello'));
+      }).toThrowError(ERR_CONSUMED);
+    });
   });
 
   describe('close cleanup', () => {
-    test.todo('no connection', async () => {});
-    test.todo('connecting', async () => {});
-    test.todo('handshaking', async () => {});
-    test.todo('connected', async () => {});
-    test.todo('pending identification', async () => {});
+    test('no connection', async () => {
+      const sessionHandle = createSessionNoConnection();
+      const session: Session<MockConnection> = sessionHandle.session;
+
+      session.send(payloadToTransportMessage('hello'));
+      session.send(payloadToTransportMessage('world'));
+      expect(session.sendBuffer.length).toBe(2);
+      session.close();
+      expect(session.sendBuffer.length).toBe(0);
+    });
+
+    test('connecting', async () => {
+      const sessionHandle = await createSessionConnecting();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const { connect } = sessionHandle;
+
+      session.send(payloadToTransportMessage('hello'));
+      session.send(payloadToTransportMessage('world'));
+      expect(session.sendBuffer.length).toBe(2);
+      connect();
+      session.close();
+      expect(session.sendBuffer.length).toBe(0);
+      const conn = await session.connPromise;
+      expect(conn.status).toBe('closed');
+    });
+
+    test('handshaking', async () => {
+      const sessionHandle = await createSessionHandshaking();
+      const session: Session<MockConnection> = sessionHandle.session;
+
+      session.send(payloadToTransportMessage('hello'));
+      session.send(payloadToTransportMessage('world'));
+      expect(session.sendBuffer.length).toBe(2);
+      session.close();
+      expect(session.sendBuffer.length).toBe(0);
+      const conn = session.conn;
+      expect(conn.status).toBe('closed');
+    });
+
+    test('connected', async () => {
+      const sessionHandle = await createSessionConnected();
+      const session: Session<MockConnection> = sessionHandle.session;
+
+      session.send(payloadToTransportMessage('hello'));
+      session.send(payloadToTransportMessage('world'));
+      expect(session.sendBuffer.length).toBe(2);
+      session.close();
+      expect(session.sendBuffer.length).toBe(0);
+      const conn = session.conn;
+      expect(conn.status).toBe('closed');
+    });
+
+    test('pending identification', async () => {
+      const sessionHandle = await createSessionPendingIdentification();
+      const session: SessionPendingIdentification<MockConnection> =
+        sessionHandle.session;
+
+      session.close();
+      const conn = session.conn;
+      expect(conn.status).toBe('closed');
+    });
   });
 
   describe('event listeners', () => {

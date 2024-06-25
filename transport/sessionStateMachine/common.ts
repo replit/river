@@ -58,7 +58,7 @@ export function bestEffortClose<ConnType extends Connection>(
     });
 }
 
-const ERR_CONSUMED = 'session state has been consumed and is no longer valid';
+export const ERR_CONSUMED = `session state has been consumed and is no longer valid`;
 
 /**
  *                   0. SessionNoConnection         ◄──┐
@@ -84,6 +84,10 @@ abstract class StateMachineState {
 
   // called when we exit the state machine entirely
   abstract _onClose(): void;
+
+  close(): void {
+    this._onClose();
+  }
 
   constructor() {
     this._isConsumed = false;
