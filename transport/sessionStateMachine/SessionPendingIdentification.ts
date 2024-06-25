@@ -1,12 +1,16 @@
 import { MessageMetadata } from '../../logging';
 import { TransportMessage } from '../message';
 import { Connection } from '../session';
-import {
-  CommonSession,
-  SessionHandshakingListeners,
-  SessionState,
-} from './common';
+import { SessionHandshakingListeners } from './SessionHandshaking';
+import { CommonSession, SessionState } from './common';
 
+/*
+ * Server-side session that has a connection but is waiting for the client to identify itself.
+ *
+ * Valid transitions:
+ * - PendingIdentification -> NoConnection (on close)
+ * - PendingIdentification -> Connected (on handshake)
+ */
 export class SessionPendingIdentification<
   ConnType extends Connection,
 > extends CommonSession {
@@ -52,14 +56,14 @@ export class SessionPendingIdentification<
     return this.conn.send(this.options.codec.toBuffer(msg));
   }
 
-  _onStateExit(): void {
+  _handleStateExit(): void {
     this.conn.removeDataListener(this.onHandshakeData);
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
     clearTimeout(this.handshakeTimeout);
   }
 
-  _onClose(): void {
+  _handleClose(): void {
     this.conn.close();
   }
 }

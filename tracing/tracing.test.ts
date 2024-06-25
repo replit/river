@@ -42,7 +42,13 @@ describe('Basic tracing tests', () => {
 
     const propCtx = getPropagationContext(ctx);
     expect(propCtx?.traceparent).toBeTruthy();
-    const teleInfo = createSessionTelemetryInfo(dummySession(), propCtx);
+    const session = dummySession();
+    const teleInfo = createSessionTelemetryInfo(
+      session.id,
+      session.to,
+      session.from,
+      propCtx,
+    );
 
     // @ts-expect-error: hacking to get parentSpanId
     expect(propCtx?.traceparent).toContain(teleInfo.span.parentSpanId);

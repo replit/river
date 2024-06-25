@@ -2,16 +2,25 @@ import { Static } from '@sinclair/typebox';
 import {
   ControlFlags,
   ControlMessageAckSchema,
+  OpaqueTransportMessage,
   PartialTransportMessage,
   isAck,
 } from '../message';
 import { Connection } from '../session';
-import {
-  IdentifiedSession,
-  SessionConnectedListeners,
-  SessionState,
-} from './common';
+import { IdentifiedSession, SessionState } from './common';
 
+export interface SessionConnectedListeners {
+  onConnectionErrored: (err: unknown) => void;
+  onConnectionClosed: () => void;
+  onMessage: (msg: OpaqueTransportMessage) => void;
+}
+
+/*
+ * A session that is connected and can send and receive messages.
+ *
+ * Valid transitions:
+ * - Connected -> NoConnection (on close)
+ */
 export class SessionConnected<
   ConnType extends Connection,
 > extends IdentifiedSession {
@@ -123,16 +132,16 @@ export class SessionConnected<
     }
   };
 
-  _onStateExit(): void {
-    super._onStateExit();
+  _handleStateExit(): void {
+    super._handleStateExit();
     this.conn.removeDataListener(this.onMessageData);
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
     clearInterval(this.heartbeatHandle);
   }
 
-  _onClose(): void {
-    super._onClose();
+  _handleClose(): void {
+    super._handleClose();
     this.conn.close();
   }
 }

@@ -22,35 +22,6 @@ export const enum SessionState {
   PendingIdentification = 'PendingIdentification',
 }
 
-// callback interfaces for various states
-export interface SessionNoConnectionListeners {
-  // timeout related
-  onSessionGracePeriodElapsed: () => void;
-}
-
-export interface SessionConnectingListeners<ConnType extends Connection> {
-  onConnectionEstablished: (conn: ConnType) => void;
-  onConnectionFailed: (err: unknown) => void;
-
-  // timeout related
-  onConnectionTimeout: () => void;
-}
-
-export interface SessionHandshakingListeners {
-  onConnectionErrored: (err: unknown) => void;
-  onConnectionClosed: () => void;
-  onHandshake: (msg: OpaqueTransportMessage) => void;
-
-  // timeout related
-  onHandshakeTimeout: () => void;
-}
-
-export interface SessionConnectedListeners {
-  onConnectionErrored: (err: unknown) => void;
-  onConnectionClosed: () => void;
-  onMessage: (msg: OpaqueTransportMessage) => void;
-}
-
 export type Session<ConnType extends Connection> =
   | SessionNoConnection
   | SessionConnecting<ConnType>
@@ -69,13 +40,18 @@ abstract class StateMachineState {
   _isConsumed: boolean;
 
   // called when we're transitioning to another state
-  abstract _onStateExit(): void;
+  // note that this is internal and should not be called directly
+  // by consumers, the proxy will call this when the state is consumed
+  // and we're transitioning to another state
+  abstract _handleStateExit(): void;
 
   // called when we exit the state machine entirely
-  abstract _onClose(): void;
+  // note that this is internal and should not be called directly
+  // by consumers, the proxy will call this when .close is closed
+  abstract _handleClose(): void;
 
   close(): void {
-    this._onClose();
+    this._handleClose();
   }
 
   constructor() {
@@ -95,15 +71,15 @@ abstract class StateMachineState {
         if (prop === '_onStateExit') {
           return () => {
             target._isConsumed = true;
-            target._onStateExit();
+            target._handleStateExit();
           };
         }
 
         // modify _onClose
         if (prop === '_onClose') {
           return () => {
-            target._onStateExit();
-            target._onClose();
+            target._handleStateExit();
+            target._handleClose();
           };
         }
 
@@ -239,11 +215,11 @@ export abstract class IdentifiedSession extends CommonSession {
     return constructedMsg.id;
   }
 
-  _onStateExit(): void {
+  _handleStateExit(): void {
     // noop
   }
 
-  _onClose(): void {
+  _handleClose(): void {
     // zero out the buffer
     this.sendBuffer.length = 0;
   }

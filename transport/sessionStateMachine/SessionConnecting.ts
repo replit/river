@@ -1,10 +1,22 @@
 import { Connection } from '../session';
-import {
-  IdentifiedSession,
-  SessionConnectingListeners,
-  SessionState,
-} from './common';
+import { IdentifiedSession, SessionState } from './common';
 
+export interface SessionConnectingListeners<ConnType extends Connection> {
+  onConnectionEstablished: (conn: ConnType) => void;
+  onConnectionFailed: (err: unknown) => void;
+
+  // timeout related
+  onConnectionTimeout: () => void;
+}
+
+/*
+ * A session that is connecting but we don't have access to the raw connection
+ * yet.
+ *
+ * Valid transitions:
+ * - Connecting -> NoConnection (timeout)
+ * - Connecting -> Handshaking (on connection established)
+ */
 export class SessionConnecting<
   ConnType extends Connection,
 > extends IdentifiedSession {
@@ -49,14 +61,14 @@ export class SessionConnecting<
       });
   }
 
-  _onStateExit(): void {
-    super._onStateExit();
+  _handleStateExit(): void {
+    super._handleStateExit();
     clearTimeout(this.connectionTimeout);
   }
 
-  _onClose(): void {
+  _handleClose(): void {
     // close the pending connection if it resolves
     this.bestEffortClose();
-    super._onClose();
+    super._handleClose();
   }
 }

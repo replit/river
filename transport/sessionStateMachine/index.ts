@@ -1,7 +1,7 @@
-export { SessionState, Session } from './common';
-export { SessionPendingIdentification } from './SessionPendingIdentification';
-export { SessionConnecting } from './SessionConnecting';
-export { SessionNoConnection } from './SessionNoConnection';
-export { SessionHandshaking } from './SessionHandshaking';
-export { SessionConnected } from './SessionConnected';
+export { type SessionState, type Session } from './common';
+export { type SessionPendingIdentification } from './SessionPendingIdentification';
+export { type SessionConnecting } from './SessionConnecting';
+export { type SessionNoConnection } from './SessionNoConnection';
+export { type SessionHandshaking } from './SessionHandshaking';
+export { type SessionConnected } from './SessionConnected';
 export { SessionStateMachine } from './transitions';

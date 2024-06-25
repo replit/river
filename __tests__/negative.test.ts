@@ -263,6 +263,10 @@ describe('should handle incompatabilities', async () => {
         type: 'HANDSHAKE_REQ',
         protocolVersion: 'v0',
         sessionId: 'sessionId',
+        expectedSessionState: {
+          reconnect: false,
+          nextExpectedSeq: 0,
+        },
       } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
     };
     ws.send(NaiveJsonCodec.toBuffer(requestMsg));

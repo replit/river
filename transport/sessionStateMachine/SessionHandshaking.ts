@@ -1,11 +1,23 @@
-import { TransportMessage } from '../message';
+import { OpaqueTransportMessage, TransportMessage } from '../message';
 import { Connection } from '../session';
-import {
-  IdentifiedSession,
-  SessionHandshakingListeners,
-  SessionState,
-} from './common';
+import { IdentifiedSession, SessionState } from './common';
 
+export interface SessionHandshakingListeners {
+  onConnectionErrored: (err: unknown) => void;
+  onConnectionClosed: () => void;
+  onHandshake: (msg: OpaqueTransportMessage) => void;
+
+  // timeout related
+  onHandshakeTimeout: () => void;
+}
+
+/*
+ * A session that is handshaking and waiting for the other side to identify itself.
+ *
+ * Valid transitions:
+ * - Handshaking -> NoConnection (on close)
+ * - Handshaking -> Connected (on handshake)
+ */
 export class SessionHandshaking<
   ConnType extends Connection,
 > extends IdentifiedSession {
@@ -44,16 +56,16 @@ export class SessionHandshaking<
     return this.conn.send(this.options.codec.toBuffer(msg));
   }
 
-  _onStateExit(): void {
-    super._onStateExit();
+  _handleStateExit(): void {
+    super._handleStateExit();
     this.conn.removeDataListener(this.onHandshakeData);
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
     clearTimeout(this.handshakeTimeout);
   }
 
-  _onClose(): void {
-    super._onClose();
+  _handleClose(): void {
+    super._handleClose();
     this.conn.close();
   }
 }

@@ -1,9 +1,16 @@
-import {
-  IdentifiedSession,
-  SessionNoConnectionListeners,
-  SessionState,
-} from './common';
+import { IdentifiedSession, SessionState } from './common';
 
+export interface SessionNoConnectionListeners {
+  // timeout related
+  onSessionGracePeriodElapsed: () => void;
+}
+
+/*
+ * A session that is not connected and cannot send or receive messages.
+ *
+ * Valid transitions:
+ * - NoConnection -> Connecting (on connect)
+ */
 export class SessionNoConnection extends IdentifiedSession {
   readonly state = SessionState.NoConnection as const;
   listeners: SessionNoConnectionListeners;
@@ -22,12 +29,12 @@ export class SessionNoConnection extends IdentifiedSession {
     }, this.options.sessionDisconnectGraceMs);
   }
 
-  _onClose(): void {
-    super._onClose();
+  _handleClose(): void {
+    super._handleClose();
   }
 
-  _onStateExit(): void {
-    super._onStateExit();
+  _handleStateExit(): void {
+    super._handleStateExit();
 
     if (this.gracePeriodTimeout) {
       clearTimeout(this.gracePeriodTimeout);

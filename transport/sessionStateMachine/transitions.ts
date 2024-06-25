@@ -1,19 +1,25 @@
 import { nanoid } from 'nanoid';
 import { OpaqueTransportMessage, TransportClientId } from '..';
 import { Connection, SessionOptions } from '../session';
-import { SessionConnecting } from './SessionConnecting';
-import { SessionNoConnection } from './SessionNoConnection';
 import {
-  IdentifiedSession,
-  SessionConnectedListeners,
+  SessionConnecting,
   SessionConnectingListeners,
-  SessionHandshakingListeners,
+} from './SessionConnecting';
+import {
+  SessionNoConnection,
   SessionNoConnectionListeners,
-} from './common';
+} from './SessionNoConnection';
+import { IdentifiedSession } from './common';
 import { createSessionTelemetryInfo } from '../../tracing';
 import { SessionPendingIdentification } from './SessionPendingIdentification';
-import { SessionHandshaking } from './SessionHandshaking';
-import { SessionConnected } from './SessionConnected';
+import {
+  SessionHandshaking,
+  SessionHandshakingListeners,
+} from './SessionHandshaking';
+import {
+  SessionConnected,
+  SessionConnectedListeners,
+} from './SessionConnected';
 
 function inheritSharedSession(
   session: IdentifiedSession,
@@ -30,17 +36,28 @@ function inheritSharedSession(
   ];
 }
 
-/**
- *                   0. SessionNoConnection         ◄──┐
- *                   │  reconnect / connect attempt    │
- *                   ▼                                 │
- *                   1. SessionConnecting      ────────┤ connect failure
- *                   │  connect success                │
- *                   ▼                                 │ handshake failure
- *                   2. SessionHandshaking     ────────┤ connection drop
- * 4. PendingSession │  handshake success              │
- * │  server-side    ▼                                 │ connection drop
- * └───────────────► 3. SessionConnected   ────────────┘ heartbeat misses
+/*
+ * Session state machine:
+ * 1. SessionNoConnection is the client entrypoint as
+ *    we know who the other side is already, we just need to connect
+ * 5. SessionPendingIdentification is the server entrypoint
+ *    as we have a connection but don't know who the other side is yet
+ *
+ *                           1. SessionNoConnection         ◄──┐
+ *                           │  reconnect / connect attempt    │
+ *                           ▼                                 │
+ *                           2. SessionConnecting              │
+ *                           │  connect success  ──────────────┤ connect failure
+ *                           ▼                                 │
+ *                           3. SessionHandshaking             │
+ *                           │  handshake success       ┌──────┤ connection drop
+ * 5. PendingIdentification  │  handshake failure  ─────┤      │
+ * │  handshake success      ▼                          │      │ connection drop
+ * ├───────────────────────► 4. SessionConnected        │      │ heartbeat misses
+ * │                         │  invalid message  ───────┼──────┘
+ * │                         ▼                          │
+ * └───────────────────────► x. Destroy Session   ◄─────┘
+ *   handshake failure
  */
 export const SessionStateMachine = {
   entrypoints: {
@@ -83,7 +100,7 @@ export const SessionStateMachine = {
       listeners: SessionConnectingListeners<ConnType>,
     ): SessionConnecting<ConnType> {
       const carriedState = inheritSharedSession(oldSession);
-      oldSession._onStateExit();
+      oldSession._handleStateExit();
 
       return new SessionConnecting(connPromise, listeners, ...carriedState);
     },
@@ -93,7 +110,7 @@ export const SessionStateMachine = {
       listeners: SessionHandshakingListeners,
     ): SessionHandshaking<ConnType> {
       const carriedState = inheritSharedSession(oldSession);
-      oldSession._onStateExit();
+      oldSession._handleStateExit();
 
       return new SessionHandshaking(conn, listeners, ...carriedState);
     },
@@ -103,7 +120,7 @@ export const SessionStateMachine = {
     ): SessionConnected<ConnType> {
       const carriedState = inheritSharedSession(oldSession);
       const conn = oldSession.conn;
-      oldSession._onStateExit();
+      oldSession._handleStateExit();
 
       return new SessionConnected(conn, listeners, ...carriedState);
     },
@@ -115,7 +132,7 @@ export const SessionStateMachine = {
     ): SessionConnected<ConnType> {
       const conn = oldSession.conn;
       const { from, options } = oldSession;
-      oldSession._onStateExit();
+      oldSession._handleStateExit();
 
       const telemetry = createSessionTelemetryInfo(sessionId, to, from);
       return new SessionConnected(
@@ -138,7 +155,7 @@ export const SessionStateMachine = {
     ): SessionNoConnection {
       const carriedState = inheritSharedSession(oldSession);
       oldSession.bestEffortClose();
-      oldSession._onStateExit();
+      oldSession._handleStateExit();
       return new SessionNoConnection(listeners, ...carriedState);
     },
     HandshakingToNoConnection<ConnType extends Connection>(
@@ -147,7 +164,7 @@ export const SessionStateMachine = {
     ): SessionNoConnection {
       const carriedState = inheritSharedSession(oldSession);
       oldSession.conn.close();
-      oldSession._onStateExit();
+      oldSession._handleStateExit();
       return new SessionNoConnection(listeners, ...carriedState);
     },
     ConnectedToNoConnection<ConnType extends Connection>(
@@ -156,7 +173,7 @@ export const SessionStateMachine = {
     ): SessionNoConnection {
       const carriedState = inheritSharedSession(oldSession);
       oldSession.conn.close();
-      oldSession._onStateExit();
+      oldSession._handleStateExit();
       return new SessionNoConnection(listeners, ...carriedState);
     },
   },
