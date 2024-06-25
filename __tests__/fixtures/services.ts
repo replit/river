@@ -1,13 +1,12 @@
 import { Type } from '@sinclair/typebox';
 import { ServiceSchema } from '../../router/services';
-import { Err, Ok } from '../../router/result';
+import { Err, Ok, unwrap } from '../../router/result';
 import { Observable } from './observable';
 import { Procedure } from '../../router';
 
 export const EchoRequest = Type.Object({
   msg: Type.String(),
   ignore: Type.Boolean(),
-  end: Type.Optional(Type.Boolean()),
 });
 export const EchoResponse = Type.Object({ response: Type.String() });
 
@@ -17,7 +16,7 @@ const TestServiceScaffold = ServiceSchema.scaffold({
 
 const testServiceProcedures = TestServiceScaffold.procedures({
   add: Procedure.rpc({
-    input: Type.Object({ n: Type.Number() }),
+    init: Type.Object({ n: Type.Number() }),
     output: Type.Object({ result: Type.Number() }),
     async handler(ctx, { n }) {
       ctx.state.count += n;
@@ -26,7 +25,7 @@ const testServiceProcedures = TestServiceScaffold.procedures({
   }),
 
   array: Procedure.rpc({
-    input: Type.Object({ n: Type.Number() }),
+    init: Type.Object({ n: Type.Number() }),
     output: Type.Array(Type.Number()),
     async handler(ctx, { n }) {
       ctx.state.count += n;
@@ -35,26 +34,29 @@ const testServiceProcedures = TestServiceScaffold.procedures({
   }),
 
   arrayStream: Procedure.stream({
+    init: Type.Object({}),
     input: Type.Object({ n: Type.Number() }),
     output: Type.Array(Type.Number()),
-    async handler(_, msgStream, returnStream) {
-      for await (const msg of msgStream) {
-        returnStream.push(Ok([msg.n]));
+    async handler(_, _init, inputStream, returnStream) {
+      for await (const msg of inputStream) {
+        returnStream.write(Ok([unwrap(msg).n]));
       }
     },
   }),
 
   echo: Procedure.stream({
+    init: Type.Object({}),
     input: EchoRequest,
     output: EchoResponse,
-    async handler(_ctx, msgStream, returnStream) {
-      for await (const { ignore, msg, end } of msgStream) {
-        if (!ignore) {
-          returnStream.push(Ok({ response: msg }));
-        }
+    async handler(_ctx, _init, inputStream, returnStream) {
+      returnStream.onCloseRequest(() => {
+        returnStream.close();
+      });
 
-        if (end) {
-          returnStream.end();
+      for await (const input of inputStream) {
+        const { ignore, msg } = unwrap(input);
+        if (!ignore) {
+          returnStream.write(Ok({ response: msg }));
         }
       }
     },
@@ -64,10 +66,15 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     init: Type.Object({ prefix: Type.String() }),
     input: EchoRequest,
     output: EchoResponse,
-    async handler(_ctx, init, msgStream, returnStream) {
-      for await (const { ignore, msg } of msgStream) {
+    async handler(_ctx, init, inputStream, returnStream) {
+      returnStream.onCloseRequest(() => {
+        returnStream.close();
+      });
+
+      for await (const input of inputStream) {
+        const { ignore, msg } = unwrap(input);
         if (!ignore) {
-          returnStream.push(Ok({ response: `${init.prefix} ${msg}` }));
+          returnStream.write(Ok({ response: `${init.prefix} ${msg}` }));
         }
       }
     },
@@ -75,7 +82,7 @@ const testServiceProcedures = TestServiceScaffold.procedures({
 
   echoUnion: Procedure.rpc({
     description: 'Echos back whatever we sent',
-    input: Type.Union([
+    init: Type.Union([
       Type.Object(
         { a: Type.Number({ description: 'A number' }) },
         { description: 'A' },
@@ -99,6 +106,23 @@ const testServiceProcedures = TestServiceScaffold.procedures({
       return Ok(input);
     },
   }),
+
+  unimplementedUpload: Procedure.upload({
+    init: Type.Object({}),
+    input: Type.Object({}),
+    output: Type.Object({}),
+    async handler() {
+      throw new Error('Not implemented');
+    },
+  }),
+
+  unimplementedSubscription: Procedure.subscription({
+    init: Type.Object({}),
+    output: Type.Object({}),
+    async handler() {
+      throw new Error('Not implemented');
+    },
+  }),
 });
 
 export const TestServiceSchema = TestServiceScaffold.finalize({
@@ -109,7 +133,7 @@ export const OrderingServiceSchema = ServiceSchema.define(
   { initializeState: () => ({ msgs: [] as Array<number> }) },
   {
     add: Procedure.rpc({
-      input: Type.Object({ n: Type.Number() }),
+      init: Type.Object({ n: Type.Number() }),
       output: Type.Object({ n: Type.Number() }),
       async handler(ctx, { n }) {
         ctx.state.msgs.push(n);
@@ -118,7 +142,7 @@ export const OrderingServiceSchema = ServiceSchema.define(
     }),
 
     getAll: Procedure.rpc({
-      input: Type.Object({}),
+      init: Type.Object({}),
       output: Type.Object({ msgs: Type.Array(Type.Number()) }),
       async handler(ctx, _msg) {
         return Ok({ msgs: ctx.state.msgs });
@@ -129,7 +153,7 @@ export const OrderingServiceSchema = ServiceSchema.define(
 
 export const BinaryFileServiceSchema = ServiceSchema.define({
   getFile: Procedure.rpc({
-    input: Type.Object({ file: Type.String() }),
+    init: Type.Object({ file: Type.String() }),
     output: Type.Object({ contents: Type.Uint8Array() }),
     async handler(_ctx, { file }) {
       const bytes: Uint8Array = Buffer.from(`contents for file ${file}`);
@@ -143,7 +167,7 @@ export const STREAM_ERROR = 'STREAM_ERROR';
 
 export const FallibleServiceSchema = ServiceSchema.define({
   divide: Procedure.rpc({
-    input: Type.Object({ a: Type.Number(), b: Type.Number() }),
+    init: Type.Object({ a: Type.Number(), b: Type.Number() }),
     output: Type.Object({ result: Type.Number() }),
     errors: Type.Union([
       Type.Object({
@@ -166,6 +190,7 @@ export const FallibleServiceSchema = ServiceSchema.define({
   }),
 
   echo: Procedure.stream({
+    init: Type.Object({}),
     input: Type.Object({
       msg: Type.String(),
       throwResult: Type.Boolean(),
@@ -176,19 +201,20 @@ export const FallibleServiceSchema = ServiceSchema.define({
       code: Type.Literal(STREAM_ERROR),
       message: Type.String(),
     }),
-    async handler(_ctx, msgStream, returnStream) {
-      for await (const { msg, throwError, throwResult } of msgStream) {
+    async handler(_ctx, _init, inputStream, outputStream) {
+      for await (const input of inputStream) {
+        const { msg, throwError, throwResult } = unwrap(input);
         if (throwError) {
           throw new Error('some message');
         } else if (throwResult) {
-          returnStream.push(
+          outputStream.write(
             Err({
               code: STREAM_ERROR,
               message: 'field throwResult was set to true',
             }),
           );
         } else {
-          returnStream.push(Ok({ response: msg }));
+          outputStream.write(Ok({ response: msg }));
         }
       }
     },
@@ -199,7 +225,7 @@ export const SubscribableServiceSchema = ServiceSchema.define(
   { initializeState: () => ({ count: new Observable(0) }) },
   {
     add: Procedure.rpc({
-      input: Type.Object({ n: Type.Number() }),
+      init: Type.Object({ n: Type.Number() }),
       output: Type.Object({ result: Type.Number() }),
       async handler(ctx, { n }) {
         ctx.state.count.set((prev) => prev + n);
@@ -208,12 +234,20 @@ export const SubscribableServiceSchema = ServiceSchema.define(
     }),
 
     value: Procedure.subscription({
-      input: Type.Object({}),
+      init: Type.Object({}),
       output: Type.Object({ result: Type.Number() }),
       async handler(ctx, _msg, returnStream) {
-        return ctx.state.count.observe((count) => {
-          returnStream.push(Ok({ result: count }));
+        const dispose1 = ctx.state.count.observe((count) => {
+          returnStream.write(Ok({ result: count }));
         });
+
+        ctx.onRequestFinished(dispose1);
+
+        const dispose2 = returnStream.onCloseRequest(() => {
+          returnStream.close();
+        });
+
+        ctx.onRequestFinished(dispose2);
       },
     }),
   },
@@ -221,12 +255,13 @@ export const SubscribableServiceSchema = ServiceSchema.define(
 
 export const UploadableServiceSchema = ServiceSchema.define({
   addMultiple: Procedure.upload({
+    init: Type.Object({}),
     input: Type.Object({ n: Type.Number() }),
     output: Type.Object({ result: Type.Number() }),
-    async handler(_ctx, msgStream) {
+    async handler(_ctx, _init, inputStream) {
       let result = 0;
-      for await (const { n } of msgStream) {
-        result += n;
+      for await (const input of inputStream) {
+        result += unwrap(input).n;
       }
 
       return Ok({ result: result });
@@ -237,10 +272,10 @@ export const UploadableServiceSchema = ServiceSchema.define({
     init: Type.Object({ prefix: Type.String() }),
     input: Type.Object({ n: Type.Number() }),
     output: Type.Object({ result: Type.String() }),
-    async handler(_ctx, init, msgStream) {
+    async handler(_ctx, init, inputStream) {
       let result = 0;
-      for await (const { n } of msgStream) {
-        result += n;
+      for await (const input of inputStream) {
+        result += unwrap(input).n;
       }
       return Ok({ result: `${init.prefix} ${result}` });
     },
@@ -256,7 +291,7 @@ const RecursivePayload = Type.Recursive((This) =>
 
 export const NonObjectSchemas = ServiceSchema.define({
   add: Procedure.rpc({
-    input: Type.Number(),
+    init: Type.Number(),
     output: Type.Number(),
     async handler(_ctx, n) {
       return Ok(n + 1);
@@ -264,7 +299,7 @@ export const NonObjectSchemas = ServiceSchema.define({
   }),
 
   echoRecursive: Procedure.rpc({
-    input: RecursivePayload,
+    init: RecursivePayload,
     output: RecursivePayload,
     async handler(_ctx, msg) {
       return Ok(msg);

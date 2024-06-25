@@ -11,9 +11,10 @@ import {
   Output,
   ResultUnwrapErr,
   ResultUnwrapOk,
+  unwrap,
 } from '../router/result';
 import { TestServiceSchema } from './fixtures/services';
-import { iterNext } from '../util/testHelpers';
+import { getIteratorFromStream, iterNext } from '../util/testHelpers';
 import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,
@@ -41,7 +42,7 @@ const fnBody = Procedure.rpc<
   typeof output,
   typeof errors
 >({
-  input,
+  init: input,
   output,
   errors,
   async handler(_state, msg) {
@@ -210,30 +211,32 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
 const services = {
   test: ServiceSchema.define({
     rpc: Procedure.rpc({
-      input: Type.Object({ n: Type.Number() }),
+      init: Type.Object({ n: Type.Number() }),
       output: Type.Object({ n: Type.Number() }),
       async handler(_, { n }) {
         return Ok({ n });
       },
     }),
     stream: Procedure.stream({
+      init: Type.Object({}),
       input: Type.Object({ n: Type.Number() }),
       output: Type.Object({ n: Type.Number() }),
-      async handler(_c, _in, output) {
-        output.push(Ok({ n: 1 }));
+      async handler(_c, _init, _input, output) {
+        output.write(Ok({ n: 1 }));
       },
     }),
     subscription: Procedure.subscription({
-      input: Type.Object({ n: Type.Number() }),
+      init: Type.Object({ n: Type.Number() }),
       output: Type.Object({ n: Type.Number() }),
-      async handler(_c, _in, output) {
-        output.push(Ok({ n: 1 }));
+      async handler(_c, _init, output) {
+        output.write(Ok({ n: 1 }));
       },
     }),
     upload: Procedure.upload({
+      init: Type.Object({}),
       input: Type.Object({ n: Type.Number() }),
       output: Type.Object({ n: Type.Number() }),
-      async handler(_c, _in) {
+      async handler(_c, _init, _input) {
         return Ok({ n: 1 });
       },
     }),
@@ -266,9 +269,9 @@ describe('Output<> type', () => {
     }
 
     // Then
-    void client.test.stream
-      .stream()
-      .then(([_in, output, _close]) => iterNext(output))
+    const [, outputReader] = client.test.stream.stream({});
+    void iterNext(getIteratorFromStream(outputReader))
+      .then(unwrap)
       .then(acceptOutput);
     expect(client).toBeTruthy();
   });
@@ -282,10 +285,11 @@ describe('Output<> type', () => {
     }
 
     // Then
-    void client.test.subscription
-      .subscribe({ n: 1 })
-      .then(([output, _close]) => iterNext(output))
+    const outputReader = client.test.subscription.subscribe({ n: 1 });
+    void iterNext(getIteratorFromStream(outputReader))
+      .then(unwrap)
       .then(acceptOutput);
+
     expect(client).toBeTruthy();
   });
 
@@ -296,10 +300,9 @@ describe('Output<> type', () => {
     }
 
     // Then
-    void client.test.upload
-      .upload()
-      .then(([_input, result]) => result)
-      .then(acceptOutput);
+    const [, finalize] = client.test.upload.upload({});
+    void finalize().then(acceptOutput);
+
     expect(client).toBeTruthy();
   });
 });
@@ -321,7 +324,7 @@ describe('ResultUwrap types', () => {
 
   test('it unwraps Err correctly', () => {
     // Given
-    const result = Err({ hello: 'world' });
+    const result = Err({ code: 'world', message: 'hello' });
 
     // When
     function acceptErr(payload: ResultUnwrapErr<typeof result>) {
@@ -330,7 +333,10 @@ describe('ResultUwrap types', () => {
 
     // Then
     assert(!result.ok);
-    expect(acceptErr(result.payload)).toEqual({ hello: 'world' });
+    expect(acceptErr(result.payload)).toEqual({
+      code: 'world',
+      message: 'hello',
+    });
   });
 });
 

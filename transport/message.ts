@@ -4,15 +4,28 @@ import { PropagationContext } from '../tracing';
 
 /**
  * Control flags for transport messages.
- * An RPC message is coded with StreamOpenBit | StreamClosedBit.
- * Streams are expected to start with StreamOpenBit sent and the client SHOULD send an empty
- * message with StreamClosedBit to close the stream handler on the server, indicating that
- * it will not be using the stream anymore.
  */
 export const enum ControlFlags {
-  AckBit = 0b0001,
-  StreamOpenBit = 0b0010,
-  StreamClosedBit = 0b0100,
+  /**
+   * Used in heartbeat messages.
+   */
+  AckBit = 0b00001,
+  /**
+   * Used in stream open requests.
+   */
+  StreamOpenBit = 0b00010,
+  /**
+   * Used when writer closes the stream.
+   */
+  StreamClosedBit = 0b01000,
+  /**
+   * Used when readers no longer wish to receive messages.
+   */
+  StreamCloseRequestBit = 0b10000,
+  /**
+   * Used when a stream is aborted due to cancellation or errors
+   */
+  StreamAbortBit = 0b00100,
 }
 
 /**
@@ -58,7 +71,7 @@ export const ControlMessageCloseSchema = Type.Object({
   type: Type.Literal('CLOSE'),
 });
 
-export const PROTOCOL_VERSION = 'v1.1';
+export const PROTOCOL_VERSION = 'v2.0';
 export const ControlMessageHandshakeRequestSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_REQ'),
   protocolVersion: Type.String(),
@@ -128,8 +141,8 @@ export const OpaqueTransportMessageSchema = TransportMessageSchema(
  */
 export interface TransportMessage<Payload = unknown> {
   id: string;
-  from: string;
-  to: string;
+  from: TransportClientId;
+  to: TransportClientId;
   seq: number;
   ack: number;
   serviceName?: string;
@@ -250,5 +263,30 @@ export function isStreamClose(controlFlag: number): boolean {
     /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
     (controlFlag & ControlFlags.StreamClosedBit) ===
     ControlFlags.StreamClosedBit
+  );
+}
+
+/**
+ * Checks if the given control flag (usually found in msg.controlFlag) is a stream close request message.
+ * @param controlFlag - The control flag to check.
+ * @returns True if the control flag contains the StreamCloseBit, false otherwise.
+ */
+export function isStreamCloseRequest(controlFlag: number): boolean {
+  return (
+    /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
+    (controlFlag & ControlFlags.StreamCloseRequestBit) ===
+    ControlFlags.StreamCloseRequestBit
+  );
+}
+
+/**
+ * Checks if the given control flag (usually found in msg.controlFlag) is an abort message.
+ * @param controlFlag - The control flag to check.
+ * @returns True if the control flag contains the AbortBit, false otherwise
+ */
+export function isStreamAbort(controlFlag: number): boolean {
+  return (
+    /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
+    (controlFlag & ControlFlags.StreamAbortBit) === ControlFlags.StreamAbortBit
   );
 }

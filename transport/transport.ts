@@ -32,6 +32,11 @@ import {
   TransportOptions,
   defaultTransportOptions,
 } from './options';
+import { ErrResult } from '../router';
+import {
+  InputReaderErrorSchema,
+  OutputReaderErrorSchema,
+} from '../router/procedures';
 
 /**
  * Represents the possible states of a transport.
@@ -576,13 +581,37 @@ export abstract class Transport<ConnType extends Connection> {
   }
 
   // control helpers
-  sendCloseStream(to: TransportClientId, streamId: string) {
+  sendCloseControl(to: TransportClientId, streamId: string) {
     return this.send(to, {
       streamId: streamId,
       controlFlags: ControlFlags.StreamClosedBit,
       payload: {
         type: 'CLOSE' as const,
       } satisfies Static<typeof ControlMessagePayloadSchema>,
+    });
+  }
+
+  sendRequestCloseControl(to: TransportClientId, streamId: string) {
+    return this.send(to, {
+      streamId: streamId,
+      controlFlags: ControlFlags.StreamCloseRequestBit,
+      payload: {
+        type: 'CLOSE' as const,
+      } satisfies Static<typeof ControlMessagePayloadSchema>,
+    });
+  }
+
+  sendAbort(
+    to: TransportClientId,
+    streamId: string,
+    payload: ErrResult<
+      Static<typeof OutputReaderErrorSchema | typeof InputReaderErrorSchema>
+    >,
+  ) {
+    return this.send(to, {
+      streamId: streamId,
+      controlFlags: ControlFlags.StreamAbortBit,
+      payload: payload,
     });
   }
 
