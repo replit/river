@@ -33,6 +33,7 @@ export type {
   StreamProcedure,
   ProcedureErrorSchemaType,
 } from './procedures';
+export { WriteStream, ReadStream } from './streams';
 export {
   Procedure,
   UNCAUGHT_ERROR_CODE,
