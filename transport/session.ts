@@ -62,6 +62,7 @@ export abstract class Connection {
    * @param cb The callback to call when the connection is closed.
    */
   abstract addCloseListener(cb: () => void): void;
+  abstract removeCloseListener(cb: () => void): void;
 
   /**
    * Handle adding a callback for when an error is received.
@@ -75,6 +76,7 @@ export abstract class Connection {
    * @param cb The callback to call when an error is received.
    */
   abstract addErrorListener(cb: (err: Error) => void): void;
+  abstract removeErrorListener(cb: (err: Error) => void): void;
 
   /**
    * Sends a message over the connection.
@@ -103,6 +105,10 @@ export interface SessionOptions {
    * Duration to wait between connection disconnect and actual session disconnect
    */
   sessionDisconnectGraceMs: number;
+  /**
+   * Handshake timeout in milliseconds
+   */
+  handshakeTimeoutMs: number;
   /**
    * The codec to use for encoding/decoding messages over the wire
    */
@@ -196,7 +202,12 @@ export class Session<ConnType extends Connection> {
       () => this.sendHeartbeat(),
       options.heartbeatIntervalMs,
     );
-    this.telemetry = createSessionTelemetryInfo(this, propagationCtx);
+    this.telemetry = createSessionTelemetryInfo(
+      this.id,
+      to,
+      from,
+      propagationCtx,
+    );
   }
 
   bindLogger(log: Logger) {

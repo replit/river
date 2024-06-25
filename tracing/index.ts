@@ -12,7 +12,6 @@ import {
   ClientTransport,
   Connection,
   OpaqueTransportMessage,
-  Session,
 } from '../transport';
 
 export interface PropagationContext {
@@ -37,7 +36,9 @@ export function getPropagationContext(
 }
 
 export function createSessionTelemetryInfo(
-  session: Session<Connection>,
+  sessionId: string,
+  to: string,
+  from: string,
   propagationCtx?: PropagationContext,
 ): TelemetryInfo {
   const parentCtx = propagationCtx
@@ -45,13 +46,13 @@ export function createSessionTelemetryInfo(
     : context.active();
 
   const span = tracer.startSpan(
-    `session ${session.id}`,
+    `session ${sessionId}`,
     {
       attributes: {
         component: 'river',
-        'river.session.id': session.id,
-        'river.session.to': session.to,
-        'river.session.from': session.from,
+        'river.session.id': sessionId,
+        'river.session.to': to,
+        'river.session.from': from,
       },
     },
     parentCtx,

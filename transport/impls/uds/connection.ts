@@ -30,6 +30,10 @@ export class UdsConnection extends Connection {
     this.sock.on('close', cb);
   }
 
+  removeCloseListener(cb: () => void): void {
+    this.sock.off('close', cb);
+  }
+
   addErrorListener(cb: (err: Error) => void): void {
     this.sock.on('error', (err) => {
       if (err instanceof Error && 'code' in err && err.code === 'EPIPE') {
@@ -39,6 +43,10 @@ export class UdsConnection extends Connection {
 
       cb(err);
     });
+  }
+
+  removeErrorListener(cb: (err: Error) => void): void {
+    this.sock.off('error', cb);
   }
 
   send(payload: Uint8Array) {

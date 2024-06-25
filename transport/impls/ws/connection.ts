@@ -46,8 +46,20 @@ export class WebSocketConnection extends Connection {
     this.closeCb = cb;
   }
 
+  removeCloseListener(cb: () => void): void {
+    if (this.closeCb === cb) {
+      this.closeCb = null;
+    }
+  }
+
   addErrorListener(cb: (err: Error) => void): void {
     this.errorCb = cb;
+  }
+
+  removeErrorListener(cb: (err: Error) => void): void {
+    if (this.errorCb === cb) {
+      this.errorCb = null;
+    }
   }
 
   send(payload: Uint8Array) {
