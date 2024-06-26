@@ -18,6 +18,7 @@ import { PartialTransportMessage } from './message';
 import { Type } from '@sinclair/typebox';
 import { TestSetupHelpers } from '../__tests__/fixtures/transports';
 import { createPostTestCleanups } from '../__tests__/fixtures/cleanup';
+import { TransportOptions } from './options';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
@@ -530,6 +531,202 @@ describe.each(testMatrix())(
 
       await testFinishesCleanly({
         clientTransports: [client1Transport, client2Transport],
+        serverTransport,
+      });
+    });
+  },
+);
+
+describe.each(testMatrix())(
+  'transport disabling transparent reconnect',
+  async ({ transport, codec }) => {
+    const opts: TransportOptions = {
+      codec: codec.codec,
+      heartbeatIntervalMs: 1_000,
+      heartbeatsUntilDead: 2,
+      // set the session disconnect grace to 0 to force a hard reconnect
+      sessionDisconnectGraceMs: 0,
+      handshakeGraceMs: 5_000,
+    };
+    let testHelpers: TestSetupHelpers;
+    let getClientTransport: TestSetupHelpers['getClientTransport'];
+    let getServerTransport: TestSetupHelpers['getServerTransport'];
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
+    beforeEach(async () => {
+      testHelpers = await transport.setup({ client: opts, server: opts });
+      getClientTransport = testHelpers.getClientTransport;
+      getServerTransport = testHelpers.getServerTransport;
+      return async () => {
+        await postTestCleanup();
+        await testHelpers.cleanup();
+      };
+    });
+
+    test('reconnecting with grace period of 0 should result in hard reconnect', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+
+      const oldClientSession = serverTransport.sessions.get('client');
+      const oldServerSession = clientTransport.sessions.get('SERVER');
+      expect(oldClientSession).toMatchObject({
+        id: oldServerSession?.advertisedSessionId,
+      });
+      expect(oldServerSession).toMatchObject({
+        id: oldClientSession?.advertisedSessionId,
+      });
+
+      clientTransport.reconnectOnConnectionDrop = false;
+      clientTransport.connections.forEach((conn) => conn.close());
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
+
+      clientTransport.reconnectOnConnectionDrop = true;
+      await clientTransport.connect('SERVER');
+      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+
+      // expect new sessions to have been created
+      const newClientSession = serverTransport.sessions.get('client');
+      const newServerSession = clientTransport.sessions.get('SERVER');
+      expect(newClientSession).not.toBe(oldClientSession);
+      expect(newServerSession).not.toBe(oldServerSession);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+  },
+);
+
+describe.each(testMatrix())(
+  'transport handshake grace period tests',
+  async ({ transport, codec }) => {
+    const opts: TransportOptions = {
+      codec: codec.codec,
+      heartbeatIntervalMs: 1_000,
+      heartbeatsUntilDead: 2,
+      sessionDisconnectGraceMs: 5_000,
+      // set the handshake grace period to 0
+      handshakeGraceMs: 0,
+    };
+    let testHelpers: TestSetupHelpers;
+    let getClientTransport: TestSetupHelpers['getClientTransport'];
+    let getServerTransport: TestSetupHelpers['getServerTransport'];
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
+    beforeEach(async () => {
+      testHelpers = await transport.setup({ client: opts, server: opts });
+      getClientTransport = testHelpers.getClientTransport;
+      getServerTransport = testHelpers.getServerTransport;
+      return async () => {
+        await postTestCleanup();
+        await testHelpers.cleanup();
+      };
+    });
+
+    test('handshake grace period of 0 should lead to closed connections', async () => {
+      const clientTransport = getClientTransport('client');
+      let serverTransport = getServerTransport();
+      const clientConnStart = vi.fn();
+      const clientConnStop = vi.fn();
+      const clientConnHandler = (evt: EventMap['connectionStatus']) => {
+        switch (evt.status) {
+          case 'connect':
+            clientConnStart();
+            break;
+          case 'disconnect':
+            clientConnStop();
+            break;
+        }
+      };
+
+      const clientSessStart = vi.fn();
+      const clientSessStop = vi.fn();
+      const clientSessHandler = (evt: EventMap['sessionStatus']) => {
+        switch (evt.status) {
+          case 'connect':
+            clientSessStart();
+            break;
+          case 'disconnect':
+            clientSessStop();
+            break;
+        }
+      };
+
+      clientTransport.addEventListener('connectionStatus', clientConnHandler);
+      clientTransport.addEventListener('sessionStatus', clientSessHandler);
+      addPostTestCleanup(async () => {
+        clientTransport.removeEventListener(
+          'connectionStatus',
+          clientConnHandler,
+        );
+        clientTransport.removeEventListener('sessionStatus', clientSessHandler);
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      const msg1 = createDummyTransportMessage();
+      const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+      await expect(
+        waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
+      ).resolves.toStrictEqual(msg1.payload);
+
+      // make sure both sides agree on the session id
+      const oldClientSession = serverTransport.sessions.get('client');
+      const oldServerSession = clientTransport.sessions.get('SERVER');
+      expect(oldClientSession).toMatchObject({
+        id: oldServerSession?.advertisedSessionId,
+      });
+      expect(oldServerSession).toMatchObject({
+        id: oldClientSession?.advertisedSessionId,
+      });
+
+      expect(clientConnStart).toHaveBeenCalledTimes(1);
+      expect(clientSessStart).toHaveBeenCalledTimes(1);
+      expect(clientConnStop).toHaveBeenCalledTimes(0);
+      expect(clientSessStop).toHaveBeenCalledTimes(0);
+
+      // bring client side connections down and stop trying to reconnect
+      clientTransport.reconnectOnConnectionDrop = false;
+      clientTransport.connections.forEach((conn) => conn.close());
+
+      await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(0));
+
+      // kill old server and make a new transport with the new server
+      await testHelpers.restartServer();
+      serverTransport = testHelpers.getServerTransport();
+      expect(serverTransport.sessions.size).toBe(0);
+
+      // eagerly reconnect client
+      clientTransport.reconnectOnConnectionDrop = true;
+      // expect connection handshake to fail and no new connection started
+      await clientTransport.connect('SERVER');
+
+      // expect no new connections to have been started
+      await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(0));
+
+      // expect no new client session to be started
+      // expect a brand new server session
+      const newClientSession = serverTransport.sessions.get('client');
+      const newServerSession = clientTransport.sessions.get('SERVER');
+      expect(newClientSession).toBeUndefined();
+      expect(newServerSession).not.toMatchObject({
+        id: oldClientSession?.id,
+      });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
         serverTransport,
       });
     });
