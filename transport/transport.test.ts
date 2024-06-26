@@ -575,9 +575,7 @@ describe.each(testMatrix())(
 
       const oldClientSession = serverTransport.sessions.get('client');
       const oldServerSession = clientTransport.sessions.get('SERVER');
-      expect(oldClientSession).toMatchObject({
-        id: oldServerSession?.advertisedSessionId,
-      });
+      expect(oldClientSession.id).toBe(oldServerSession?.advertisedSessionId);
       expect(oldServerSession).toMatchObject({
         id: oldClientSession?.advertisedSessionId,
       });
