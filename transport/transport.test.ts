@@ -19,6 +19,7 @@ import { Type } from '@sinclair/typebox';
 import { TestSetupHelpers } from '../__tests__/fixtures/transports';
 import { createPostTestCleanups } from '../__tests__/fixtures/cleanup';
 import { TransportOptions } from './options';
+import { ClientTransportOptions } from '.';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
@@ -538,7 +539,7 @@ describe.each(testMatrix())(
 );
 
 describe.each(testMatrix())(
-  'transport disabling transparent reconnect',
+  'transport disabling transparent reconnect ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts: TransportOptions = {
       codec: codec.codec,
@@ -606,7 +607,7 @@ describe.each(testMatrix())(
 );
 
 describe.each(testMatrix())(
-  'transport handshake grace period tests',
+  'transport handshake grace period tests ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts: TransportOptions = {
       codec: codec.codec,
@@ -614,14 +615,18 @@ describe.each(testMatrix())(
       heartbeatsUntilDead: 2,
       sessionDisconnectGraceMs: 10_000,
       // setting session grace to be higher so that only handshake grace passes
-      handshakeGraceMs: 5_000,
+      handshakeGraceMs: 500,
+    };
+    const clientOpts: ClientTransportOptions = {
+      ...opts,
+      attemptBudgetCapacity: 1,
     };
     let testHelpers: TestSetupHelpers;
     let getClientTransport: TestSetupHelpers['getClientTransport'];
     let getServerTransport: TestSetupHelpers['getServerTransport'];
     const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
     beforeEach(async () => {
-      testHelpers = await transport.setup({ client: opts, server: opts });
+      testHelpers = await transport.setup({ client: clientOpts, server: opts });
       getClientTransport = testHelpers.getClientTransport;
       getServerTransport = testHelpers.getServerTransport;
       return async () => {
@@ -631,25 +636,14 @@ describe.each(testMatrix())(
     });
 
     test('handshake grace period of 0 should lead to closed connections', async () => {
-      const schema = Type.Object({
-        kept: Type.String(),
-        discarded: Type.String(),
-      });
-      const get = vi.fn(async () => ({ kept: 'kept', discarded: 'discarded' }));
+      const schema = Type.Unknown();
+      const get = vi.fn(async () => ({}));
 
-      // define an actual timeout function instead of advance timers
-      const sleep = (ms: number) =>
-        new Promise((resolve) => setTimeout(resolve, ms));
-
-      const parse = vi.fn(async (metadata: unknown) => {
-        // advance the timer past the handshake grace period
-        const handshakeGrace = opts.handshakeGraceMs ?? 5_000;
-        await sleep(handshakeGrace);
-        return {
-          // @ts-expect-error - we haven't extended the global type here
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          kept: metadata.kept,
-        };
+      const parse = vi.fn(async () => {
+        const promise = new Promise(() => {
+          // noop we never want this to return
+        });
+        return promise;
       });
 
       const serverTransport = getServerTransport({
@@ -661,16 +655,35 @@ describe.each(testMatrix())(
         construct: get,
       });
       addPostTestCleanup(async () => {
+        clientTransport.removeEventListener('protocolError', protocolError);
         await cleanupTransports([clientTransport, serverTransport]);
       });
+
+      const protocolError = vi.fn();
+      clientTransport.addEventListener('protocolError', protocolError);
 
       await waitFor(() => {
         expect(get).toHaveBeenCalledTimes(1);
         expect(parse).toHaveBeenCalledTimes(1);
       });
 
+      const handshakeGrace = opts.handshakeGraceMs ?? 500;
+      await vi.advanceTimersByTimeAsync(handshakeGrace + 1);
+
       // expect no session to have been established due to connection timeout
       expect(serverTransport.sessions.size).toBe(0);
+
+      // exhaust the retry budget to result in a protocolError.RetriesExceeded
+      await vi.advanceTimersByTimeAsync(handshakeGrace + 1);
+
+      await waitFor(() => {
+        expect(protocolError).toHaveBeenCalledTimes(1);
+        expect(protocolError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: ProtocolError.RetriesExceeded,
+          }),
+        );
+      });
 
       // cleanup: bring client side connections down and stop trying to reconnect
       clientTransport.reconnectOnConnectionDrop = false;
