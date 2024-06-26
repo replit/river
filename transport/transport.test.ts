@@ -664,11 +664,15 @@ describe.each(testMatrix())(
         expect(parse).toHaveBeenCalledTimes(1);
       });
 
+      // timeout the connection that is waiting for an empty promise
       const handshakeGrace = opts.handshakeTimeoutMs ?? 500;
       await vi.advanceTimersByTimeAsync(handshakeGrace + 1);
 
-      // expect no session to have been established due to connection timeout
+      // expect no server session/connection to have been established due to connection timeout
       expect(serverTransport.sessions.size).toBe(0);
+      expect(serverTransport.connections.size).toBe(0);
+      // client should not have successfully established any connections
+      expect(clientTransport.connections.size).toBe(0);
 
       // exhaust the retry budget to result in a protocolError.RetriesExceeded
       await vi.advanceTimersByTimeAsync(handshakeGrace + 1);
