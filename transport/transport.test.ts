@@ -643,8 +643,8 @@ describe.each(testMatrix())(
 
       const parse = vi.fn(async (metadata: unknown) => {
         // advance the timer past the handshake grace period
-        // eslint-disable-next-line @typescript-eslint/non-nullable-type-assertion-style
-        await sleep(opts.handshakeGraceMs as number);
+        const handshakeGrace = opts.handshakeGraceMs ?? 5_000;
+        await sleep(handshakeGrace);
         return {
           // @ts-expect-error - we haven't extended the global type here
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
