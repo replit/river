@@ -614,7 +614,7 @@ describe.each(testMatrix())(
       heartbeatsUntilDead: 2,
       sessionDisconnectGraceMs: 10_000,
       // setting session grace to be higher so that only handshake grace passes
-      handshakeGraceMs: 500,
+      handshakeGraceMs: 5_000,
     };
     let testHelpers: TestSetupHelpers;
     let getClientTransport: TestSetupHelpers['getClientTransport'];
@@ -631,102 +631,50 @@ describe.each(testMatrix())(
     });
 
     test('handshake grace period of 0 should lead to closed connections', async () => {
-      const clientTransport = getClientTransport('client');
-      let serverTransport = getServerTransport();
-      const clientConnStart = vi.fn();
-      const clientConnStop = vi.fn();
-      const clientConnHandler = (evt: EventMap['connectionStatus']) => {
-        switch (evt.status) {
-          case 'connect':
-            clientConnStart();
-            break;
-          case 'disconnect':
-            clientConnStop();
-            break;
-        }
-      };
+      const schema = Type.Object({
+        kept: Type.String(),
+        discarded: Type.String(),
+      });
+      const get = vi.fn(async () => ({ kept: 'kept', discarded: 'discarded' }));
 
-      const clientSessStart = vi.fn();
-      const clientSessStop = vi.fn();
-      const clientSessHandler = (evt: EventMap['sessionStatus']) => {
-        switch (evt.status) {
-          case 'connect':
-            clientSessStart();
-            break;
-          case 'disconnect':
-            clientSessStop();
-            break;
-        }
-      };
+      // define an actual timeout function instead of advance timers
+      const sleep = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
 
-      clientTransport.addEventListener('connectionStatus', clientConnHandler);
-      clientTransport.addEventListener('sessionStatus', clientSessHandler);
+      const parse = vi.fn(async (metadata: unknown) => {
+        // advance the timer past the handshake grace period
+        // eslint-disable-next-line @typescript-eslint/non-nullable-type-assertion-style
+        await sleep(opts.handshakeGraceMs as number);
+        return {
+          // @ts-expect-error - we haven't extended the global type here
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          kept: metadata.kept,
+        };
+      });
+
+      const serverTransport = getServerTransport({
+        schema,
+        validate: parse,
+      });
+      const clientTransport = getClientTransport('client', {
+        schema,
+        construct: get,
+      });
       addPostTestCleanup(async () => {
-        clientTransport.removeEventListener(
-          'connectionStatus',
-          clientConnHandler,
-        );
-        clientTransport.removeEventListener('sessionStatus', clientSessHandler);
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
-      const msg1 = createDummyTransportMessage();
-      const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
-      await expect(
-        waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
-      ).resolves.toStrictEqual(msg1.payload);
-
-      // make sure both sides agree on the session id
-      const oldClientSession = serverTransport.sessions.get('client');
-      const oldServerSession = clientTransport.sessions.get('SERVER');
-      expect(oldClientSession).toMatchObject({
-        id: oldServerSession?.advertisedSessionId,
-      });
-      expect(oldServerSession).toMatchObject({
-        id: oldClientSession?.advertisedSessionId,
+      await waitFor(() => {
+        expect(get).toHaveBeenCalledTimes(1);
+        expect(parse).toHaveBeenCalledTimes(1);
       });
 
-      expect(clientConnStart).toHaveBeenCalledTimes(1);
-      expect(clientSessStart).toHaveBeenCalledTimes(1);
-      expect(clientConnStop).toHaveBeenCalledTimes(0);
-      expect(clientSessStop).toHaveBeenCalledTimes(0);
-
-      // bring client side connections down and stop trying to reconnect
-      clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
-
-      await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(0));
-
-      // advance the timer past the handshake grace period
-      await advanceFakeTimersByConnectionBackoff();
-
-      // kill old server and make a new transport with the new server
-      await testHelpers.restartServer();
-      serverTransport = testHelpers.getServerTransport();
+      // expect no session to have been established due to connection timeout
       expect(serverTransport.sessions.size).toBe(0);
 
-      // eagerly reconnect client
-      clientTransport.reconnectOnConnectionDrop = true;
-      // expect connection handshake to fail and no new connection started
-      await clientTransport.connect('SERVER');
-
-      // expect no new connections to have been started
-      await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(0));
-
-      // expect no new client session to be started
-      // expect a brand new server session
-      const newClientSession = serverTransport.sessions.get('client');
-      const newServerSession = clientTransport.sessions.get('SERVER');
-      expect(newClientSession).toBeUndefined();
-      expect(newServerSession).not.toMatchObject({
-        id: oldClientSession?.id,
-      });
+      // cleanup: bring client side connections down and stop trying to reconnect
+      clientTransport.reconnectOnConnectionDrop = false;
+      clientTransport.connections.forEach((conn) => conn.close());
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
