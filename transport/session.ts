@@ -104,6 +104,10 @@ export interface SessionOptions {
    */
   sessionDisconnectGraceMs: number;
   /**
+   * Duration to wait for a handshake to complete before considering the connection dead.
+   */
+  handshakeTimeoutMs?: number;
+  /**
    * The codec to use for encoding/decoding messages over the wire
    */
   codec: Codec;

@@ -75,7 +75,7 @@ export abstract class ClientTransport<
         { ...conn.loggingMetadata, clientId: this.clientId, connectedTo: to },
       );
       conn.close();
-    }, this.options.sessionDisconnectGraceMs);
+    }, this.options.handshakeTimeoutMs);
 
     const handshakeHandler = (data: Uint8Array) => {
       const maybeSession = this.receiveHandshakeResponseMessage(data, conn);
