@@ -637,7 +637,7 @@ describe.each(testMatrix())(
       const schema = Type.Unknown();
       const get = vi.fn(async () => ({}));
 
-      const parse = vi.fn(async () => {
+      const parse = vi.fn(() => {
         const promise = new Promise(() => {
           // noop we never want this to return
         });
