@@ -144,7 +144,7 @@ const transport = new WebSocketClientTransport(
 const client = createClient(
   transport,
   'SERVER', // transport id of the server in the previous step
-  {eagerlyConnect: true}, // whether to eagerly connect to the server on creation (optional argument)
+  { eagerlyConnect: true }, // whether to eagerly connect to the server on creation (optional argument)
 );
 
 // we get full type safety on `client`
