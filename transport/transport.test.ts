@@ -652,13 +652,12 @@ describe.each(testMatrix())(
         schema,
         construct: get,
       });
+			const protocolError = vi.fn();
+			clientTransport.addEventListener('protocolError', protocolError);
       addPostTestCleanup(async () => {
         clientTransport.removeEventListener('protocolError', protocolError);
         await cleanupTransports([clientTransport, serverTransport]);
       });
-
-      const protocolError = vi.fn();
-      clientTransport.addEventListener('protocolError', protocolError);
 
       await waitFor(() => {
         expect(get).toHaveBeenCalledTimes(1);
