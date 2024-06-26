@@ -575,7 +575,9 @@ describe.each(testMatrix())(
 
       const oldClientSession = serverTransport.sessions.get('client');
       const oldServerSession = clientTransport.sessions.get('SERVER');
-      expect(oldClientSession.id).toBe(oldServerSession?.advertisedSessionId);
+      expect(oldClientSession).toMatchObject({
+        id: oldServerSession?.advertisedSessionId,
+      });
       expect(oldServerSession).toMatchObject({
         id: oldClientSession?.advertisedSessionId,
       });
@@ -652,8 +654,10 @@ describe.each(testMatrix())(
         schema,
         construct: get,
       });
-			const protocolError = vi.fn();
-			clientTransport.addEventListener('protocolError', protocolError);
+
+      const protocolError = vi.fn();
+      clientTransport.addEventListener('protocolError', protocolError);
+
       addPostTestCleanup(async () => {
         clientTransport.removeEventListener('protocolError', protocolError);
         await cleanupTransports([clientTransport, serverTransport]);
@@ -685,7 +689,6 @@ describe.each(testMatrix())(
           }),
         );
       });
-
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
