@@ -19,7 +19,7 @@ import {
   handshakeRequestMessage,
 } from '../transport/message';
 import { nanoid } from 'nanoid';
-import { NaiveJsonCodec } from '../codec';
+import { BinaryCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
@@ -198,7 +198,7 @@ describe('should handle incompatabilities', async () => {
       },
       sessionId: 'sessionId',
     });
-    ws.send(NaiveJsonCodec.toBuffer(requestMsg));
+    ws.send(BinaryCodec.toBuffer(requestMsg));
 
     // wait for both sides to be happy
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
@@ -220,7 +220,7 @@ describe('should handle incompatabilities', async () => {
       streamId: 'streamid',
       payload: {},
     };
-    ws.send(NaiveJsonCodec.toBuffer(msg));
+    ws.send(BinaryCodec.toBuffer(msg));
 
     await waitFor(() => expect(errMock).toHaveBeenCalledTimes(1));
     expect(errMock).toHaveBeenCalledWith(
@@ -265,7 +265,7 @@ describe('should handle incompatabilities', async () => {
         sessionId: 'sessionId',
       } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
     };
-    ws.send(NaiveJsonCodec.toBuffer(requestMsg));
+    ws.send(BinaryCodec.toBuffer(requestMsg));
 
     // should never connect
     // ws should be closed

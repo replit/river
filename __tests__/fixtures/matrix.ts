@@ -27,16 +27,13 @@ type Selector = [ValidTransports, ValidCodecs];
  * @returns An array of TestMatrixEntry objects representing the combinations of transport and codec.
  */
 export const testMatrix = (selector?: Selector): Array<TestMatrixEntry> =>
-  transports
+  // If a selector is provided, filter transports to match the selector
+  (selector
+    ? transports.filter((transport) => selector[0] === transport.name)
+    : transports
+  )
     .map((transport) =>
-      // If a selector is provided, filter transport + codecs to match the selector; otherwise, use all codecs.
-      (selector
-        ? codecs.filter(
-            (codec) =>
-              selector[0] === transport.name && selector[1] === codec.name,
-          )
-        : codecs
-      ).map((codec) => ({
+      codecs.map((codec) => ({
         transport,
         codec,
       })),
