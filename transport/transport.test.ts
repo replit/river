@@ -635,7 +635,7 @@ describe.each(testMatrix())(
 
     test('handshake grace period of 0 should lead to closed connections', async () => {
       const schema = Type.Unknown();
-      const get = vi.fn(async () => ({}));
+      const get = vi.fn();
 
       const parse = vi.fn(() => {
         const promise = new Promise(() => {
