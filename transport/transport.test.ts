@@ -612,9 +612,9 @@ describe.each(testMatrix())(
       codec: codec.codec,
       heartbeatIntervalMs: 1_000,
       heartbeatsUntilDead: 2,
-      sessionDisconnectGraceMs: 5_000,
-      // set the handshake grace period to 0
-      handshakeGraceMs: 0,
+      sessionDisconnectGraceMs: 10_000,
+      // setting session grace to be higher so that only handshake grace passes
+      handshakeGraceMs: 500,
     };
     let testHelpers: TestSetupHelpers;
     let getClientTransport: TestSetupHelpers['getClientTransport'];
@@ -699,6 +699,9 @@ describe.each(testMatrix())(
       await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(clientConnStop).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(0));
+
+      // advance the timer past the handshake grace period
+      await advanceFakeTimersByConnectionBackoff();
 
       // kill old server and make a new transport with the new server
       await testHelpers.restartServer();
