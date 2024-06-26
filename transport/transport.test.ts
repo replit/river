@@ -682,9 +682,6 @@ describe.each(testMatrix())(
         );
       });
 
-      // cleanup: bring client side connections down and stop trying to reconnect
-      clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
