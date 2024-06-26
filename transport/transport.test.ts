@@ -547,7 +547,7 @@ describe.each(testMatrix())(
       heartbeatsUntilDead: 2,
       // set the session disconnect grace to 0 to force a hard reconnect
       sessionDisconnectGraceMs: 0,
-      handshakeGraceMs: 5_000,
+      handshakeTimeoutMs: 5_000,
     };
     let testHelpers: TestSetupHelpers;
     let getClientTransport: TestSetupHelpers['getClientTransport'];
@@ -615,7 +615,7 @@ describe.each(testMatrix())(
       heartbeatsUntilDead: 2,
       sessionDisconnectGraceMs: 10_000,
       // setting session grace to be higher so that only handshake grace passes
-      handshakeGraceMs: 500,
+      handshakeTimeoutMs: 500,
     };
     const clientOpts: ClientTransportOptions = {
       ...opts,
@@ -667,7 +667,7 @@ describe.each(testMatrix())(
         expect(parse).toHaveBeenCalledTimes(1);
       });
 
-      const handshakeGrace = opts.handshakeGraceMs ?? 500;
+      const handshakeGrace = opts.handshakeTimeoutMs ?? 500;
       await vi.advanceTimersByTimeAsync(handshakeGrace + 1);
 
       // expect no session to have been established due to connection timeout

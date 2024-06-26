@@ -331,7 +331,7 @@ The process differs slightly between the client and server:
 ### Handshake
 
 The handshake is a special message that is sent immediately after the wire connection is established and before any other messages are sent.
-The client and the server should both have a grace period `handshakeGraceMs` to wait for a valid handshake message before closing the connection.
+The client and the server should both have a grace period `handshakeTimeoutMs` to wait for a valid handshake message before closing the connection.
 
 Once a handshake is successful, the client and server can start sending and receiving messages, and a session is considered to be established.
 Handshake messages are identical to normal transport messages except with:
