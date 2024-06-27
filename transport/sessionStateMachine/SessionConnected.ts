@@ -6,8 +6,8 @@ import {
   PartialTransportMessage,
   isAck,
 } from '../message';
-import { Connection } from '../session';
 import { IdentifiedSession, SessionState } from './common';
+import { Connection } from '../connection';
 
 export interface SessionConnectedListeners {
   onConnectionErrored: (err: unknown) => void;

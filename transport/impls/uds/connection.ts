@@ -1,10 +1,10 @@
-import { Connection } from '../../session';
 import { type Socket } from 'node:net';
 import stream from 'node:stream';
 import {
   MessageFramer,
   Uint32LengthPrefixFraming,
 } from '../../transforms/messageFraming';
+import { Connection } from '../../connection';
 
 export class UdsConnection extends Connection {
   sock: Socket;

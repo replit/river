@@ -18,10 +18,12 @@ import {
   PartialTransportMessage,
 } from '../transport/message';
 import { coerceErrorString } from './stringify';
-import { Connection, Session, SessionOptions } from '../transport/session';
 import { Transport } from '../transport/transport';
 import { WsLike } from '../transport/impls/ws/wslike';
 import { defaultTransportOptions } from '../transport/options';
+import { generateId } from '../transport/id';
+import { Connection } from '../transport/connection';
+import { SessionOptions } from '../transport/sessionStateMachine/common';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
@@ -157,7 +159,7 @@ function dummyCtx<State>(
     state,
     to: session.to,
     from: session.from,
-    streamId: nanoid(),
+    streamId: generateId(),
     session,
     metadata: {},
   };
@@ -277,7 +279,5 @@ export function asClientUpload<
 
 export const getUnixSocketPath = () => {
   // https://nodejs.org/api/net.html#identifying-paths-for-ipc-connections
-  return process.platform === 'win32'
-    ? `\\\\?\\pipe\\${nanoid()}`
-    : `/tmp/${nanoid()}.sock`;
+  return `/tmp/${nanoid()}.sock`;
 };

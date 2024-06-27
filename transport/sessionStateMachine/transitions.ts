@@ -1,6 +1,4 @@
-import { nanoid } from 'nanoid';
 import { OpaqueTransportMessage, TransportClientId } from '..';
-import { Connection, SessionOptions } from '../session';
 import {
   SessionConnecting,
   SessionConnectingListeners,
@@ -9,7 +7,7 @@ import {
   SessionNoConnection,
   SessionNoConnectionListeners,
 } from './SessionNoConnection';
-import { IdentifiedSession } from './common';
+import { IdentifiedSession, SessionOptions } from './common';
 import { createSessionTelemetryInfo } from '../../tracing';
 import { SessionPendingIdentification } from './SessionPendingIdentification';
 import {
@@ -20,6 +18,8 @@ import {
   SessionConnected,
   SessionConnectedListeners,
 } from './SessionConnected';
+import { generateId } from '../id';
+import { Connection } from '../connection';
 
 function inheritSharedSession(
   session: IdentifiedSession,
@@ -67,7 +67,7 @@ export const SessionStateMachine = {
       listeners: SessionNoConnectionListeners,
       options: SessionOptions,
     ) {
-      const id = `session-${nanoid(12)}`;
+      const id = `session-${generateId()}`;
       const telemetry = createSessionTelemetryInfo(id, to, from);
       const sendBuffer: Array<OpaqueTransportMessage> = [];
 

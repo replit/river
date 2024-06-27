@@ -1,6 +1,6 @@
 import { Type, TSchema, Static } from '@sinclair/typebox';
-import { nanoid } from 'nanoid';
 import { PropagationContext } from '../tracing';
+import { generateId } from './id';
 
 /**
  * Control flags for transport messages.
@@ -162,12 +162,12 @@ export function handshakeRequestMessage({
   tracing?: PropagationContext;
 }): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {
   return {
-    id: nanoid(),
+    id: generateId(),
     from,
     to,
     seq: 0,
     ack: 0,
-    streamId: nanoid(),
+    streamId: generateId(),
     controlFlags: 0,
     tracing,
     payload: {
@@ -196,12 +196,12 @@ export function handshakeResponseMessage({
   status: Static<typeof ControlMessageHandshakeResponseSchema>['status'];
 }): TransportMessage<Static<typeof ControlMessageHandshakeResponseSchema>> {
   return {
-    id: nanoid(),
+    id: generateId(),
     from,
     to,
     seq: 0,
     ack: 0,
-    streamId: nanoid(),
+    streamId: generateId(),
     controlFlags: 0,
     payload: {
       type: 'HANDSHAKE_RESP',

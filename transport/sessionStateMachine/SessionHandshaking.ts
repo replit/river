@@ -1,5 +1,5 @@
+import { Connection } from '../connection';
 import { OpaqueTransportMessage, TransportMessage } from '../message';
-import { Connection } from '../session';
 import { IdentifiedSession, SessionState } from './common';
 
 export interface SessionHandshakingListeners {

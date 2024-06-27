@@ -18,6 +18,7 @@ import { PartialTransportMessage } from './message';
 import { Type } from '@sinclair/typebox';
 import { TestSetupHelpers } from '../__tests__/fixtures/transports';
 import { createPostTestCleanups } from '../__tests__/fixtures/cleanup';
+import { coloredStringLogger } from '../logging';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
@@ -39,7 +40,9 @@ describe.each(testMatrix())(
 
     test('connection is recreated after clean client disconnect', async () => {
       const clientTransport = getClientTransport('client');
+      clientTransport.bindLogger(coloredStringLogger);
       const serverTransport = getServerTransport();
+      serverTransport.bindLogger(coloredStringLogger);
       addPostTestCleanup(async () => {
         await cleanupTransports([clientTransport, serverTransport]);
       });

@@ -17,11 +17,6 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
   }
 
   async createNewOutgoingConnection(to: TransportClientId) {
-    const oldConnection = this.connections.get(to);
-    if (oldConnection) {
-      oldConnection.close();
-    }
-
     this.log?.info(`establishing a new uds to ${to}`, {
       clientId: this.clientId,
       connectedTo: to,
@@ -34,8 +29,6 @@ export class UnixDomainSocketClientTransport extends ClientTransport<UdsConnecti
       sock.connect(this.path);
     });
 
-    const conn = new UdsConnection(sock);
-    this.handleConnection(conn, to);
-    return conn;
+    return new UdsConnection(sock);
   }
 }

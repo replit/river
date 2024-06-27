@@ -7,12 +7,14 @@ import {
   TransportClientId,
   TransportMessage,
 } from '../message';
-import { Connection, SessionOptions, unsafeId } from '../session';
 import { Value } from '@sinclair/typebox/value';
 import { SessionNoConnection } from './SessionNoConnection';
 import { SessionConnecting } from './SessionConnecting';
 import { SessionHandshaking } from './SessionHandshaking';
 import { SessionConnected } from './SessionConnected';
+import { Codec } from '../../codec';
+import { Connection } from '../connection';
+import { generateId } from '../id';
 
 export const enum SessionState {
   NoConnection = 'NoConnection',
@@ -102,6 +104,34 @@ abstract class StateMachineState {
       },
     });
   }
+}
+
+export interface SessionOptions {
+  /**
+   * Frequency at which to send heartbeat acknowledgements
+   */
+  heartbeatIntervalMs: number;
+  /**
+   * Number of elapsed heartbeats without a response message before we consider
+   * the connection dead.
+   */
+  heartbeatsUntilDead: number;
+  /**
+   * Duration to wait between connection disconnect and actual session disconnect
+   */
+  sessionDisconnectGraceMs: number;
+  /**
+   * Connection timeout in milliseconds
+   */
+  connectionTimeoutMs: number;
+  /**
+   * Handshake timeout in milliseconds
+   */
+  handshakeTimeoutMs: number;
+  /**
+   * The codec to use for encoding/decoding messages over the wire
+   */
+  codec: Codec;
 }
 
 // all session states have a from and options
@@ -198,7 +228,7 @@ export abstract class IdentifiedSession extends CommonSession {
   ): TransportMessage<Payload> {
     const msg = {
       ...partialMsg,
-      id: unsafeId(),
+      id: generateId(),
       to: this.to,
       from: this.from,
       seq: this.seq,
@@ -222,5 +252,6 @@ export abstract class IdentifiedSession extends CommonSession {
   _handleClose(): void {
     // zero out the buffer
     this.sendBuffer.length = 0;
+    this.telemetry.span.end();
   }
 }

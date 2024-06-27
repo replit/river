@@ -1,4 +1,4 @@
-export { type SessionState, type Session } from './common';
+export { SessionState, type Session } from './common';
 export { type SessionPendingIdentification } from './SessionPendingIdentification';
 export { type SessionConnecting } from './SessionConnecting';
 export { type SessionNoConnection } from './SessionNoConnection';

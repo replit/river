@@ -1,18 +1,18 @@
 import { describe, expect, test, vitest } from 'vitest';
 import { EventDispatcher } from './events';
 import { OpaqueTransportMessage } from '.';
-import { nanoid } from 'nanoid';
+import { generateId } from './id';
 
 function dummyMessage(): OpaqueTransportMessage {
   return {
-    id: nanoid(),
-    from: nanoid(),
-    to: nanoid(),
+    id: generateId(),
+    from: generateId(),
+    to: generateId(),
     seq: 0,
     ack: 0,
-    streamId: nanoid(),
+    streamId: generateId(),
     controlFlags: 0,
-    payload: nanoid(),
+    payload: generateId(),
   };
 }
 

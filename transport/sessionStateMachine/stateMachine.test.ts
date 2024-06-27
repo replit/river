@@ -3,7 +3,6 @@ import {
   payloadToTransportMessage,
   testingSessionOptions,
 } from '../../util/testHelpers';
-import { Connection } from '../session';
 import { waitFor } from '../../__tests__/fixtures/cleanup';
 import {
   ControlFlags,
@@ -18,6 +17,7 @@ import { SessionConnectingListeners } from './SessionConnecting';
 import { SessionNoConnectionListeners } from './SessionNoConnection';
 import { SessionStateMachine } from './transitions';
 import { SessionPendingIdentification } from './SessionPendingIdentification';
+import { Connection } from '../connection';
 
 function persistedSessionState<ConnType extends Connection>(
   session: Session<ConnType>,
@@ -1264,6 +1264,28 @@ describe('session state machine', () => {
 
       // make sure the session acks the heartbeat
       expect(conn.send).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not dispatch acks', async () => {
+      const sessionHandle = await createSessionConnected();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const conn = session.conn;
+
+      // send a heartbeat
+      conn.emitData(
+        session.options.codec.toBuffer(
+          session.constructMsg({
+            streamId: 'heartbeat',
+            controlFlags: 0,
+            payload: {
+              type: 'ACK',
+            } satisfies Static<typeof ControlMessageAckSchema>,
+          }),
+        ),
+      );
+
+      expect(conn.send).toHaveBeenCalledTimes(1);
+      expect(sessionHandle.onMessage).not.toHaveBeenCalled();
     });
   });
 });

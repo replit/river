@@ -1,6 +1,6 @@
 import { MessageMetadata } from '../../logging';
+import { Connection } from '../connection';
 import { TransportMessage } from '../message';
-import { Connection } from '../session';
 import { SessionHandshakingListeners } from './SessionHandshaking';
 import { CommonSession, SessionState } from './common';
 

@@ -19,13 +19,12 @@ import {
   PartialTransportMessage,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
-import { nanoid } from 'nanoid';
 import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
-import { Connection } from '../transport/session';
 import { createProcTelemetryInfo, getPropagationContext } from '../tracing';
 import { ClientHandshakeOptions } from './handshake';
-import { ClientTransport } from '../transport';
+import { ClientTransport, Connection } from '../transport';
+import { generateId } from '../transport/id';
 
 // helper to make next, yield, and return all the same type
 export type AsyncIter<T> = AsyncGenerator<T, T>;
@@ -256,7 +255,7 @@ function handleRpc(
   serviceName: string,
   procedureName: string,
 ) {
-  const streamId = nanoid();
+  const streamId = generateId();
   const { span, ctx } = createProcTelemetryInfo(
     transport,
     'rpc',
@@ -314,7 +313,7 @@ function handleStream(
   serviceName: string,
   procedureName: string,
 ) {
-  const streamId = nanoid();
+  const streamId = generateId();
   const { span, ctx } = createProcTelemetryInfo(
     transport,
     'stream',
@@ -412,7 +411,7 @@ function handleSubscribe(
   serviceName: string,
   procedureName: string,
 ) {
-  const streamId = nanoid();
+  const streamId = generateId();
   const { span, ctx } = createProcTelemetryInfo(
     transport,
     'subscription',
@@ -482,7 +481,7 @@ function handleUpload(
   serviceName: string,
   procedureName: string,
 ) {
-  const streamId = nanoid();
+  const streamId = generateId();
   const { span, ctx } = createProcTelemetryInfo(
     transport,
     'upload',

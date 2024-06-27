@@ -1,4 +1,4 @@
-import { Connection } from '../session';
+import { Connection } from '../connection';
 import { IdentifiedSession, SessionState } from './common';
 
 export interface SessionConnectingListeners<ConnType extends Connection> {

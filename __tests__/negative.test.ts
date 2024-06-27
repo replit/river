@@ -18,13 +18,13 @@ import {
   OpaqueTransportMessage,
   handshakeRequestMessage,
 } from '../transport/message';
-import { nanoid } from 'nanoid';
 import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
 import NodeWs from 'ws';
 import { createPostTestCleanups } from './fixtures/cleanup';
+import { generateId } from '../transport/id';
 
 describe('should handle incompatabilities', async () => {
   let server: http.Server;
@@ -252,12 +252,12 @@ describe('should handle incompatabilities', async () => {
     await new Promise((resolve) => (ws.onopen = resolve));
 
     const requestMsg = {
-      id: nanoid(),
+      id: generateId(),
       from: 'client',
       to: 'SERVER',
       seq: 0,
       ack: 0,
-      streamId: nanoid(),
+      streamId: generateId(),
       controlFlags: 0,
       payload: {
         type: 'HANDSHAKE_REQ',
