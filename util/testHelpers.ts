@@ -23,7 +23,11 @@ import { WsLike } from '../transport/impls/ws/wslike';
 import { defaultTransportOptions } from '../transport/options';
 import { generateId } from '../transport/id';
 import { Connection } from '../transport/connection';
-import { SessionOptions } from '../transport/sessionStateMachine/common';
+import {
+  Session,
+  SessionOptions,
+} from '../transport/sessionStateMachine/common';
+import { SessionStateMachine } from '../transport/sessionStateMachine';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
@@ -141,10 +145,14 @@ function catchProcError(err: unknown) {
 export const testingSessionOptions: SessionOptions = defaultTransportOptions;
 
 export function dummySession() {
-  return new Session<Connection>(
-    undefined,
+  return SessionStateMachine.entrypoints.NoConnection(
     'client',
     'server',
+    {
+      onSessionGracePeriodElapsed: () => {
+        /* noop */
+      },
+    },
     testingSessionOptions,
   );
 }

@@ -23,7 +23,11 @@ import {
 } from './options';
 import {
   Session,
+  SessionConnected,
+  SessionConnecting,
+  SessionHandshaking,
   SessionNoConnection,
+  SessionState,
   SessionStateMachine,
 } from './sessionStateMachine';
 import { Connection } from './connection';
@@ -194,6 +198,17 @@ export abstract class Transport<ConnType extends Connection> {
     return this.status;
   }
 
+  protected updateSession<S extends Session<ConnType>>(session: S): S {
+    const activeSession = this.sessions.get(session.to);
+    if (activeSession && activeSession.id !== session.id) {
+      const msg = `attempt to transition active session for ${session.to} but active session (${activeSession.id}) is different from handle (${session.id})`;
+      throw new Error(msg);
+    }
+
+    this.sessions.set(session.to, session);
+    return session;
+  }
+
   // state transitions
   protected createUnconnectedSession(to: string): SessionNoConnection {
     const session = SessionStateMachine.entrypoints.NoConnection(
@@ -216,41 +231,64 @@ export abstract class Transport<ConnType extends Connection> {
       session,
     });
 
-    // invariant check
-    // TODO: these shouldn't need to be done
-    const existingSession = this.sessions.get(session.to);
-    if (existingSession && existingSession !== session) {
-      throw new Error('attempt to create session when one already exists');
-    }
-
-    this.sessions.set(session.to, session);
-    return session;
+    return this.updateSession(session);
   }
 
   protected deleteSession(session: Session<ConnType>) {
     session.close();
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'disconnect',
-      session,
+      session: session as Session<Connection>,
     });
-
-    // invariant check
-    // TODO: these shouldn't need to be done
-    const existingSession = this.sessions.get(session.to);
-    if (existingSession && existingSession !== session) {
-      throw new Error('attempt to delete mismatched session');
-    }
 
     this.sessions.delete(session.to);
   }
 
   // common listeners
-  private onSessionGracePeriodElapsed = (session: SessionNoConnection) => {
+  protected onSessionGracePeriodElapsed(session: SessionNoConnection) {
     this.log?.warn(
       `session to ${session.to} grace period elapsed, closing`,
       session.loggingMetadata,
     );
 
     this.deleteSession(session);
-  };
+  }
+
+  protected onConnectingFailed(
+    session: SessionConnecting<ConnType>,
+  ): SessionNoConnection {
+    // transition to no connection
+    const noConnectionSession =
+      SessionStateMachine.transition.ConnectingToNoConnection(session, {
+        onSessionGracePeriodElapsed: () => {
+          this.onSessionGracePeriodElapsed(noConnectionSession);
+        },
+      });
+
+    return this.updateSession(noConnectionSession);
+  }
+
+  protected onConnClosed(
+    session: SessionHandshaking<ConnType> | SessionConnected<ConnType>,
+  ): SessionNoConnection {
+    // transition to no connection
+    let noConnectionSession: SessionNoConnection;
+    if (session.state === SessionState.Handshaking) {
+      noConnectionSession =
+        SessionStateMachine.transition.HandshakingToNoConnection(session, {
+          onSessionGracePeriodElapsed: () => {
+            this.onSessionGracePeriodElapsed(noConnectionSession);
+          },
+        });
+    } else {
+      noConnectionSession =
+        SessionStateMachine.transition.ConnectedToNoConnection(session, {
+          onSessionGracePeriodElapsed: () => {
+            this.onSessionGracePeriodElapsed(noConnectionSession);
+          },
+        });
+    }
+
+    return this.updateSession(noConnectionSession);
+  }
 }

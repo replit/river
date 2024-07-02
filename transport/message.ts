@@ -69,16 +69,27 @@ export const ControlMessageHandshakeRequestSchema = Type.Object({
    * is compatible with what it already has.
    */
   expectedSessionState: Type.Object({
-    /**
-     * reconnect is set to true if the client explicitly wants to reestablish an existing
-     * connection.
-     */
-    reconnect: Type.Boolean(),
     nextExpectedSeq: Type.Integer(),
   }),
 
   metadata: Type.Optional(Type.Unknown()),
 });
+
+export const HandshakeErrorRetriableResponseCodes = Type.Union([
+  Type.Literal('REJECTED_BY_CUSTOM_HANDLER'),
+  Type.Literal('SESSION_STATE_MISMATCH'),
+]);
+
+export const HandshakeErrorFatalResponseCodes = Type.Union([
+  Type.Literal('MALFORMED_HANDSHAKE_META'),
+  Type.Literal('MALFORMED_HANDSHAKE'),
+  Type.Literal('PROTOCOL_VERSION_MISMATCH'),
+]);
+
+export const HandshakeErrorResponseCodes = Type.Union([
+  HandshakeErrorRetriableResponseCodes,
+  HandshakeErrorFatalResponseCodes,
+]);
 
 export const ControlMessageHandshakeResponseSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_RESP'),
@@ -90,6 +101,9 @@ export const ControlMessageHandshakeResponseSchema = Type.Object({
     Type.Object({
       ok: Type.Literal(false),
       reason: Type.String(),
+      // TODO: remove optional once we know all servers
+      // are sending code here
+      code: Type.Optional(HandshakeErrorResponseCodes),
     }),
   ]),
 });
@@ -207,6 +221,16 @@ export function handshakeResponseMessage({
       type: 'HANDSHAKE_RESP',
       status,
     } satisfies Static<typeof ControlMessageHandshakeResponseSchema>,
+  };
+}
+
+export function closeStreamMessage(streamId: string): PartialTransportMessage {
+  return {
+    streamId,
+    controlFlags: ControlFlags.StreamClosedBit,
+    payload: {
+      type: 'CLOSE' as const,
+    } satisfies Static<typeof ControlMessagePayloadSchema>,
   };
 }
 

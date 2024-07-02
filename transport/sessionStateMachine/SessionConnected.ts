@@ -119,7 +119,7 @@ export class SessionConnected<
       return;
     }
 
-    // handle acks specially
+    // discard acks (unless we aren't heartbeating in which case just respond)
     this.log?.debug(`discarding msg (ack bit set)`, {
       ...this.loggingMetadata,
       transportMessage: parsedMsg,

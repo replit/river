@@ -17,6 +17,7 @@ import {
   TransportClientId,
   isStreamClose,
   PartialTransportMessage,
+  closeStreamMessage,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
@@ -207,7 +208,7 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
 
   const options = { ...defaultClientOptions, ...providedClientOptions };
   if (options.eagerlyConnect) {
-    void transport.connect(serverId);
+    transport.connect(serverId);
   }
 
   return _createRecursiveProxy(async (opts) => {
@@ -219,8 +220,8 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
     }
 
     const [input] = opts.args;
-    if (options.connectOnInvoke && !transport.connections.has(serverId)) {
-      void transport.connect(serverId);
+    if (options.connectOnInvoke && !transport.sessions.has(serverId)) {
+      transport.connect(serverId);
     }
 
     if (procType === 'rpc') {
@@ -362,7 +363,7 @@ function handleStream(
 
     // after ending input stream, send a close message to the server
     if (!healthyClose) return;
-    transport.sendCloseStream(serverId, streamId);
+    transport.send(serverId, closeStreamMessage(streamId));
   };
 
   void pipeInputToTransport();
@@ -454,7 +455,7 @@ function handleSubscribe(
   const closeHandler = () => {
     cleanup();
     if (!healthyClose) return;
-    transport.sendCloseStream(serverId, streamId);
+    transport.send(serverId, closeStreamMessage(streamId));
   };
 
   // close stream after disconnect + grace period elapses
@@ -529,7 +530,7 @@ function handleUpload(
 
     // after ending input stream, send a close message to the server
     if (!healthyClose) return;
-    transport.sendCloseStream(serverId, streamId);
+    transport.send(serverId, closeStreamMessage(streamId));
   };
 
   void pipeInputToTransport();

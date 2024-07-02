@@ -125,28 +125,34 @@ export const SessionStateMachine = {
       return new SessionConnected(conn, listeners, ...carriedState);
     },
     PendingIdentificationToConnected<ConnType extends Connection>(
-      oldSession: SessionPendingIdentification<ConnType>,
+      pendingSession: SessionPendingIdentification<ConnType>,
+      oldSession: SessionNoConnection | undefined,
       sessionId: string,
       to: TransportClientId,
       listeners: SessionConnectedListeners,
     ): SessionConnected<ConnType> {
-      const conn = oldSession.conn;
-      const { from, options } = oldSession;
-      oldSession._handleStateExit();
+      const conn = pendingSession.conn;
+      const { from, options } = pendingSession;
+      const carriedState: ConstructorParameters<typeof IdentifiedSession> =
+        oldSession
+          ? // old session exists, inherit state
+            inheritSharedSession(oldSession)
+          : // old session does not exist, create new state
+            [
+              sessionId,
+              from,
+              to,
+              0,
+              0,
+              [],
+              createSessionTelemetryInfo(sessionId, to, from),
+              options,
+            ];
 
-      const telemetry = createSessionTelemetryInfo(sessionId, to, from);
-      return new SessionConnected(
-        conn,
-        listeners,
-        sessionId,
-        from,
-        to,
-        0,
-        0,
-        [],
-        telemetry,
-        options,
-      );
+      pendingSession._handleStateExit();
+      oldSession?._handleStateExit();
+
+      return new SessionConnected(conn, listeners, ...carriedState);
     },
     // disconnect paths
     ConnectingToNoConnection<ConnType extends Connection>(

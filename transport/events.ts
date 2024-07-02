@@ -1,6 +1,7 @@
-import { TransportStatus } from '.';
+import { Connection } from './connection';
 import { OpaqueTransportMessage } from './message';
-import { Connection, Session } from './session';
+import { Session } from './sessionStateMachine';
+import { TransportStatus } from './transport';
 
 type ConnectionStatus = 'connect' | 'disconnect';
 export const ProtocolError = {

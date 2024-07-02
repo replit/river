@@ -323,7 +323,7 @@ describe('session state machine', () => {
       expect(onHandshakeTimeout).not.toHaveBeenCalled();
     });
 
-    test('pending -> connected', async () => {
+    test('pending (no existing session) -> connected', async () => {
       const sessionHandle = createSessionPendingIdentification();
       let session:
         | Session<MockConnection>
@@ -339,6 +339,7 @@ describe('session state machine', () => {
       const listeners = createSessionConnectedListeners();
       session = SessionStateMachine.transition.PendingIdentificationToConnected(
         session,
+        undefined,
         'clientSessionId',
         'to',
         listeners,
@@ -371,6 +372,38 @@ describe('session state machine', () => {
       // advance time and make sure timer doesn't go off
       vi.advanceTimersByTime(testingSessionOptions.handshakeTimeoutMs);
       expect(onHandshakeTimeout).not.toHaveBeenCalled();
+    });
+
+    test('pending (existing session) -> connected', async () => {
+      const oldSessionHandle = createSessionNoConnection();
+      const oldSession: Session<MockConnection> = oldSessionHandle.session;
+      oldSession.send(payloadToTransportMessage('hello'));
+      oldSession.send(payloadToTransportMessage('world'));
+      expect(oldSession.sendBuffer.length).toBe(2);
+      expect(oldSession.seq).toBe(2);
+      expect(oldSession.ack).toBe(0);
+
+      const sessionHandle = createSessionPendingIdentification();
+      let session:
+        | Session<MockConnection>
+        | SessionPendingIdentification<MockConnection> = sessionHandle.session;
+
+      const listeners = createSessionConnectedListeners();
+      session = SessionStateMachine.transition.PendingIdentificationToConnected(
+        session,
+        oldSession,
+        'clientSessionId',
+        'to',
+        listeners,
+      );
+
+      session.send(payloadToTransportMessage('foo'));
+      expect(session.sendBuffer.length).toBe(3);
+      expect(session.seq).toBe(3);
+      expect(session.ack).toBe(0);
+      expect(oldSession._isConsumed).toBe(true);
+      expect(session.conn.send).toHaveBeenCalledTimes(3);
+      expect(session.conn.status).toBe('open');
     });
 
     test('connecting (conn failed) -> no connection', async () => {
@@ -723,6 +756,7 @@ describe('session state machine', () => {
       const listeners = createSessionConnectedListeners();
       SessionStateMachine.transition.PendingIdentificationToConnected(
         session,
+        undefined,
         'clientSessionId',
         'to',
         listeners,
@@ -980,7 +1014,6 @@ describe('session state machine', () => {
             to: 'to',
             sessionId: 'clientSessionId',
             expectedSessionState: {
-              reconnect: false,
               nextExpectedSeq: 0,
             },
           }),
@@ -1096,7 +1129,6 @@ describe('session state machine', () => {
             to: 'to',
             sessionId: 'clientSessionId',
             expectedSessionState: {
-              reconnect: false,
               nextExpectedSeq: 0,
             },
           }),
@@ -1276,7 +1308,7 @@ describe('session state machine', () => {
         session.options.codec.toBuffer(
           session.constructMsg({
             streamId: 'heartbeat',
-            controlFlags: 0,
+            controlFlags: ControlFlags.AckBit,
             payload: {
               type: 'ACK',
             } satisfies Static<typeof ControlMessageAckSchema>,
@@ -1284,7 +1316,6 @@ describe('session state machine', () => {
         ),
       );
 
-      expect(conn.send).toHaveBeenCalledTimes(1);
       expect(sessionHandle.onMessage).not.toHaveBeenCalled();
     });
   });

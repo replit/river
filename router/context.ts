@@ -1,5 +1,5 @@
+import { Connection, Session } from '../transport';
 import { TransportClientId } from '../transport/message';
-import { Connection, Session } from '../transport/session';
 
 /**
  * The context for services/procedures. This is used only on

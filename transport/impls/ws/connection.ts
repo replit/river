@@ -1,4 +1,4 @@
-import { Connection } from '../../session';
+import { Connection } from '../../connection';
 import { WsLike } from './wslike';
 
 export class WebSocketConnection extends Connection {

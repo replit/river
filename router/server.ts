@@ -1,5 +1,5 @@
 import { Static } from '@sinclair/typebox';
-import { ServerTransport } from '../transport';
+import { Connection, ServerTransport } from '../transport';
 import { AnyProcedure, PayloadType } from './procedures';
 import {
   AnyService,
@@ -15,6 +15,7 @@ import {
   isStreamOpen,
   TransportClientId,
   ControlFlags,
+  closeStreamMessage,
 } from '../transport/message';
 import {
   ServiceContext,
@@ -31,7 +32,6 @@ import {
   UNCAUGHT_ERROR,
 } from './result';
 import { EventMap } from '../transport/events';
-import { Connection } from '../transport/session';
 import { coerceErrorString } from '../util/stringify';
 import { Span, SpanStatusCode } from '@opentelemetry/api';
 import { createHandlerSpan } from '../tracing';
@@ -240,7 +240,10 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
             // we ended, send a close bit back to the client
             // also, if the client has disconnected, we don't need to send a close
             if (!this.disconnectedSessions.has(message.from)) {
-              this.transport.sendCloseStream(session.to, message.streamId);
+              this.transport.send(
+                session.to,
+                closeStreamMessage(message.streamId),
+              );
             }
 
             // call disposables returned from handlers

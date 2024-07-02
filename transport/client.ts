@@ -3,7 +3,6 @@ import { ClientHandshakeOptions } from '../router/handshake';
 import {
   ControlMessageHandshakeResponseSchema,
   OpaqueTransportMessage,
-  PartialTransportMessage,
   TransportClientId,
   handshakeRequestMessage,
 } from './message';
@@ -18,16 +17,15 @@ import { coerceErrorString } from '../util/stringify';
 import { ProtocolError } from './events';
 import { Value } from '@sinclair/typebox/value';
 import tracer, { getPropagationContext } from '../tracing';
-import { Connection } from './connection';
 import {
-  Session,
   SessionConnected,
   SessionConnecting,
   SessionHandshaking,
-  SessionNoConnection,
   SessionState,
   SessionStateMachine,
 } from './sessionStateMachine';
+import { Connection } from './connection';
+import { MessageMetadata } from '../logging';
 
 export abstract class ClientTransport<
   ConnType extends Connection,
@@ -80,19 +78,31 @@ export abstract class ClientTransport<
     to: TransportClientId,
   ): Promise<ConnType>;
 
-  // listeners
-  private onSessionGracePeriodElapsed = (session: SessionNoConnection) => {
-    this.log?.warn(
-      `session to ${session.to} grace period elapsed, closing`,
-      session.loggingMetadata,
-    );
-    this.deleteSession(session);
-  };
+  private tryReconnecting(to: string) {
+    if (this.reconnectOnConnectionDrop && this.getStatus() === 'open') {
+      this.connect(to);
+    }
+  }
 
-  private onConnectionEstablished = (
+  // listeners
+  protected onConnectingFailed(session: SessionConnecting<ConnType>) {
+    const noConnectionSession = super.onConnectingFailed(session);
+    this.tryReconnecting(noConnectionSession.to);
+    return noConnectionSession;
+  }
+
+  protected onConnClosed(
+    session: SessionHandshaking<ConnType> | SessionConnected<ConnType>,
+  ) {
+    const noConnectionSession = super.onConnClosed(session);
+    this.tryReconnecting(noConnectionSession.to);
+    return noConnectionSession;
+  }
+
+  protected onConnectionEstablished(
     session: SessionConnecting<ConnType>,
     conn: ConnType,
-  ) => {
+  ): SessionHandshaking<ConnType> {
     // transition to handshaking
     const handshakingSession =
       SessionStateMachine.transition.ConnectingToHandshaking(session, conn, {
@@ -123,66 +133,62 @@ export abstract class ClientTransport<
         },
       });
 
-    this.session = handshakingSession;
-
-    // send the handshake
+    this.updateSession(handshakingSession);
     void this.sendHandshake(handshakingSession);
-  };
+    return handshakingSession;
+  }
 
-  private onHandshakeResponse = (
+  private rejectHandshakeResponse(
+    session: SessionHandshaking<ConnType>,
+    reason: string,
+    metadata: MessageMetadata,
+  ) {
+    session.conn.telemetry?.span.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: reason,
+    });
+
+    this.log?.warn(reason, metadata);
+    this.protocolError(ProtocolError.HandshakeFailed, reason);
+    this.deleteSession(session);
+  }
+
+  protected onHandshakeResponse(
     session: SessionHandshaking<ConnType>,
     msg: OpaqueTransportMessage,
-  ) => {
+  ) {
     // invariant: msg is a handshake response
     if (!Value.Check(ControlMessageHandshakeResponseSchema, msg.payload)) {
-      session.conn.telemetry?.span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: 'invalid handshake response',
-      });
-      this.log?.warn(`received invalid handshake resp`, {
+      const reason = `received invalid handshake response`;
+      this.rejectHandshakeResponse(session, reason, {
         ...session.loggingMetadata,
         transportMessage: msg,
         validationErrors: [
           ...Value.Errors(ControlMessageHandshakeResponseSchema, msg.payload),
         ],
       });
-      this.protocolError(
-        ProtocolError.HandshakeFailed,
-        'invalid handshake resp',
-      );
-      this.destroySession(session);
       return;
     }
 
     // invariant: handshake response should be ok
     if (!msg.payload.status.ok) {
+      // TODO: handle retriable errors slightly differently here
+
       const reason = `handshake failed: ${msg.payload.status.reason}`;
-      session.conn.telemetry?.span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: reason,
-      });
-      this.log?.warn(reason, {
+      this.rejectHandshakeResponse(session, reason, {
         ...session.loggingMetadata,
         transportMessage: msg,
       });
-      this.protocolError(ProtocolError.HandshakeFailed, reason);
-      this.destroySession(session);
       return;
     }
 
     // invariant: session id should match between client + server
     if (msg.payload.status.sessionId !== session.id) {
       const reason = `session id mismatch: expected ${session.id}, got ${msg.payload.status.sessionId}`;
-      session.conn.telemetry?.span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: reason,
-      });
-      this.log?.warn(reason, {
+      this.rejectHandshakeResponse(session, reason, {
         ...session.loggingMetadata,
         transportMessage: msg,
       });
-      this.protocolError(ProtocolError.HandshakeFailed, reason);
-      this.destroySession(session);
       return;
     }
 
@@ -212,53 +218,9 @@ export abstract class ClientTransport<
         onMessage: (msg) => this.handleMsg(msg),
       });
 
-    this.session = connectedSession;
+    this.updateSession(connectedSession);
     this.retryBudget.startRestoringBudget(session.to);
-  };
-
-  private tryReconnecting(to: string) {
-    if (this.reconnectOnConnectionDrop && this.getStatus() === 'open') {
-      this.connect(to);
-    }
   }
-
-  private onConnectingFailed = (session: SessionConnecting<ConnType>) => {
-    // transition to no connection
-    const noConnectionSession =
-      SessionStateMachine.transition.ConnectingToNoConnection(session, {
-        onSessionGracePeriodElapsed: () => {
-          this.onSessionGracePeriodElapsed(noConnectionSession);
-        },
-      });
-
-    this.session = noConnectionSession;
-    this.tryReconnecting(noConnectionSession.to);
-  };
-
-  private onConnClosed = (
-    session: SessionHandshaking<ConnType> | SessionConnected<ConnType>,
-  ) => {
-    // transition to no connection
-    let noConnectionSession: SessionNoConnection;
-    if (session.state === SessionState.Handshaking) {
-      noConnectionSession =
-        SessionStateMachine.transition.HandshakingToNoConnection(session, {
-          onSessionGracePeriodElapsed: () => {
-            this.onSessionGracePeriodElapsed(noConnectionSession);
-          },
-        });
-    } else {
-      noConnectionSession =
-        SessionStateMachine.transition.ConnectedToNoConnection(session, {
-          onSessionGracePeriodElapsed: () => {
-            this.onSessionGracePeriodElapsed(noConnectionSession);
-          },
-        });
-    }
-
-    this.session = noConnectionSession;
-    this.tryReconnecting(noConnectionSession.to);
-  };
 
   /**
    * Manually attempts to connect to a client.
@@ -266,15 +228,14 @@ export abstract class ClientTransport<
    */
   connect(to: TransportClientId) {
     // create a new session if one does not exist
-    if (!this.session) {
-      this.session = this.createSession(to);
-    }
+    let session = this.sessions.get(to);
+    session ??= this.createUnconnectedSession(to);
 
-    if (this.session.state !== SessionState.NoConnection) {
+    if (session.state !== SessionState.NoConnection) {
       // already trying to connect
       this.log?.debug(
-        `session to ${to} has state ${this.session.state}, skipping connect attempt`,
-        this.session.loggingMetadata,
+        `session to ${to} has state ${session.state}, skipping connect attempt`,
+        session.loggingMetadata,
       );
       return;
     }
@@ -282,7 +243,7 @@ export abstract class ClientTransport<
     if (this.getStatus() !== 'open') {
       this.log?.info(
         `transport state is no longer open, cancelling attempt to connect to ${to}`,
-        this.session.loggingMetadata,
+        session.loggingMetadata,
       );
       return;
     }
@@ -291,7 +252,7 @@ export abstract class ClientTransport<
     if (!this.retryBudget.hasBudget(to)) {
       const budgetConsumed = this.retryBudget.getBudgetConsumed(to);
       const errMsg = `tried to connect to ${to} but retry budget exceeded (more than ${budgetConsumed} attempts in the last ${this.retryBudget.totalBudgetRestoreTime}ms)`;
-      this.log?.error(errMsg, this.session.loggingMetadata);
+      this.log?.error(errMsg, session.loggingMetadata);
       this.protocolError(ProtocolError.RetriesExceeded, errMsg);
       return;
     }
@@ -304,7 +265,7 @@ export abstract class ClientTransport<
 
     this.log?.info(
       `attempting connection to ${to} (${backoffMs}ms backoff)`,
-      this.session.loggingMetadata,
+      session.loggingMetadata,
     );
 
     this.retryBudget.consumeBudget(to);
@@ -332,7 +293,7 @@ export abstract class ClientTransport<
 
     const connectingSession =
       SessionStateMachine.transition.NoConnectionToConnecting(
-        this.session,
+        session,
         reconnectPromise,
         {
           onConnectionEstablished: (conn: ConnType) => {
@@ -360,7 +321,7 @@ export abstract class ClientTransport<
         },
       );
 
-    this.session = connectingSession;
+    this.updateSession(connectingSession);
   }
 
   private async sendHandshake(session: SessionHandshaking<ConnType>) {
@@ -375,7 +336,6 @@ export abstract class ClientTransport<
       to: session.to,
       sessionId: session.id,
       expectedSessionState: {
-        reconnect: session.ack > 0,
         nextExpectedSeq: session.ack,
       },
       metadata,

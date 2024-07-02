@@ -1,6 +1,6 @@
 import { NaiveJsonCodec } from '../codec/json';
 import { ConnectionRetryOptions } from './rateLimit';
-import { SessionOptions } from './session';
+import { SessionOptions } from './sessionStateMachine/common';
 
 export type TransportOptions = SessionOptions;
 
