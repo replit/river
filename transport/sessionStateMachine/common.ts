@@ -64,9 +64,9 @@ abstract class StateMachineState {
     // we intercept the access and throw an error to help catch bugs
     return new Proxy(this, {
       get(target, prop) {
-        // always allow access to _isConsumed
-        if (prop === '_isConsumed') {
-          return target._isConsumed;
+        // always allow access to _isConsumed and id
+        if (prop === '_isConsumed' || prop === 'id') {
+          return Reflect.get(target, prop);
         }
 
         // modify _handleStateExit
@@ -199,6 +199,7 @@ export abstract class IdentifiedSession extends CommonSession {
     sendBuffer: Array<OpaqueTransportMessage>,
     telemetry: TelemetryInfo,
     options: SessionOptions,
+    log: Logger | undefined,
   ) {
     super(from, options);
     this.id = id;
@@ -207,6 +208,7 @@ export abstract class IdentifiedSession extends CommonSession {
     this.ack = ack;
     this.sendBuffer = sendBuffer;
     this.telemetry = telemetry;
+    this.log = log;
   }
 
   get loggingMetadata(): MessageMetadata {

@@ -342,6 +342,7 @@ describe('session state machine', () => {
         undefined,
         'clientSessionId',
         'to',
+        undefined,
         listeners,
       );
 
@@ -394,6 +395,7 @@ describe('session state machine', () => {
         oldSession,
         'clientSessionId',
         'to',
+        undefined,
         listeners,
       );
 
@@ -708,7 +710,7 @@ describe('session state machine', () => {
       );
 
       // doing anything on the old session should throw
-      expect(() => session.id).toThrowError(ERR_CONSUMED);
+      expect(() => session.loggingMetadata).toThrowError(ERR_CONSUMED);
       expect(() => {
         session.send(payloadToTransportMessage('hello'));
       }).toThrowError(ERR_CONSUMED);
@@ -729,7 +731,7 @@ describe('session state machine', () => {
       );
 
       // doing anything on the old session should throw
-      expect(() => session.id).toThrowError(ERR_CONSUMED);
+      expect(() => session.loggingMetadata).toThrowError(ERR_CONSUMED);
       expect(() => {
         session.send(payloadToTransportMessage('hello'));
       }).toThrowError(ERR_CONSUMED);
@@ -742,7 +744,7 @@ describe('session state machine', () => {
       SessionStateMachine.transition.HandshakingToConnected(session, listeners);
 
       // doing anything on the old session should throw
-      expect(() => session.id).toThrowError(ERR_CONSUMED);
+      expect(() => session.loggingMetadata).toThrowError(ERR_CONSUMED);
       expect(() => {
         session.send(payloadToTransportMessage('hello'));
       }).toThrowError(ERR_CONSUMED);
@@ -759,6 +761,7 @@ describe('session state machine', () => {
         undefined,
         'clientSessionId',
         'to',
+        undefined,
         listeners,
       );
 
@@ -776,7 +779,7 @@ describe('session state machine', () => {
       );
 
       // doing anything on the old session should throw
-      expect(() => session.id).toThrowError(ERR_CONSUMED);
+      expect(() => session.loggingMetadata).toThrowError(ERR_CONSUMED);
       expect(() => {
         session.send(payloadToTransportMessage('hello'));
       }).toThrowError(ERR_CONSUMED);
@@ -792,7 +795,7 @@ describe('session state machine', () => {
       );
 
       // doing anything on the old session should throw
-      expect(() => session.id).toThrowError(ERR_CONSUMED);
+      expect(() => session.loggingMetadata).toThrowError(ERR_CONSUMED);
       expect(() => {
         session.send(payloadToTransportMessage('hello'));
       }).toThrowError(ERR_CONSUMED);
@@ -808,7 +811,7 @@ describe('session state machine', () => {
       );
 
       // doing anything on the old session should throw
-      expect(() => session.id).toThrowError(ERR_CONSUMED);
+      expect(() => session.loggingMetadata).toThrowError(ERR_CONSUMED);
       expect(() => {
         session.send(payloadToTransportMessage('hello'));
       }).toThrowError(ERR_CONSUMED);

@@ -115,7 +115,7 @@ export abstract class ClientTransport<
           );
         },
         onConnectionClosed: () => {
-          this.log?.error(
+          this.log?.warn(
             `connection to ${session.to} closed during handshake`,
             handshakingSession.loggingMetadata,
           );
@@ -203,14 +203,14 @@ export abstract class ClientTransport<
         onConnectionErrored: (err) => {
           // just log, when we error we also emit close
           const errStr = coerceErrorString(err);
-          this.log?.error(
-            `connection to ${session.to} errored: ${errStr}`,
+          this.log?.warn(
+            `connection to ${connectedSession.to} errored: ${errStr}`,
             connectedSession.loggingMetadata,
           );
         },
         onConnectionClosed: () => {
-          this.log?.error(
-            `connection to ${session.to} closed`,
+          this.log?.info(
+            `connection to ${connectedSession.to} closed`,
             connectedSession.loggingMetadata,
           );
           this.onConnClosed(connectedSession);
@@ -219,7 +219,7 @@ export abstract class ClientTransport<
       });
 
     this.updateSession(connectedSession);
-    this.retryBudget.startRestoringBudget(session.to);
+    this.retryBudget.startRestoringBudget(connectedSession.to);
   }
 
   /**

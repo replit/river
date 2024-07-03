@@ -8,7 +8,7 @@ import {
   SessionNoConnectionListeners,
 } from './SessionNoConnection';
 import { IdentifiedSession, SessionOptions } from './common';
-import { createSessionTelemetryInfo } from '../../tracing';
+import { PropagationContext, createSessionTelemetryInfo } from '../../tracing';
 import { SessionPendingIdentification } from './SessionPendingIdentification';
 import {
   SessionHandshaking,
@@ -33,6 +33,7 @@ function inheritSharedSession(
     session.sendBuffer,
     session.telemetry,
     session.options,
+    session.log,
   ];
 }
 
@@ -81,6 +82,7 @@ export const SessionStateMachine = {
         sendBuffer,
         telemetry,
         options,
+        undefined,
       );
     },
     PendingIdentification<ConnType extends Connection>(
@@ -102,7 +104,16 @@ export const SessionStateMachine = {
       const carriedState = inheritSharedSession(oldSession);
       oldSession._handleStateExit();
 
-      return new SessionConnecting(connPromise, listeners, ...carriedState);
+      const session = new SessionConnecting(
+        connPromise,
+        listeners,
+        ...carriedState,
+      );
+      session.log?.info(
+        'session transition from NoConnection to Connecting',
+        session.loggingMetadata,
+      );
+      return session;
     },
     ConnectingToHandshaking<ConnType extends Connection>(
       oldSession: SessionConnecting<ConnType>,
@@ -112,7 +123,13 @@ export const SessionStateMachine = {
       const carriedState = inheritSharedSession(oldSession);
       oldSession._handleStateExit();
 
-      return new SessionHandshaking(conn, listeners, ...carriedState);
+      const session = new SessionHandshaking(conn, listeners, ...carriedState);
+      session.log?.info(
+        'session transition from Connecting to Handshaking',
+        session.loggingMetadata,
+      );
+
+      return session;
     },
     HandshakingToConnected<ConnType extends Connection>(
       oldSession: SessionHandshaking<ConnType>,
@@ -122,13 +139,20 @@ export const SessionStateMachine = {
       const conn = oldSession.conn;
       oldSession._handleStateExit();
 
-      return new SessionConnected(conn, listeners, ...carriedState);
+      const session = new SessionConnected(conn, listeners, ...carriedState);
+      session.log?.info(
+        'session transition from Handshaking to Connected',
+        session.loggingMetadata,
+      );
+
+      return session;
     },
     PendingIdentificationToConnected<ConnType extends Connection>(
       pendingSession: SessionPendingIdentification<ConnType>,
       oldSession: SessionNoConnection | undefined,
       sessionId: string,
       to: TransportClientId,
+      propagationCtx: PropagationContext | undefined,
       listeners: SessionConnectedListeners,
     ): SessionConnected<ConnType> {
       const conn = pendingSession.conn;
@@ -145,14 +169,21 @@ export const SessionStateMachine = {
               0,
               0,
               [],
-              createSessionTelemetryInfo(sessionId, to, from),
+              createSessionTelemetryInfo(sessionId, to, from, propagationCtx),
               options,
+              pendingSession.log,
             ];
 
       pendingSession._handleStateExit();
       oldSession?._handleStateExit();
 
-      return new SessionConnected(conn, listeners, ...carriedState);
+      const session = new SessionConnected(conn, listeners, ...carriedState);
+      session.log?.info(
+        'session transition from PendingIdentification to Connected',
+        session.loggingMetadata,
+      );
+
+      return session;
     },
     // disconnect paths
     ConnectingToNoConnection<ConnType extends Connection>(
@@ -162,7 +193,14 @@ export const SessionStateMachine = {
       const carriedState = inheritSharedSession(oldSession);
       oldSession.bestEffortClose();
       oldSession._handleStateExit();
-      return new SessionNoConnection(listeners, ...carriedState);
+
+      const session = new SessionNoConnection(listeners, ...carriedState);
+      session.log?.info(
+        'session transition from Connecting to NoConnection',
+        session.loggingMetadata,
+      );
+
+      return session;
     },
     HandshakingToNoConnection<ConnType extends Connection>(
       oldSession: SessionHandshaking<ConnType>,
@@ -171,7 +209,14 @@ export const SessionStateMachine = {
       const carriedState = inheritSharedSession(oldSession);
       oldSession.conn.close();
       oldSession._handleStateExit();
-      return new SessionNoConnection(listeners, ...carriedState);
+
+      const session = new SessionNoConnection(listeners, ...carriedState);
+      session.log?.info(
+        'session transition from Handshaking to NoConnection',
+        session.loggingMetadata,
+      );
+
+      return session;
     },
     ConnectedToNoConnection<ConnType extends Connection>(
       oldSession: SessionConnected<ConnType>,
@@ -180,7 +225,14 @@ export const SessionStateMachine = {
       const carriedState = inheritSharedSession(oldSession);
       oldSession.conn.close();
       oldSession._handleStateExit();
-      return new SessionNoConnection(listeners, ...carriedState);
+
+      const session = new SessionNoConnection(listeners, ...carriedState);
+      session.log?.info(
+        'session transition from Connected to NoConnection',
+        session.loggingMetadata,
+      );
+
+      return session;
     },
   },
 } as const;

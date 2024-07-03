@@ -20,6 +20,7 @@ import {
 import { PartialTransportMessage } from '../../message';
 import type NodeWs from 'ws';
 import { createPostTestCleanups } from '../../../__tests__/fixtures/cleanup';
+import { coloredStringLogger } from '../../../logging';
 
 describe('sending and receiving across websockets works', async () => {
   let server: http.Server;
@@ -149,6 +150,9 @@ describe('sending and receiving across websockets works', async () => {
       'client',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
+    clientTransport.bindLogger(coloredStringLogger);
+    serverTransport.bindLogger(coloredStringLogger);
+
     clientTransport.connect(serverTransport.clientId);
     addPostTestCleanup(async () => {
       await cleanupTransports([clientTransport, serverTransport]);

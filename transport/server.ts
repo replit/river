@@ -142,6 +142,10 @@ export abstract class ServerTransport<
       );
 
     this.pendingSessions.add(pendingSession);
+
+    if (this.log) {
+      pendingSession.log = this.log;
+    }
   }
 
   private rejectHandshakeRequest(
@@ -258,7 +262,7 @@ export abstract class ServerTransport<
             oldSession.sendBuffer[0].seq
           : // otherwise it's the current seq
             oldSession.seq;
-      if (nextExpectedSeq !== ourNextSeq) {
+      if (nextExpectedSeq < ourNextSeq) {
         this.rejectHandshakeRequest(
           session,
           msg.from,
@@ -337,17 +341,18 @@ export abstract class ServerTransport<
         oldSession,
         sessionId,
         msg.from,
+        msg.tracing,
         {
           onConnectionErrored: (err) => {
             // just log, when we error we also emit close
             const errStr = coerceErrorString(err);
-            this.log?.error(
+            this.log?.warn(
               `connection to ${connectedSession.to} errored: ${errStr}`,
               connectedSession.loggingMetadata,
             );
           },
           onConnectionClosed: () => {
-            this.log?.error(
+            this.log?.info(
               `connection to ${connectedSession.to} closed`,
               connectedSession.loggingMetadata,
             );
@@ -359,6 +364,12 @@ export abstract class ServerTransport<
 
     this.sessionHandshakeMetadata.set(connectedSession, parsedMetadata);
     this.updateSession(connectedSession);
+    connectedSession.startActiveHeartbeat();
+
+    this.eventDispatcher.dispatchEvent('sessionStatus', {
+      status: 'connect',
+      session: connectedSession,
+    });
   }
 
   private async validateHandshakeMetadata(

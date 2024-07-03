@@ -54,7 +54,7 @@ export async function ensureTransportIsClean(t: Transport<Connection>) {
     expect(
       numberOfConnections(t),
       `[post-test cleanup] transport ${t.clientId} should not have open connections after the test`,
-    ).toStrictEqual(new Map()),
+    ).toBe(0),
   );
 }
 
