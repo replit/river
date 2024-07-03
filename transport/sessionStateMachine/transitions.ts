@@ -97,7 +97,7 @@ export const SessionStateMachine = {
     NoConnectionToConnecting<ConnType extends Connection>(
       oldSession: SessionNoConnection,
       connPromise: Promise<ConnType>,
-      listeners: SessionConnectingListeners<ConnType>,
+      listeners: SessionConnectingListeners,
     ): SessionConnecting<ConnType> {
       const carriedState = inheritSharedSession(oldSession);
       oldSession._handleStateExit();

@@ -102,7 +102,7 @@ describe.each(testMatrix())(
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
-      await clientTransport.connect(serverTransport.clientId);
+      clientTransport.connect(serverTransport.clientId);
       await waitFor(() => {
         expect(clientTransport.sessions.size).toBe(1);
         expect(serverTransport.sessions.size).toBe(1);

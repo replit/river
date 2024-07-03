@@ -91,7 +91,7 @@ export abstract class Transport<ConnType extends Connection> {
   protected options: TransportOptions;
   log?: Logger;
 
-  sessions = new Map<TransportClientId, Session<ConnType>>();
+  sessions: Map<TransportClientId, Session<ConnType>>;
 
   /**
    * Creates a new Transport instance.
@@ -107,6 +107,7 @@ export abstract class Transport<ConnType extends Connection> {
     this.eventDispatcher = new EventDispatcher();
     this.clientId = clientId;
     this.status = 'open';
+    this.sessions = new Map();
   }
 
   bindLogger(fn: LogFn | Logger, level?: LoggingLevel) {

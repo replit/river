@@ -85,7 +85,7 @@ function createSessionNoConnectionListeners(): SessionNoConnectionListeners {
   };
 }
 
-function createSessionConnectingListeners(): SessionConnectingListeners<MockConnection> {
+function createSessionConnectingListeners(): SessionConnectingListeners {
   return {
     onConnectionEstablished: vi.fn(),
     onConnectionFailed: vi.fn(),

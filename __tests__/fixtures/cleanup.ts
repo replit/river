@@ -8,7 +8,10 @@ import {
 } from '../../transport';
 import { Server } from '../../router';
 import { AnyServiceSchemaMap } from '../../router/services';
-import { testingSessionOptions } from '../../util/testHelpers';
+import {
+  numberOfConnections,
+  testingSessionOptions,
+} from '../../util/testHelpers';
 import { Value } from '@sinclair/typebox/value';
 import { ControlMessageAckSchema } from '../../transport/message';
 
@@ -49,7 +52,7 @@ export async function ensureTransportIsClean(t: Transport<Connection>) {
   );
   await waitFor(() =>
     expect(
-      t.connections,
+      numberOfConnections(t),
       `[post-test cleanup] transport ${t.clientId} should not have open connections after the test`,
     ).toStrictEqual(new Map()),
   );
@@ -70,7 +73,7 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
         [...t.sessions]
           .map(([client, sess]) => {
             // get all messages that are not heartbeats
-            const buff = sess.inspectSendBuffer().filter((msg) => {
+            const buff = sess.sendBuffer.filter((msg) => {
               return !Value.Check(ControlMessageAckSchema, msg.payload);
             });
 
@@ -95,8 +98,8 @@ export async function ensureServerIsClean(s: Server<AnyServiceSchemaMap>) {
   );
 }
 
-export async function cleanupTransports(
-  transports: Array<Transport<Connection>>,
+export async function cleanupTransports<ConnType extends Connection>(
+  transports: Array<Transport<ConnType>>,
 ) {
   for (const t of transports) {
     if (t.getStatus() !== 'closed') {

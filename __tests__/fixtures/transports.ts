@@ -10,6 +10,7 @@ import net from 'node:net';
 import {
   createLocalWebSocketClient,
   createWebSocketServer,
+  getTransportConnections,
   getUnixSocketPath,
   onUdsServeReady,
   onWsServerReady,
@@ -70,12 +71,12 @@ export const transports: Array<TransportMatrixEntry> = [
       return {
         simulatePhantomDisconnect() {
           for (const transport of transports) {
-            for (const conn of transport.connections.values()) {
+            for (const conn of getTransportConnections(transport)) {
               conn.ws.onmessage = null;
             }
           }
         },
-        getClientTransport(id, handshakeOptions) {
+        getClientTransport: (id, handshakeOptions) => {
           const clientTransport = new WebSocketClientTransport(
             () => Promise.resolve(createLocalWebSocketClient(port)),
             id,
@@ -86,8 +87,7 @@ export const transports: Array<TransportMatrixEntry> = [
             clientTransport.extendHandshake(handshakeOptions);
           }
 
-          void clientTransport.connect('SERVER');
-
+          clientTransport.connect('SERVER');
           transports.push(clientTransport);
           return clientTransport;
         },
@@ -103,7 +103,7 @@ export const transports: Array<TransportMatrixEntry> = [
           }
 
           transports.push(serverTransport);
-          return serverTransport;
+          return serverTransport as ServerTransport<Connection>;
         },
         async restartServer() {
           for (const transport of transports) {
@@ -140,7 +140,7 @@ export const transports: Array<TransportMatrixEntry> = [
       return {
         simulatePhantomDisconnect() {
           for (const transport of transports) {
-            for (const conn of transport.connections.values()) {
+            for (const conn of getTransportConnections(transport)) {
               conn.sock.pause();
             }
           }
@@ -156,7 +156,7 @@ export const transports: Array<TransportMatrixEntry> = [
             clientTransport.extendHandshake(handshakeOptions);
           }
 
-          void clientTransport.connect('SERVER');
+          clientTransport.connect('SERVER');
           transports.push(clientTransport);
           return clientTransport;
         },
@@ -177,7 +177,7 @@ export const transports: Array<TransportMatrixEntry> = [
         async restartServer() {
           for (const transport of transports) {
             if (transport.clientId !== 'SERVER') continue;
-            for (const conn of transport.connections.values()) {
+            for (const conn of getTransportConnections(transport)) {
               conn.sock.destroy();
             }
           }
@@ -282,7 +282,7 @@ export const transports: Array<TransportMatrixEntry> = [
             clientTransport.extendHandshake(handshakeOptions);
           }
 
-          void clientTransport.connect('SERVER');
+          clientTransport.connect('SERVER');
 
           return clientTransport;
         },

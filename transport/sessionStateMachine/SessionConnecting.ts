@@ -1,8 +1,8 @@
 import { Connection } from '../connection';
 import { IdentifiedSession, SessionState } from './common';
 
-export interface SessionConnectingListeners<ConnType extends Connection> {
-  onConnectionEstablished: (conn: ConnType) => void;
+export interface SessionConnectingListeners {
+  onConnectionEstablished: (conn: Connection) => void;
   onConnectionFailed: (err: unknown) => void;
 
   // timeout related
@@ -22,13 +22,13 @@ export class SessionConnecting<
 > extends IdentifiedSession {
   readonly state = SessionState.Connecting as const;
   connPromise: Promise<ConnType>;
-  listeners: SessionConnectingListeners<ConnType>;
+  listeners: SessionConnectingListeners;
 
   connectionTimeout: ReturnType<typeof setTimeout>;
 
   constructor(
     connPromise: Promise<ConnType>,
-    listeners: SessionConnectingListeners<ConnType>,
+    listeners: SessionConnectingListeners,
     ...args: ConstructorParameters<typeof IdentifiedSession>
   ) {
     super(...args);

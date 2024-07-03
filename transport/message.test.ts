@@ -62,7 +62,6 @@ describe('message helpers', () => {
       from: 'a',
       to: 'b',
       expectedSessionState: {
-        reconnect: false,
         nextExpectedSeq: 0,
       },
       sessionId: 'sess',

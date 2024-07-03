@@ -26,6 +26,7 @@ import { Connection } from '../transport/connection';
 import {
   Session,
   SessionOptions,
+  SessionState,
 } from '../transport/sessionStateMachine/common';
 import { SessionStateMachine } from '../transport/sessionStateMachine';
 
@@ -289,3 +290,30 @@ export const getUnixSocketPath = () => {
   // https://nodejs.org/api/net.html#identifying-paths-for-ipc-connections
   return `/tmp/${nanoid()}.sock`;
 };
+
+export function getTransportConnections<ConnType extends Connection>(
+  transport: Transport<ConnType>,
+): Array<ConnType> {
+  const connections = [];
+  for (const session of transport.sessions.values()) {
+    if (session.state === SessionState.Connected) {
+      connections.push(session.conn);
+    }
+  }
+
+  return connections;
+}
+
+export function numberOfConnections<ConnType extends Connection>(
+  transport: Transport<ConnType>,
+): number {
+  return getTransportConnections(transport).length;
+}
+
+export function closeAllConnections<ConnType extends Connection>(
+  transport: Transport<ConnType>,
+) {
+  for (const conn of getTransportConnections(transport)) {
+    conn.close();
+  }
+}

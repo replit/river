@@ -1,5 +1,9 @@
 import { assert, beforeEach, describe, expect, test } from 'vitest';
-import { iterNext } from '../util/testHelpers';
+import {
+  closeAllConnections,
+  iterNext,
+  numberOfConnections,
+} from '../util/testHelpers';
 import {
   SubscribableServiceSchema,
   TestServiceSchema,
@@ -50,11 +54,11 @@ describe.each(testMatrix())(
 
       // start procedure
       await client.test.add.rpc({ n: 3 });
-      expect(clientTransport.connections.size).toEqual(1);
-      expect(serverTransport.connections.size).toEqual(1);
+      expect(numberOfConnections(clientTransport)).toEqual(1);
+      expect(numberOfConnections(serverTransport)).toEqual(1);
 
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      closeAllConnections(clientTransport);
 
       const procPromise = client.test.add.rpc({ n: 4 });
       // end procedure
@@ -69,8 +73,8 @@ describe.each(testMatrix())(
         }),
       );
 
-      await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -97,11 +101,11 @@ describe.each(testMatrix())(
       const result = await iterNext(output);
       assert(result.ok);
 
-      expect(clientTransport.connections.size).toEqual(1);
-      expect(serverTransport.connections.size).toEqual(1);
+      expect(numberOfConnections(clientTransport)).toEqual(1);
+      expect(numberOfConnections(serverTransport)).toEqual(1);
 
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      closeAllConnections(clientTransport);
 
       const nextResPromise = iterNext(output);
       // end procedure
@@ -116,8 +120,8 @@ describe.each(testMatrix())(
         }),
       );
 
-      await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -177,13 +181,13 @@ describe.each(testMatrix())(
       expect(result.payload).toStrictEqual({ result: 1 });
 
       // all clients are connected
-      expect(client1Transport.connections.size).toEqual(1);
-      expect(client2Transport.connections.size).toEqual(1);
-      expect(serverTransport.connections.size).toEqual(2);
+      expect(numberOfConnections(client1Transport)).toEqual(1);
+      expect(numberOfConnections(client2Transport)).toEqual(1);
+      expect(numberOfConnections(serverTransport)).toEqual(2);
 
       // kill the connection for client2
       client2Transport.reconnectOnConnectionDrop = false;
-      client2Transport.connections.forEach((conn) => conn.close());
+      closeAllConnections(client2Transport);
 
       // client1 who is still connected can still add values and receive updates
       const add2Promise = client1.subscribable.add.rpc({ n: 2 });
@@ -206,9 +210,13 @@ describe.each(testMatrix())(
       expect(result.payload).toStrictEqual({ result: 3 });
 
       // at this point, only client1 is connected
-      await waitFor(() => expect(client1Transport.connections.size).toEqual(1));
-      await waitFor(() => expect(client2Transport.connections.size).toEqual(0));
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      await waitFor(() =>
+        expect(numberOfConnections(client1Transport)).toBe(1),
+      );
+      await waitFor(() =>
+        expect(numberOfConnections(client2Transport)).toBe(0),
+      );
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
 
       // cleanup client1 (client2 is already disconnected)
       close1();
@@ -243,11 +251,11 @@ describe.each(testMatrix())(
       // end procedure
 
       // need to wait for connection to be established
-      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
 
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      closeAllConnections(clientTransport);
 
       // after we've disconnected, hit end of grace period
       await advanceFakeTimersBySessionGrace();
@@ -259,8 +267,8 @@ describe.each(testMatrix())(
         }),
       );
 
-      await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,

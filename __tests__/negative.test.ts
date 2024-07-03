@@ -9,6 +9,7 @@ import {
   createDummyTransportMessage,
   createLocalWebSocketClient,
   createWebSocketServer,
+  numberOfConnections,
   onWsServerReady,
 } from '../util/testHelpers';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
@@ -50,8 +51,8 @@ describe('should handle incompatabilities', async () => {
       'client',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
-    await clientTransport.connect(serverTransport.clientId);
-    await waitFor(() => expect(serverTransport.connections.size).toBe(1));
+    clientTransport.connect(serverTransport.clientId);
+    await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
 
     const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
@@ -89,9 +90,8 @@ describe('should handle incompatabilities', async () => {
 
     // try connecting and make sure we get the fake connection failure
     expect(errMock).toHaveBeenCalledTimes(0);
-    const connectionPromise = clientTransport.connect(serverTransport.clientId);
+    clientTransport.connect(serverTransport.clientId);
     await vi.runAllTimersAsync();
-    await connectionPromise;
 
     await waitFor(() => expect(errMock).toHaveBeenCalledTimes(1));
     expect(errMock).toHaveBeenCalledWith(
@@ -125,11 +125,11 @@ describe('should handle incompatabilities', async () => {
     });
 
     for (let i = 0; i < 3; i++) {
-      await clientTransport.connect(serverTransport.clientId);
+      clientTransport.connect(serverTransport.clientId);
     }
 
     expect(errMock).toHaveBeenCalledTimes(0);
-    await waitFor(() => expect(serverTransport.connections.size).toBe(1));
+    await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
     expect(connectCalls).toBe(1);
 
     await testFinishesCleanly({
@@ -158,7 +158,7 @@ describe('should handle incompatabilities', async () => {
     // should never connect
     // ws should be closed
     await waitFor(() => expect(ws.readyState).toBe(ws.CLOSED));
-    expect(serverTransport.connections.size).toBe(0);
+    expect(numberOfConnections(serverTransport)).toBe(0);
     expect(spy).toHaveBeenCalledTimes(0);
     expect(errMock).toHaveBeenCalledTimes(1);
     expect(errMock).toHaveBeenCalledWith(
@@ -193,7 +193,6 @@ describe('should handle incompatabilities', async () => {
       from: 'client',
       to: 'SERVER',
       expectedSessionState: {
-        reconnect: false,
         nextExpectedSeq: 0,
       },
       sessionId: 'sessionId',
@@ -264,7 +263,6 @@ describe('should handle incompatabilities', async () => {
         protocolVersion: 'v0',
         sessionId: 'sessionId',
         expectedSessionState: {
-          reconnect: false,
           nextExpectedSeq: 0,
         },
       } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
@@ -274,7 +272,7 @@ describe('should handle incompatabilities', async () => {
     // should never connect
     // ws should be closed
     await waitFor(() => expect(ws.readyState).toBe(ws.CLOSED));
-    expect(serverTransport.connections.size).toBe(0);
+    expect(numberOfConnections(serverTransport)).toBe(0);
     expect(spy).toHaveBeenCalledTimes(0);
     expect(errMock).toHaveBeenCalledTimes(1);
     expect(errMock).toHaveBeenCalledWith(

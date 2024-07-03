@@ -296,12 +296,15 @@ export abstract class ClientTransport<
         session,
         reconnectPromise,
         {
-          onConnectionEstablished: (conn: ConnType) => {
+          onConnectionEstablished: (conn) => {
             this.log?.debug(
               `connection to ${to} established`,
               connectingSession.loggingMetadata,
             );
-            this.onConnectionEstablished(connectingSession, conn);
+
+            // cast here because conn can't be narrowed to ConnType
+            // in the callback due to variance rules
+            this.onConnectionEstablished(connectingSession, conn as ConnType);
           },
           onConnectionFailed: (error: unknown) => {
             const errStr = coerceErrorString(error);

@@ -1,5 +1,9 @@
 import { assert, beforeEach, describe, expect, test } from 'vitest';
-import { iterNext } from '../util/testHelpers';
+import {
+  closeAllConnections,
+  iterNext,
+  numberOfConnections,
+} from '../util/testHelpers';
 import {
   SubscribableServiceSchema,
   TestServiceSchema,
@@ -48,15 +52,15 @@ describe.each(testMatrix())(
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
-      expect(clientTransport.connections.size).toEqual(0);
-      expect(serverTransport.connections.size).toEqual(0);
+      expect(numberOfConnections(clientTransport)).toEqual(0);
+      expect(numberOfConnections(serverTransport)).toEqual(0);
 
       // start procedure
       await client.test.add.rpc({ n: 3 });
       // end procedure
 
-      expect(clientTransport.connections.size).toEqual(1);
-      expect(serverTransport.connections.size).toEqual(1);
+      expect(numberOfConnections(clientTransport)).toEqual(1);
+      expect(numberOfConnections(serverTransport)).toEqual(1);
 
       // should be back to 0 connections after client closes
       clientTransport.reconnectOnConnectionDrop = false;
@@ -83,15 +87,15 @@ describe.each(testMatrix())(
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
-      expect(clientTransport.connections.size).toEqual(0);
-      expect(serverTransport.connections.size).toEqual(0);
+      expect(numberOfConnections(clientTransport)).toEqual(0);
+      expect(numberOfConnections(serverTransport)).toEqual(0);
 
       // start procedure
       await client.test.add.rpc({ n: 3 });
       // end procedure
 
-      expect(clientTransport.connections.size).toEqual(1);
-      expect(serverTransport.connections.size).toEqual(1);
+      expect(numberOfConnections(clientTransport)).toEqual(1);
+      expect(numberOfConnections(serverTransport)).toEqual(1);
 
       // should be back to 0 connections after client closes
       clientTransport.reconnectOnConnectionDrop = false;
@@ -136,8 +140,8 @@ describe.each(testMatrix())(
       ).toEqual(clientListeners);
 
       // check number of connections
-      expect(serverTransport.connections.size).toEqual(1);
-      expect(clientTransport.connections.size).toEqual(1);
+      expect(numberOfConnections(clientTransport)).toEqual(1);
+      expect(numberOfConnections(serverTransport)).toEqual(1);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -199,8 +203,8 @@ describe.each(testMatrix())(
       ).toEqual(clientListeners);
 
       // check number of connections
-      expect(serverTransport.connections.size).toEqual(1);
-      expect(clientTransport.connections.size).toEqual(1);
+      expect(numberOfConnections(clientTransport)).toEqual(1);
+      expect(numberOfConnections(serverTransport)).toEqual(1);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -254,8 +258,8 @@ describe.each(testMatrix())(
       ).toEqual(clientListeners);
 
       // check number of connections
-      expect(serverTransport.connections.size).toEqual(1);
-      expect(clientTransport.connections.size).toEqual(1);
+      expect(numberOfConnections(clientTransport)).toEqual(1);
+      expect(numberOfConnections(serverTransport)).toEqual(1);
 
       // no observers should remain subscribed to the observable
       await testFinishesCleanly({
@@ -306,8 +310,8 @@ describe.each(testMatrix())(
       ).toEqual(clientListeners);
 
       // check number of connections
-      expect(serverTransport.connections.size).toEqual(1);
-      expect(clientTransport.connections.size).toEqual(1);
+      expect(numberOfConnections(clientTransport)).toEqual(1);
+      expect(numberOfConnections(serverTransport)).toEqual(1);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -341,16 +345,16 @@ describe.each(testMatrix())(
 
       // wait for session to disconnect
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      closeAllConnections(clientTransport);
       await advanceFakeTimersBySessionGrace();
 
       expect(clientTransport.sessions.size).toEqual(0);
 
       // reconnect
       clientTransport.reconnectOnConnectionDrop = true;
-      void clientTransport.connect(serverTransport.clientId);
-      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      clientTransport.connect(serverTransport.clientId);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
 
       // push on the old stream and make sure its not sent
       input.push({ msg: '2', ignore: false });
