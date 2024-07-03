@@ -64,8 +64,8 @@ abstract class StateMachineState {
     // we intercept the access and throw an error to help catch bugs
     return new Proxy(this, {
       get(target, prop) {
-        // always allow access to _isConsumed and id
-        if (prop === '_isConsumed' || prop === 'id') {
+        // always allow access to _isConsumed, id, and state
+        if (prop === '_isConsumed' || prop === 'id' || prop === 'state') {
           return Reflect.get(target, prop);
         }
 
@@ -142,10 +142,15 @@ export abstract class CommonSession extends StateMachineState {
   log?: Logger;
   abstract get loggingMetadata(): MessageMetadata;
 
-  constructor(from: TransportClientId, options: SessionOptions) {
+  constructor(
+    from: TransportClientId,
+    options: SessionOptions,
+    log: Logger | undefined,
+  ) {
     super();
     this.from = from;
     this.options = options;
+    this.log = log;
   }
 
   parseMsg(msg: Uint8Array): OpaqueTransportMessage | null {
@@ -186,7 +191,14 @@ export abstract class IdentifiedSession extends CommonSession {
   readonly telemetry: TelemetryInfo;
   readonly to: TransportClientId;
 
+  /**
+   * Number of messages we've sent along this session (excluding handshake and acks)
+   */
   seq: number;
+
+  /**
+   * Number of unique messages we've received this session (excluding handshake and acks)
+   */
   ack: number;
   sendBuffer: Array<OpaqueTransportMessage>;
 
@@ -201,7 +213,7 @@ export abstract class IdentifiedSession extends CommonSession {
     options: SessionOptions,
     log: Logger | undefined,
   ) {
-    super(from, options);
+    super(from, options, log);
     this.id = id;
     this.to = to;
     this.seq = seq;
@@ -239,6 +251,10 @@ export abstract class IdentifiedSession extends CommonSession {
 
     this.seq++;
     return msg;
+  }
+
+  nextSeq(): number {
+    return this.sendBuffer.length > 0 ? this.sendBuffer[0].seq : this.seq;
   }
 
   send(msg: PartialTransportMessage): string {

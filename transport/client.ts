@@ -2,6 +2,7 @@ import { SpanStatusCode } from '@opentelemetry/api';
 import { ClientHandshakeOptions } from '../router/handshake';
 import {
   ControlMessageHandshakeResponseSchema,
+  HandshakeErrorRetriableResponseCodes,
   OpaqueTransportMessage,
   TransportClientId,
   handshakeRequestMessage,
@@ -110,13 +111,13 @@ export abstract class ClientTransport<
           // just log, when we error we also emit close
           const errStr = coerceErrorString(err);
           this.log?.error(
-            `connection to ${session.to} errored during handshake: ${errStr}`,
+            `connection to ${handshakingSession.to} errored during handshake: ${errStr}`,
             handshakingSession.loggingMetadata,
           );
         },
         onConnectionClosed: () => {
           this.log?.warn(
-            `connection to ${session.to} closed during handshake`,
+            `connection to ${handshakingSession.to} closed during handshake`,
             handshakingSession.loggingMetadata,
           );
           this.onConnClosed(handshakingSession);
@@ -126,7 +127,7 @@ export abstract class ClientTransport<
         },
         onHandshakeTimeout: () => {
           this.log?.error(
-            `connection to ${session.to} timed out during handshake`,
+            `connection to ${handshakingSession.to} timed out during handshake`,
             handshakingSession.loggingMetadata,
           );
           this.onConnClosed(handshakingSession);
@@ -149,7 +150,6 @@ export abstract class ClientTransport<
     });
 
     this.log?.warn(reason, metadata);
-    this.protocolError(ProtocolError.HandshakeFailed, reason);
     this.deleteSession(session);
   }
 
@@ -172,13 +172,26 @@ export abstract class ClientTransport<
 
     // invariant: handshake response should be ok
     if (!msg.payload.status.ok) {
-      // TODO: handle retriable errors slightly differently here
+      // TODO: remove conditional check after we know code is always present
+      const retriable = msg.payload.status.code
+        ? Value.Check(
+            HandshakeErrorRetriableResponseCodes,
+            msg.payload.status.code,
+          )
+        : false;
 
       const reason = `handshake failed: ${msg.payload.status.reason}`;
       this.rejectHandshakeResponse(session, reason, {
         ...session.loggingMetadata,
         transportMessage: msg,
       });
+
+      if (retriable) {
+        this.tryReconnecting(session.to);
+      } else {
+        this.protocolError(ProtocolError.HandshakeFailed, reason);
+      }
+
       return;
     }
 
@@ -193,7 +206,7 @@ export abstract class ClientTransport<
     }
 
     // transition to connected!
-    this.log?.debug(`handshake from ${msg.from} ok`, {
+    this.log?.info(`handshake from ${msg.from} ok`, {
       ...session.loggingMetadata,
       transportMessage: msg,
     });
@@ -216,6 +229,10 @@ export abstract class ClientTransport<
           this.onConnClosed(connectedSession);
         },
         onMessage: (msg) => this.handleMsg(msg),
+        onInvalidMessage: (reason) => {
+          this.protocolError(ProtocolError.MessageOrderingViolated, reason);
+          this.deleteSession(connectedSession);
+        },
       });
 
     this.updateSession(connectedSession);
@@ -298,7 +315,7 @@ export abstract class ClientTransport<
         {
           onConnectionEstablished: (conn) => {
             this.log?.debug(
-              `connection to ${to} established`,
+              `connection to ${connectingSession.to} established`,
               connectingSession.loggingMetadata,
             );
 
@@ -340,6 +357,7 @@ export abstract class ClientTransport<
       sessionId: session.id,
       expectedSessionState: {
         nextExpectedSeq: session.ack,
+        nextSentSeq: session.nextSeq(),
       },
       metadata,
       tracing: getPropagationContext(session.telemetry.ctx),

@@ -13,6 +13,7 @@ import {
 import {
   EventDispatcher,
   EventHandler,
+  EventMap,
   EventTypes,
   ProtocolErrorType,
 } from './events';
@@ -40,16 +41,7 @@ import { Connection } from './connection';
 export type TransportStatus = 'open' | 'closed';
 
 /**
- * Transports manage the lifecycle (creation/deletion) of sessions and connections. Its responsibilities include:
- *
- *  1) Constructing a new {@link Session} and {@link Connection} on {@link TransportMessage}s from new clients.
- *     After constructing the {@link Connection}, {@link onConnect} is called which adds it to the connection map.
- *  2) Delegating message listening of the connection to the newly created {@link Connection}.
- *     From this point on, the {@link Connection} is responsible for *reading* and *writing*
- *     messages from the connection.
- *  3) When a connection is closed, the {@link Transport} calls {@link onDisconnect} which closes the
- *     connection via {@link Connection.close} and removes it from the {@link connections} map.
-
+ * Transports manage the lifecycle (creation/deletion) of sessions
  *
  * ```plaintext
  *            ▲
@@ -95,7 +87,6 @@ export abstract class Transport<ConnType extends Connection> {
 
   /**
    * Creates a new Transport instance.
-   * This should also set up {@link onConnect}, and {@link onDisconnect} listeners.
    * @param codec The codec used to encode and decode messages.
    * @param clientId The client ID of this transport.
    */
@@ -207,6 +198,19 @@ export abstract class Transport<ConnType extends Connection> {
     }
 
     this.sessions.set(session.to, session);
+
+    if (!activeSession) {
+      this.eventDispatcher.dispatchEvent('sessionStatus', {
+        status: 'connect',
+        session: session,
+      });
+    }
+
+    this.eventDispatcher.dispatchEvent('sessionTransition', {
+      state: session.state,
+      session: session,
+    } as EventMap['sessionTransition']);
+
     return session;
   }
 
@@ -221,25 +225,20 @@ export abstract class Transport<ConnType extends Connection> {
         },
       },
       this.options,
+      this.log,
     );
 
-    if (this.log) {
-      session.log = this.log;
-    }
-
-    this.eventDispatcher.dispatchEvent('sessionStatus', {
-      status: 'connect',
-      session,
-    });
-
-    return this.updateSession(session);
+    this.updateSession(session);
+    return session;
   }
 
   protected deleteSession(session: Session<ConnType>) {
+    session.log?.info(`closing session ${session.id}`, session.loggingMetadata);
     session.close();
+
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'disconnect',
-      session: session as Session<Connection>,
+      session: session,
     });
 
     this.sessions.delete(session.to);

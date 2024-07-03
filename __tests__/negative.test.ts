@@ -143,10 +143,10 @@ describe('should handle incompatabilities', async () => {
     // add listeners
     const spy = vi.fn();
     const errMock = vi.fn();
-    serverTransport.addEventListener('connectionStatus', spy);
+    serverTransport.addEventListener('sessionStatus', spy);
     serverTransport.addEventListener('protocolError', errMock);
     addPostTestCleanup(async () => {
-      serverTransport.removeEventListener('connectionStatus', spy);
+      serverTransport.removeEventListener('sessionStatus', spy);
       serverTransport.removeEventListener('protocolError', errMock);
       await cleanupTransports([serverTransport]);
     });
@@ -179,10 +179,10 @@ describe('should handle incompatabilities', async () => {
     // add listeners
     const spy = vi.fn();
     const errMock = vi.fn();
-    serverTransport.addEventListener('connectionStatus', spy);
+    serverTransport.addEventListener('sessionStatus', spy);
     serverTransport.addEventListener('protocolError', errMock);
     addPostTestCleanup(async () => {
-      serverTransport.removeEventListener('connectionStatus', spy);
+      serverTransport.removeEventListener('sessionStatus', spy);
       serverTransport.removeEventListener('protocolError', errMock);
       await cleanupTransports([serverTransport]);
     });
@@ -239,11 +239,11 @@ describe('should handle incompatabilities', async () => {
     // add listeners
     const spy = vi.fn();
     const errMock = vi.fn();
-    serverTransport.addEventListener('connectionStatus', spy);
+    serverTransport.addEventListener('sessionStatus', spy);
     serverTransport.addEventListener('protocolError', errMock);
     addPostTestCleanup(async () => {
       serverTransport.removeEventListener('protocolError', errMock);
-      serverTransport.removeEventListener('connectionStatus', spy);
+      serverTransport.removeEventListener('sessionStatus', spy);
       await cleanupTransports([serverTransport]);
     });
 

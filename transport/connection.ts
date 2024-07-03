@@ -29,20 +29,32 @@ export abstract class Connection {
     return metadata;
   }
 
-  dataListeners = new Set<(msg: Uint8Array) => void>();
-  closeListeners = new Set<() => void>();
-  errorListeners = new Set<(err: Error) => void>();
+  _dataListeners = new Set<(msg: Uint8Array) => void>();
+  _closeListeners = new Set<() => void>();
+  _errorListeners = new Set<(err: Error) => void>();
+
+  get dataListeners() {
+    return [...this._dataListeners];
+  }
+
+  get closeListeners() {
+    return [...this._closeListeners];
+  }
+
+  get errorListeners() {
+    return [...this._errorListeners];
+  }
 
   /**
    * Handle adding a callback for when a message is received.
    * @param msg The message that was received.
    */
   addDataListener(cb: (msg: Uint8Array) => void) {
-    this.dataListeners.add(cb);
+    this._dataListeners.add(cb);
   }
 
   removeDataListener(cb: (msg: Uint8Array) => void): void {
-    this.dataListeners.delete(cb);
+    this._dataListeners.delete(cb);
   }
 
   /**
@@ -51,11 +63,11 @@ export abstract class Connection {
    * @param cb The callback to call when the connection is closed.
    */
   addCloseListener(cb: () => void): void {
-    this.closeListeners.add(cb);
+    this._closeListeners.add(cb);
   }
 
   removeCloseListener(cb: () => void): void {
-    this.closeListeners.delete(cb);
+    this._closeListeners.delete(cb);
   }
 
   /**
@@ -70,11 +82,11 @@ export abstract class Connection {
    * @param cb The callback to call when an error is received.
    */
   addErrorListener(cb: (err: Error) => void): void {
-    this.errorListeners.add(cb);
+    this._errorListeners.add(cb);
   }
 
   removeErrorListener(cb: (err: Error) => void): void {
-    this.errorListeners.delete(cb);
+    this._errorListeners.delete(cb);
   }
 
   /**

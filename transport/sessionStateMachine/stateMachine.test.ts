@@ -107,6 +107,7 @@ function createSessionConnectedListeners(): SessionConnectedListeners {
     onMessage: vi.fn(),
     onConnectionClosed: vi.fn(),
     onConnectionErrored: vi.fn(),
+    onInvalidMessage: vi.fn(),
   };
 }
 
@@ -264,9 +265,9 @@ describe('session state machine', () => {
       );
 
       // check handlers on the connection
-      expect(conn.dataListeners.size).toBe(1);
-      expect(conn.closeListeners.size).toBe(1);
-      expect(conn.errorListeners.size).toBe(1);
+      expect(conn.dataListeners.length).toBe(1);
+      expect(conn.closeListeners.length).toBe(1);
+      expect(conn.errorListeners.length).toBe(1);
 
       // advance time and make sure timer doesn't go off
       vi.advanceTimersByTime(testingSessionOptions.connectionTimeoutMs);
@@ -301,21 +302,21 @@ describe('session state machine', () => {
 
       // check handlers on the connection
       const conn = session.conn;
-      expect(conn.dataListeners.size).toBe(1);
-      expect(conn.closeListeners.size).toBe(1);
-      expect(conn.errorListeners.size).toBe(1);
+      expect(conn.dataListeners.length).toBe(1);
+      expect(conn.closeListeners.length).toBe(1);
+      expect(conn.errorListeners.length).toBe(1);
 
       // make sure the old listeners are removed
       for (const listener of oldListeners.onHandshakeData) {
-        expect(conn.dataListeners.has(listener)).toBe(false);
+        expect(conn.dataListeners.includes(listener)).toBe(false);
       }
 
       for (const listener of oldListeners.onConnectionClosed) {
-        expect(conn.closeListeners.has(listener)).toBe(false);
+        expect(conn.closeListeners.includes(listener)).toBe(false);
       }
 
       for (const listener of oldListeners.onConnectionErrored) {
-        expect(conn.errorListeners.has(listener)).toBe(false);
+        expect(conn.errorListeners.includes(listener)).toBe(false);
       }
 
       // advance time and make sure timer doesn't go off
@@ -353,21 +354,21 @@ describe('session state machine', () => {
 
       // check handlers on the connection
       const conn = session.conn;
-      expect(conn.dataListeners.size).toBe(1);
-      expect(conn.closeListeners.size).toBe(1);
-      expect(conn.errorListeners.size).toBe(1);
+      expect(conn.dataListeners.length).toBe(1);
+      expect(conn.closeListeners.length).toBe(1);
+      expect(conn.errorListeners.length).toBe(1);
 
       // make sure the old listeners are removed
       for (const listener of oldListeners.onHandshake) {
-        expect(conn.dataListeners.has(listener)).toBe(false);
+        expect(conn.dataListeners.includes(listener)).toBe(false);
       }
 
       for (const listener of oldListeners.onConnectionClosed) {
-        expect(conn.closeListeners.has(listener)).toBe(false);
+        expect(conn.closeListeners.includes(listener)).toBe(false);
       }
 
       for (const listener of oldListeners.onConnectionErrored) {
-        expect(conn.errorListeners.has(listener)).toBe(false);
+        expect(conn.errorListeners.includes(listener)).toBe(false);
       }
 
       // advance time and make sure timer doesn't go off
@@ -460,9 +461,9 @@ describe('session state machine', () => {
       expect(conn.status).toBe('closed');
 
       // should not have any listeners
-      expect(conn.dataListeners.size).toBe(0);
-      expect(conn.closeListeners.size).toBe(0);
-      expect(conn.errorListeners.size).toBe(0);
+      expect(conn.dataListeners.length).toBe(0);
+      expect(conn.closeListeners.length).toBe(0);
+      expect(conn.errorListeners.length).toBe(0);
 
       // make sure the persisted state is the same
       expect(persistedSessionState(session)).toStrictEqual(
@@ -497,21 +498,21 @@ describe('session state machine', () => {
       expect(conn.status).toBe('closed');
 
       // check handlers on the connection
-      expect(conn.dataListeners.size).toBe(0);
-      expect(conn.closeListeners.size).toBe(0);
-      expect(conn.errorListeners.size).toBe(0);
+      expect(conn.dataListeners.length).toBe(0);
+      expect(conn.closeListeners.length).toBe(0);
+      expect(conn.errorListeners.length).toBe(0);
 
       // make sure the old listeners are removed
       for (const listener of oldListeners.onHandshakeData) {
-        expect(conn.dataListeners.has(listener)).toBe(false);
+        expect(conn.dataListeners.includes(listener)).toBe(false);
       }
 
       for (const listener of oldListeners.onConnectionClosed) {
-        expect(conn.closeListeners.has(listener)).toBe(false);
+        expect(conn.closeListeners.includes(listener)).toBe(false);
       }
 
       for (const listener of oldListeners.onConnectionErrored) {
-        expect(conn.errorListeners.has(listener)).toBe(false);
+        expect(conn.errorListeners.includes(listener)).toBe(false);
       }
 
       // make sure the persisted state is the same
@@ -545,21 +546,21 @@ describe('session state machine', () => {
       expect(conn.status).toBe('closed');
 
       // check handlers on the connection
-      expect(conn.dataListeners.size).toBe(0);
-      expect(conn.closeListeners.size).toBe(0);
-      expect(conn.errorListeners.size).toBe(0);
+      expect(conn.dataListeners.length).toBe(0);
+      expect(conn.closeListeners.length).toBe(0);
+      expect(conn.errorListeners.length).toBe(0);
 
       // make sure the old listeners are removed
       for (const listener of oldListeners.onMessageData) {
-        expect(conn.dataListeners.has(listener)).toBe(false);
+        expect(conn.dataListeners.includes(listener)).toBe(false);
       }
 
       for (const listener of oldListeners.onConnectionClosed) {
-        expect(conn.closeListeners.has(listener)).toBe(false);
+        expect(conn.closeListeners.includes(listener)).toBe(false);
       }
 
       for (const listener of oldListeners.onConnectionErrored) {
-        expect(conn.errorListeners.has(listener)).toBe(false);
+        expect(conn.errorListeners.includes(listener)).toBe(false);
       }
 
       // make sure the persisted state is the same

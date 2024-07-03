@@ -20,6 +20,7 @@ import {
 } from './SessionConnected';
 import { generateId } from '../id';
 import { Connection } from '../connection';
+import { Logger } from '../../logging';
 
 function inheritSharedSession(
   session: IdentifiedSession,
@@ -67,12 +68,13 @@ export const SessionStateMachine = {
       from: TransportClientId,
       listeners: SessionNoConnectionListeners,
       options: SessionOptions,
+      log?: Logger,
     ) {
       const id = `session-${generateId()}`;
       const telemetry = createSessionTelemetryInfo(id, to, from);
       const sendBuffer: Array<OpaqueTransportMessage> = [];
 
-      return new SessionNoConnection(
+      const session = new SessionNoConnection(
         listeners,
         id,
         from,
@@ -82,16 +84,37 @@ export const SessionStateMachine = {
         sendBuffer,
         telemetry,
         options,
-        undefined,
+        log,
       );
+
+      session.log?.info(`session ${session.id} created in NoConnection state`, {
+        ...session.loggingMetadata,
+        tags: ['state-transition'],
+      });
+
+      return session;
     },
     PendingIdentification<ConnType extends Connection>(
       from: TransportClientId,
       conn: ConnType,
       listeners: SessionHandshakingListeners,
       options: SessionOptions,
+      log?: Logger,
     ): SessionPendingIdentification<ConnType> {
-      return new SessionPendingIdentification(conn, listeners, from, options);
+      const session = new SessionPendingIdentification(
+        conn,
+        listeners,
+        from,
+        options,
+        log,
+      );
+
+      session.log?.info(`session created in PendingIdentification state`, {
+        ...session.loggingMetadata,
+        tags: ['state-transition'],
+      });
+
+      return session;
     },
   },
   transition: {
@@ -110,8 +133,11 @@ export const SessionStateMachine = {
         ...carriedState,
       );
       session.log?.info(
-        'session transition from NoConnection to Connecting',
-        session.loggingMetadata,
+        `session ${session.id} transition from NoConnection to Connecting`,
+        {
+          ...session.loggingMetadata,
+          tags: ['state-transition'],
+        },
       );
       return session;
     },
@@ -125,8 +151,11 @@ export const SessionStateMachine = {
 
       const session = new SessionHandshaking(conn, listeners, ...carriedState);
       session.log?.info(
-        'session transition from Connecting to Handshaking',
-        session.loggingMetadata,
+        `session ${session.id} transition from Connecting to Handshaking`,
+        {
+          ...session.loggingMetadata,
+          tags: ['state-transition'],
+        },
       );
 
       return session;
@@ -141,8 +170,11 @@ export const SessionStateMachine = {
 
       const session = new SessionConnected(conn, listeners, ...carriedState);
       session.log?.info(
-        'session transition from Handshaking to Connected',
-        session.loggingMetadata,
+        `session ${session.id} transition from Handshaking to Connected`,
+        {
+          ...session.loggingMetadata,
+          tags: ['state-transition'],
+        },
       );
 
       return session;
@@ -179,8 +211,11 @@ export const SessionStateMachine = {
 
       const session = new SessionConnected(conn, listeners, ...carriedState);
       session.log?.info(
-        'session transition from PendingIdentification to Connected',
-        session.loggingMetadata,
+        `session ${session.id} transition from PendingIdentification to Connected`,
+        {
+          ...session.loggingMetadata,
+          tags: ['state-transition'],
+        },
       );
 
       return session;
@@ -196,8 +231,11 @@ export const SessionStateMachine = {
 
       const session = new SessionNoConnection(listeners, ...carriedState);
       session.log?.info(
-        'session transition from Connecting to NoConnection',
-        session.loggingMetadata,
+        `session ${session.id} transition from Connecting to NoConnection`,
+        {
+          ...session.loggingMetadata,
+          tags: ['state-transition'],
+        },
       );
 
       return session;
@@ -212,8 +250,11 @@ export const SessionStateMachine = {
 
       const session = new SessionNoConnection(listeners, ...carriedState);
       session.log?.info(
-        'session transition from Handshaking to NoConnection',
-        session.loggingMetadata,
+        `session ${session.id} transition from Handshaking to NoConnection`,
+        {
+          ...session.loggingMetadata,
+          tags: ['state-transition'],
+        },
       );
 
       return session;
@@ -228,8 +269,11 @@ export const SessionStateMachine = {
 
       const session = new SessionNoConnection(listeners, ...carriedState);
       session.log?.info(
-        'session transition from Connected to NoConnection',
-        session.loggingMetadata,
+        `session ${session.id} transition from Connected to NoConnection`,
+        {
+          ...session.loggingMetadata,
+          tags: ['state-transition'],
+        },
       );
 
       return session;

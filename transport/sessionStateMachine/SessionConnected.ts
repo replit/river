@@ -8,11 +8,13 @@ import {
 } from '../message';
 import { IdentifiedSession, SessionState } from './common';
 import { Connection } from '../connection';
+import { SpanStatusCode } from '@opentelemetry/api';
 
 export interface SessionConnectedListeners {
   onConnectionErrored: (err: unknown) => void;
   onConnectionClosed: () => void;
   onMessage: (msg: OpaqueTransportMessage) => void;
+  onInvalidMessage: (reason: string) => void;
 }
 
 /*
@@ -36,14 +38,6 @@ export class SessionConnected<
   }
 
   updateBookkeeping(ack: number, seq: number) {
-    if (seq + 1 < this.ack) {
-      this.log?.error(`received stale seq ${seq} + 1 < ${this.ack}`, {
-        ...this.loggingMetadata,
-        tags: ['invariant-violation'],
-      });
-      return;
-    }
-
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
     this.ack = seq + 1;
     this.heartbeatMisses = 0;
@@ -89,6 +83,7 @@ export class SessionConnected<
         );
         this.telemetry.span.addEvent('closing connection due to inactivity');
         this.conn.close();
+        clearInterval(this.heartbeatHandle);
         return;
       }
 
@@ -110,6 +105,40 @@ export class SessionConnected<
   onMessageData = (msg: Uint8Array) => {
     const parsedMsg = this.parseMsg(msg);
     if (parsedMsg === null) return;
+
+    // check message ordering here
+    if (parsedMsg.seq !== this.ack) {
+      if (parsedMsg.seq < this.ack) {
+        this.log?.debug(
+          `received duplicate msg (got seq: ${parsedMsg.seq}, wanted seq: ${this.ack}), discarding`,
+          {
+            ...this.loggingMetadata,
+            transportMessage: parsedMsg,
+          },
+        );
+      } else {
+        const reason = `received out-of-order msg (got seq: ${parsedMsg.seq}, wanted seq: ${this.ack})`;
+        this.log?.error(reason, {
+          ...this.loggingMetadata,
+          transportMessage: parsedMsg,
+          tags: ['invariant-violation'],
+        });
+        this.telemetry.span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: reason,
+        });
+
+        this.listeners.onInvalidMessage(reason);
+      }
+
+      return;
+    }
+
+    // message is ok to update bookkeeping with
+    this.log?.debug(`received msg`, {
+      ...this.loggingMetadata,
+      transportMessage: parsedMsg,
+    });
 
     this.updateBookkeeping(parsedMsg.ack, parsedMsg.seq);
 

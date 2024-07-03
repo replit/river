@@ -87,7 +87,6 @@ export const transports: Array<TransportMatrixEntry> = [
             clientTransport.extendHandshake(handshakeOptions);
           }
 
-          clientTransport.connect('SERVER');
           transports.push(clientTransport);
           return clientTransport;
         },
@@ -141,7 +140,12 @@ export const transports: Array<TransportMatrixEntry> = [
         simulatePhantomDisconnect() {
           for (const transport of transports) {
             for (const conn of getTransportConnections(transport)) {
-              conn.sock.pause();
+              const dataListeners = conn.sock.listeners('data') as Array<
+                () => void
+              >;
+              for (const listener of dataListeners) {
+                conn.sock.removeListener('data', listener);
+              }
             }
           }
         },
@@ -156,7 +160,6 @@ export const transports: Array<TransportMatrixEntry> = [
             clientTransport.extendHandshake(handshakeOptions);
           }
 
-          clientTransport.connect('SERVER');
           transports.push(clientTransport);
           return clientTransport;
         },
@@ -281,8 +284,6 @@ export const transports: Array<TransportMatrixEntry> = [
           if (handshakeOptions) {
             clientTransport.extendHandshake(handshakeOptions);
           }
-
-          clientTransport.connect('SERVER');
 
           return clientTransport;
         },

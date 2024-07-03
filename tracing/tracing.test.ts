@@ -98,11 +98,11 @@ describe.each(testMatrix())(
     test('Traces sessions and connections across network boundary', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
+      clientTransport.connect(serverTransport.clientId);
       addPostTestCleanup(async () => {
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
-      clientTransport.connect(serverTransport.clientId);
       await waitFor(() => {
         expect(clientTransport.sessions.size).toBe(1);
         expect(serverTransport.sessions.size).toBe(1);

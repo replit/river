@@ -121,22 +121,18 @@ describe('EventDispatcher', () => {
 
     const handler = vitest.fn();
     dispatcher.addEventListener('message', handler);
-    dispatcher.addEventListener('connectionStatus', handler);
     dispatcher.addEventListener('protocolError', handler);
     dispatcher.addEventListener('sessionStatus', handler);
     dispatcher.addEventListener('transportStatus', handler);
 
     dispatcher.removeAllListeners();
     expect(dispatcher.numberOfListeners('message')).toEqual(0);
-    expect(dispatcher.numberOfListeners('connectionStatus')).toEqual(0);
     expect(dispatcher.numberOfListeners('protocolError')).toEqual(0);
     expect(dispatcher.numberOfListeners('sessionStatus')).toEqual(0);
     expect(dispatcher.numberOfListeners('transportStatus')).toEqual(0);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
     dispatcher.dispatchEvent('message', {} as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-    dispatcher.dispatchEvent('connectionStatus', {} as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
     dispatcher.dispatchEvent('protocolError', {} as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument

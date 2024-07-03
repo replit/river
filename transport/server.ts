@@ -44,7 +44,7 @@ export abstract class ServerTransport<
   /**
    * A map of session handshake data for each session.
    */
-  sessionHandshakeMetadata: WeakMap<Session<ConnType>, ParsedMetadata>;
+  sessionHandshakeMetadata = new Map<TransportClientId, ParsedMetadata>();
   pendingSessions = new Set<SessionPendingIdentification<ConnType>>();
 
   constructor(
@@ -56,7 +56,6 @@ export abstract class ServerTransport<
       ...defaultServerTransportOptions,
       ...providedOptions,
     };
-    this.sessionHandshakeMetadata = new WeakMap();
     this.log?.info(`initiated server transport`, {
       clientId: this.clientId,
       protocolVersion: PROTOCOL_VERSION,
@@ -75,6 +74,11 @@ export abstract class ServerTransport<
     // for a non-identified session, just delete directly
 
     this.pendingSessions.delete(pendingSession);
+  }
+
+  protected deleteSession(session: Session<ConnType>): void {
+    this.sessionHandshakeMetadata.delete(session.to);
+    super.deleteSession(session);
   }
 
   protected handleConnection(conn: ConnType) {
@@ -139,13 +143,10 @@ export abstract class ServerTransport<
           },
         },
         this.options,
+        this.log,
       );
 
     this.pendingSessions.add(pendingSession);
-
-    if (this.log) {
-      pendingSession.log = this.log;
-    }
   }
 
   private rejectHandshakeRequest(
@@ -234,15 +235,41 @@ export abstract class ServerTransport<
       return;
     }
 
-    // invariant: must either match an existing session (be a reconnect)
-    // or be a new session
-    if (oldSession) {
-      // invariant: if it's a reconnect, the session id must match
-      if (oldSession.id !== msg.payload.sessionId) {
+    // 4 connect cases
+    // 1. new session
+    //    we dont have a session and the client is requesting a new one
+    //    we can create the session as normal
+    // 2. cliest is reconnecting to an existing session but we don't have it
+    //    reject this handshake, there's nothing we can do to salvage it
+    // 3. transparent reconnect (old session exists and is the same as the client wants)
+    //    assign to old session
+    // 4. hard reconnect (oldSession exists but but the client wants a new one)
+    //    we close the old session and create a new one
+    let connectCase:
+      | 'new session'
+      | 'unknown session'
+      | 'transparent reconnection'
+      | 'hard reconnection' = 'new session';
+    if (oldSession && oldSession.id === msg.payload.sessionId) {
+      connectCase = 'transparent reconnection';
+
+      // invariant: ordering must be correct
+      const clientNextExpectedSeq =
+        msg.payload.expectedSessionState.nextExpectedSeq;
+      // TODO: remove nullish coalescing when we're sure this is always set
+      const clientNextSentSeq =
+        msg.payload.expectedSessionState.nextSentSeq ?? 0;
+      const ourNextSeq = oldSession.nextSeq();
+      const ourAck = oldSession.ack;
+
+      // two incorrect cases where we cannot permit a reconnect:
+      // - if the client is about to send a message in the future w.r.t to the server
+      //  - client.seq > server.ack => nextSentSeq > oldSession.ack
+      if (clientNextSentSeq > ourAck) {
         this.rejectHandshakeRequest(
           session,
           msg.from,
-          `session id mismatch, expected ${oldSession.id}, got ${msg.payload.sessionId}`,
+          `client is in the future: server wanted next message to be ${ourAck} but client would have sent ${clientNextSentSeq}`,
           'SESSION_STATE_MISMATCH',
           {
             ...session.loggingMetadata,
@@ -254,19 +281,13 @@ export abstract class ServerTransport<
         return;
       }
 
-      // invariant: next expected seq must be the next seq we would send
-      const nextExpectedSeq = msg.payload.expectedSessionState.nextExpectedSeq;
-      const ourNextSeq =
-        oldSession.sendBuffer.length > 0
-          ? // if we have messages buffered, the next message we would send is the first buffered
-            oldSession.sendBuffer[0].seq
-          : // otherwise it's the current seq
-            oldSession.seq;
-      if (nextExpectedSeq < ourNextSeq) {
+      // - if the server is about to send a message in the future w.r.t to the client
+      //  - server.seq > client.ack => oldSession.nextSeq() > nextExpectedSeq
+      if (ourNextSeq > clientNextExpectedSeq) {
         this.rejectHandshakeRequest(
           session,
           msg.from,
-          `client wanted next message to be ${nextExpectedSeq} but we would have sent ${ourNextSeq}`,
+          `server is in the future: client wanted next message to be ${clientNextExpectedSeq} but server would have sent ${ourNextSeq}`,
           'SESSION_STATE_MISMATCH',
           {
             ...session.loggingMetadata,
@@ -277,30 +298,9 @@ export abstract class ServerTransport<
 
         return;
       }
-    }
 
-    // from this point on, we're committed to connecting
-    const sessionId = msg.payload.sessionId;
-    this.log?.debug(
-      `handshake from ${msg.from} ok, responding with handshake success`,
-      {
-        ...session.loggingMetadata,
-        connectedTo: msg.from,
-      },
-    );
-    const responseMsg = handshakeResponseMessage({
-      from: this.clientId,
-      to: msg.from,
-      status: {
-        ok: true,
-        sessionId,
-      },
-    });
-    session.sendHandshake(responseMsg);
-
-    // if we have an old session, make sure we transition it to not connected before
-    // we transition the new session to connected
-    if (oldSession) {
+      // transparent reconnect seems ok, proceed by transitioning old session
+      // to not connected
       if (oldSession.state === SessionState.Connected) {
         const noConnectionSession =
           SessionStateMachine.transition.ConnectedToNoConnection(oldSession, {
@@ -331,7 +331,57 @@ export abstract class ServerTransport<
       }
 
       this.updateSession(oldSession);
+    } else if (oldSession) {
+      connectCase = 'hard reconnection';
+
+      // just nuke the old session entirely and proceed as if this was new
+      this.deleteSession(oldSession);
+      oldSession = undefined;
+    } else {
+      connectCase = 'unknown session';
+
+      const clientNextExpectedSeq =
+        msg.payload.expectedSessionState.nextExpectedSeq;
+      // TODO: remove nullish coalescing when we're sure this is always set
+      const clientNextSentSeq =
+        msg.payload.expectedSessionState.nextSentSeq ?? 0;
+
+      if (clientNextSentSeq > 0 || clientNextExpectedSeq > 0) {
+        // we don't have a session, but the client is trying to reconnect
+        // to an old session. we can't do anything about this, so we reject
+        this.rejectHandshakeRequest(
+          session,
+          msg.from,
+          `client is trying to reconnect to a session the server don't know about: ${msg.payload.sessionId}`,
+          'SESSION_STATE_MISMATCH',
+          {
+            ...session.loggingMetadata,
+            connectedTo: msg.from,
+            transportMessage: msg,
+          },
+        );
+        return;
+      }
     }
+
+    // from this point on, we're committed to connecting
+    const sessionId = msg.payload.sessionId;
+    this.log?.info(
+      `handshake from ${msg.from} ok (${connectCase}), responding with handshake success`,
+      {
+        ...session.loggingMetadata,
+        connectedTo: msg.from,
+      },
+    );
+    const responseMsg = handshakeResponseMessage({
+      from: this.clientId,
+      to: msg.from,
+      status: {
+        ok: true,
+        sessionId,
+      },
+    });
+    session.sendHandshake(responseMsg);
 
     // transition
     const connectedSession =
@@ -359,17 +409,17 @@ export abstract class ServerTransport<
             this.onConnClosed(connectedSession);
           },
           onMessage: (msg) => this.handleMsg(msg),
+          onInvalidMessage: (reason) => {
+            this.protocolError(ProtocolError.MessageOrderingViolated, reason);
+            this.deleteSession(connectedSession);
+          },
         },
       );
 
-    this.sessionHandshakeMetadata.set(connectedSession, parsedMetadata);
+    this.sessionHandshakeMetadata.set(connectedSession.to, parsedMetadata);
     this.updateSession(connectedSession);
+    this.pendingSessions.delete(session);
     connectedSession.startActiveHeartbeat();
-
-    this.eventDispatcher.dispatchEvent('sessionStatus', {
-      status: 'connect',
-      session: connectedSession,
-    });
   }
 
   private async validateHandshakeMetadata(
@@ -402,7 +452,7 @@ export abstract class ServerTransport<
       }
 
       const previousParsedMetadata = existingSession
-        ? this.sessionHandshakeMetadata.get(existingSession)
+        ? this.sessionHandshakeMetadata.get(existingSession.to)
         : undefined;
 
       parsedMetadata = await this.handshakeExtensions.validate(

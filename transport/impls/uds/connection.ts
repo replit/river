@@ -46,7 +46,7 @@ export class UdsConnection extends Connection {
   }
 
   close() {
-    this.sock.destroy();
+    this.sock.end();
     this.framer.destroy();
   }
 }

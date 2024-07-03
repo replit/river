@@ -281,7 +281,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       );
     };
 
-    const sessionMeta = this.transport.sessionHandshakeMetadata.get(session);
+    const sessionMeta = this.transport.sessionHandshakeMetadata.get(session.to);
     if (!sessionMeta) {
       this.log?.error(`session doesn't have handshake metadata`, {
         ...session.loggingMetadata,

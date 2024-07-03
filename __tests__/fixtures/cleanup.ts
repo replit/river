@@ -20,13 +20,14 @@ const waitUntilOptions = {
   interval: 5, // check every 5ms
 };
 
+export async function advanceFakeTimersByHeartbeat() {
+  await vi.runOnlyPendingTimersAsync();
+  await vi.advanceTimersByTimeAsync(testingSessionOptions.heartbeatIntervalMs);
+}
+
 export async function advanceFakeTimersByDisconnectGrace() {
   for (let i = 0; i < testingSessionOptions.heartbeatsUntilDead; i++) {
-    // wait for heartbeat interval to elapse
     await vi.runOnlyPendingTimersAsync();
-    await vi.advanceTimersByTimeAsync(
-      testingSessionOptions.heartbeatIntervalMs + 1,
-    );
   }
 }
 

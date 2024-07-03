@@ -1,9 +1,8 @@
 import { Connection } from './connection';
 import { OpaqueTransportMessage } from './message';
-import { Session } from './sessionStateMachine';
+import { Session, SessionState } from './sessionStateMachine';
 import { TransportStatus } from './transport';
 
-type ConnectionStatus = 'connect' | 'disconnect';
 export const ProtocolError = {
   RetriesExceeded: 'conn_retry_exceeded',
   HandshakeFailed: 'handshake_failed',
@@ -15,14 +14,15 @@ export type ProtocolErrorType =
 
 export interface EventMap {
   message: OpaqueTransportMessage;
-  connectionStatus: {
-    status: ConnectionStatus;
-    conn: Connection;
-  };
   sessionStatus: {
-    status: ConnectionStatus;
+    status: 'connect' | 'disconnect';
     session: Session<Connection>;
   };
+  sessionTransition:
+    | { state: SessionState.Connected }
+    | { state: SessionState.Handshaking }
+    | { state: SessionState.Connecting }
+    | { state: SessionState.NoConnection };
   protocolError: {
     type: ProtocolErrorType;
     message: string;

@@ -69,14 +69,18 @@ export const ControlMessageHandshakeRequestSchema = Type.Object({
    * is compatible with what it already has.
    */
   expectedSessionState: Type.Object({
+    // what the client expects the server to send next
     nextExpectedSeq: Type.Integer(),
+    // TODO: remove optional once we know all servers
+    // are nextSentSeq here
+    // what the server expects the client to send next
+    nextSentSeq: Type.Optional(Type.Integer()),
   }),
 
   metadata: Type.Optional(Type.Unknown()),
 });
 
 export const HandshakeErrorRetriableResponseCodes = Type.Union([
-  Type.Literal('REJECTED_BY_CUSTOM_HANDLER'),
   Type.Literal('SESSION_STATE_MISMATCH'),
 ]);
 
@@ -84,6 +88,7 @@ export const HandshakeErrorFatalResponseCodes = Type.Union([
   Type.Literal('MALFORMED_HANDSHAKE_META'),
   Type.Literal('MALFORMED_HANDSHAKE'),
   Type.Literal('PROTOCOL_VERSION_MISMATCH'),
+  Type.Literal('REJECTED_BY_CUSTOM_HANDLER'),
 ]);
 
 export const HandshakeErrorResponseCodes = Type.Union([
