@@ -15,7 +15,7 @@ import { SessionHandshakingListeners } from './SessionHandshaking';
 import { SessionConnectedListeners } from './SessionConnected';
 import { SessionConnectingListeners } from './SessionConnecting';
 import { SessionNoConnectionListeners } from './SessionNoConnection';
-import { SessionStateMachine } from './transitions';
+import { SessionStateGraph } from './transitions';
 import { SessionPendingIdentification } from './SessionPendingIdentification';
 import { Connection } from '../connection';
 
@@ -114,7 +114,7 @@ function createSessionConnectedListeners(): SessionConnectedListeners {
 
 function createSessionNoConnection() {
   const listeners = createSessionNoConnectionListeners();
-  const session = SessionStateMachine.entrypoints.NoConnection(
+  const session = SessionStateGraph.entrypoints.NoConnection(
     'to',
     'from',
     listeners,
@@ -129,7 +129,7 @@ function createSessionConnecting() {
   const { pendingConn, connect, error } = getPendingMockConnection();
   const listeners = createSessionConnectingListeners();
 
-  session = SessionStateMachine.transition.NoConnectionToConnecting(
+  session = SessionStateGraph.transition.NoConnectionToConnecting(
     session,
     pendingConn,
     listeners,
@@ -146,7 +146,7 @@ async function createSessionHandshaking() {
   connect();
   const conn = await session.connPromise;
   const listeners = createSessionHandshakingListeners();
-  session = SessionStateMachine.transition.ConnectingToHandshaking(
+  session = SessionStateGraph.transition.ConnectingToHandshaking(
     session,
     conn,
     listeners,
@@ -160,7 +160,7 @@ async function createSessionConnected() {
   let session: Session<MockConnection> = sessionHandle.session;
   const listeners = createSessionConnectedListeners();
 
-  session = SessionStateMachine.transition.HandshakingToConnected(
+  session = SessionStateGraph.transition.HandshakingToConnected(
     session,
     listeners,
   );
@@ -171,7 +171,7 @@ async function createSessionConnected() {
 function createSessionPendingIdentification() {
   const conn = new MockConnection();
   const listeners = createSessionHandshakingListeners();
-  const session = SessionStateMachine.entrypoints.PendingIdentification(
+  const session = SessionStateGraph.entrypoints.PendingIdentification(
     'from',
     conn,
     listeners,
@@ -220,7 +220,7 @@ describe('session state machine', () => {
 
       const { pendingConn } = getPendingMockConnection();
       const listeners = createSessionConnectingListeners();
-      session = SessionStateMachine.transition.NoConnectionToConnecting(
+      session = SessionStateGraph.transition.NoConnectionToConnecting(
         session,
         pendingConn,
         listeners,
@@ -251,7 +251,7 @@ describe('session state machine', () => {
       connect();
       const conn = await session.connPromise;
       const listeners = createSessionHandshakingListeners();
-      session = SessionStateMachine.transition.ConnectingToHandshaking(
+      session = SessionStateGraph.transition.ConnectingToHandshaking(
         session,
         conn,
         listeners,
@@ -288,7 +288,7 @@ describe('session state machine', () => {
       const onHandshakeTimeout = sessionHandle.onHandshakeTimeout;
 
       const listeners = createSessionConnectedListeners();
-      session = SessionStateMachine.transition.HandshakingToConnected(
+      session = SessionStateGraph.transition.HandshakingToConnected(
         session,
         listeners,
       );
@@ -339,7 +339,7 @@ describe('session state machine', () => {
 
       const onHandshakeTimeout = sessionHandle.onHandshakeTimeout;
       const listeners = createSessionConnectedListeners();
-      session = SessionStateMachine.transition.PendingIdentificationToConnected(
+      session = SessionStateGraph.transition.PendingIdentificationToConnected(
         session,
         undefined,
         'clientSessionId',
@@ -392,7 +392,7 @@ describe('session state machine', () => {
         | SessionPendingIdentification<MockConnection> = sessionHandle.session;
 
       const listeners = createSessionConnectedListeners();
-      session = SessionStateMachine.transition.PendingIdentificationToConnected(
+      session = SessionStateGraph.transition.PendingIdentificationToConnected(
         session,
         oldSession,
         'clientSessionId',
@@ -421,7 +421,7 @@ describe('session state machine', () => {
       error(new Error('test error'));
 
       const listeners = createSessionNoConnectionListeners();
-      session = SessionStateMachine.transition.ConnectingToNoConnection(
+      session = SessionStateGraph.transition.ConnectingToNoConnection(
         session,
         listeners,
       );
@@ -451,7 +451,7 @@ describe('session state machine', () => {
       connect();
 
       const listeners = createSessionNoConnectionListeners();
-      session = SessionStateMachine.transition.ConnectingToNoConnection(
+      session = SessionStateGraph.transition.ConnectingToNoConnection(
         session,
         listeners,
       );
@@ -489,7 +489,7 @@ describe('session state machine', () => {
       const onHandshakeTimeout = sessionHandle.onHandshakeTimeout;
       const listeners = createSessionNoConnectionListeners();
       const sessionStateToBePersisted = persistedSessionState(session);
-      session = SessionStateMachine.transition.HandshakingToNoConnection(
+      session = SessionStateGraph.transition.HandshakingToNoConnection(
         session,
         listeners,
       );
@@ -538,7 +538,7 @@ describe('session state machine', () => {
 
       const listeners = createSessionNoConnectionListeners();
       const sessionStateToBePersisted = persistedSessionState(session);
-      session = SessionStateMachine.transition.ConnectedToNoConnection(
+      session = SessionStateGraph.transition.ConnectedToNoConnection(
         session,
         listeners,
       );
@@ -582,7 +582,7 @@ describe('session state machine', () => {
       expect(session.ack).toBe(0);
 
       const { pendingConn } = getPendingMockConnection();
-      session = SessionStateMachine.transition.NoConnectionToConnecting(
+      session = SessionStateGraph.transition.NoConnectionToConnecting(
         session,
         pendingConn,
         createSessionConnectingListeners(),
@@ -605,7 +605,7 @@ describe('session state machine', () => {
 
       connect();
       const conn = await session.connPromise;
-      session = SessionStateMachine.transition.ConnectingToHandshaking(
+      session = SessionStateGraph.transition.ConnectingToHandshaking(
         session,
         conn,
         createSessionHandshakingListeners(),
@@ -627,7 +627,7 @@ describe('session state machine', () => {
       expect(session.seq).toBe(2);
       expect(session.ack).toBe(0);
 
-      session = SessionStateMachine.transition.HandshakingToConnected(
+      session = SessionStateGraph.transition.HandshakingToConnected(
         session,
         createSessionConnectedListeners(),
       );
@@ -646,7 +646,7 @@ describe('session state machine', () => {
       expect(session.seq).toBe(2);
       expect(session.ack).toBe(0);
 
-      session = SessionStateMachine.transition.ConnectingToNoConnection(
+      session = SessionStateGraph.transition.ConnectingToNoConnection(
         session,
         createSessionNoConnectionListeners(),
       );
@@ -667,7 +667,7 @@ describe('session state machine', () => {
       expect(session.seq).toBe(2);
       expect(session.ack).toBe(0);
 
-      session = SessionStateMachine.transition.HandshakingToNoConnection(
+      session = SessionStateGraph.transition.HandshakingToNoConnection(
         session,
         createSessionNoConnectionListeners(),
       );
@@ -687,7 +687,7 @@ describe('session state machine', () => {
       expect(session.seq).toBe(2);
       expect(session.ack).toBe(0);
 
-      session = SessionStateMachine.transition.ConnectedToNoConnection(
+      session = SessionStateGraph.transition.ConnectedToNoConnection(
         session,
         createSessionNoConnectionListeners(),
       );
@@ -705,7 +705,7 @@ describe('session state machine', () => {
       const { pendingConn } = getPendingMockConnection();
       const listeners = createSessionConnectingListeners();
 
-      SessionStateMachine.transition.NoConnectionToConnecting(
+      SessionStateGraph.transition.NoConnectionToConnecting(
         session,
         pendingConn,
         listeners,
@@ -726,7 +726,7 @@ describe('session state machine', () => {
       connect();
       const conn = await session.connPromise;
       const listeners = createSessionHandshakingListeners();
-      SessionStateMachine.transition.ConnectingToHandshaking(
+      SessionStateGraph.transition.ConnectingToHandshaking(
         session,
         conn,
         listeners,
@@ -743,7 +743,7 @@ describe('session state machine', () => {
       const sessionHandle = await createSessionHandshaking();
       const session: Session<MockConnection> = sessionHandle.session;
       const listeners = createSessionConnectedListeners();
-      SessionStateMachine.transition.HandshakingToConnected(session, listeners);
+      SessionStateGraph.transition.HandshakingToConnected(session, listeners);
 
       // doing anything on the old session should throw
       expect(() => session.loggingMetadata).toThrowError(ERR_CONSUMED);
@@ -758,7 +758,7 @@ describe('session state machine', () => {
         | Session<MockConnection>
         | SessionPendingIdentification<MockConnection> = sessionHandle.session;
       const listeners = createSessionConnectedListeners();
-      SessionStateMachine.transition.PendingIdentificationToConnected(
+      SessionStateGraph.transition.PendingIdentificationToConnected(
         session,
         undefined,
         'clientSessionId',
@@ -775,10 +775,7 @@ describe('session state machine', () => {
       const sessionHandle = createSessionConnecting();
       const session: Session<MockConnection> = sessionHandle.session;
       const listeners = createSessionNoConnectionListeners();
-      SessionStateMachine.transition.ConnectingToNoConnection(
-        session,
-        listeners,
-      );
+      SessionStateGraph.transition.ConnectingToNoConnection(session, listeners);
 
       // doing anything on the old session should throw
       expect(() => session.loggingMetadata).toThrowError(ERR_CONSUMED);
@@ -791,7 +788,7 @@ describe('session state machine', () => {
       const sessionHandle = await createSessionHandshaking();
       const session: Session<MockConnection> = sessionHandle.session;
       const listeners = createSessionNoConnectionListeners();
-      SessionStateMachine.transition.HandshakingToNoConnection(
+      SessionStateGraph.transition.HandshakingToNoConnection(
         session,
         listeners,
       );
@@ -807,10 +804,7 @@ describe('session state machine', () => {
       const sessionHandle = await createSessionConnected();
       const session: Session<MockConnection> = sessionHandle.session;
       const listeners = createSessionNoConnectionListeners();
-      SessionStateMachine.transition.ConnectedToNoConnection(
-        session,
-        listeners,
-      );
+      SessionStateGraph.transition.ConnectedToNoConnection(session, listeners);
 
       // doing anything on the old session should throw
       expect(() => session.loggingMetadata).toThrowError(ERR_CONSUMED);
@@ -1265,10 +1259,7 @@ describe('session state machine', () => {
 
       // transition to no connection
       const listeners = createSessionNoConnectionListeners();
-      SessionStateMachine.transition.ConnectedToNoConnection(
-        session,
-        listeners,
-      );
+      SessionStateGraph.transition.ConnectedToNoConnection(session, listeners);
 
       // send another heartbeat
       vi.advanceTimersByTime(testingSessionOptions.heartbeatIntervalMs);

@@ -61,7 +61,7 @@ function inheritSharedSession(
  * └───────────────────────► x. Destroy Session   ◄─────┘
  *   handshake failure
  */
-export const SessionStateMachine = {
+export const SessionStateGraph = {
   entrypoints: {
     NoConnection(
       to: TransportClientId,

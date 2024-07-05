@@ -23,7 +23,7 @@ import { MessageMetadata } from '../logging';
 import { SessionConnecting } from './sessionStateMachine/SessionConnecting';
 import { SessionHandshaking } from './sessionStateMachine/SessionHandshaking';
 import { SessionConnected } from './sessionStateMachine/SessionConnected';
-import { SessionStateMachine } from './sessionStateMachine/transitions';
+import { SessionStateGraph } from './sessionStateMachine/transitions';
 import { SessionState } from './sessionStateMachine/common';
 
 export abstract class ClientTransport<
@@ -104,7 +104,7 @@ export abstract class ClientTransport<
   ): SessionHandshaking<ConnType> {
     // transition to handshaking
     const handshakingSession =
-      SessionStateMachine.transition.ConnectingToHandshaking(session, conn, {
+      SessionStateGraph.transition.ConnectingToHandshaking(session, conn, {
         onConnectionErrored: (err) => {
           // just log, when we error we also emit close
           const errStr = coerceErrorString(err);
@@ -219,7 +219,7 @@ export abstract class ClientTransport<
     });
 
     const connectedSession =
-      SessionStateMachine.transition.HandshakingToConnected(session, {
+      SessionStateGraph.transition.HandshakingToConnected(session, {
         onConnectionErrored: (err) => {
           // just log, when we error we also emit close
           const errStr = coerceErrorString(err);
@@ -316,7 +316,7 @@ export abstract class ClientTransport<
     });
 
     const connectingSession =
-      SessionStateMachine.transition.NoConnectionToConnecting(
+      SessionStateGraph.transition.NoConnectionToConnecting(
         session,
         reconnectPromise,
         {

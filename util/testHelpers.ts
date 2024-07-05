@@ -28,7 +28,7 @@ import {
   SessionOptions,
   SessionState,
 } from '../transport/sessionStateMachine/common';
-import { SessionStateMachine } from '../transport/sessionStateMachine';
+import { SessionStateGraph } from '../transport/sessionStateMachine';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
@@ -146,7 +146,7 @@ function catchProcError(err: unknown) {
 export const testingSessionOptions: SessionOptions = defaultTransportOptions;
 
 export function dummySession() {
-  return SessionStateMachine.entrypoints.NoConnection(
+  return SessionStateGraph.entrypoints.NoConnection(
     'client',
     'server',
     {

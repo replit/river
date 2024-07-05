@@ -23,7 +23,7 @@ import { Connection } from './connection';
 import { MessageMetadata } from '../logging';
 import { SessionPendingIdentification } from './sessionStateMachine/SessionPendingIdentification';
 import { Session, SessionState } from './sessionStateMachine/common';
-import { SessionStateMachine } from './sessionStateMachine/transitions';
+import { SessionStateGraph } from './sessionStateMachine/transitions';
 
 export abstract class ServerTransport<
   ConnType extends Connection,
@@ -87,69 +87,68 @@ export abstract class ServerTransport<
     });
 
     let receivedHandshake = false;
-    const pendingSession =
-      SessionStateMachine.entrypoints.PendingIdentification(
-        this.clientId,
-        conn,
-        {
-          onConnectionClosed: () => {
-            this.log?.warn(
-              `connection from unknown closed before handshake finished`,
-              pendingSession.loggingMetadata,
-            );
+    const pendingSession = SessionStateGraph.entrypoints.PendingIdentification(
+      this.clientId,
+      conn,
+      {
+        onConnectionClosed: () => {
+          this.log?.warn(
+            `connection from unknown closed before handshake finished`,
+            pendingSession.loggingMetadata,
+          );
 
-            this.deletePendingSession(pendingSession);
-          },
-          onConnectionErrored: (err) => {
-            const errorString = coerceErrorString(err);
-            this.log?.warn(
-              `connection from unknown errored before handshake finished: ${errorString}`,
-              pendingSession.loggingMetadata,
-            );
-
-            this.deletePendingSession(pendingSession);
-          },
-          onHandshakeTimeout: () => {
-            this.log?.warn(
-              `connection from unknown timed out before handshake finished`,
-              pendingSession.loggingMetadata,
-            );
-
-            this.deletePendingSession(pendingSession);
-          },
-          onHandshake: (msg) => {
-            if (receivedHandshake) {
-              this.log?.error(
-                `received multiple handshake messages from pending session`,
-                {
-                  ...pendingSession.loggingMetadata,
-                  connectedTo: msg.from,
-                  transportMessage: msg,
-                },
-              );
-
-              this.deletePendingSession(pendingSession);
-              return;
-            }
-
-            // let this resolve async, we just need to make sure its only
-            // called once so we don't race while transitioning to connected
-            // onHandshakeRequest is async as custom validation may be async
-            receivedHandshake = true;
-            void this.onHandshakeRequest(pendingSession, msg);
-          },
-          onInvalidHandshake: (reason) => {
-            this.log?.error(
-              `invalid handshake: ${reason}`,
-              pendingSession.loggingMetadata,
-            );
-            this.deletePendingSession(pendingSession);
-            this.protocolError(ProtocolError.HandshakeFailed, reason);
-          },
+          this.deletePendingSession(pendingSession);
         },
-        this.options,
-        this.log,
-      );
+        onConnectionErrored: (err) => {
+          const errorString = coerceErrorString(err);
+          this.log?.warn(
+            `connection from unknown errored before handshake finished: ${errorString}`,
+            pendingSession.loggingMetadata,
+          );
+
+          this.deletePendingSession(pendingSession);
+        },
+        onHandshakeTimeout: () => {
+          this.log?.warn(
+            `connection from unknown timed out before handshake finished`,
+            pendingSession.loggingMetadata,
+          );
+
+          this.deletePendingSession(pendingSession);
+        },
+        onHandshake: (msg) => {
+          if (receivedHandshake) {
+            this.log?.error(
+              `received multiple handshake messages from pending session`,
+              {
+                ...pendingSession.loggingMetadata,
+                connectedTo: msg.from,
+                transportMessage: msg,
+              },
+            );
+
+            this.deletePendingSession(pendingSession);
+            return;
+          }
+
+          // let this resolve async, we just need to make sure its only
+          // called once so we don't race while transitioning to connected
+          // onHandshakeRequest is async as custom validation may be async
+          receivedHandshake = true;
+          void this.onHandshakeRequest(pendingSession, msg);
+        },
+        onInvalidHandshake: (reason) => {
+          this.log?.error(
+            `invalid handshake: ${reason}`,
+            pendingSession.loggingMetadata,
+          );
+          this.deletePendingSession(pendingSession);
+          this.protocolError(ProtocolError.HandshakeFailed, reason);
+        },
+      },
+      this.options,
+      this.log,
+    );
 
     this.pendingSessions.add(pendingSession);
   }
@@ -308,7 +307,7 @@ export abstract class ServerTransport<
       // to not connected
       if (oldSession.state === SessionState.Connected) {
         const noConnectionSession =
-          SessionStateMachine.transition.ConnectedToNoConnection(oldSession, {
+          SessionStateGraph.transition.ConnectedToNoConnection(oldSession, {
             onSessionGracePeriodElapsed: () => {
               this.onSessionGracePeriodElapsed(noConnectionSession);
             },
@@ -317,7 +316,7 @@ export abstract class ServerTransport<
         oldSession = noConnectionSession;
       } else if (oldSession.state === SessionState.Handshaking) {
         const noConnectionSession =
-          SessionStateMachine.transition.HandshakingToNoConnection(oldSession, {
+          SessionStateGraph.transition.HandshakingToNoConnection(oldSession, {
             onSessionGracePeriodElapsed: () => {
               this.onSessionGracePeriodElapsed(noConnectionSession);
             },
@@ -326,7 +325,7 @@ export abstract class ServerTransport<
         oldSession = noConnectionSession;
       } else if (oldSession.state === SessionState.Connecting) {
         const noConnectionSession =
-          SessionStateMachine.transition.ConnectingToNoConnection(oldSession, {
+          SessionStateGraph.transition.ConnectingToNoConnection(oldSession, {
             onSessionGracePeriodElapsed: () => {
               this.onSessionGracePeriodElapsed(noConnectionSession);
             },
@@ -390,7 +389,7 @@ export abstract class ServerTransport<
 
     // transition
     const connectedSession =
-      SessionStateMachine.transition.PendingIdentificationToConnected(
+      SessionStateGraph.transition.PendingIdentificationToConnected(
         session,
         // by this point oldSession is either no connection or we dont have an old session
         oldSession,

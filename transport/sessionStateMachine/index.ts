@@ -4,4 +4,4 @@ export { type SessionConnecting } from './SessionConnecting';
 export { type SessionNoConnection } from './SessionNoConnection';
 export { type SessionHandshaking } from './SessionHandshaking';
 export { type SessionConnected } from './SessionConnected';
-export { SessionStateMachine } from './transitions';
+export { SessionStateGraph } from './transitions';

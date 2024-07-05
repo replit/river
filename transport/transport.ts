@@ -29,7 +29,7 @@ import {
   SessionHandshaking,
   SessionNoConnection,
   SessionState,
-  SessionStateMachine,
+  SessionStateGraph,
 } from './sessionStateMachine';
 import { Connection } from './connection';
 
@@ -227,7 +227,7 @@ export abstract class Transport<ConnType extends Connection> {
 
   // state transitions
   protected createUnconnectedSession(to: string): SessionNoConnection {
-    const session = SessionStateMachine.entrypoints.NoConnection(
+    const session = SessionStateGraph.entrypoints.NoConnection(
       to,
       this.clientId,
       {
@@ -270,7 +270,7 @@ export abstract class Transport<ConnType extends Connection> {
   ): SessionNoConnection {
     // transition to no connection
     const noConnectionSession =
-      SessionStateMachine.transition.ConnectingToNoConnection(session, {
+      SessionStateGraph.transition.ConnectingToNoConnection(session, {
         onSessionGracePeriodElapsed: () => {
           this.onSessionGracePeriodElapsed(noConnectionSession);
         },
@@ -286,14 +286,14 @@ export abstract class Transport<ConnType extends Connection> {
     let noConnectionSession: SessionNoConnection;
     if (session.state === SessionState.Handshaking) {
       noConnectionSession =
-        SessionStateMachine.transition.HandshakingToNoConnection(session, {
+        SessionStateGraph.transition.HandshakingToNoConnection(session, {
           onSessionGracePeriodElapsed: () => {
             this.onSessionGracePeriodElapsed(noConnectionSession);
           },
         });
     } else {
       noConnectionSession =
-        SessionStateMachine.transition.ConnectedToNoConnection(session, {
+        SessionStateGraph.transition.ConnectedToNoConnection(session, {
           onSessionGracePeriodElapsed: () => {
             this.onSessionGracePeriodElapsed(noConnectionSession);
           },
