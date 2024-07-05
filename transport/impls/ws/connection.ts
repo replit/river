@@ -41,12 +41,11 @@ export class WebSocketConnection extends Connection {
   }
 
   send(payload: Uint8Array) {
-    if (this.ws.readyState === this.ws.OPEN) {
-      this.ws.send(payload);
-      return true;
-    } else {
+    if (this.ws.readyState !== this.ws.OPEN) {
       return false;
     }
+    this.ws.send(payload);
+    return true;
   }
 
   close() {

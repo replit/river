@@ -1,7 +1,6 @@
-import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, test } from 'vitest';
 import {
   closeAllConnections,
-  getTransportConnections,
   iterNext,
   numberOfConnections,
 } from '../util/testHelpers';
@@ -21,8 +20,6 @@ import { Err, UNEXPECTED_DISCONNECT } from '../router/result';
 import { testMatrix } from './fixtures/matrix';
 import { TestSetupHelpers } from './fixtures/transports';
 import { createPostTestCleanups } from './fixtures/cleanup';
-import { coloredStringLogger } from '../logging';
-import { EventMap, SessionState } from '../transport';
 
 describe.each(testMatrix())(
   'procedures should handle unexpected disconnects ($transport.name transport, $codec.name codec)',

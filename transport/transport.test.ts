@@ -23,7 +23,10 @@ import { Type } from '@sinclair/typebox';
 import { TestSetupHelpers } from '../__tests__/fixtures/transports';
 import { createPostTestCleanups } from '../__tests__/fixtures/cleanup';
 import { SessionState } from './sessionStateMachine';
-import { coloredStringLogger } from '../logging';
+import {
+  ProvidedClientTransportOptions,
+  ProvidedTransportOptions,
+} from './options';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
@@ -535,6 +538,163 @@ describe.each(testMatrix())(
 
       await testFinishesCleanly({
         clientTransports: [client1Transport, client2Transport],
+        serverTransport,
+      });
+    });
+  },
+);
+
+describe.each(testMatrix())(
+  'transport disabling transparent reconnect ($transport.name transport, $codec.name codec)',
+  async ({ transport, codec }) => {
+    const opts: ProvidedTransportOptions = {
+      codec: codec.codec,
+      // set the session disconnect grace to 0 to force a hard reconnect
+      sessionDisconnectGraceMs: 0,
+    };
+
+    let testHelpers: TestSetupHelpers;
+    let getClientTransport: TestSetupHelpers['getClientTransport'];
+    let getServerTransport: TestSetupHelpers['getServerTransport'];
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
+    beforeEach(async () => {
+      testHelpers = await transport.setup({ client: opts, server: opts });
+      getClientTransport = testHelpers.getClientTransport;
+      getServerTransport = testHelpers.getServerTransport;
+      return async () => {
+        await postTestCleanup();
+        await testHelpers.cleanup();
+      };
+    });
+
+    test('reconnecting with grace period of 0 should result in hard reconnect', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
+
+      const oldClientSessionId = serverTransport.sessions.get('client')?.id;
+      const oldServerSessionId = clientTransport.sessions.get('SERVER')?.id;
+      expect(oldClientSessionId).not.toBeUndefined();
+      expect(oldServerSessionId).not.toBeUndefined();
+      expect(oldClientSessionId).toBe(oldServerSessionId);
+
+      clientTransport.reconnectOnConnectionDrop = false;
+      closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+
+      clientTransport.reconnectOnConnectionDrop = true;
+      clientTransport.connect('SERVER');
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
+
+      // expect new sessions to have been created
+      const newClientSessionId = serverTransport.sessions.get('client')?.id;
+      const newServerSessionId = clientTransport.sessions.get('SERVER')?.id;
+      expect(newClientSessionId).not.toBeUndefined();
+      expect(newServerSessionId).not.toBeUndefined();
+      expect(newClientSessionId).not.toBe(oldClientSessionId);
+      expect(newServerSessionId).not.toBe(oldServerSessionId);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+  },
+);
+
+describe.each(testMatrix())(
+  'transport handshake grace period tests ($transport.name transport, $codec.name codec)',
+  async ({ transport, codec }) => {
+    const opts: ProvidedTransportOptions = {
+      codec: codec.codec,
+      sessionDisconnectGraceMs: 10_000,
+      // setting session grace to be higher so that only handshake grace passes
+      handshakeTimeoutMs: 500,
+    };
+
+    const clientOpts: ProvidedClientTransportOptions = {
+      ...opts,
+      attemptBudgetCapacity: 1,
+    };
+
+    let testHelpers: TestSetupHelpers;
+    let getClientTransport: TestSetupHelpers['getClientTransport'];
+    let getServerTransport: TestSetupHelpers['getServerTransport'];
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
+    beforeEach(async () => {
+      testHelpers = await transport.setup({ client: clientOpts, server: opts });
+      getClientTransport = testHelpers.getClientTransport;
+      getServerTransport = testHelpers.getServerTransport;
+      return async () => {
+        await postTestCleanup();
+        await testHelpers.cleanup();
+      };
+    });
+
+    test('handshake grace period of 0 should lead to closed connections', async () => {
+      const schema = Type.Unknown();
+      const get = vi.fn();
+
+      const parse = vi.fn(() => {
+        const promise = new Promise(() => {
+          // noop we never want this to return
+        });
+        return promise;
+      });
+
+      const serverTransport = getServerTransport({
+        schema,
+        validate: parse,
+      });
+      const clientTransport = getClientTransport('client', {
+        schema,
+        construct: get,
+      });
+
+      const protocolError = vi.fn();
+      clientTransport.addEventListener('protocolError', protocolError);
+
+      addPostTestCleanup(async () => {
+        clientTransport.removeEventListener('protocolError', protocolError);
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(get).toHaveBeenCalledTimes(1);
+        expect(parse).toHaveBeenCalledTimes(1);
+      });
+
+      // timeout the connection that is waiting for an empty promise
+      const handshakeGrace = opts.handshakeTimeoutMs ?? 500;
+      await vi.advanceTimersByTimeAsync(handshakeGrace + 1);
+
+      // expect no server session/connection to have been established due to connection timeout
+      expect(serverTransport.sessions.size).toBe(0);
+      expect(numberOfConnections(serverTransport)).toBe(0);
+      // client should not have successfully established any connections
+      expect(numberOfConnections(clientTransport)).toBe(0);
+
+      // exhaust the retry budget to result in a protocolError.RetriesExceeded
+      await vi.advanceTimersByTimeAsync(handshakeGrace + 1);
+
+      await waitFor(() => {
+        expect(protocolError).toHaveBeenCalledTimes(1);
+        expect(protocolError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: ProtocolError.RetriesExceeded,
+          }),
+        );
+      });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
         serverTransport,
       });
     });

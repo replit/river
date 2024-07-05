@@ -18,7 +18,7 @@ import { UNCAUGHT_ERROR } from '../router/result';
 import { Observable } from './fixtures/observable';
 
 describe('server-side test', () => {
-  const service = TestServiceSchema.instantiate();
+  const service = TestServiceSchema.instantiate({});
 
   test('rpc basic', async () => {
     const add = asClientRpc({ count: 0 }, service.procedures.add);
@@ -35,7 +35,7 @@ describe('server-side test', () => {
   });
 
   test('fallible rpc', async () => {
-    const service = FallibleServiceSchema.instantiate();
+    const service = FallibleServiceSchema.instantiate({});
     const divide = asClientRpc({}, service.procedures.divide);
     const result = await divide({ a: 10, b: 2 });
     assert(result.ok);
@@ -98,7 +98,7 @@ describe('server-side test', () => {
   });
 
   test('fallible stream', async () => {
-    const service = FallibleServiceSchema.instantiate();
+    const service = FallibleServiceSchema.instantiate({});
     const [input, output] = asClientStream({}, service.procedures.echo);
 
     input.push({ msg: 'abc', throwResult: false, throwError: false });
@@ -124,7 +124,7 @@ describe('server-side test', () => {
   });
 
   test('subscriptions', async () => {
-    const service = SubscribableServiceSchema.instantiate();
+    const service = SubscribableServiceSchema.instantiate({});
     const state = { count: new Observable(0) };
     const add = asClientRpc(state, service.procedures.add);
     const subscribe = asClientSubscription(state, service.procedures.value);
@@ -144,7 +144,7 @@ describe('server-side test', () => {
   });
 
   test('uploads', async () => {
-    const service = UploadableServiceSchema.instantiate();
+    const service = UploadableServiceSchema.instantiate({});
     const [input, result] = asClientUpload({}, service.procedures.addMultiple);
 
     input.push({ n: 1 });
@@ -154,7 +154,7 @@ describe('server-side test', () => {
   });
 
   test('uploads with initialization', async () => {
-    const service = UploadableServiceSchema.instantiate();
+    const service = UploadableServiceSchema.instantiate({});
     const [input, result] = asClientUpload(
       {},
       service.procedures.addMultipleWithPrefix,

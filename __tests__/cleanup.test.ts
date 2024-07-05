@@ -20,7 +20,6 @@ import {
 } from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
 import { TestSetupHelpers } from './fixtures/transports';
-import { coloredStringLogger } from '../logging';
 
 describe.each(testMatrix())(
   'procedures should clean up after themselves ($transport.name transport, $codec.name codec)',
