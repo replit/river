@@ -29,9 +29,9 @@ export abstract class Connection {
     return metadata;
   }
 
-  _dataListeners = new Set<(msg: Uint8Array) => void>();
-  _closeListeners = new Set<() => void>();
-  _errorListeners = new Set<(err: Error) => void>();
+  private _dataListeners = new Set<(msg: Uint8Array) => void>();
+  private _closeListeners = new Set<() => void>();
+  private _errorListeners = new Set<(err: Error) => void>();
 
   get dataListeners() {
     return [...this._dataListeners];

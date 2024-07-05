@@ -16,7 +16,7 @@ import { SessionConnectedListeners } from './SessionConnected';
 import { SessionConnectingListeners } from './SessionConnecting';
 import { SessionNoConnectionListeners } from './SessionNoConnection';
 import { SessionStateGraph } from './transitions';
-import { SessionPendingIdentification } from './SessionPendingIdentification';
+import { SessionWaitingForHandshake } from './SessionWaitingForHandshake';
 import { Connection } from '../connection';
 
 function persistedSessionState<ConnType extends Connection>(
@@ -168,10 +168,10 @@ async function createSessionConnected() {
   return { session, ...listeners };
 }
 
-function createSessionPendingIdentification() {
+function createSessionWaitingForHandshake() {
   const conn = new MockConnection();
   const listeners = createSessionHandshakingListeners();
-  const session = SessionStateGraph.entrypoints.PendingIdentification(
+  const session = SessionStateGraph.entrypoints.WaitingForHandshake(
     'from',
     conn,
     listeners,
@@ -204,8 +204,8 @@ describe('session state machine', () => {
     });
 
     test('pending identification', async () => {
-      const { session } = createSessionPendingIdentification();
-      expect(session.state).toBe(SessionState.PendingIdentification);
+      const { session } = createSessionWaitingForHandshake();
+      expect(session.state).toBe(SessionState.WaitingForHandshake);
     });
   });
 
@@ -326,10 +326,10 @@ describe('session state machine', () => {
     });
 
     test('pending (no existing session) -> connected', async () => {
-      const sessionHandle = createSessionPendingIdentification();
+      const sessionHandle = createSessionWaitingForHandshake();
       let session:
         | Session<MockConnection>
-        | SessionPendingIdentification<MockConnection> = sessionHandle.session;
+        | SessionWaitingForHandshake<MockConnection> = sessionHandle.session;
 
       const oldListeners = {
         onHandshake: [...session.conn.dataListeners],
@@ -339,7 +339,7 @@ describe('session state machine', () => {
 
       const onHandshakeTimeout = sessionHandle.onHandshakeTimeout;
       const listeners = createSessionConnectedListeners();
-      session = SessionStateGraph.transition.PendingIdentificationToConnected(
+      session = SessionStateGraph.transition.WaitingForHandshakeToConnected(
         session,
         undefined,
         'clientSessionId',
@@ -386,13 +386,13 @@ describe('session state machine', () => {
       expect(oldSession.seq).toBe(2);
       expect(oldSession.ack).toBe(0);
 
-      const sessionHandle = createSessionPendingIdentification();
+      const sessionHandle = createSessionWaitingForHandshake();
       let session:
         | Session<MockConnection>
-        | SessionPendingIdentification<MockConnection> = sessionHandle.session;
+        | SessionWaitingForHandshake<MockConnection> = sessionHandle.session;
 
       const listeners = createSessionConnectedListeners();
-      session = SessionStateGraph.transition.PendingIdentificationToConnected(
+      session = SessionStateGraph.transition.WaitingForHandshakeToConnected(
         session,
         oldSession,
         'clientSessionId',
@@ -753,12 +753,12 @@ describe('session state machine', () => {
     });
 
     test('pending -> connected: stale handle', async () => {
-      const sessionHandle = createSessionPendingIdentification();
+      const sessionHandle = createSessionWaitingForHandshake();
       const session:
         | Session<MockConnection>
-        | SessionPendingIdentification<MockConnection> = sessionHandle.session;
+        | SessionWaitingForHandshake<MockConnection> = sessionHandle.session;
       const listeners = createSessionConnectedListeners();
-      SessionStateGraph.transition.PendingIdentificationToConnected(
+      SessionStateGraph.transition.WaitingForHandshakeToConnected(
         session,
         undefined,
         'clientSessionId',
@@ -868,8 +868,8 @@ describe('session state machine', () => {
     });
 
     test('pending identification', async () => {
-      const sessionHandle = createSessionPendingIdentification();
-      const session: SessionPendingIdentification<MockConnection> =
+      const sessionHandle = createSessionWaitingForHandshake();
+      const session: SessionWaitingForHandshake<MockConnection> =
         sessionHandle.session;
 
       session.close();
@@ -1054,15 +1054,15 @@ describe('session state machine', () => {
     });
 
     test('pending identification event listeners: connectionErrored', async () => {
-      const sessionHandle = createSessionPendingIdentification();
+      const sessionHandle = createSessionWaitingForHandshake();
       const session:
         | Session<MockConnection>
-        | SessionPendingIdentification<MockConnection> = sessionHandle.session;
+        | SessionWaitingForHandshake<MockConnection> = sessionHandle.session;
 
       const conn = session.conn;
       const { onHandshake, onConnectionClosed, onConnectionErrored } =
         sessionHandle;
-      expect(session.state).toBe(SessionState.PendingIdentification);
+      expect(session.state).toBe(SessionState.WaitingForHandshake);
       expect(onHandshake).not.toHaveBeenCalled();
       expect(onConnectionClosed).not.toHaveBeenCalled();
       expect(onConnectionErrored).not.toHaveBeenCalled();
@@ -1079,19 +1079,19 @@ describe('session state machine', () => {
       });
 
       // should not have transitioned to the next state
-      expect(session.state).toBe(SessionState.PendingIdentification);
+      expect(session.state).toBe(SessionState.WaitingForHandshake);
     });
 
     test('pending identification event listeners: connectionClosed', async () => {
-      const sessionHandle = createSessionPendingIdentification();
+      const sessionHandle = createSessionWaitingForHandshake();
       const session:
         | Session<MockConnection>
-        | SessionPendingIdentification<MockConnection> = sessionHandle.session;
+        | SessionWaitingForHandshake<MockConnection> = sessionHandle.session;
 
       const conn = session.conn;
       const { onHandshake, onConnectionClosed, onConnectionErrored } =
         sessionHandle;
-      expect(session.state).toBe(SessionState.PendingIdentification);
+      expect(session.state).toBe(SessionState.WaitingForHandshake);
       expect(onHandshake).not.toHaveBeenCalled();
       expect(onConnectionClosed).not.toHaveBeenCalled();
       expect(onConnectionErrored).not.toHaveBeenCalled();
@@ -1105,18 +1105,18 @@ describe('session state machine', () => {
       });
 
       // should not have transitioned to the next state
-      expect(session.state).toBe(SessionState.PendingIdentification);
+      expect(session.state).toBe(SessionState.WaitingForHandshake);
     });
 
     test('pending identification event listeners: onHandshakeData', async () => {
-      const sessionHandle = createSessionPendingIdentification();
+      const sessionHandle = createSessionWaitingForHandshake();
       const session:
         | Session<MockConnection>
-        | SessionPendingIdentification<MockConnection> = sessionHandle.session;
+        | SessionWaitingForHandshake<MockConnection> = sessionHandle.session;
 
       const { onHandshake, onConnectionClosed, onConnectionErrored } =
         sessionHandle;
-      expect(session.state).toBe(SessionState.PendingIdentification);
+      expect(session.state).toBe(SessionState.WaitingForHandshake);
       expect(onHandshake).not.toHaveBeenCalled();
       expect(onConnectionClosed).not.toHaveBeenCalled();
       expect(onConnectionErrored).not.toHaveBeenCalled();
@@ -1141,14 +1141,14 @@ describe('session state machine', () => {
       });
 
       // should not have transitioned to the next state
-      expect(session.state).toBe(SessionState.PendingIdentification);
+      expect(session.state).toBe(SessionState.WaitingForHandshake);
     });
 
     test('pending identification event listeners: handshakeTimeout', async () => {
-      const sessionHandle = createSessionPendingIdentification();
+      const sessionHandle = createSessionWaitingForHandshake();
       const session:
         | Session<MockConnection>
-        | SessionPendingIdentification<MockConnection> = sessionHandle.session;
+        | SessionWaitingForHandshake<MockConnection> = sessionHandle.session;
 
       const {
         onHandshake,
@@ -1156,7 +1156,7 @@ describe('session state machine', () => {
         onConnectionErrored,
         onHandshakeTimeout,
       } = sessionHandle;
-      expect(session.state).toBe(SessionState.PendingIdentification);
+      expect(session.state).toBe(SessionState.WaitingForHandshake);
       expect(onHandshake).not.toHaveBeenCalled();
       expect(onConnectionClosed).not.toHaveBeenCalled();
       expect(onConnectionErrored).not.toHaveBeenCalled();

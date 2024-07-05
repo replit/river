@@ -21,7 +21,7 @@ export const enum SessionState {
   Connecting = 'Connecting',
   Handshaking = 'Handshaking',
   Connected = 'Connected',
-  PendingIdentification = 'PendingIdentification',
+  WaitingForHandshake = 'WaitingForHandshake',
 }
 
 export type Session<ConnType extends Connection> =

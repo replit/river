@@ -21,7 +21,7 @@ import { Value } from '@sinclair/typebox/value';
 import { ProtocolError } from './events';
 import { Connection } from './connection';
 import { MessageMetadata } from '../logging';
-import { SessionPendingIdentification } from './sessionStateMachine/SessionPendingIdentification';
+import { SessionWaitingForHandshake } from './sessionStateMachine/SessionWaitingForHandshake';
 import { Session, SessionState } from './sessionStateMachine/common';
 import { SessionStateGraph } from './sessionStateMachine/transitions';
 
@@ -42,7 +42,7 @@ export abstract class ServerTransport<
    * A map of session handshake data for each session.
    */
   sessionHandshakeMetadata = new Map<TransportClientId, ParsedMetadata>();
-  pendingSessions = new Set<SessionPendingIdentification<ConnType>>();
+  pendingSessions = new Set<SessionWaitingForHandshake<ConnType>>();
 
   constructor(
     clientId: TransportClientId,
@@ -64,7 +64,7 @@ export abstract class ServerTransport<
   }
 
   protected deletePendingSession(
-    pendingSession: SessionPendingIdentification<ConnType>,
+    pendingSession: SessionWaitingForHandshake<ConnType>,
   ) {
     pendingSession.close();
     // we don't dispatch a session disconnect event
@@ -87,7 +87,7 @@ export abstract class ServerTransport<
     });
 
     let receivedHandshake = false;
-    const pendingSession = SessionStateGraph.entrypoints.PendingIdentification(
+    const pendingSession = SessionStateGraph.entrypoints.WaitingForHandshake(
       this.clientId,
       conn,
       {
@@ -154,7 +154,7 @@ export abstract class ServerTransport<
   }
 
   private rejectHandshakeRequest(
-    session: SessionPendingIdentification<ConnType>,
+    session: SessionWaitingForHandshake<ConnType>,
     to: TransportClientId,
     reason: string,
     code: Static<typeof HandshakeErrorResponseCodes>,
@@ -184,7 +184,7 @@ export abstract class ServerTransport<
   }
 
   protected async onHandshakeRequest(
-    session: SessionPendingIdentification<ConnType>,
+    session: SessionWaitingForHandshake<ConnType>,
     msg: OpaqueTransportMessage,
   ) {
     // invariant: msg is a handshake request
@@ -243,7 +243,7 @@ export abstract class ServerTransport<
     // 1. new session
     //    we dont have a session and the client is requesting a new one
     //    we can create the session as normal
-    // 2. cliest is reconnecting to an existing session but we don't have it
+    // 2. client is reconnecting to an existing session but we don't have it
     //    reject this handshake, there's nothing we can do to salvage it
     // 3. transparent reconnect (old session exists and is the same as the client wants)
     //    assign to old session
@@ -389,7 +389,7 @@ export abstract class ServerTransport<
 
     // transition
     const connectedSession =
-      SessionStateGraph.transition.PendingIdentificationToConnected(
+      SessionStateGraph.transition.WaitingForHandshakeToConnected(
         session,
         // by this point oldSession is either no connection or we dont have an old session
         oldSession,
@@ -427,7 +427,7 @@ export abstract class ServerTransport<
   }
 
   private async validateHandshakeMetadata(
-    handshakingSession: SessionPendingIdentification<ConnType>,
+    handshakingSession: SessionWaitingForHandshake<ConnType>,
     existingSession: Session<ConnType> | undefined,
     rawMetadata: Static<
       typeof ControlMessageHandshakeRequestSchema

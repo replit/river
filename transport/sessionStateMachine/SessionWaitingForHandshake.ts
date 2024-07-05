@@ -8,13 +8,13 @@ import { CommonSession, SessionState } from './common';
  * Server-side session that has a connection but is waiting for the client to identify itself.
  *
  * Valid transitions:
- * - PendingIdentification -> NoConnection (on close)
- * - PendingIdentification -> Connected (on handshake)
+ * - WaitingForHandshake -> NoConnection (on close)
+ * - WaitingForHandshake -> Connected (on handshake)
  */
-export class SessionPendingIdentification<
+export class SessionWaitingForHandshake<
   ConnType extends Connection,
 > extends CommonSession {
-  readonly state = SessionState.PendingIdentification as const;
+  readonly state = SessionState.WaitingForHandshake as const;
   conn: ConnType;
   listeners: SessionHandshakingListeners;
 

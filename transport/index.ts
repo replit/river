@@ -14,7 +14,7 @@ export {
   type SessionConnecting,
   type SessionHandshaking,
   type SessionConnected,
-  type SessionPendingIdentification,
+  type SessionWaitingForHandshake,
 } from './sessionStateMachine';
 export { Connection } from './connection';
 export {

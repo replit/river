@@ -9,7 +9,7 @@ import {
 } from './SessionNoConnection';
 import { IdentifiedSession, SessionOptions } from './common';
 import { PropagationContext, createSessionTelemetryInfo } from '../../tracing';
-import { SessionPendingIdentification } from './SessionPendingIdentification';
+import { SessionWaitingForHandshake } from './SessionWaitingForHandshake';
 import {
   SessionHandshaking,
   SessionHandshakingListeners,
@@ -42,7 +42,7 @@ function inheritSharedSession(
  * Session state machine:
  * 1. SessionNoConnection is the client entrypoint as
  *    we know who the other side is already, we just need to connect
- * 5. SessionPendingIdentification is the server entrypoint
+ * 5. SessionWaitingForHandshake is the server entrypoint
  *    as we have a connection but don't know who the other side is yet
  *
  *                           1. SessionNoConnection         ◄──┐
@@ -53,7 +53,7 @@ function inheritSharedSession(
  *                           ▼                                 │
  *                           3. SessionHandshaking             │
  *                           │  handshake success       ┌──────┤ connection drop
- * 5. PendingIdentification  │  handshake failure  ─────┤      │
+ * 5. WaitingForHandshake    │  handshake failure  ─────┤      │
  * │  handshake success      ▼                          │      │ connection drop
  * ├───────────────────────► 4. SessionConnected        │      │ heartbeat misses
  * │                         │  invalid message  ───────┼──────┘
@@ -94,14 +94,14 @@ export const SessionStateGraph = {
 
       return session;
     },
-    PendingIdentification<ConnType extends Connection>(
+    WaitingForHandshake<ConnType extends Connection>(
       from: TransportClientId,
       conn: ConnType,
       listeners: SessionHandshakingListeners,
       options: SessionOptions,
       log?: Logger,
-    ): SessionPendingIdentification<ConnType> {
-      const session = new SessionPendingIdentification(
+    ): SessionWaitingForHandshake<ConnType> {
+      const session = new SessionWaitingForHandshake(
         conn,
         listeners,
         from,
@@ -109,7 +109,7 @@ export const SessionStateGraph = {
         log,
       );
 
-      session.log?.info(`session created in PendingIdentification state`, {
+      session.log?.info(`session created in WaitingForHandshake state`, {
         ...session.loggingMetadata,
         tags: ['state-transition'],
       });
@@ -179,8 +179,8 @@ export const SessionStateGraph = {
 
       return session;
     },
-    PendingIdentificationToConnected<ConnType extends Connection>(
-      pendingSession: SessionPendingIdentification<ConnType>,
+    WaitingForHandshakeToConnected<ConnType extends Connection>(
+      pendingSession: SessionWaitingForHandshake<ConnType>,
       oldSession: SessionNoConnection | undefined,
       sessionId: string,
       to: TransportClientId,
@@ -211,7 +211,7 @@ export const SessionStateGraph = {
 
       const session = new SessionConnected(conn, listeners, ...carriedState);
       session.log?.info(
-        `session ${session.id} transition from PendingIdentification to Connected`,
+        `session ${session.id} transition from WaitingForHandshake to Connected`,
         {
           ...session.loggingMetadata,
           tags: ['state-transition'],
