@@ -18,15 +18,13 @@ import { coerceErrorString } from '../util/stringify';
 import { ProtocolError } from './events';
 import { Value } from '@sinclair/typebox/value';
 import tracer, { getPropagationContext } from '../tracing';
-import {
-  SessionConnected,
-  SessionConnecting,
-  SessionHandshaking,
-  SessionState,
-  SessionStateMachine,
-} from './sessionStateMachine';
 import { Connection } from './connection';
 import { MessageMetadata } from '../logging';
+import { SessionConnecting } from './sessionStateMachine/SessionConnecting';
+import { SessionHandshaking } from './sessionStateMachine/SessionHandshaking';
+import { SessionConnected } from './sessionStateMachine/SessionConnected';
+import { SessionStateMachine } from './sessionStateMachine/transitions';
+import { SessionState } from './sessionStateMachine/common';
 
 export abstract class ClientTransport<
   ConnType extends Connection,

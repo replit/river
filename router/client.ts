@@ -24,8 +24,9 @@ import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
 import { createProcTelemetryInfo, getPropagationContext } from '../tracing';
 import { ClientHandshakeOptions } from './handshake';
-import { ClientTransport, Connection } from '../transport';
 import { generateId } from '../transport/id';
+import { Connection } from '../transport/connection';
+import { ClientTransport } from '../transport/client';
 
 // helper to make next, yield, and return all the same type
 export type AsyncIter<T> = AsyncGenerator<T, T>;

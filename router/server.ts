@@ -1,5 +1,4 @@
 import { Static } from '@sinclair/typebox';
-import { Connection, ServerTransport } from '../transport';
 import { AnyProcedure, PayloadType } from './procedures';
 import {
   AnyService,
@@ -36,6 +35,8 @@ import { coerceErrorString } from '../util/stringify';
 import { Span, SpanStatusCode } from '@opentelemetry/api';
 import { createHandlerSpan } from '../tracing';
 import { ServerHandshakeOptions } from './handshake';
+import { Connection } from '../transport/connection';
+import { ServerTransport } from '../transport/server';
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.

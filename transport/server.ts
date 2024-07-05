@@ -20,13 +20,10 @@ import { Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { ProtocolError } from './events';
 import { Connection } from './connection';
-import {
-  Session,
-  SessionPendingIdentification,
-  SessionState,
-  SessionStateMachine,
-} from './sessionStateMachine';
 import { MessageMetadata } from '../logging';
+import { SessionPendingIdentification } from './sessionStateMachine/SessionPendingIdentification';
+import { Session, SessionState } from './sessionStateMachine/common';
+import { SessionStateMachine } from './sessionStateMachine/transitions';
 
 export abstract class ServerTransport<
   ConnType extends Connection,
