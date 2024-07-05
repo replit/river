@@ -368,14 +368,13 @@ type HandshakeResponse = {
     | {
         ok: false;
         reason: string;
-        code:
-          // retriable
-          | 'SESSION_STATE_MISMATCH'
+        code: // retriable
+        | 'SESSION_STATE_MISMATCH'
           // fatal
           | 'MALFORMED_HANDSHAKE_META'
           | 'MALFORMED_HANDSHAKE'
           | 'PROTOCOL_VERSION_MISMATCH'
-          | 'REJECTED_BY_CUSTOM_HANDLER'
+          | 'REJECTED_BY_CUSTOM_HANDLER';
       };
 };
 ```
