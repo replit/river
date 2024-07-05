@@ -134,13 +134,10 @@ describe.each(testMatrix())(
       });
     });
 
-    test.only('subscription', async () => {
+    test('subscription', async () => {
       const client1Transport = getClientTransport('client1');
       const client2Transport = getClientTransport('client2');
       const serverTransport = getServerTransport();
-
-      client1Transport.bindLogger(coloredStringLogger);
-      serverTransport.bindLogger(coloredStringLogger);
 
       const services = {
         subscribable: SubscribableServiceSchema,

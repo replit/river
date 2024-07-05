@@ -192,12 +192,12 @@ export abstract class IdentifiedSession extends CommonSession {
   readonly to: TransportClientId;
 
   /**
-   * Number of messages we've sent along this session (excluding handshake and acks)
+   * Index of the message we will send next (excluding handshake)
    */
   seq: number;
 
   /**
-   * Number of unique messages we've received this session (excluding handshake and acks)
+   * Number of unique messages we've received this session (excluding handshake)
    */
   ack: number;
   sendBuffer: Array<OpaqueTransportMessage>;

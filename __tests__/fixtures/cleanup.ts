@@ -124,15 +124,26 @@ export async function testFinishesCleanly({
     ...(clientTransports ?? []),
   ];
 
-  // wait for one round of heartbeats to propagate
-  await advanceFakeTimersByHeartbeat();
-
   for (const t of allTransports) {
     t.log?.info('*** end of test invariant checks ***', {
       clientId: t.clientId,
     });
+  }
 
+  // wait for one round of heartbeats to propagate
+  await advanceFakeTimersByHeartbeat();
+
+  // make sure clients have sent everything
+  for (const t of clientTransports ?? []) {
     await ensureTransportBuffersAreEventuallyEmpty(t);
+  }
+
+  // wait for one round of heartbeats to propagate
+  await advanceFakeTimersByHeartbeat();
+
+  // make sure servers finally received everything
+  if (serverTransport) {
+    await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
   }
 
   if (server) {
