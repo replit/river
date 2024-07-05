@@ -570,6 +570,8 @@ describe.each(testMatrix())(
     test('reconnecting with grace period of 0 should result in hard reconnect', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
+      clientTransport.connect(serverTransport.clientId);
+
       addPostTestCleanup(async () => {
         await cleanupTransports([clientTransport, serverTransport]);
       });
@@ -657,6 +659,7 @@ describe.each(testMatrix())(
         schema,
         construct: get,
       });
+      clientTransport.connect(serverTransport.clientId);
 
       const protocolError = vi.fn();
       clientTransport.addEventListener('protocolError', protocolError);
