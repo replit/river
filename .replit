@@ -12,6 +12,10 @@ channel = "stable-23_05"
 localPort = 3000
 externalPort = 80
 
+[[ports]]
+localPort = 24678
+externalPort = 3000
+
 [languages.eslint]
 pattern = "**{*.ts,*.js,*.tsx,*.jsx}"
 [languages.eslint.languageServer]

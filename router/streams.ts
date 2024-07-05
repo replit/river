@@ -109,6 +109,12 @@ export interface WriteStream<T> {
    * `isClosed` returns true if the stream was closed by the writer.
    */
   isClosed(): boolean;
+  /**
+   * `onClose` registers a callback that will be called when the stream
+   * is closed. Returns a function that can be used to unregister the
+   * listener.
+   */
+  onClose(cb: () => void): () => void;
 }
 
 /**
@@ -326,6 +332,9 @@ export class ReadStreamImpl<T, E extends Static<BaseErrorSchemaType>>
     this.resolveNextPromise?.();
     this.onCloseListeners.forEach((cb) => cb());
     this.onCloseListeners.clear();
+
+    // TODO maybe log a warn if after a certain amount of time
+    // the queue was not fully consumed
   }
 
   /**
@@ -349,26 +358,26 @@ export class WriteStreamImpl<T> implements WriteStream<T> {
    */
   private writeCb: (value: T) => void;
   /**
-   * Passed via constructor to pass on close requests
-   */
-  private closeCb: () => void;
-  /**
    * Whether the stream is closed.
    */
   private closed = false;
+  /**
+   * A list of listeners that will be called when the stream is closed.
+   */
+  private onCloseListeners: Set<() => void>;
   /**
    * Whether the reader has requested to close the stream.
    */
   private closeRequested = false;
   /**
-   * A list of listeners that will be called when the stream is closed.
+   * A list of listeners that will be called when a close request is triggered.
    */
-  private onCloseListeners: Set<() => void>;
+  private onCloseRequestListeners: Set<() => void>;
 
-  constructor(writeCb: (value: T) => void, closeCb: () => void) {
+  constructor(writeCb: (value: T) => void) {
     this.writeCb = writeCb;
-    this.closeCb = closeCb;
     this.onCloseListeners = new Set();
+    this.onCloseRequestListeners = new Set();
   }
 
   public write(value: T): undefined {
@@ -379,13 +388,34 @@ export class WriteStreamImpl<T> implements WriteStream<T> {
     this.writeCb(value);
   }
 
+  public isClosed(): boolean {
+    return this.closed;
+  }
+
+  onClose(cb: () => void): () => void {
+    if (this.isClosed()) {
+      cb();
+
+      return () => undefined;
+    }
+
+    this.onCloseListeners.add(cb);
+
+    return () => this.onCloseListeners.delete(cb);
+  }
+
   public close(): undefined {
     if (this.isClosed()) {
       return;
     }
 
     this.closed = true;
-    this.closeCb();
+    this.onCloseListeners.forEach((cb) => cb());
+
+    // cleanup
+    this.onCloseListeners.clear();
+    this.onCloseRequestListeners.clear();
+    this.writeCb = () => undefined;
   }
 
   public isCloseRequested(): boolean {
@@ -397,13 +427,15 @@ export class WriteStreamImpl<T> implements WriteStream<T> {
       throw new Error('Stream is already closed');
     }
 
-    this.onCloseListeners.add(cb);
+    if (this.isCloseRequested()) {
+      cb();
 
-    return () => this.onCloseListeners.delete(cb);
-  }
+      return () => undefined;
+    }
 
-  public isClosed(): boolean {
-    return this.closed;
+    this.onCloseRequestListeners.add(cb);
+
+    return () => this.onCloseRequestListeners.delete(cb);
   }
 
   /**
@@ -421,7 +453,7 @@ export class WriteStreamImpl<T> implements WriteStream<T> {
     }
 
     this.closeRequested = true;
-    this.onCloseListeners.forEach((cb) => cb());
-    this.onCloseListeners.clear();
+    this.onCloseRequestListeners.forEach((cb) => cb());
+    this.onCloseRequestListeners.clear();
   }
 }

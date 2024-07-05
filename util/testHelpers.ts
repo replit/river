@@ -236,14 +236,14 @@ function createOutputPipe<
     (v) => {
       reader.pushValue(v);
     },
-    () => {
-      // Make it async to simulate request going over the wire
-      // using promises so that we don't get affected by fake timers.
-      void Promise.resolve().then(() => {
-        reader.triggerClose();
-      });
-    },
   );
+  writer.onClose(() => {
+    // Make it async to simulate request going over the wire
+    // using promises so that we don't get affected by fake timers.
+    void Promise.resolve().then(() => {
+      reader.triggerClose();
+    });
+  });
 
   return { reader, writer };
 }
@@ -262,18 +262,16 @@ function createInputPipe<Input extends PayloadType>(): {
       writer.triggerCloseRequest();
     });
   });
-  const writer = new WriteStreamImpl<Static<Input>>(
-    (v) => {
-      reader.pushValue(Ok(v));
-    },
-    () => {
-      // Make it async to simulate request going over the wire
-      // using promises so that we don't get affected by fake timers.
-      void Promise.resolve().then(() => {
-        reader.triggerClose();
-      });
-    },
-  );
+  const writer = new WriteStreamImpl<Static<Input>>((v) => {
+    reader.pushValue(Ok(v));
+  });
+  writer.onClose(() => {
+    // Make it async to simulate request going over the wire
+    // using promises so that we don't get affected by fake timers.
+    void Promise.resolve().then(() => {
+      reader.triggerClose();
+    });
+  });
 
   return { reader, writer };
 }

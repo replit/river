@@ -393,28 +393,24 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       procedure.type === 'rpc' || procedure.type === 'upload';
     const outputWriter = new WriteStreamImpl<
       Result<Static<PayloadType>, Static<ProcedureErrorSchemaType>>
-    >(
-      (response) => {
-        this.transport.send(from, {
-          streamId,
-          controlFlags: procClosesWithResponse
-            ? ControlFlags.StreamClosedBit
-            : 0,
-          payload: response,
-        });
-      },
-      () => {
-        if (!procClosesWithResponse && cleanClose) {
-          // we ended, send a close bit back to the client
-          // also, if the client has disconnected, we don't need to send a close
-          this.transport.sendCloseControl(from, streamId);
-        }
+    >((response) => {
+      this.transport.send(from, {
+        streamId,
+        controlFlags: procClosesWithResponse ? ControlFlags.StreamClosedBit : 0,
+        payload: response,
+      });
+    });
+    outputWriter.onClose(() => {
+      if (!procClosesWithResponse && cleanClose) {
+        // we ended, send a close bit back to the client
+        // also, if the client has disconnected, we don't need to send a close
+        this.transport.sendCloseControl(from, streamId);
+      }
 
-        if (inputReader.isClosed()) {
-          cleanup();
-        }
-      },
-    );
+      if (inputReader.isClosed()) {
+        cleanup();
+      }
+    });
 
     const onHandlerError = (err: unknown, span: Span) => {
       const errorMsg = coerceErrorString(err);

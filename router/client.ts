@@ -294,27 +294,25 @@ function handleProc(
     streamId,
   );
   let cleanClose = true;
-  const inputWriter = new WriteStreamImpl<Static<PayloadType>>(
-    (rawIn) => {
-      transport.send(serverId, {
-        streamId,
-        payload: rawIn,
-        controlFlags: 0,
-        tracing: getPropagationContext(ctx),
-      });
-    },
-    () => {
-      span.addEvent('inputWriter closed');
+  const inputWriter = new WriteStreamImpl<Static<PayloadType>>((rawIn) => {
+    transport.send(serverId, {
+      streamId,
+      payload: rawIn,
+      controlFlags: 0,
+      tracing: getPropagationContext(ctx),
+    });
+  });
+  inputWriter.onClose(() => {
+    span.addEvent('inputWriter closed');
 
-      if (!procClosesWithInit && cleanClose) {
-        transport.sendCloseControl(serverId, streamId);
-      }
+    if (!procClosesWithInit && cleanClose) {
+      transport.sendCloseControl(serverId, streamId);
+    }
 
-      if (outputReader.isClosed()) {
-        cleanup();
-      }
-    },
-  );
+    if (outputReader.isClosed()) {
+      cleanup();
+    }
+  });
 
   const outputReader = new ReadStreamImpl<
     Static<PayloadType>,
