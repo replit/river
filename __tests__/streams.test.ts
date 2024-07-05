@@ -361,9 +361,9 @@ describe('ReadStream unit', () => {
 });
 
 describe('WriteStream unit', () => {
-  it('should write', async () => {
+  it('should write', () => {
     const writeCb = vi.fn();
-    const stream = new WriteStreamImpl<number>(writeCb, noopCb);
+    const stream = new WriteStreamImpl<number>(writeCb);
     stream.write(1);
     stream.write(2);
 
@@ -371,45 +371,79 @@ describe('WriteStream unit', () => {
     expect(writeCb).toHaveBeenNthCalledWith(2, 2);
   });
 
-  it('should close the stream', async () => {
-    const closeCb = vi.fn();
-    const stream = new WriteStreamImpl<number>(noopCb, closeCb);
+  it('should close the stream', () => {
+    const stream = new WriteStreamImpl<number>(noopCb);
 
     expect(stream.isClosed()).toBeFalsy();
 
     stream.close();
-    expect(closeCb).toHaveBeenCalled();
     expect(stream.isClosed()).toBeTruthy();
+    expect(() => stream.close()).not.toThrow();
   });
 
-  it('should throw when writing after close', async () => {
-    const stream = new WriteStreamImpl<number>(noopCb, noopCb);
+  it('should notify listeners when closing the stream', () => {
+    const stream = new WriteStreamImpl<number>(noopCb);
+
+    const cb1 = vi.fn();
+    stream.onClose(cb1);
+    const cb2 = vi.fn();
+    stream.onClose(cb2);
+
+    stream.close();
+
+    expect(cb1).toHaveBeenCalled();
+    expect(cb2).toHaveBeenCalled();
+    expect(cb1.mock.invocationCallOrder[0]).toBeLessThan(
+      cb2.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('should throw when writing after close', () => {
+    const stream = new WriteStreamImpl<number>(noopCb);
     stream.close();
     expect(() => stream.write(1)).toThrowError(Error);
   });
 
-  it('should handle close requests', async () => {
-    const stream = new WriteStreamImpl<number>(noopCb, noopCb);
-
-    expect(stream.isCloseRequested()).toBeFalsy();
-
-    const closeRequestP = new Promise<void>((resolve) =>
-      stream.onCloseRequest(resolve),
-    );
-    expect(
-      await Promise.race([
-        new Promise((resolve) => setTimeout(() => resolve('timeout'), 10)),
-        closeRequestP,
-      ]),
-    ).toEqual('timeout');
+  it('triggering a close request multiple times throws', () => {
+    // since triggering close is an internal API meant for requests coming from the client
+    // we don't expect it to be called multiple times
+    const stream = new WriteStreamImpl<number>(noopCb);
 
     stream.triggerCloseRequest();
+    expect(() => stream.triggerCloseRequest()).toThrowError(Error);
+  });
+
+  it('should trigger a close requests', () => {
+    const stream = new WriteStreamImpl<number>(noopCb);
+
+    expect(stream.isCloseRequested()).toBeFalsy();
+    stream.triggerCloseRequest();
     expect(stream.isCloseRequested()).toBeTruthy();
-    expect(
-      await Promise.race([
-        new Promise((resolve) => setTimeout(() => resolve('timeout'), 10)),
-        closeRequestP,
-      ]),
-    ).toEqual(undefined);
+  });
+
+  it('should notify listeners when triggering a close request', () => {
+    const stream = new WriteStreamImpl<number>(noopCb);
+
+    const cb1 = vi.fn();
+    stream.onCloseRequest(cb1);
+    const cb2 = vi.fn();
+    stream.onCloseRequest(cb2);
+
+    stream.triggerCloseRequest();
+
+    expect(cb1).toHaveBeenCalled();
+    expect(cb2).toHaveBeenCalled();
+    expect(cb1.mock.invocationCallOrder[0]).toBeLessThan(
+      cb2.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('triggering a close request multiple times throws', () => {
+    // since triggering close is an internal API meant for requests coming from the client
+    // we don't expect it to be called multiple times
+    const stream = new WriteStreamImpl<number>(noopCb);
+
+    stream.triggerCloseRequest();
+    expect(() => stream.triggerCloseRequest()).toThrowError(Error);
   });
 });
