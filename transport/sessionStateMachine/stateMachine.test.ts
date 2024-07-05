@@ -96,6 +96,7 @@ function createSessionConnectingListeners(): SessionConnectingListeners {
 function createSessionHandshakingListeners(): SessionHandshakingListeners {
   return {
     onHandshake: vi.fn(),
+    onInvalidHandshake: vi.fn(),
     onConnectionClosed: vi.fn(),
     onConnectionErrored: vi.fn(),
     onHandshakeTimeout: vi.fn(),

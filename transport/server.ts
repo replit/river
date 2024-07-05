@@ -141,6 +141,14 @@ export abstract class ServerTransport<
             receivedHandshake = true;
             void this.onHandshakeRequest(pendingSession, msg);
           },
+          onInvalidHandshake: (reason) => {
+            this.log?.error(
+              `invalid handshake: ${reason}`,
+              pendingSession.loggingMetadata,
+            );
+            this.deletePendingSession(pendingSession);
+            this.protocolError(ProtocolError.HandshakeFailed, reason);
+          },
         },
         this.options,
         this.log,

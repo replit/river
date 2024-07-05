@@ -1,6 +1,7 @@
-import { assert, beforeEach, describe, expect, test } from 'vitest';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   closeAllConnections,
+  getTransportConnections,
   iterNext,
   numberOfConnections,
 } from '../util/testHelpers';
@@ -20,6 +21,8 @@ import { Err, UNEXPECTED_DISCONNECT } from '../router/result';
 import { testMatrix } from './fixtures/matrix';
 import { TestSetupHelpers } from './fixtures/transports';
 import { createPostTestCleanups } from './fixtures/cleanup';
+import { coloredStringLogger } from '../logging';
+import { EventMap, SessionState } from '../transport';
 
 describe.each(testMatrix())(
   'procedures should handle unexpected disconnects ($transport.name transport, $codec.name codec)',
@@ -59,6 +62,7 @@ describe.each(testMatrix())(
 
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
 
       const procPromise = client.test.add.rpc({ n: 4 });
       // end procedure
@@ -106,6 +110,7 @@ describe.each(testMatrix())(
 
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
 
       const nextResPromise = iterNext(output);
       // end procedure
@@ -129,10 +134,13 @@ describe.each(testMatrix())(
       });
     });
 
-    test('subscription', async () => {
+    test.only('subscription', async () => {
       const client1Transport = getClientTransport('client1');
       const client2Transport = getClientTransport('client2');
       const serverTransport = getServerTransport();
+
+      client1Transport.bindLogger(coloredStringLogger);
+      serverTransport.bindLogger(coloredStringLogger);
 
       const services = {
         subscribable: SubscribableServiceSchema,
@@ -189,11 +197,26 @@ describe.each(testMatrix())(
       client2Transport.reconnectOnConnectionDrop = false;
       closeAllConnections(client2Transport);
 
+      // wait for connections to reflect that
+      await waitFor(() => {
+        expect(numberOfConnections(client1Transport)).toEqual(1);
+        expect(numberOfConnections(client2Transport)).toEqual(0);
+        expect(numberOfConnections(serverTransport)).toEqual(1);
+      });
+
       // client1 who is still connected can still add values and receive updates
-      const add2Promise = client1.subscribable.add.rpc({ n: 2 });
+      const add2 = await client1.subscribable.add.rpc({ n: 2 });
+      assert(add2.ok);
+      result = await iterNext(subscription1);
+      assert(result.ok);
+      expect(result.payload).toStrictEqual({ result: 3 });
+
+      // try receiving a value from client2
       const nextResPromise = iterNext(subscription2);
 
       // after we've disconnected, hit end of grace period
+      // because this advances the global timer, we need to wait for client1 to reconnect
+      // after missing some heartbeats
       await advanceFakeTimersBySessionGrace();
 
       // we should get an error from the subscription on client2
@@ -203,24 +226,17 @@ describe.each(testMatrix())(
         }),
       );
 
-      // client1 who is still connected can still add values and receive updates
-      assert((await add2Promise).ok);
-      result = await iterNext(subscription1);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 3 });
-
       // at this point, only client1 is connected
-      await waitFor(() =>
-        expect(numberOfConnections(client1Transport)).toBe(1),
-      );
-      await waitFor(() =>
-        expect(numberOfConnections(client2Transport)).toBe(0),
-      );
-      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
+      await waitFor(() => {
+        expect(numberOfConnections(client1Transport)).toEqual(1);
+        expect(numberOfConnections(client2Transport)).toEqual(0);
+        expect(numberOfConnections(serverTransport)).toEqual(1);
+      });
 
-      // cleanup client1 (client2 is already disconnected)
+      // cleanup
       close1();
       close2();
+
       await testFinishesCleanly({
         clientTransports: [client1Transport, client2Transport],
         serverTransport,
@@ -256,6 +272,7 @@ describe.each(testMatrix())(
 
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
 
       // after we've disconnected, hit end of grace period
       await advanceFakeTimersBySessionGrace();

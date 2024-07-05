@@ -3,7 +3,6 @@ import {
   createDummyTransportMessage,
   payloadToTransportMessage,
   waitForMessage,
-  testingSessionOptions,
   getTransportConnections,
   closeAllConnections,
   numberOfConnections,
@@ -188,10 +187,7 @@ describe.each(testMatrix())(
         ).resolves.toStrictEqual(msg.payload);
 
         // wait for heartbeat interval to elapse
-        await vi.runOnlyPendingTimersAsync();
-        await vi.advanceTimersByTimeAsync(
-          testingSessionOptions.heartbeatIntervalMs * (1 + Math.random()),
-        );
+        await advanceFakeTimersByHeartbeat();
       }
 
       await testFinishesCleanly({
@@ -677,7 +673,6 @@ describe.each(testMatrix())(
 
     test('messages should not be resent when client reconnects to a different instance of the server', async () => {
       const clientTransport = testHelpers.getClientTransport('client');
-      clientTransport.bindLogger(coloredStringLogger);
       let serverTransport = testHelpers.getServerTransport();
       const clientConnStart = vi.fn();
       const clientConnHandler = (evt: EventMap['sessionTransition']) => {
@@ -876,11 +871,11 @@ describe.each(testMatrix())(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
 
+      expect(serverConnStart).toHaveBeenCalledTimes(1);
       expect(clientSessStart).toHaveBeenCalledTimes(1);
       expect(serverSessStart).toHaveBeenCalledTimes(1);
       expect(clientSessStop).toHaveBeenCalledTimes(0);
       expect(serverSessStop).toHaveBeenCalledTimes(0);
-      expect(serverConnStart).toHaveBeenCalledTimes(1);
 
       // now, let's wait until the connection is considered dead
       testHelpers.simulatePhantomDisconnect();

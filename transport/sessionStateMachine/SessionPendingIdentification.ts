@@ -40,7 +40,10 @@ export class SessionPendingIdentification<
 
   onHandshakeData = (msg: Uint8Array) => {
     const parsedMsg = this.parseMsg(msg);
-    if (parsedMsg === null) return;
+    if (parsedMsg === null) {
+      this.listeners.onInvalidHandshake('could not parse message');
+      return;
+    }
 
     this.listeners.onHandshake(parsedMsg);
   };

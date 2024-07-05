@@ -16,6 +16,7 @@ import {
   advanceFakeTimersBySessionGrace,
   cleanupTransports,
   testFinishesCleanly,
+  waitFor,
 } from '../../../__tests__/fixtures/cleanup';
 import { PartialTransportMessage } from '../../message';
 import type NodeWs from 'ws';
@@ -133,9 +134,11 @@ describe('sending and receiving across websockets works', async () => {
     await advanceFakeTimersBySessionGrace();
 
     // the connection should have been cleaned up
-    expect(numberOfConnections(serverTransport)).toBe(0);
-    expect(serverTransport.sessions.size).toBe(0);
-    expect(ws.readyState).toBe(ws.CLOSED);
+    await waitFor(() => {
+      expect(numberOfConnections(serverTransport)).toBe(0);
+      expect(serverTransport.sessions.size).toBe(0);
+      expect(ws.readyState).toBe(ws.CLOSED);
+    });
 
     await testFinishesCleanly({
       clientTransports: [],

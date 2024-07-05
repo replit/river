@@ -125,6 +125,14 @@ export abstract class ClientTransport<
         onHandshake: (msg) => {
           this.onHandshakeResponse(handshakingSession, msg);
         },
+        onInvalidHandshake: (reason) => {
+          this.log?.error(
+            `invalid handshake: ${reason}`,
+            handshakingSession.loggingMetadata,
+          );
+          this.deleteSession(session);
+          this.protocolError(ProtocolError.HandshakeFailed, reason);
+        },
         onHandshakeTimeout: () => {
           this.log?.error(
             `connection to ${handshakingSession.to} timed out during handshake`,
@@ -189,6 +197,7 @@ export abstract class ClientTransport<
       if (retriable) {
         this.tryReconnecting(session.to);
       } else {
+        this.deleteSession(session);
         this.protocolError(ProtocolError.HandshakeFailed, reason);
       }
 
@@ -230,8 +239,8 @@ export abstract class ClientTransport<
         },
         onMessage: (msg) => this.handleMsg(msg),
         onInvalidMessage: (reason) => {
-          this.protocolError(ProtocolError.MessageOrderingViolated, reason);
           this.deleteSession(connectedSession);
+          this.protocolError(ProtocolError.MessageOrderingViolated, reason);
         },
       });
 

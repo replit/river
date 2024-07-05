@@ -153,6 +153,17 @@ export abstract class Transport<ConnType extends Connection> {
    * @returns The ID of the sent message or undefined if it wasn't sent
    */
   send(to: TransportClientId, msg: PartialTransportMessage): string {
+    if (this.getStatus() === 'closed') {
+      const err = 'transport is closed, cant send';
+      this.log?.error(err, {
+        clientId: this.clientId,
+        transportMessage: msg,
+        tags: ['invariant-violation'],
+      });
+
+      throw new Error(err);
+    }
+
     let session = this.sessions.get(to);
     if (!session) {
       session = this.createUnconnectedSession(to);
@@ -234,13 +245,13 @@ export abstract class Transport<ConnType extends Connection> {
 
   protected deleteSession(session: Session<ConnType>) {
     session.log?.info(`closing session ${session.id}`, session.loggingMetadata);
-    session.close();
 
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'disconnect',
       session: session,
     });
 
+    session.close();
     this.sessions.delete(session.to);
   }
 

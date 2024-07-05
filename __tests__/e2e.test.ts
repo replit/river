@@ -574,8 +574,10 @@ describe.each(testMatrix())(
       clientTransport.reconnectOnConnectionDrop = true;
 
       // we should have no connections
-      expect(numberOfConnections(serverTransport)).toEqual(0);
-      expect(numberOfConnections(clientTransport)).toEqual(0);
+      await waitFor(() => {
+        expect(numberOfConnections(serverTransport)).toEqual(0);
+        expect(numberOfConnections(clientTransport)).toEqual(0);
+      });
 
       // client should reconnect when making another call without explicitly calling connect
       const resultPromise = client.test.add.rpc({ n: 4 });

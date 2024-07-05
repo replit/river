@@ -169,7 +169,6 @@ function dummyCtx<State>(
     to: session.to,
     from: session.from,
     streamId: generateId(),
-    session,
     metadata: {},
   };
 }

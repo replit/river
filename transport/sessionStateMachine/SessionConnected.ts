@@ -64,6 +64,13 @@ export class SessionConnected<
     this.conn.addErrorListener(listeners.onConnectionErrored);
 
     // send any buffered messages
+    if (this.sendBuffer.length > 0) {
+      this.log?.debug(
+        `sending ${this.sendBuffer.length} buffered messages`,
+        this.loggingMetadata,
+      );
+    }
+
     for (const msg of this.sendBuffer) {
       conn.send(this.options.codec.toBuffer(msg));
     }
@@ -76,7 +83,7 @@ export class SessionConnected<
     this.heartbeatHandle = setInterval(() => {
       const misses = this.heartbeatMisses;
       const missDuration = misses * this.options.heartbeatIntervalMs;
-      if (misses > this.options.heartbeatsUntilDead) {
+      if (misses >= this.options.heartbeatsUntilDead) {
         this.log?.info(
           `closing connection to ${this.to} due to inactivity (missed ${misses} heartbeats which is ${missDuration}ms)`,
           this.loggingMetadata,
@@ -84,6 +91,7 @@ export class SessionConnected<
         this.telemetry.span.addEvent('closing connection due to inactivity');
         this.conn.close();
         clearInterval(this.heartbeatHandle);
+        this.heartbeatHandle = undefined;
         return;
       }
 
@@ -167,6 +175,7 @@ export class SessionConnected<
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
     clearInterval(this.heartbeatHandle);
+    this.heartbeatHandle = undefined;
   }
 
   _handleClose(): void {

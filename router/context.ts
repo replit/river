@@ -1,4 +1,3 @@
-import { Connection, Session } from '../transport';
 import { TransportClientId } from '../transport/message';
 
 /**
@@ -53,6 +52,5 @@ export type ServiceContextWithTransportInfo<State> = ServiceContext & {
   to: TransportClientId;
   from: TransportClientId;
   streamId: string;
-  session: Session<Connection>;
   metadata: ParsedMetadata;
 };

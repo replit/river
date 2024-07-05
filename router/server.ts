@@ -13,9 +13,9 @@ import {
   OpaqueTransportMessage,
   isStreamClose,
   isStreamOpen,
-  TransportClientId,
   ControlFlags,
   closeStreamMessage,
+  PartialTransportMessage,
 } from '../transport/message';
 import {
   ServiceContext,
@@ -64,9 +64,13 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
   contextMap: Map<AnyService, ServiceContextWithState<object>>;
   // map of streamId to ProcStream
   streamMap: Map<string, ProcStream>;
-  // map of client to their open streams by streamId
-  clientStreams: Map<TransportClientId, Set<string>>;
-  disconnectedSessions: Set<TransportClientId>;
+
+  // map of sessionId to streamIds
+  sessionToStreamId: Map<string, Set<string>>;
+
+  // streams that are in the process of being cleaned up
+  // this is to prevent output handlers from sending after the stream is cleaned up
+  sessionsBeingCleanedUp = new Set<string>();
 
   private log?: Logger;
   constructor(
@@ -95,9 +99,8 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     }
 
     this.transport = transport;
-    this.disconnectedSessions = new Set();
     this.streamMap = new Map();
-    this.clientStreams = new Map();
+    this.sessionToStreamId = new Map();
     this.transport.addEventListener('message', this.onMessage);
     this.transport.addEventListener('sessionStatus', this.onSessionStatus);
     this.log = transport.log;
@@ -142,25 +145,27 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     await this.pushToStream(procStream, message, isInitMessage);
   };
 
-  // cleanup streams on session close
   onSessionStatus = async (evt: EventMap['sessionStatus']) => {
-    if (evt.status !== 'disconnect') return;
+    if (evt.status === 'connect') {
+      this.sessionToStreamId.set(evt.session.id, new Set());
+      return;
+    }
 
-    const disconnectedClientId = evt.session.to;
+    // cleanup
     this.log?.info(
-      `got session disconnect from ${disconnectedClientId}, cleaning up streams`,
+      `got session disconnect from ${evt.session.to}, cleaning up streams for session`,
       evt.session.loggingMetadata,
     );
 
-    const streamsFromThisClient = this.clientStreams.get(disconnectedClientId);
+    const streamsFromThisClient = this.sessionToStreamId.get(evt.session.id);
     if (!streamsFromThisClient) return;
 
-    this.disconnectedSessions.add(disconnectedClientId);
+    this.sessionsBeingCleanedUp.add(evt.session.id);
     await Promise.all(
       Array.from(streamsFromThisClient).map(this.cleanupStream),
     );
-    this.disconnectedSessions.delete(disconnectedClientId);
-    this.clientStreams.delete(disconnectedClientId);
+    this.sessionToStreamId.delete(evt.session.id);
+    this.sessionsBeingCleanedUp.delete(evt.session.id);
   };
 
   createNewProcStream(message: OpaqueTransportMessage) {
@@ -217,6 +222,9 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       return;
     }
 
+    const to = session.to;
+    const sessionId = session.id;
+    const sessionLoggingMetadata = session.loggingMetadata;
     const procedure = service.procedures[message.procedureName];
     const incoming: ProcStream['incoming'] = pushable({ objectMode: true });
     const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
@@ -224,13 +232,19 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       procedure.type === 'subscription' || procedure.type === 'stream';
     const disposables: Array<() => void> = [];
 
+    const wrappedSend = (payload: PartialTransportMessage) => {
+      if (!this.sessionsBeingCleanedUp.has(sessionId)) {
+        this.transport.send(to, payload);
+      }
+    };
+
     const outputHandler: Promise<unknown> =
       // sending outgoing messages back to client
       needsClose
         ? // subscription and stream case, we need to send a close bit after the response stream
           (async () => {
             for await (const response of outgoing) {
-              this.transport.send(session.to, {
+              wrappedSend({
                 streamId: message.streamId,
                 controlFlags: 0,
                 payload: response,
@@ -238,13 +252,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
             }
 
             // we ended, send a close bit back to the client
-            // also, if the client has disconnected, we don't need to send a close
-            if (!this.disconnectedSessions.has(message.from)) {
-              this.transport.send(
-                session.to,
-                closeStreamMessage(message.streamId),
-              );
-            }
+            wrappedSend(closeStreamMessage(message.streamId));
 
             // call disposables returned from handlers
             disposables.forEach((d) => d());
@@ -253,7 +261,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
           (async () => {
             const response = await outgoing.next().then((res) => res.value);
             if (response) {
-              this.transport.send(session.to, {
+              wrappedSend({
                 streamId: message.streamId,
                 controlFlags: ControlFlags.StreamClosedBit,
                 payload: response,
@@ -268,7 +276,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       const errorMsg = coerceErrorString(err);
       this.log?.error(
         `procedure ${message.serviceName}.${message.procedureName} threw an uncaught error: ${errorMsg}`,
-        session.loggingMetadata,
+        sessionLoggingMetadata,
       );
 
       span.recordException(err instanceof Error ? err : new Error(errorMsg));
@@ -281,10 +289,10 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       );
     };
 
-    const sessionMeta = this.transport.sessionHandshakeMetadata.get(session.to);
+    const sessionMeta = this.transport.sessionHandshakeMetadata.get(to);
     if (!sessionMeta) {
       this.log?.error(`session doesn't have handshake metadata`, {
-        ...session.loggingMetadata,
+        ...sessionLoggingMetadata,
         tags: ['invariant-violation'],
       });
       return;
@@ -299,7 +307,6 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
         to: message.to,
         from: message.from,
         streamId: message.streamId,
-        session,
         metadata: sessionMeta,
       };
 
@@ -424,9 +431,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
                   incoming,
                 );
 
-                if (!this.disconnectedSessions.has(message.from)) {
-                  outgoing.push(outputMessage);
-                }
+                outgoing.push(outputMessage);
               } catch (err) {
                 errorHandler(err, span);
               } finally {
@@ -445,9 +450,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
                   incoming,
                 );
 
-                if (!this.disconnectedSessions.has(message.from)) {
-                  outgoing.push(outputMessage);
-                }
+                outgoing.push(outputMessage);
               } catch (err) {
                 errorHandler(err, span);
               } finally {
@@ -465,7 +468,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
           `got request for invalid procedure type ${
             (procedure as AnyProcedure).type
           } at ${message.serviceName}.${message.procedureName}`,
-          { ...session.loggingMetadata, transportMessage: message },
+          { ...sessionLoggingMetadata, transportMessage: message },
         );
         return;
     }
@@ -482,10 +485,10 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     this.streamMap.set(message.streamId, procStream);
 
     // add this stream to ones from that client so we can clean it up in the case of a disconnect without close
-    const streamsFromThisClient =
-      this.clientStreams.get(message.from) ?? new Set();
-    streamsFromThisClient.add(message.streamId);
-    this.clientStreams.set(message.from, streamsFromThisClient);
+    const streamsForThisSession =
+      this.sessionToStreamId.get(sessionId) ?? new Set();
+    streamsForThisSession.add(message.streamId);
+    this.sessionToStreamId.set(sessionId, streamsForThisSession);
 
     return procStream;
   }
@@ -532,11 +535,11 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     if (isStreamClose(message.controlFlags)) {
       await this.cleanupStream(message.streamId);
 
-      const streamsFromThisClient = this.clientStreams.get(message.from);
+      const streamsFromThisClient = this.sessionToStreamId.get(message.from);
       if (streamsFromThisClient) {
         streamsFromThisClient.delete(message.streamId);
         if (streamsFromThisClient.size === 0) {
-          this.clientStreams.delete(message.from);
+          this.sessionToStreamId.delete(message.from);
         }
       }
     }

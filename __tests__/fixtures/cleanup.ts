@@ -21,21 +21,19 @@ const waitUntilOptions = {
 };
 
 export async function advanceFakeTimersByHeartbeat() {
-  await vi.runOnlyPendingTimersAsync();
   await vi.advanceTimersByTimeAsync(testingSessionOptions.heartbeatIntervalMs);
 }
 
 export async function advanceFakeTimersByDisconnectGrace() {
-  for (let i = 0; i < testingSessionOptions.heartbeatsUntilDead; i++) {
-    await vi.runOnlyPendingTimersAsync();
+  for (let i = 0; i < testingSessionOptions.heartbeatsUntilDead + 1; i++) {
+    await advanceFakeTimersByHeartbeat();
   }
 }
 
 export async function advanceFakeTimersBySessionGrace() {
   await advanceFakeTimersByDisconnectGrace();
-  await vi.runOnlyPendingTimersAsync();
   await vi.advanceTimersByTimeAsync(
-    testingSessionOptions.sessionDisconnectGraceMs + 1,
+    testingSessionOptions.sessionDisconnectGraceMs,
   );
 }
 
@@ -120,21 +118,20 @@ export async function testFinishesCleanly({
   server: Server<AnyServiceSchemaMap>;
 }>) {
   // pre-close invariants
+  // invariant check servers first as heartbeats are authoritative on their side
   const allTransports = [
-    ...(clientTransports ?? []),
     ...(serverTransport ? [serverTransport] : []),
+    ...(clientTransports ?? []),
   ];
+
+  // wait for one round of heartbeats to propagate
+  await advanceFakeTimersByHeartbeat();
 
   for (const t of allTransports) {
     t.log?.info('*** end of test invariant checks ***', {
       clientId: t.clientId,
     });
 
-    // wait for one round of heartbeat
-    await vi.runOnlyPendingTimersAsync();
-    await vi.advanceTimersByTimeAsync(
-      testingSessionOptions.heartbeatIntervalMs + 1,
-    );
     await ensureTransportBuffersAreEventuallyEmpty(t);
   }
 

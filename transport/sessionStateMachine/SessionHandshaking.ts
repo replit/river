@@ -6,6 +6,7 @@ export interface SessionHandshakingListeners {
   onConnectionErrored: (err: unknown) => void;
   onConnectionClosed: () => void;
   onHandshake: (msg: OpaqueTransportMessage) => void;
+  onInvalidHandshake: (reason: string) => void;
 
   // timeout related
   onHandshakeTimeout: () => void;
@@ -47,7 +48,10 @@ export class SessionHandshaking<
 
   onHandshakeData = (msg: Uint8Array) => {
     const parsedMsg = this.parseMsg(msg);
-    if (parsedMsg === null) return;
+    if (parsedMsg === null) {
+      this.listeners.onInvalidHandshake('could not parse message');
+      return;
+    }
 
     this.listeners.onHandshake(parsedMsg);
   };

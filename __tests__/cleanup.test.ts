@@ -11,6 +11,7 @@ import {
 } from './fixtures/services';
 import { createClient, createServer } from '../router';
 import {
+  advanceFakeTimersByHeartbeat,
   advanceFakeTimersBySessionGrace,
   cleanupTransports,
   createPostTestCleanups,
@@ -19,6 +20,7 @@ import {
 } from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
 import { TestSetupHelpers } from './fixtures/transports';
+import { coloredStringLogger } from '../logging';
 
 describe.each(testMatrix())(
   'procedures should clean up after themselves ($transport.name transport, $codec.name codec)',
@@ -62,9 +64,23 @@ describe.each(testMatrix())(
       expect(numberOfConnections(clientTransport)).toEqual(1);
       expect(numberOfConnections(serverTransport)).toEqual(1);
 
+      // wait for send buffers to be flushed
+      await advanceFakeTimersByHeartbeat();
+      await waitFor(() =>
+        expect(
+          serverTransport.sessions.get(clientTransport.clientId)?.sendBuffer
+            .length,
+        ).toEqual(0),
+      );
+
       // should be back to 0 connections after client closes
       clientTransport.reconnectOnConnectionDrop = false;
       clientTransport.close();
+
+      await waitFor(() => {
+        expect(numberOfConnections(clientTransport)).toEqual(0);
+        expect(numberOfConnections(serverTransport)).toEqual(0);
+      });
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -100,6 +116,11 @@ describe.each(testMatrix())(
       // should be back to 0 connections after client closes
       clientTransport.reconnectOnConnectionDrop = false;
       serverTransport.close();
+
+      await waitFor(() => {
+        expect(numberOfConnections(clientTransport)).toEqual(0);
+        expect(numberOfConnections(serverTransport)).toEqual(0);
+      });
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -262,12 +283,17 @@ describe.each(testMatrix())(
       expect(numberOfConnections(serverTransport)).toEqual(1);
 
       // no observers should remain subscribed to the observable
+      await waitFor(() =>
+        expect(server.services.subscribable.state.count.listenerCount).toEqual(
+          0,
+        ),
+      );
+
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
         server,
       });
-      expect(server.services.subscribable.state.count.listenerCount).toEqual(0);
     });
 
     test('upload', async () => {
@@ -347,8 +373,7 @@ describe.each(testMatrix())(
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
       await advanceFakeTimersBySessionGrace();
-
-      expect(clientTransport.sessions.size).toEqual(0);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
 
       // reconnect
       clientTransport.reconnectOnConnectionDrop = true;
