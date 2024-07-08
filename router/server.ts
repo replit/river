@@ -323,6 +323,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
     const serviceContextWithTransportInfo: ServiceContextWithTransportInfo<object> =
       {
         ...serviceContext,
+        sessionId,
         to: message.to,
         from: message.from,
         streamId: message.streamId,

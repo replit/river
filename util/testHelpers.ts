@@ -166,6 +166,7 @@ function dummyCtx<State>(
   return {
     ...extendedContext,
     state,
+    sessionId: session.id,
     to: session.to,
     from: session.from,
     streamId: generateId(),
