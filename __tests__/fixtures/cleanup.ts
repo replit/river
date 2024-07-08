@@ -8,7 +8,10 @@ import {
 } from '../../transport';
 import { Server } from '../../router';
 import { AnyServiceSchemaMap } from '../../router/services';
-import { testingSessionOptions } from '../../util/testHelpers';
+import {
+  numberOfConnections,
+  testingSessionOptions,
+} from '../../util/testHelpers';
 import { Value } from '@sinclair/typebox/value';
 import { ControlMessageAckSchema } from '../../transport/message';
 
@@ -17,21 +20,20 @@ const waitUntilOptions = {
   interval: 5, // check every 5ms
 };
 
+export async function advanceFakeTimersByHeartbeat() {
+  await vi.advanceTimersByTimeAsync(testingSessionOptions.heartbeatIntervalMs);
+}
+
 export async function advanceFakeTimersByDisconnectGrace() {
-  for (let i = 0; i < testingSessionOptions.heartbeatsUntilDead; i++) {
-    // wait for heartbeat interval to elapse
-    await vi.runOnlyPendingTimersAsync();
-    await vi.advanceTimersByTimeAsync(
-      testingSessionOptions.heartbeatIntervalMs + 1,
-    );
+  for (let i = 0; i < testingSessionOptions.heartbeatsUntilDead + 1; i++) {
+    await advanceFakeTimersByHeartbeat();
   }
 }
 
 export async function advanceFakeTimersBySessionGrace() {
   await advanceFakeTimersByDisconnectGrace();
-  await vi.runOnlyPendingTimersAsync();
   await vi.advanceTimersByTimeAsync(
-    testingSessionOptions.sessionDisconnectGraceMs + 1,
+    testingSessionOptions.sessionDisconnectGraceMs,
   );
 }
 
@@ -49,9 +51,9 @@ export async function ensureTransportIsClean(t: Transport<Connection>) {
   );
   await waitFor(() =>
     expect(
-      t.connections,
+      numberOfConnections(t),
       `[post-test cleanup] transport ${t.clientId} should not have open connections after the test`,
-    ).toStrictEqual(new Map()),
+    ).toBe(0),
   );
 }
 
@@ -70,7 +72,7 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
         [...t.sessions]
           .map(([client, sess]) => {
             // get all messages that are not heartbeats
-            const buff = sess.inspectSendBuffer().filter((msg) => {
+            const buff = sess.sendBuffer.filter((msg) => {
               return !Value.Check(ControlMessageAckSchema, msg.payload);
             });
 
@@ -95,8 +97,8 @@ export async function ensureServerIsClean(s: Server<AnyServiceSchemaMap>) {
   );
 }
 
-export async function cleanupTransports(
-  transports: Array<Transport<Connection>>,
+export async function cleanupTransports<ConnType extends Connection>(
+  transports: Array<Transport<ConnType>>,
 ) {
   for (const t of transports) {
     if (t.getStatus() !== 'closed') {
@@ -116,22 +118,32 @@ export async function testFinishesCleanly({
   server: Server<AnyServiceSchemaMap>;
 }>) {
   // pre-close invariants
+  // invariant check servers first as heartbeats are authoritative on their side
   const allTransports = [
-    ...(clientTransports ?? []),
     ...(serverTransport ? [serverTransport] : []),
+    ...(clientTransports ?? []),
   ];
 
   for (const t of allTransports) {
     t.log?.info('*** end of test invariant checks ***', {
       clientId: t.clientId,
     });
+  }
 
-    // wait for one round of heartbeat
-    await vi.runOnlyPendingTimersAsync();
-    await vi.advanceTimersByTimeAsync(
-      testingSessionOptions.heartbeatIntervalMs + 1,
-    );
+  // wait for one round of heartbeats to propagate
+  await advanceFakeTimersByHeartbeat();
+
+  // make sure clients have sent everything
+  for (const t of clientTransports ?? []) {
     await ensureTransportBuffersAreEventuallyEmpty(t);
+  }
+
+  // wait for one round of heartbeats to propagate
+  await advanceFakeTimersByHeartbeat();
+
+  // make sure servers finally received everything
+  if (serverTransport) {
+    await ensureTransportBuffersAreEventuallyEmpty(serverTransport);
   }
 
   if (server) {

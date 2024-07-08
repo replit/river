@@ -9,6 +9,7 @@ import {
   createDummyTransportMessage,
   createLocalWebSocketClient,
   createWebSocketServer,
+  numberOfConnections,
   onWsServerReady,
 } from '../util/testHelpers';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
@@ -18,13 +19,13 @@ import {
   OpaqueTransportMessage,
   handshakeRequestMessage,
 } from '../transport/message';
-import { nanoid } from 'nanoid';
 import { NaiveJsonCodec } from '../codec';
 import { Static } from '@sinclair/typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
 import NodeWs from 'ws';
 import { createPostTestCleanups } from './fixtures/cleanup';
+import { generateId } from '../transport/id';
 
 describe('should handle incompatabilities', async () => {
   let server: http.Server;
@@ -50,8 +51,8 @@ describe('should handle incompatabilities', async () => {
       'client',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
-    await clientTransport.connect(serverTransport.clientId);
-    await waitFor(() => expect(serverTransport.connections.size).toBe(1));
+    clientTransport.connect(serverTransport.clientId);
+    await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
 
     const errMock = vi.fn();
     clientTransport.addEventListener('protocolError', errMock);
@@ -89,9 +90,8 @@ describe('should handle incompatabilities', async () => {
 
     // try connecting and make sure we get the fake connection failure
     expect(errMock).toHaveBeenCalledTimes(0);
-    const connectionPromise = clientTransport.connect(serverTransport.clientId);
+    clientTransport.connect(serverTransport.clientId);
     await vi.runAllTimersAsync();
-    await connectionPromise;
 
     await waitFor(() => expect(errMock).toHaveBeenCalledTimes(1));
     expect(errMock).toHaveBeenCalledWith(
@@ -125,11 +125,11 @@ describe('should handle incompatabilities', async () => {
     });
 
     for (let i = 0; i < 3; i++) {
-      await clientTransport.connect(serverTransport.clientId);
+      clientTransport.connect(serverTransport.clientId);
     }
 
     expect(errMock).toHaveBeenCalledTimes(0);
-    await waitFor(() => expect(serverTransport.connections.size).toBe(1));
+    await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
     expect(connectCalls).toBe(1);
 
     await testFinishesCleanly({
@@ -143,10 +143,10 @@ describe('should handle incompatabilities', async () => {
     // add listeners
     const spy = vi.fn();
     const errMock = vi.fn();
-    serverTransport.addEventListener('connectionStatus', spy);
+    serverTransport.addEventListener('sessionStatus', spy);
     serverTransport.addEventListener('protocolError', errMock);
     addPostTestCleanup(async () => {
-      serverTransport.removeEventListener('connectionStatus', spy);
+      serverTransport.removeEventListener('sessionStatus', spy);
       serverTransport.removeEventListener('protocolError', errMock);
       await cleanupTransports([serverTransport]);
     });
@@ -158,7 +158,7 @@ describe('should handle incompatabilities', async () => {
     // should never connect
     // ws should be closed
     await waitFor(() => expect(ws.readyState).toBe(ws.CLOSED));
-    expect(serverTransport.connections.size).toBe(0);
+    expect(numberOfConnections(serverTransport)).toBe(0);
     expect(spy).toHaveBeenCalledTimes(0);
     expect(errMock).toHaveBeenCalledTimes(1);
     expect(errMock).toHaveBeenCalledWith(
@@ -179,10 +179,10 @@ describe('should handle incompatabilities', async () => {
     // add listeners
     const spy = vi.fn();
     const errMock = vi.fn();
-    serverTransport.addEventListener('connectionStatus', spy);
+    serverTransport.addEventListener('sessionStatus', spy);
     serverTransport.addEventListener('protocolError', errMock);
     addPostTestCleanup(async () => {
-      serverTransport.removeEventListener('connectionStatus', spy);
+      serverTransport.removeEventListener('sessionStatus', spy);
       serverTransport.removeEventListener('protocolError', errMock);
       await cleanupTransports([serverTransport]);
     });
@@ -193,7 +193,6 @@ describe('should handle incompatabilities', async () => {
       from: 'client',
       to: 'SERVER',
       expectedSessionState: {
-        reconnect: false,
         nextExpectedSeq: 0,
       },
       sessionId: 'sessionId',
@@ -240,11 +239,11 @@ describe('should handle incompatabilities', async () => {
     // add listeners
     const spy = vi.fn();
     const errMock = vi.fn();
-    serverTransport.addEventListener('connectionStatus', spy);
+    serverTransport.addEventListener('sessionStatus', spy);
     serverTransport.addEventListener('protocolError', errMock);
     addPostTestCleanup(async () => {
       serverTransport.removeEventListener('protocolError', errMock);
-      serverTransport.removeEventListener('connectionStatus', spy);
+      serverTransport.removeEventListener('sessionStatus', spy);
       await cleanupTransports([serverTransport]);
     });
 
@@ -252,17 +251,20 @@ describe('should handle incompatabilities', async () => {
     await new Promise((resolve) => (ws.onopen = resolve));
 
     const requestMsg = {
-      id: nanoid(),
+      id: generateId(),
       from: 'client',
       to: 'SERVER',
       seq: 0,
       ack: 0,
-      streamId: nanoid(),
+      streamId: generateId(),
       controlFlags: 0,
       payload: {
         type: 'HANDSHAKE_REQ',
         protocolVersion: 'v0',
         sessionId: 'sessionId',
+        expectedSessionState: {
+          nextExpectedSeq: 0,
+        },
       } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
     };
     ws.send(NaiveJsonCodec.toBuffer(requestMsg));
@@ -270,7 +272,7 @@ describe('should handle incompatabilities', async () => {
     // should never connect
     // ws should be closed
     await waitFor(() => expect(ws.readyState).toBe(ws.CLOSED));
-    expect(serverTransport.connections.size).toBe(0);
+    expect(numberOfConnections(serverTransport)).toBe(0);
     expect(spy).toHaveBeenCalledTimes(0);
     expect(errMock).toHaveBeenCalledTimes(1);
     expect(errMock).toHaveBeenCalledWith(

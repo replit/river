@@ -1,6 +1,6 @@
 # River
 
-⚠️ Not production ready, while Replit is using parts of river in production, we are still going through rapid breaking changes. First production ready version will be 1.x.x ⚠️
+⚠️ Not production ready, while Replit is using parts of River in production, we are still going through rapid breaking changes. First production ready version will be `1.x.x` ⚠️
 
 River allows multiple clients to connect to and make remote procedure calls to a remote server as if they were local procedures.
 
@@ -157,15 +157,6 @@ if (result.ok) {
 }
 ```
 
-You can then access the `ParsedMetadata` in your procedure handlers:
-
-```ts
-async handler(ctx, ...args) {
-  // this contains the parsed metadata
-  console.log(ctx.metadata)
-}
-```
-
 ### Logging
 
 To add logging, you can bind a logging function to a transport.
@@ -192,12 +183,12 @@ River defines two types of reconnects:
 1. **Transparent reconnects:** These occur when the connection is temporarily lost and reestablished without losing any messages. From the application's perspective, this process is seamless and does not disrupt ongoing operations.
 2. **Hard reconnect:** This occurs when all server state is lost, requiring the client to reinitialize anything stateful (e.g. subscriptions).
 
-You can listen for transparent reconnects via the `connectionStatus` events, but realistically, no applications should need to listen for this unless it is for debugging purposes. Hard reconnects are signaled via `sessionStatus` events.
+Hard reconnects are signaled via `sessionStatus` events.
 
 If your application is stateful on either the server or the client, the service consumer _should_ wrap all the client-side setup with `transport.addEventListener('sessionStatus', (evt) => ...)` to do appropriate setup and teardown.
 
 ```ts
-transport.addEventListener('connectionStatus', (evt) => {
+transport.addEventListener('sessionStatus', (evt) => {
   if (evt.status === 'connect') {
     // do something
   } else if (evt.status === 'disconnect') {
@@ -205,11 +196,12 @@ transport.addEventListener('connectionStatus', (evt) => {
   }
 });
 
-transport.addEventListener('sessionStatus', (evt) => {
-  if (evt.status === 'connect') {
+// or, listen for specific session states
+transport.addEventListener('sessionTransition', (evt) => {
+  if (evt.state === SessionState.Connected) {
+    // switch on various transition states
+  } else if (evt.state === SessionState.NoConnection) {
     // do something
-  } else if (evt.status === 'disconnect') {
-    // do something else
   }
 });
 ```
@@ -251,6 +243,15 @@ createServer(new MockServerTransport('SERVER'), services, {
     },
   ),
 });
+```
+
+You can then access the `ParsedMetadata` in your procedure handlers:
+
+```ts
+async handler(ctx, ...args) {
+  // this contains the parsed metadata
+  console.log(ctx.metadata)
+}
 ```
 
 ### Further examples

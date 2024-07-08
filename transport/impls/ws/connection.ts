@@ -1,10 +1,7 @@
-import { Connection } from '../../session';
+import { Connection } from '../../connection';
 import { WsLike } from './wslike';
 
 export class WebSocketConnection extends Connection {
-  errorCb: null | ((err: Error) => void) = null;
-  closeCb: null | (() => void) = null;
-
   ws: WsLike;
 
   constructor(ws: WsLike) {
@@ -19,35 +16,28 @@ export class WebSocketConnection extends Connection {
     this.ws.onerror = () => {
       didError = true;
     };
+
     this.ws.onclose = ({ code, reason }) => {
-      if (didError && this.errorCb) {
-        this.errorCb(
-          new Error(
-            `websocket closed with code and reason: ${code} - ${reason}`,
-          ),
+      if (didError) {
+        const err = new Error(
+          `websocket closed with code and reason: ${code} - ${reason}`,
         );
+
+        for (const cb of this.errorListeners) {
+          cb(err);
+        }
       }
 
-      if (this.closeCb) {
-        this.closeCb();
+      for (const cb of this.closeListeners) {
+        cb();
       }
     };
-  }
 
-  addDataListener(cb: (msg: Uint8Array) => void) {
-    this.ws.onmessage = (msg) => cb(msg.data as Uint8Array);
-  }
-
-  removeDataListener(): void {
-    this.ws.onmessage = null;
-  }
-
-  addCloseListener(cb: () => void): void {
-    this.closeCb = cb;
-  }
-
-  addErrorListener(cb: (err: Error) => void): void {
-    this.errorCb = cb;
+    this.ws.onmessage = (msg) => {
+      for (const cb of this.dataListeners) {
+        cb(msg.data as Uint8Array);
+      }
+    };
   }
 
   send(payload: Uint8Array) {

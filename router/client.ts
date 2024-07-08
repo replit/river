@@ -17,15 +17,16 @@ import {
   TransportClientId,
   isStreamClose,
   PartialTransportMessage,
+  closeStreamMessage,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
-import { nanoid } from 'nanoid';
 import { Err, Result, UNEXPECTED_DISCONNECT } from './result';
 import { EventMap } from '../transport/events';
-import { Connection } from '../transport/session';
 import { createProcTelemetryInfo, getPropagationContext } from '../tracing';
 import { ClientHandshakeOptions } from './handshake';
-import { ClientTransport } from '../transport';
+import { generateId } from '../transport/id';
+import { Connection } from '../transport/connection';
+import { ClientTransport } from '../transport/client';
 
 // helper to make next, yield, and return all the same type
 export type AsyncIter<T> = AsyncGenerator<T, T>;
@@ -208,7 +209,7 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
 
   const options = { ...defaultClientOptions, ...providedClientOptions };
   if (options.eagerlyConnect) {
-    void transport.connect(serverId);
+    transport.connect(serverId);
   }
 
   return _createRecursiveProxy(async (opts) => {
@@ -220,8 +221,8 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
     }
 
     const [input] = opts.args;
-    if (options.connectOnInvoke && !transport.connections.has(serverId)) {
-      void transport.connect(serverId);
+    if (options.connectOnInvoke && !transport.sessions.has(serverId)) {
+      transport.connect(serverId);
     }
 
     if (procType === 'rpc') {
@@ -256,7 +257,7 @@ function handleRpc(
   serviceName: string,
   procedureName: string,
 ) {
-  const streamId = nanoid();
+  const streamId = generateId();
   const { span, ctx } = createProcTelemetryInfo(
     transport,
     'rpc',
@@ -314,7 +315,7 @@ function handleStream(
   serviceName: string,
   procedureName: string,
 ) {
-  const streamId = nanoid();
+  const streamId = generateId();
   const { span, ctx } = createProcTelemetryInfo(
     transport,
     'stream',
@@ -363,7 +364,7 @@ function handleStream(
 
     // after ending input stream, send a close message to the server
     if (!healthyClose) return;
-    transport.sendCloseStream(serverId, streamId);
+    transport.send(serverId, closeStreamMessage(streamId));
   };
 
   void pipeInputToTransport();
@@ -412,7 +413,7 @@ function handleSubscribe(
   serviceName: string,
   procedureName: string,
 ) {
-  const streamId = nanoid();
+  const streamId = generateId();
   const { span, ctx } = createProcTelemetryInfo(
     transport,
     'subscription',
@@ -455,7 +456,7 @@ function handleSubscribe(
   const closeHandler = () => {
     cleanup();
     if (!healthyClose) return;
-    transport.sendCloseStream(serverId, streamId);
+    transport.send(serverId, closeStreamMessage(streamId));
   };
 
   // close stream after disconnect + grace period elapses
@@ -482,7 +483,7 @@ function handleUpload(
   serviceName: string,
   procedureName: string,
 ) {
-  const streamId = nanoid();
+  const streamId = generateId();
   const { span, ctx } = createProcTelemetryInfo(
     transport,
     'upload',
@@ -530,7 +531,7 @@ function handleUpload(
 
     // after ending input stream, send a close message to the server
     if (!healthyClose) return;
-    transport.sendCloseStream(serverId, streamId);
+    transport.send(serverId, closeStreamMessage(streamId));
   };
 
   void pipeInputToTransport();

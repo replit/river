@@ -69,7 +69,6 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
       connectedTo: to,
     });
 
-    this.handleConnection(conn, to);
     return conn;
   }
 }

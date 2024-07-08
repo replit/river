@@ -291,7 +291,7 @@ At the application level, it appears as if the connection never dropped.
 ### Creating connections and sessions
 
 A `Connection` object MUST be created immediately upon establishing a raw wire connection.
-Subsequently, a `Session` object is created for each `Connection` object once the protocol handshake over the `Connection` is completed.
+Subsequently, a `Session` object is created for each `Connection` object to handle the lifecycle of the `Connection`.
 The process differs slightly between the client and server:
 
 #### Client
@@ -323,10 +323,34 @@ The process differs slightly between the client and server:
   - If the received message is not a protocol handshake request or is invalid (further details on the protocol handshake can be found under the 'Handshake' heading below), the `Connection` is closed immediately.
   - Upon receiving a valid protocol handshake request:
     - Follow the instructions for a successful handshake in the client scenario (this code path is identical).
+    - Create a session with the same ID as the client session.
     - Send a successful protocol handshake response back to the client.
 - A close event listener is attached to the `Connection` to handle unexpected closures. This event listener should:
   - Close the underlying wire connection if still open.
   - Initiate the grace period for the associated `Session`'s destruction (this code path is identical to the client).
+
+#### State Transitions
+
+- SessionNoConnection is the client entrypoint as we know who the other side is already, we just need to connect
+- SessionWaitingForHandshake is the server entrypoint as we have a connection but don't know who the other side is yet
+
+```plaintext
+                           1. SessionNoConnection         ◄──┐
+                           │  reconnect / connect attempt    │
+                           ▼                                 │
+                           2. SessionConnecting              │
+                           │  connect success  ──────────────┤ connect failure
+                           ▼                                 │
+                           3. SessionHandshaking             │
+                           │  handshake success       ┌──────┤ connection drop
+ 5. WaitingForHandshake    │  handshake failure  ─────┤      │
+ │  handshake success      ▼                          │      │ connection drop
+ ├───────────────────────► 4. SessionConnected        │      │ heartbeat misses
+ │                         │  invalid message  ───────┼──────┘
+ │                         ▼                          │
+ └───────────────────────► x. Destroy Session   ◄─────┘
+   handshake failure
+```
 
 ### Handshake
 
@@ -347,9 +371,9 @@ type HandshakeRequest = {
   type: 'HANDSHAKE_REQ';
   protocolVersion: string;
   sessionId: string;
-  expectedSessionState?: {
-    reconnect: boolean;
+  expectedSessionState: {
     nextExpectedSeq: number;
+    nextSentSeq: number;
   };
 };
 ```
@@ -367,6 +391,13 @@ type HandshakeResponse = {
     | {
         ok: false;
         reason: string;
+        code: // retriable
+        | 'SESSION_STATE_MISMATCH'
+          // fatal
+          | 'MALFORMED_HANDSHAKE_META'
+          | 'MALFORMED_HANDSHAKE'
+          | 'PROTOCOL_VERSION_MISMATCH'
+          | 'REJECTED_BY_CUSTOM_HANDLER';
       };
 };
 ```
@@ -376,8 +407,9 @@ The server will send an error response if either:
 - the handshake request is malformed (i.e. doesn't conform to the schema)
 - the protocol version in the request does not match the protocol version of the server
 - the expected session state does not match the server's session state. examples:
-  - the client wanted a reconnection, but the server doesn't know about that particular session
-  - the client's next expected seq exceeds the server's last acked message
+  - the client wanted a reconnection to a specific session but the server doesn't know about it
+  - the client is in the future (`client.nextSentSeq > server.ack`)
+  - server is in the future (`server.seq > client.nextExpectedSeq`)
 
 When the client receives a status with `ok: false`, it should consider the handshake failed and close the connection.
 
@@ -391,12 +423,7 @@ This metadata is tracked within the `Session` object.
 Though this is very [TCP](https://jzhao.xyz/thoughts/TCP) inspired, River has the benefit of assuming the underlying transport is an ordered byte stream which simplifies the protocol significantly.
 
 The send buffer is a queue of messages that have been sent but not yet acknowledged by the other side.
-When a message is sent (including control messages like explicit acks[^1]), it is added to the send buffer.
-
-[^1]:
-    There is a protocol optimization here that treats explicit acks purely as status updates for bookkeeping.
-    In this optimization, explicit heartbeats 1) should not be buffered, 2) should not increment `seq` when sent, 3) send `seq - 1` as its `seq` field.
-    Semantically, this is identical to 'retransmitting' the previous message but without the payload.
+When a message is sent (including control messages like explicit acks), it is added to the send buffer.
 
 All messages have an `ack` and the `ack` corresponds to the number of messages the other side has processed.
 When receiving message a valid message (see the 'Handling Messages for Streams' section for the definition of 'valid'), sessions should ensure that the incoming message `msg.seq` MUST match the session's `session.ack`.
@@ -438,9 +465,13 @@ Both clients and servers should listen for `sessionStatus` events to do some err
 Certain transports will not emit a close event when the underlying connection is lost.
 This is especially true for WebSockets in specific cases (e.g. closing your laptop lid).
 
-To detect these phantom disconnects, the session SHOULD send an explicit heartbeat message every `heartbeatIntervalMs` milliseconds (this should be a parameter of the transport).
+To detect these phantom disconnects, the server SHOULD send an explicit heartbeat message every `heartbeatIntervalMs` milliseconds (this should be a parameter of the transport) via each session.
+This is because clients are usually browsers which means we cannot trust user-facing timers (due to various reasons like browser throttling, hibernation, etc.) so we rely purely on the server to track time.
+
 This message is a control message with the `AckBit` set and the payload `{ type: 'ACK' }`.
-The `seq` and `ack` of the message should match that of the session itself and otherwise be transmitted like a normal message.
+The `seq` and `ack` of the message should match that of the session itself and otherwise be transmitted like a normal message (i.e. should stil increment bookkeeping like incrementing `seq`).
+
+Clients SHOULD echo back a heartbeat in the same format as soon as it receives a server heartbeat.
 
 We track the number of heartbeats that we've sent to the other side without hearing a message. When the number of heartbeat misses exceeds some threshold `heartbeatsUntilDead` (also a parameter of the transport),
 close the connection in that session. See the 'On disconnect' section above for more details on how to handle this.
