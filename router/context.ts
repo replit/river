@@ -1,4 +1,5 @@
 import { TransportClientId } from '../transport/message';
+import { SessionId } from '../transport/sessionStateMachine/common';
 
 /**
  * The context for services/procedures. This is used only on
@@ -49,6 +50,7 @@ export type ServiceContextWithState<State> = ServiceContext & { state: State };
 
 export type ServiceContextWithTransportInfo<State> = ServiceContext & {
   state: State;
+  sessionId: SessionId;
   to: TransportClientId;
   from: TransportClientId;
   streamId: string;
