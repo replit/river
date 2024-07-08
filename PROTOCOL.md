@@ -330,6 +330,7 @@ The process differs slightly between the client and server:
   - Initiate the grace period for the associated `Session`'s destruction (this code path is identical to the client).
 
 #### State Transitions
+
 - SessionNoConnection is the client entrypoint as we know who the other side is already, we just need to connect
 - SessionWaitingForHandshake is the server entrypoint as we have a connection but don't know who the other side is yet
 
