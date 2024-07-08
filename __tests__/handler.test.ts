@@ -5,7 +5,7 @@ import {
   asClientUpload,
   iterNext,
 } from '../util/testHelpers';
-import { assert, describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import {
   DIV_BY_ZERO,
   FallibleServiceSchema,
@@ -23,31 +23,28 @@ describe('server-side test', () => {
   test('rpc basic', async () => {
     const add = asClientRpc({ count: 0 }, service.procedures.add);
     const result = await add({ n: 3 });
-    assert(result.ok);
-    expect(result.payload).toStrictEqual({ result: 3 });
+    expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
   });
 
   test('rpc initial state', async () => {
     const add = asClientRpc({ count: 5 }, service.procedures.add);
     const result = await add({ n: 6 });
-    assert(result.ok);
-    expect(result.payload).toStrictEqual({ result: 11 });
+    expect(result).toStrictEqual({ ok: true, payload: { result: 11 } });
   });
 
   test('fallible rpc', async () => {
     const service = FallibleServiceSchema.instantiate({});
     const divide = asClientRpc({}, service.procedures.divide);
     const result = await divide({ a: 10, b: 2 });
-    assert(result.ok);
-    expect(result.payload).toStrictEqual({ result: 5 });
+    expect(result).toStrictEqual({ ok: true, payload: { result: 5 } });
 
     const result2 = await divide({ a: 10, b: 0 });
-    assert(!result2.ok);
-    expect(result2.payload).toStrictEqual({
-      code: DIV_BY_ZERO,
-      message: 'Cannot divide by zero',
-      extras: {
-        test: 'abc',
+    expect(result2).toStrictEqual({
+      ok: false,
+      payload: {
+        code: DIV_BY_ZERO,
+        message: 'Cannot divide by zero',
+        extras: { test: 'abc' },
       },
     });
   });
@@ -64,12 +61,10 @@ describe('server-side test', () => {
     input.end();
 
     const result1 = await iterNext(output);
-    assert(result1.ok);
-    expect(result1.payload).toStrictEqual({ response: 'abc' });
+    expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
     const result2 = await iterNext(output);
-    assert(result2.ok);
-    expect(result2.payload).toStrictEqual({ response: 'ghi' });
+    expect(result2).toStrictEqual({ ok: true, payload: { response: 'ghi' } });
 
     expect(output.readableLength).toBe(0);
   });
@@ -87,12 +82,16 @@ describe('server-side test', () => {
     input.end();
 
     const result1 = await iterNext(output);
-    assert(result1.ok);
-    expect(result1.payload).toStrictEqual({ response: 'test abc' });
+    expect(result1).toStrictEqual({
+      ok: true,
+      payload: { response: 'test abc' },
+    });
 
     const result2 = await iterNext(output);
-    assert(result2.ok);
-    expect(result2.payload).toStrictEqual({ response: 'test ghi' });
+    expect(result2).toStrictEqual({
+      ok: true,
+      payload: { response: 'test ghi' },
+    });
 
     expect(output.readableLength).toBe(0);
   });
@@ -103,20 +102,26 @@ describe('server-side test', () => {
 
     input.push({ msg: 'abc', throwResult: false, throwError: false });
     const result1 = await iterNext(output);
-    assert(result1.ok);
-    expect(result1.payload).toStrictEqual({ response: 'abc' });
+    expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
     input.push({ msg: 'def', throwResult: true, throwError: false });
     const result2 = await iterNext(output);
-    assert(!result2.ok);
-    expect(result2.payload.code).toStrictEqual(STREAM_ERROR);
+    expect(result2).toStrictEqual({
+      ok: false,
+      payload: {
+        code: STREAM_ERROR,
+        message: 'field throwResult was set to true',
+      },
+    });
 
     input.push({ msg: 'ghi', throwResult: false, throwError: true });
     const result3 = await iterNext(output);
-    assert(!result3.ok);
-    expect(result3.payload).toStrictEqual({
-      code: UNCAUGHT_ERROR,
-      message: 'some message',
+    expect(result3).toStrictEqual({
+      ok: false,
+      payload: {
+        code: UNCAUGHT_ERROR,
+        message: 'some message',
+      },
     });
 
     input.end();
@@ -131,16 +136,13 @@ describe('server-side test', () => {
 
     const stream = subscribe({});
     const streamResult1 = await iterNext(stream);
-    assert(streamResult1.ok);
-    expect(streamResult1.payload).toStrictEqual({ result: 0 });
+    expect(streamResult1).toStrictEqual({ ok: true, payload: { result: 0 } });
 
     const result = await add({ n: 3 });
-    assert(result.ok);
-    expect(result.payload).toStrictEqual({ result: 3 });
+    expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
 
     const streamResult2 = await iterNext(stream);
-    assert(streamResult1.ok);
-    expect(streamResult2.payload).toStrictEqual({ result: 3 });
+    expect(streamResult2).toStrictEqual({ ok: true, payload: { result: 3 } });
   });
 
   test('uploads', async () => {

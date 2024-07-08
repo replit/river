@@ -29,6 +29,7 @@ export abstract class Connection {
     return metadata;
   }
 
+  // can't use event emitter because we need this to work in both node + browser
   private _dataListeners = new Set<(msg: Uint8Array) => void>();
   private _closeListeners = new Set<() => void>();
   private _errorListeners = new Set<(err: Error) => void>();
@@ -59,7 +60,7 @@ export abstract class Connection {
 
   /**
    * Handle adding a callback for when the connection is closed.
-   * This should also be called if an error happens.
+   * This should also be called if an error happens and after notifying all the error listeners.
    * @param cb The callback to call when the connection is closed.
    */
   addCloseListener(cb: () => void): void {

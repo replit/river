@@ -37,6 +37,7 @@ import { createHandlerSpan } from '../tracing';
 import { ServerHandshakeOptions } from './handshake';
 import { Connection } from '../transport/connection';
 import { ServerTransport } from '../transport/server';
+import { SessionId } from '../transport/sessionStateMachine/common';
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -44,11 +45,13 @@ import { ServerTransport } from '../transport/server';
  */
 export interface Server<Services extends AnyServiceSchemaMap> {
   services: InstantiatedServiceSchemaMap<Services>;
-  streams: Map<string, ProcStream>;
+  streams: Map<StreamId, ProcStream>;
 }
 
+type StreamId = string;
+
 interface ProcStream {
-  id: string;
+  id: StreamId;
   serviceName: string;
   procedureName: string;
   incoming: Pushable<PayloadType>;
@@ -63,15 +66,12 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
   transport: ServerTransport<Connection>;
   services: InstantiatedServiceSchemaMap<Services>;
   contextMap: Map<AnyService, ServiceContextWithState<object>>;
-  // map of streamId to ProcStream
-  streamMap: Map<string, ProcStream>;
-
-  // map of sessionId to streamIds
-  sessionToStreamId: Map<string, Set<string>>;
+  streamMap: Map<StreamId, ProcStream>;
+  sessionToStreamId: Map<SessionId, Set<StreamId>>;
 
   // streams that are in the process of being cleaned up
   // this is to prevent output handlers from sending after the stream is cleaned up
-  sessionsBeingCleanedUp = new Set<string>();
+  sessionsBeingCleanedUp = new Set<SessionId>();
 
   private log?: Logger;
   constructor(
@@ -147,7 +147,29 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
   };
 
   onSessionStatus = async (evt: EventMap['sessionStatus']) => {
+    const streamsFromThisClient = this.sessionToStreamId.get(evt.session.id);
+
+    const cleanupStreams = async (ids: Set<string>) => {
+      this.sessionsBeingCleanedUp.add(evt.session.id);
+      await Promise.all(Array.from(ids).map(this.cleanupStream));
+      this.sessionToStreamId.delete(evt.session.id);
+      this.sessionsBeingCleanedUp.delete(evt.session.id);
+    };
+
     if (evt.status === 'connect') {
+      // check to see if we have any streams from this session
+      if (streamsFromThisClient) {
+        this.log?.error(
+          `got session connect from ${evt.session.to} but there are still streams open from this session`,
+          {
+            clientId: this.transport.clientId,
+            tags: ['invariant-violation'],
+          },
+        );
+
+        await cleanupStreams(streamsFromThisClient);
+      }
+
       this.sessionToStreamId.set(evt.session.id, new Set());
       return;
     }
@@ -158,15 +180,8 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       evt.session.loggingMetadata,
     );
 
-    const streamsFromThisClient = this.sessionToStreamId.get(evt.session.id);
     if (!streamsFromThisClient) return;
-
-    this.sessionsBeingCleanedUp.add(evt.session.id);
-    await Promise.all(
-      Array.from(streamsFromThisClient).map(this.cleanupStream),
-    );
-    this.sessionToStreamId.delete(evt.session.id);
-    this.sessionsBeingCleanedUp.delete(evt.session.id);
+    await cleanupStreams(streamsFromThisClient);
   };
 
   createNewProcStream(message: OpaqueTransportMessage) {
@@ -223,9 +238,11 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       return;
     }
 
-    const to = session.to;
-    const sessionId = session.id;
-    const sessionLoggingMetadata = session.loggingMetadata;
+    const {
+      to,
+      id: sessionId,
+      loggingMetadata: sessionLoggingMetadata,
+    } = session;
     const procedure = service.procedures[message.procedureName];
     const incoming: ProcStream['incoming'] = pushable({ objectMode: true });
     const outgoing: ProcStream['outgoing'] = pushable({ objectMode: true });
@@ -233,6 +250,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       procedure.type === 'subscription' || procedure.type === 'stream';
     const disposables: Array<() => void> = [];
 
+    // this will be removed in v2 after have better abstractions for when to cleanup
     const wrappedSend = (payload: PartialTransportMessage) => {
       if (!this.sessionsBeingCleanedUp.has(sessionId)) {
         this.transport.send(to, payload);

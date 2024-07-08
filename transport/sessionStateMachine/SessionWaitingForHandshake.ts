@@ -18,7 +18,7 @@ export class SessionWaitingForHandshake<
   conn: ConnType;
   listeners: SessionHandshakingListeners;
 
-  handshakeTimeout: ReturnType<typeof setTimeout>;
+  handshakeTimeout?: ReturnType<typeof setTimeout>;
 
   constructor(
     conn: ConnType,
@@ -45,6 +45,8 @@ export class SessionWaitingForHandshake<
       return;
     }
 
+    // after this fires, the listener is responsible for transitioning the session
+    // and thus removing the handshake timeout
     this.listeners.onHandshake(parsedMsg);
   };
 
@@ -64,6 +66,7 @@ export class SessionWaitingForHandshake<
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
     clearTimeout(this.handshakeTimeout);
+    this.handshakeTimeout = undefined;
   }
 
   _handleClose(): void {

@@ -1,4 +1,4 @@
-import { assert, beforeEach, describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test } from 'vitest';
 import {
   closeAllConnections,
   iterNext,
@@ -148,7 +148,8 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      await client.test.add.rpc({ n: 3 });
+      const res = await client.test.add.rpc({ n: 3 });
+      expect(res).toStrictEqual({ ok: true, payload: { result: 3 } });
       // end procedure
 
       // number of message handlers shouldn't increase after rpc
@@ -195,8 +196,10 @@ describe.each(testMatrix())(
       input.push({ msg: '2', ignore: false, end: true });
 
       const result1 = await iterNext(output);
-      assert(result1.ok);
-      expect(result1.payload).toStrictEqual({ response: '1' });
+      expect(result1).toStrictEqual({
+        ok: true,
+        payload: { response: '1' },
+      });
 
       // ensure we only have one stream despite pushing multiple messages.
       await waitFor(() => expect(server.streams.size).toEqual(1));
@@ -205,11 +208,13 @@ describe.each(testMatrix())(
       await waitFor(() => expect(server.streams.size).toEqual(0));
 
       const result2 = await iterNext(output);
-      assert(result2.ok);
-      expect(result2.payload).toStrictEqual({ response: '2' });
+      expect(result2).toStrictEqual({
+        ok: true,
+        payload: { response: '2' },
+      });
 
       const result3 = await output.next();
-      assert(result3.done);
+      expect(result3.done).toBe(true);
 
       close();
       // end procedure
@@ -259,12 +264,18 @@ describe.each(testMatrix())(
         {},
       );
       let result = await iterNext(subscription);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 0 });
+      expect(result).toStrictEqual({
+        ok: true,
+        payload: { result: 0 },
+      });
+
       const add1 = await client.subscribable.add.rpc({ n: 1 });
-      assert(add1.ok);
+      expect(add1).toStrictEqual({ ok: true, payload: { result: 1 } });
       result = await iterNext(subscription);
-      assert(result.ok);
+      expect(result).toStrictEqual({
+        ok: true,
+        payload: { result: 1 },
+      });
 
       close();
       // end procedure
@@ -322,8 +333,7 @@ describe.each(testMatrix())(
       addStream.end();
 
       const result = await addResult;
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 3 });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
       // end procedure
 
       // number of message handlers shouldn't increase after upload ends
@@ -365,8 +375,7 @@ describe.each(testMatrix())(
       input.push({ msg: '1', ignore: false });
 
       const result1 = await iterNext(output);
-      assert(result1.ok);
-      expect(result1.payload).toStrictEqual({ response: '1' });
+      expect(result1).toStrictEqual({ ok: true, payload: { response: '1' } });
 
       // wait for session to disconnect
       clientTransport.reconnectOnConnectionDrop = false;
@@ -383,7 +392,8 @@ describe.each(testMatrix())(
       // push on the old stream and make sure its not sent
       input.push({ msg: '2', ignore: false });
       const result2 = await iterNext(output);
-      assert(!result2.ok);
+      expect(result2).toMatchObject({ ok: false });
+
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,

@@ -24,7 +24,7 @@ export class SessionConnecting<
   connPromise: Promise<ConnType>;
   listeners: SessionConnectingListeners;
 
-  connectionTimeout: ReturnType<typeof setTimeout>;
+  connectionTimeout?: ReturnType<typeof setTimeout>;
 
   constructor(
     connPromise: Promise<ConnType>,
@@ -64,6 +64,7 @@ export class SessionConnecting<
   _handleStateExit(): void {
     super._handleStateExit();
     clearTimeout(this.connectionTimeout);
+    this.connectionTimeout = undefined;
   }
 
   _handleClose(): void {

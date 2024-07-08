@@ -286,7 +286,6 @@ export function asClientUpload<
 }
 
 export const getUnixSocketPath = () => {
-  // https://nodejs.org/api/net.html#identifying-paths-for-ipc-connections
   return `/tmp/${nanoid()}.sock`;
 };
 

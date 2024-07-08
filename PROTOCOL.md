@@ -329,6 +329,28 @@ The process differs slightly between the client and server:
   - Close the underlying wire connection if still open.
   - Initiate the grace period for the associated `Session`'s destruction (this code path is identical to the client).
 
+#### State Transitions
+- SessionNoConnection is the client entrypoint as we know who the other side is already, we just need to connect
+- SessionWaitingForHandshake is the server entrypoint as we have a connection but don't know who the other side is yet
+
+```plaintext
+                           1. SessionNoConnection         ◄──┐
+                           │  reconnect / connect attempt    │
+                           ▼                                 │
+                           2. SessionConnecting              │
+                           │  connect success  ──────────────┤ connect failure
+                           ▼                                 │
+                           3. SessionHandshaking             │
+                           │  handshake success       ┌──────┤ connection drop
+ 5. WaitingForHandshake    │  handshake failure  ─────┤      │
+ │  handshake success      ▼                          │      │ connection drop
+ ├───────────────────────► 4. SessionConnected        │      │ heartbeat misses
+ │                         │  invalid message  ───────┼──────┘
+ │                         ▼                          │
+ └───────────────────────► x. Destroy Session   ◄─────┘
+   handshake failure
+```
+
 ### Handshake
 
 The handshake is a special message that is sent immediately after the wire connection is established and before any other messages are sent.

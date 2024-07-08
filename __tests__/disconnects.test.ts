@@ -161,26 +161,28 @@ describe.each(testMatrix())(
       const [subscription1, close1] =
         await client1.subscribable.value.subscribe({});
       let result = await iterNext(subscription1);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 0 });
+      expect(result).toStrictEqual({
+        ok: true,
+        payload: { result: 0 },
+      });
 
       const [subscription2, close2] =
         await client2.subscribable.value.subscribe({});
       result = await iterNext(subscription2);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 0 });
+      expect(result).toStrictEqual({
+        ok: true,
+        payload: { result: 0 },
+      });
 
       // client2 adds a value
       const add1 = await client2.subscribable.add.rpc({ n: 1 });
-      assert(add1.ok);
+      expect(add1).toStrictEqual({ ok: true, payload: { result: 1 } });
 
       // both clients should receive the updated value
       result = await iterNext(subscription1);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 1 });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 1 } });
       result = await iterNext(subscription2);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 1 });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 1 } });
 
       // all clients are connected
       expect(numberOfConnections(client1Transport)).toEqual(1);
@@ -200,10 +202,9 @@ describe.each(testMatrix())(
 
       // client1 who is still connected can still add values and receive updates
       const add2 = await client1.subscribable.add.rpc({ n: 2 });
-      assert(add2.ok);
+      expect(add2).toStrictEqual({ ok: true, payload: { result: 3 } });
       result = await iterNext(subscription1);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 3 });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
 
       // try receiving a value from client2
       const nextResPromise = iterNext(subscription2);

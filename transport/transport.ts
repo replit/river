@@ -152,25 +152,7 @@ export abstract class Transport<ConnType extends Connection> {
    * @param msg The message to send.
    * @returns The ID of the sent message or undefined if it wasn't sent
    */
-  send(to: TransportClientId, msg: PartialTransportMessage): string {
-    if (this.getStatus() === 'closed') {
-      const err = 'transport is closed, cant send';
-      this.log?.error(err, {
-        clientId: this.clientId,
-        transportMessage: msg,
-        tags: ['invariant-violation'],
-      });
-
-      throw new Error(err);
-    }
-
-    let session = this.sessions.get(to);
-    if (!session) {
-      session = this.createUnconnectedSession(to);
-    }
-
-    return session.send(msg);
-  }
+  abstract send(to: TransportClientId, msg: PartialTransportMessage): string;
 
   protected protocolError(type: ProtocolErrorType, message: string) {
     this.eventDispatcher.dispatchEvent('protocolError', { type, message });
@@ -226,23 +208,6 @@ export abstract class Transport<ConnType extends Connection> {
   }
 
   // state transitions
-  protected createUnconnectedSession(to: string): SessionNoConnection {
-    const session = SessionStateGraph.entrypoints.NoConnection(
-      to,
-      this.clientId,
-      {
-        onSessionGracePeriodElapsed: () => {
-          this.onSessionGracePeriodElapsed(session);
-        },
-      },
-      this.options,
-      this.log,
-    );
-
-    this.updateSession(session);
-    return session;
-  }
-
   protected deleteSession(session: Session<ConnType>) {
     session.log?.info(`closing session ${session.id}`, session.loggingMetadata);
 

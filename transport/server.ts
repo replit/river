@@ -6,6 +6,7 @@ import {
   HandshakeErrorResponseCodes,
   OpaqueTransportMessage,
   PROTOCOL_VERSION,
+  PartialTransportMessage,
   TransportClientId,
   handshakeResponseMessage,
 } from './message';
@@ -61,6 +62,33 @@ export abstract class ServerTransport<
 
   extendHandshake(options: ServerHandshakeOptions) {
     this.handshakeExtensions = options;
+  }
+
+  send(to: string, msg: PartialTransportMessage): string {
+    if (this.getStatus() === 'closed') {
+      const err = 'transport is closed, cant send';
+      this.log?.error(err, {
+        clientId: this.clientId,
+        transportMessage: msg,
+        tags: ['invariant-violation'],
+      });
+
+      throw new Error(err);
+    }
+
+    const session = this.sessions.get(to);
+    if (!session) {
+      const err = `session to ${to} does not exist`;
+      this.log?.error(err, {
+        clientId: this.clientId,
+        transportMessage: msg,
+        tags: ['invariant-violation'],
+      });
+
+      throw new Error(err);
+    }
+
+    return session.send(msg);
   }
 
   protected deletePendingSession(

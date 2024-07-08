@@ -185,9 +185,11 @@ export type InheritedProperties = Pick<
   'id' | 'from' | 'to' | 'seq' | 'ack' | 'sendBuffer' | 'telemetry' | 'options'
 >;
 
+export type SessionId = string;
+
 // all sessions where we know the other side's client id
 export abstract class IdentifiedSession extends CommonSession {
-  readonly id: string;
+  readonly id: SessionId;
   readonly telemetry: TelemetryInfo;
   readonly to: TransportClientId;
 
@@ -203,7 +205,7 @@ export abstract class IdentifiedSession extends CommonSession {
   sendBuffer: Array<OpaqueTransportMessage>;
 
   constructor(
-    id: string,
+    id: SessionId,
     from: TransportClientId,
     to: TransportClientId,
     seq: number,

@@ -117,6 +117,8 @@ export const SessionStateGraph = {
       return session;
     },
   },
+  // All of the transitions 'move'/'consume' the old session and return a new one.
+  // After a session is transitioned, any usage of the old session will throw.
   transition: {
     // happy path transitions
     NoConnectionToConnecting<ConnType extends Connection>(

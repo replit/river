@@ -4,6 +4,7 @@ import {
   ControlMessageHandshakeResponseSchema,
   HandshakeErrorRetriableResponseCodes,
   OpaqueTransportMessage,
+  PartialTransportMessage,
   TransportClientId,
   handshakeRequestMessage,
 } from './message';
@@ -25,6 +26,7 @@ import { SessionHandshaking } from './sessionStateMachine/SessionHandshaking';
 import { SessionConnected } from './sessionStateMachine/SessionConnected';
 import { SessionStateGraph } from './sessionStateMachine/transitions';
 import { SessionState } from './sessionStateMachine/common';
+import { SessionNoConnection } from './sessionStateMachine/SessionNoConnection';
 
 export abstract class ClientTransport<
   ConnType extends Connection,
@@ -81,6 +83,43 @@ export abstract class ClientTransport<
     if (this.reconnectOnConnectionDrop && this.getStatus() === 'open') {
       this.connect(to);
     }
+  }
+
+  send(to: string, msg: PartialTransportMessage): string {
+    if (this.getStatus() === 'closed') {
+      const err = 'transport is closed, cant send';
+      this.log?.error(err, {
+        clientId: this.clientId,
+        transportMessage: msg,
+        tags: ['invariant-violation'],
+      });
+
+      throw new Error(err);
+    }
+
+    let session = this.sessions.get(to);
+    if (!session) {
+      session = this.createUnconnectedSession(to);
+    }
+
+    return session.send(msg);
+  }
+
+  private createUnconnectedSession(to: string): SessionNoConnection {
+    const session = SessionStateGraph.entrypoints.NoConnection(
+      to,
+      this.clientId,
+      {
+        onSessionGracePeriodElapsed: () => {
+          this.onSessionGracePeriodElapsed(session);
+        },
+      },
+      this.options,
+      this.log,
+    );
+
+    this.updateSession(session);
+    return session;
   }
 
   // listeners

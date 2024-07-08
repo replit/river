@@ -38,6 +38,10 @@ export class UdsConnection extends Connection {
         cb(msg);
       }
     });
+
+    this.sock.on('end', () => {
+      this.sock.destroy();
+    });
   }
 
   send(payload: Uint8Array) {
@@ -50,6 +54,6 @@ export class UdsConnection extends Connection {
 
   close() {
     this.sock.end();
-    this.framer.destroy();
+    this.framer.end();
   }
 }
