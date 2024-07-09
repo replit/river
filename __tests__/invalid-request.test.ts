@@ -55,6 +55,7 @@ describe('aborts invalid request', () => {
     };
 
     createServer(serverTransport, services);
+    clientTransport.connect(serverId);
 
     const streamId = nanoid();
     clientTransport.send(serverId, {
@@ -106,6 +107,7 @@ describe('aborts invalid request', () => {
     };
 
     createServer(serverTransport, services);
+    clientTransport.connect(serverId);
 
     const streamId = nanoid();
     clientTransport.send(serverId, {
@@ -156,6 +158,7 @@ describe('aborts invalid request', () => {
     };
 
     createServer(serverTransport, services);
+    clientTransport.connect(serverId);
 
     const streamId = nanoid();
     clientTransport.send(serverId, {
@@ -206,6 +209,7 @@ describe('aborts invalid request', () => {
     };
 
     createServer(serverTransport, services);
+    clientTransport.connect(serverId);
 
     const streamId = nanoid();
     clientTransport.send(serverId, {
@@ -257,6 +261,7 @@ describe('aborts invalid request', () => {
     };
 
     createServer(serverTransport, services);
+    clientTransport.connect(serverId);
 
     const streamId = nanoid();
     clientTransport.send(serverId, {
@@ -310,6 +315,7 @@ describe('aborts invalid request', () => {
     };
 
     createServer(serverTransport, services);
+    clientTransport.connect(serverId);
 
     const streamId = nanoid();
     clientTransport.send(serverId, {
@@ -361,6 +367,7 @@ describe('aborts invalid request', () => {
     };
 
     createServer(serverTransport, services);
+    clientTransport.connect(serverId);
 
     const streamId = nanoid();
     clientTransport.send(serverId, {
@@ -421,6 +428,7 @@ describe('aborts invalid request', () => {
     };
 
     createServer(serverTransport, services);
+    clientTransport.connect(serverId);
 
     const streamId = nanoid();
     clientTransport.send(serverId, {
@@ -480,6 +488,7 @@ describe('aborts invalid request', () => {
     };
 
     createServer(serverTransport, services);
+    clientTransport.connect(serverId);
 
     const streamId = nanoid();
     clientTransport.send(serverId, {
@@ -550,6 +559,7 @@ describe('aborts invalid request', () => {
     };
 
     createServer(serverTransport, services);
+    clientTransport.connect(serverId);
 
     const client = createClient<typeof services>(clientTransport, serverId);
 
@@ -606,8 +616,9 @@ describe('aborts invalid request', () => {
       };
 
       createServer(serverTransport, services);
+      clientTransport.connect(serverId);
 
-      const serverSendAbortSpy = vi.spyOn(serverTransport, 'sendAbort');
+      const sendSpy = vi.spyOn(serverTransport, 'send');
 
       const streamId = nanoid();
       clientTransport.send(serverId, {
@@ -630,7 +641,18 @@ describe('aborts invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(serverSendAbortSpy).toHaveBeenCalledTimes(1);
+        expect(sendSpy).toHaveBeenCalledWith('client', {
+          streamId,
+          controlFlags: ControlFlags.StreamAbortBit,
+          payload: {
+            ok: false,
+            payload: {
+              code: INVALID_REQUEST_CODE,
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              message: expect.stringContaining('missing service name'),
+            },
+          },
+        });
       });
 
       const anotherStreamId = nanoid();
@@ -642,36 +664,21 @@ describe('aborts invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(serverSendAbortSpy).toHaveBeenCalledTimes(2);
+        expect(sendSpy).toHaveBeenCalledWith('client', {
+          streamId: anotherStreamId,
+          controlFlags: ControlFlags.StreamAbortBit,
+          payload: {
+            ok: false,
+            payload: {
+              code: INVALID_REQUEST_CODE,
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              message: expect.stringContaining('missing service name'),
+            },
+          },
+        });
       });
 
-      expect(serverSendAbortSpy).toHaveBeenNthCalledWith(
-        1,
-        'client',
-        streamId,
-        {
-          ok: false,
-          payload: {
-            code: INVALID_REQUEST_CODE,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            message: expect.stringContaining('missing service name'),
-          },
-        },
-      );
-
-      expect(serverSendAbortSpy).toHaveBeenNthCalledWith(
-        2,
-        'client',
-        anotherStreamId,
-        {
-          ok: false,
-          payload: {
-            code: INVALID_REQUEST_CODE,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            message: expect.stringContaining('missing service name'),
-          },
-        },
-      );
+      expect(sendSpy).toHaveBeenCalledTimes(2);
     });
 
     test('starts responding to same stream after tombstones are evicted', async () => {
@@ -697,8 +704,9 @@ describe('aborts invalid request', () => {
       createServer(serverTransport, services, {
         maxAbortedStreamTombstonesPerSession,
       });
+      clientTransport.connect(serverId);
 
-      const serverSendAbortSpy = vi.spyOn(serverTransport, 'sendAbort');
+      const sendSpy = vi.spyOn(serverTransport, 'send');
 
       const firstStreamId = nanoid();
       clientTransport.send(serverId, {
@@ -709,22 +717,19 @@ describe('aborts invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(serverSendAbortSpy).toHaveBeenCalledTimes(1);
-      });
-
-      expect(serverSendAbortSpy).toHaveBeenNthCalledWith(
-        1,
-        'client',
-        firstStreamId,
-        {
-          ok: false,
+        expect(sendSpy).toHaveBeenNthCalledWith(1, 'client', {
+          streamId: firstStreamId,
+          controlFlags: ControlFlags.StreamAbortBit,
           payload: {
-            code: INVALID_REQUEST_CODE,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            message: expect.stringContaining('missing service name'),
+            ok: false,
+            payload: {
+              code: INVALID_REQUEST_CODE,
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              message: expect.stringContaining('missing service name'),
+            },
           },
-        },
-      );
+        });
+      });
 
       for (let i = 0; i < maxAbortedStreamTombstonesPerSession; i++) {
         clientTransport.send(serverId, {
@@ -736,7 +741,7 @@ describe('aborts invalid request', () => {
       }
 
       await waitFor(() => {
-        expect(serverSendAbortSpy).toHaveBeenCalledTimes(
+        expect(sendSpy).toHaveBeenCalledTimes(
           maxAbortedStreamTombstonesPerSession + 1,
         );
       });
@@ -749,21 +754,24 @@ describe('aborts invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(serverSendAbortSpy).toHaveBeenCalledTimes(
+        expect(sendSpy).toHaveBeenCalledTimes(
           maxAbortedStreamTombstonesPerSession + 2,
         );
       });
 
-      expect(serverSendAbortSpy).toHaveBeenNthCalledWith(
+      expect(sendSpy).toHaveBeenNthCalledWith(
         maxAbortedStreamTombstonesPerSession + 2,
         'client',
-        firstStreamId,
         {
-          ok: false,
+          streamId: firstStreamId,
+          controlFlags: ControlFlags.StreamAbortBit,
           payload: {
-            code: INVALID_REQUEST_CODE,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            message: expect.stringContaining('missing service name'),
+            ok: false,
+            payload: {
+              code: INVALID_REQUEST_CODE,
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              message: expect.stringContaining('missing service name'),
+            },
           },
         },
       );
@@ -797,8 +805,10 @@ describe('aborts invalid request', () => {
       createServer(serverTransport, services, {
         maxAbortedStreamTombstonesPerSession,
       });
+      client1Transport.connect(serverId);
+      client2Transport.connect(serverId);
 
-      const serverSendAbortSpy = vi.spyOn(serverTransport, 'sendAbort');
+      const sendSpy = vi.spyOn(serverTransport, 'send');
 
       const client1FirstStreamId = nanoid();
       client1Transport.send(serverId, {
@@ -818,7 +828,7 @@ describe('aborts invalid request', () => {
       }
 
       await waitFor(() => {
-        expect(serverSendAbortSpy).toHaveBeenCalledTimes(
+        expect(sendSpy).toHaveBeenCalledTimes(
           maxAbortedStreamTombstonesPerSession + 1,
         );
       });
@@ -840,21 +850,24 @@ describe('aborts invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(serverSendAbortSpy).toHaveBeenCalledTimes(
+        expect(sendSpy).toHaveBeenCalledTimes(
           maxAbortedStreamTombstonesPerSession + 2,
         );
       });
 
-      expect(serverSendAbortSpy).toHaveBeenNthCalledWith(
+      expect(sendSpy).toHaveBeenNthCalledWith(
         maxAbortedStreamTombstonesPerSession + 2,
         'client1',
-        client1LastStreamId,
         {
-          ok: false,
+          streamId: client1LastStreamId,
+          controlFlags: ControlFlags.StreamAbortBit,
           payload: {
-            code: INVALID_REQUEST_CODE,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            message: expect.stringContaining('missing service name'),
+            ok: false,
+            payload: {
+              code: INVALID_REQUEST_CODE,
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              message: expect.stringContaining('missing service name'),
+            },
           },
         },
       );

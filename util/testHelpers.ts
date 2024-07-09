@@ -21,7 +21,6 @@ import {
   PartialTransportMessage,
 } from '../transport/message';
 import { coerceErrorString } from './stringify';
-import { Connection, Session, SessionOptions } from '../transport/session';
 import { Transport } from '../transport/transport';
 import {
   ReadStream,
@@ -32,6 +31,13 @@ import {
 import { WsLike } from '../transport/impls/ws/wslike';
 import { defaultTransportOptions } from '../transport/options';
 import { BaseErrorSchemaType } from '../router/result';
+import { Connection } from '../transport/connection';
+import {
+  Session,
+  SessionOptions,
+  SessionState,
+} from '../transport/sessionStateMachine/common';
+import { SessionStateGraph } from '../transport/sessionStateMachine';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
@@ -166,10 +172,14 @@ function catchProcError(err: unknown) {
 export const testingSessionOptions: SessionOptions = defaultTransportOptions;
 
 export function dummySession() {
-  return new Session<Connection>(
-    undefined,
+  return SessionStateGraph.entrypoints.NoConnection(
     'client',
     'server',
+    {
+      onSessionGracePeriodElapsed: () => {
+        /* noop */
+      },
+    },
     testingSessionOptions,
   );
 }
@@ -181,8 +191,9 @@ function dummyCtx<State>(
 ): ProcedureHandlerContext<State> {
   return {
     ...extendedContext,
-    from: session.from,
     state,
+    sessionId: session.id,
+    from: session.from,
     metadata: {},
     abortController: new AbortController(),
     clientAbortSignal: new AbortController().signal,
@@ -359,8 +370,32 @@ export function asClientUpload<
 }
 
 export const getUnixSocketPath = () => {
-  // https://nodejs.org/api/net.html#identifying-paths-for-ipc-connections
-  return process.platform === 'win32'
-    ? `\\\\?\\pipe\\${nanoid()}`
-    : `/tmp/${nanoid()}.sock`;
+  return `/tmp/${nanoid()}.sock`;
 };
+
+export function getTransportConnections<ConnType extends Connection>(
+  transport: Transport<ConnType>,
+): Array<ConnType> {
+  const connections = [];
+  for (const session of transport.sessions.values()) {
+    if (session.state === SessionState.Connected) {
+      connections.push(session.conn);
+    }
+  }
+
+  return connections;
+}
+
+export function numberOfConnections<ConnType extends Connection>(
+  transport: Transport<ConnType>,
+): number {
+  return getTransportConnections(transport).length;
+}
+
+export function closeAllConnections<ConnType extends Connection>(
+  transport: Transport<ConnType>,
+) {
+  for (const conn of getTransportConnections(transport)) {
+    conn.close();
+  }
+}

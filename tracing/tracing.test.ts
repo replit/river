@@ -41,7 +41,13 @@ describe('Basic tracing tests', () => {
 
     const propCtx = getPropagationContext(ctx);
     expect(propCtx?.traceparent).toBeTruthy();
-    const teleInfo = createSessionTelemetryInfo(dummySession(), propCtx);
+    const session = dummySession();
+    const teleInfo = createSessionTelemetryInfo(
+      session.id,
+      session.to,
+      session.from,
+      propCtx,
+    );
 
     // @ts-expect-error: hacking to get parentSpanId
     expect(propCtx?.traceparent).toContain(teleInfo.span.parentSpanId);
@@ -97,11 +103,11 @@ describe.each(testMatrix())(
     test('Traces sessions and connections across network boundary', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
+      clientTransport.connect(serverTransport.clientId);
       addPostTestCleanup(async () => {
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
-      await clientTransport.connect(serverTransport.clientId);
       await waitFor(() => {
         expect(clientTransport.sessions.size).toBe(1);
         expect(serverTransport.sessions.size).toBe(1);

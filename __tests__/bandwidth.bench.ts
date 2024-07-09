@@ -23,8 +23,10 @@ describe('bandwidth', async () => {
     const { getClientTransport, getServerTransport, cleanup } = await setup();
     afterAll(cleanup);
 
-    const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
+    const clientTransport = getClientTransport('client');
+    clientTransport.connect(serverTransport.clientId);
+
     const services = { test: TestServiceSchema };
     createServer(serverTransport, services);
     const client = createClient<typeof services>(

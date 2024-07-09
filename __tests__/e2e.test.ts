@@ -1,5 +1,10 @@
 import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
-import { getIteratorFromStream, iterNext } from '../util/testHelpers';
+import {
+  closeAllConnections,
+  getIteratorFromStream,
+  iterNext,
+  numberOfConnections,
+} from '../util/testHelpers';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import {
@@ -412,12 +417,12 @@ describe.each(testMatrix())(
 
         // randomly disconnect at some point
         if (i == 10) {
-          clientTransport.connections.forEach((conn) => conn.close());
+          closeAllConnections(clientTransport);
         }
 
         // again B)
         if (i == 42) {
-          clientTransport.connections.forEach((conn) => conn.close());
+          closeAllConnections(clientTransport);
         }
 
         promises.push(
@@ -541,8 +546,8 @@ describe.each(testMatrix())(
       });
 
       // test
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
-      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -566,23 +571,25 @@ describe.each(testMatrix())(
       });
 
       await client.test.add.rpc({ n: 3 });
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
-      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
 
       // kill the session
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      closeAllConnections(clientTransport);
       await advanceFakeTimersBySessionGrace();
       clientTransport.reconnectOnConnectionDrop = true;
 
       // we should have no connections
-      expect(serverTransport.connections.size).toEqual(0);
-      expect(clientTransport.connections.size).toEqual(0);
+      await waitFor(() => {
+        expect(numberOfConnections(serverTransport)).toEqual(0);
+        expect(numberOfConnections(clientTransport)).toEqual(0);
+      });
 
       // client should reconnect when making another call without explicitly calling connect
       const resultPromise = client.test.add.rpc({ n: 4 });
-      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
       const result = await resultPromise;
       expect(result).toStrictEqual({ ok: true, payload: { result: 7 } });
       await testFinishesCleanly({
@@ -610,17 +617,17 @@ describe.each(testMatrix())(
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
-      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
 
       // kill the session
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      closeAllConnections(clientTransport);
       await advanceFakeTimersBySessionGrace();
 
       // we should have no connections
-      expect(serverTransport.connections.size).toEqual(0);
-      expect(clientTransport.connections.size).toEqual(0);
+      expect(numberOfConnections(serverTransport)).toEqual(0);
+      expect(numberOfConnections(clientTransport)).toEqual(0);
 
       // client should not reconnect when making another call
       const resultPromise = client.test.add.rpc({ n: 4 });
@@ -628,7 +635,7 @@ describe.each(testMatrix())(
       expect(connectMock).not.toHaveBeenCalled();
 
       // connect and ensure that we still get the result
-      await clientTransport.connect(serverTransport.clientId);
+      clientTransport.connect(serverTransport.clientId);
       const result = await resultPromise;
       expect(result).toStrictEqual({ ok: true, payload: { result: 4 } });
 

@@ -1,13 +1,7 @@
-import { Codec } from '../codec/types';
-import { Value } from '@sinclair/typebox/value';
 import {
   OpaqueTransportMessage,
-  OpaqueTransportMessageSchema,
   TransportClientId,
   PartialTransportMessage,
-  ControlFlags,
-  ControlMessagePayloadSchema,
-  isAck,
 } from './message';
 import {
   BaseLogger,
@@ -19,24 +13,25 @@ import {
 import {
   EventDispatcher,
   EventHandler,
+  EventMap,
   EventTypes,
-  ProtocolError,
   ProtocolErrorType,
 } from './events';
-import { Connection, Session } from './session';
-import { Static } from '@sinclair/typebox';
-import { PropagationContext, createConnectionTelemetryInfo } from '../tracing';
-import { SpanStatusCode } from '@opentelemetry/api';
 import {
   ProvidedTransportOptions,
   TransportOptions,
   defaultTransportOptions,
 } from './options';
-import { ErrResult } from '../router';
 import {
-  InputReaderErrorSchema,
-  OutputReaderErrorSchema,
-} from '../router/procedures';
+  Session,
+  SessionConnected,
+  SessionConnecting,
+  SessionHandshaking,
+  SessionNoConnection,
+  SessionState,
+  SessionStateGraph,
+} from './sessionStateMachine';
+import { Connection } from './connection';
 
 /**
  * Represents the possible states of a transport.
@@ -46,16 +41,7 @@ import {
 export type TransportStatus = 'open' | 'closed';
 
 /**
- * Transports manage the lifecycle (creation/deletion) of sessions and connections. Its responsibilities include:
- *
- *  1) Constructing a new {@link Session} and {@link Connection} on {@link TransportMessage}s from new clients.
- *     After constructing the {@link Connection}, {@link onConnect} is called which adds it to the connection map.
- *  2) Delegating message listening of the connection to the newly created {@link Connection}.
- *     From this point on, the {@link Connection} is responsible for *reading* and *writing*
- *     messages from the connection.
- *  3) When a connection is closed, the {@link Transport} calls {@link onDisconnect} which closes the
- *     connection via {@link Connection.close} and removes it from the {@link connections} map.
-
+ * Transports manage the lifecycle (creation/deletion) of sessions
  *
  * ```plaintext
  *            ▲
@@ -82,30 +68,9 @@ export abstract class Transport<ConnType extends Connection> {
   private status: TransportStatus;
 
   /**
-   * The {@link Codec} used to encode and decode messages.
-   */
-  codec: Codec;
-
-  /**
    * The client ID of this transport.
    */
   clientId: TransportClientId;
-
-  /**
-   * The map of {@link Session}s managed by this transport.
-   */
-  sessions: Map<TransportClientId, Session<ConnType>>;
-
-  /**
-   * The map of {@link Connection}s managed by this transport.
-   */
-  get connections() {
-    return new Map(
-      [...this.sessions]
-        .map(([client, session]) => [client, session.connection])
-        .filter((entry): entry is [string, ConnType] => entry[1] !== undefined),
-    );
-  }
 
   /**
    * The event dispatcher for handling events of type EventTypes.
@@ -118,9 +83,10 @@ export abstract class Transport<ConnType extends Connection> {
   protected options: TransportOptions;
   log?: Logger;
 
+  sessions: Map<TransportClientId, Session<ConnType>>;
+
   /**
    * Creates a new Transport instance.
-   * This should also set up {@link onConnect}, and {@link onDisconnect} listeners.
    * @param codec The codec used to encode and decode messages.
    * @param clientId The client ID of this transport.
    */
@@ -130,10 +96,9 @@ export abstract class Transport<ConnType extends Connection> {
   ) {
     this.options = { ...defaultTransportOptions, ...providedOptions };
     this.eventDispatcher = new EventDispatcher();
-    this.sessions = new Map();
-    this.codec = this.options.codec;
     this.clientId = clientId;
     this.status = 'open';
+    this.sessions = new Map();
   }
 
   bindLogger(fn: LogFn | Logger, level?: LoggingLevel) {
@@ -148,390 +113,13 @@ export abstract class Transport<ConnType extends Connection> {
   }
 
   /**
-   * This is called immediately after a new connection is established and we
-   * may or may not know the identity of the connected client.
-   * It should attach all the necessary listeners to the connection for lifecycle
-   * events (i.e. data, close, error)
-   *
-   * This method is implemented by {@link ClientTransport} and {@link ServerTransport}.
-   */
-  protected abstract handleConnection(
-    conn: ConnType,
-    to: TransportClientId,
-  ): void;
-
-  /**
-   * Called when a new connection is established
-   * and we know the identity of the connected client.
-   * @param conn The connection object.
-   */
-  protected onConnect(
-    conn: ConnType,
-    session: Session<ConnType>,
-    isTransparentReconnect: boolean,
-  ) {
-    this.eventDispatcher.dispatchEvent('connectionStatus', {
-      status: 'connect',
-      conn,
-    });
-
-    conn.telemetry = createConnectionTelemetryInfo(conn, session.telemetry);
-
-    session.replaceWithNewConnection(conn, isTransparentReconnect);
-
-    this.log?.info(`connected to ${session.to}`, {
-      ...conn.loggingMetadata,
-      ...session.loggingMetadata,
-    });
-  }
-
-  protected createSession(
-    to: TransportClientId,
-    conn?: ConnType,
-    propagationCtx?: PropagationContext,
-  ) {
-    const session = new Session<ConnType>(
-      conn,
-      this.clientId,
-      to,
-      this.options,
-      propagationCtx,
-    );
-
-    if (this.log) {
-      session.bindLogger(this.log);
-    }
-
-    const currentSession = this.sessions.get(session.to);
-    if (currentSession) {
-      // something went very wrong, and we were asked to replace an active session with another one
-      this.log?.warn(
-        `session ${session.id} from ${session.to} surreptitiously replacing ${currentSession.id}`,
-        {
-          ...currentSession.loggingMetadata,
-          tags: ['invariant-violation'],
-        },
-      );
-      this.deleteSession({
-        session: currentSession,
-        closeHandshakingConnection: false,
-      });
-    }
-    this.sessions.set(session.to, session);
-    this.eventDispatcher.dispatchEvent('sessionStatus', {
-      status: 'connect',
-      session,
-    });
-    return session;
-  }
-
-  protected createNewSession({
-    to,
-    conn,
-    sessionId,
-    propagationCtx,
-  }: {
-    to: TransportClientId;
-    conn: ConnType;
-    sessionId: string;
-    propagationCtx?: PropagationContext;
-  }) {
-    let session = this.sessions.get(to);
-    if (session !== undefined) {
-      // this is a new session. if the client already had one, delete it before continuing
-      this.log?.info(
-        `session for ${to} already exists, replacing it with a new session as requested`,
-        session.loggingMetadata,
-      );
-      this.deleteSession({
-        session,
-        closeHandshakingConnection: false,
-      });
-      session = undefined;
-    }
-
-    session = this.createSession(to, conn, propagationCtx);
-    session.advertisedSessionId = sessionId;
-    this.log?.info(`created new session for ${to}`, session.loggingMetadata);
-
-    return session;
-  }
-
-  protected getExistingSession({
-    to,
-    sessionId,
-    nextExpectedSeq,
-  }: {
-    to: TransportClientId;
-    sessionId: string;
-    nextExpectedSeq: number;
-  }) {
-    const session = this.sessions.get(to);
-    if (
-      // reject this request if there was no previous session to replace
-      session === undefined ||
-      // or if both parties do not agree about the next expected sequence number
-      !session.nextExpectedSeqInRange(nextExpectedSeq) ||
-      // or if both parties do not agree on the advertised session id
-      session.advertisedSessionId !== sessionId
-    ) {
-      return false;
-    }
-
-    this.log?.info(
-      `reused existing session for ${to}`,
-      session.loggingMetadata,
-    );
-
-    return session;
-  }
-
-  protected getOrCreateSession({
-    to,
-    conn,
-    handshakingConn,
-    sessionId,
-    propagationCtx,
-  }: {
-    to: TransportClientId;
-    conn?: ConnType;
-    handshakingConn?: ConnType;
-    sessionId?: string;
-    propagationCtx?: PropagationContext;
-  }) {
-    let session = this.sessions.get(to);
-    const isReconnect = session !== undefined;
-    let isTransparentReconnect = isReconnect;
-
-    if (
-      session?.advertisedSessionId !== undefined &&
-      sessionId !== undefined &&
-      session.advertisedSessionId !== sessionId
-    ) {
-      this.log?.info(
-        `session for ${to} already exists but has a different session id (expected: ${session.advertisedSessionId}, got: ${sessionId}), creating a new one`,
-        session.loggingMetadata,
-      );
-      // note that here we are only interested in closing the handshaking connection if it _does
-      // not_ match the current handshaking connection. otherwise we can be in a situation where we
-      // can accidentally close the current connection and are never able to establish a full
-      // handshake.
-      this.deleteSession({
-        session,
-        closeHandshakingConnection: handshakingConn !== undefined,
-        handshakingConn,
-      });
-      isTransparentReconnect = false;
-      session = undefined;
-    }
-
-    if (!session) {
-      session = this.createSession(to, conn, propagationCtx);
-      this.log?.info(
-        `no session for ${to}, created a new one`,
-        session.loggingMetadata,
-      );
-    }
-
-    if (sessionId !== undefined) {
-      session.advertisedSessionId = sessionId;
-    }
-
-    if (handshakingConn !== undefined) {
-      session.replaceWithNewHandshakingConnection(handshakingConn);
-    }
-    return { session, isReconnect, isTransparentReconnect };
-  }
-
-  protected deleteSession({
-    session,
-    closeHandshakingConnection,
-    handshakingConn,
-  }: {
-    session: Session<ConnType>;
-    closeHandshakingConnection: boolean;
-    handshakingConn?: ConnType;
-  }) {
-    if (closeHandshakingConnection) {
-      session.closeHandshakingConnection(handshakingConn);
-    }
-    session.close();
-    session.telemetry.span.end();
-    const currentSession = this.sessions.get(session.to);
-    if (currentSession && currentSession.id !== session.id) {
-      // something went very wrong, and we were asked to delete a session that was not the currently
-      // active one
-      this.log?.warn(
-        `session ${session.id} disconnect from ${session.to}, mismatch with ${currentSession.id}`,
-        {
-          ...session.loggingMetadata,
-          tags: ['invariant-violation'],
-        },
-      );
-      return;
-    }
-    this.sessions.delete(session.to);
-    this.log?.info(
-      `session ${session.id} disconnect from ${session.to}`,
-      session.loggingMetadata,
-    );
-    this.eventDispatcher.dispatchEvent('sessionStatus', {
-      status: 'disconnect',
-      session,
-    });
-  }
-
-  /**
-   * The downstream implementation needs to call this when a connection is closed.
-   * @param conn The connection object.
-   * @param connectedTo The peer we are connected to.
-   */
-  protected onDisconnect(conn: ConnType, session: Session<ConnType>) {
-    if (session.connection !== undefined && session.connection.id !== conn.id) {
-      // it is completely legal for us to receive the onDisconnect notification later down the line
-      // and accidentally try to install the grace notification into an already-reconnected session.
-      session.telemetry.span.addEvent('onDisconnect race');
-      this.log?.warn('onDisconnect race', {
-        clientId: this.clientId,
-        ...session.loggingMetadata,
-        ...conn.loggingMetadata,
-        tags: ['invariant-violation'],
-      });
-      return;
-    }
-    conn.telemetry?.span.end();
-    this.eventDispatcher.dispatchEvent('connectionStatus', {
-      status: 'disconnect',
-      conn,
-    });
-
-    session.connection = undefined;
-    session.beginGrace(() => {
-      if (session.connection !== undefined) {
-        // if for whatever reason the session has a connection, it means that we accidentally
-        // installed a grace period in a session that already had reconnected. oops.
-        session.telemetry.span.addEvent('session grace period race');
-        this.log?.warn('session grace period race', {
-          clientId: this.clientId,
-          ...session.loggingMetadata,
-          ...conn.loggingMetadata,
-          tags: ['invariant-violation'],
-        });
-        return;
-      }
-      session.telemetry.span.addEvent('session grace period expired');
-      this.deleteSession({
-        session,
-        closeHandshakingConnection: true,
-        handshakingConn: conn,
-      });
-    });
-  }
-
-  /**
-   * Parses a message from a Uint8Array into a {@link OpaqueTransportMessage}.
-   * @param msg The message to parse.
-   * @returns The parsed message, or null if the message is malformed or invalid.
-   */
-  protected parseMsg(
-    msg: Uint8Array,
-    conn: ConnType,
-  ): OpaqueTransportMessage | null {
-    const parsedMsg = this.codec.fromBuffer(msg);
-
-    if (parsedMsg === null) {
-      const decodedBuffer = new TextDecoder().decode(Buffer.from(msg));
-      this.log?.error(
-        `received malformed msg, killing conn: ${decodedBuffer}`,
-        {
-          clientId: this.clientId,
-          ...conn.loggingMetadata,
-        },
-      );
-      return null;
-    }
-
-    if (!Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
-      this.log?.error(`received invalid msg: ${JSON.stringify(parsedMsg)}`, {
-        clientId: this.clientId,
-        ...conn.loggingMetadata,
-        validationErrors: [
-          ...Value.Errors(OpaqueTransportMessageSchema, parsedMsg),
-        ],
-      });
-      return null;
-    }
-
-    return parsedMsg;
-  }
-
-  /**
    * Called when a message is received by this transport.
    * You generally shouldn't need to override this in downstream transport implementations.
    * @param msg The received message.
    */
-  protected handleMsg(msg: OpaqueTransportMessage, conn: ConnType) {
+  protected handleMsg(msg: OpaqueTransportMessage) {
     if (this.getStatus() !== 'open') return;
-    const session = this.sessions.get(msg.from);
-    if (!session) {
-      this.log?.error(`received message for unknown session from ${msg.from}`, {
-        clientId: this.clientId,
-        transportMessage: msg,
-        ...conn.loggingMetadata,
-        tags: ['invariant-violation'],
-      });
-      return;
-    }
-
-    // got a msg so we know the other end is alive, reset the grace period
-    session.cancelGrace();
-
-    this.log?.debug(`received msg`, {
-      clientId: this.clientId,
-      transportMessage: msg,
-      ...conn.loggingMetadata,
-    });
-    if (msg.seq !== session.nextExpectedSeq) {
-      if (msg.seq < session.nextExpectedSeq) {
-        this.log?.debug(
-          `received duplicate msg (got seq: ${msg.seq}, wanted seq: ${session.nextExpectedSeq}), discarding`,
-          {
-            clientId: this.clientId,
-            transportMessage: msg,
-            ...conn.loggingMetadata,
-          },
-        );
-      } else {
-        const errMsg = `received out-of-order msg (got seq: ${msg.seq}, wanted seq: ${session.nextExpectedSeq})`;
-        this.log?.error(`${errMsg}, marking connection as dead`, {
-          clientId: this.clientId,
-          transportMessage: msg,
-          ...conn.loggingMetadata,
-          tags: ['invariant-violation'],
-        });
-        this.protocolError(ProtocolError.MessageOrderingViolated, errMsg);
-        session.telemetry.span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: 'message order violated',
-        });
-        this.deleteSession({ session, closeHandshakingConnection: true });
-      }
-
-      return;
-    }
-
-    session.updateBookkeeping(msg.ack, msg.seq);
-
-    // don't dispatch explicit acks
-    if (!isAck(msg.controlFlags)) {
-      this.eventDispatcher.dispatchEvent('message', msg);
-    } else {
-      this.log?.debug(`discarding msg (ack bit set)`, {
-        clientId: this.clientId,
-        transportMessage: msg,
-        ...conn.loggingMetadata,
-      });
-    }
+    this.eventDispatcher.dispatchEvent('message', msg);
   }
 
   /**
@@ -564,56 +152,7 @@ export abstract class Transport<ConnType extends Connection> {
    * @param msg The message to send.
    * @returns The ID of the sent message or undefined if it wasn't sent
    */
-
-  send(to: TransportClientId, msg: PartialTransportMessage): string {
-    if (this.getStatus() === 'closed') {
-      const err = 'transport is closed, cant send';
-      this.log?.error(err, {
-        clientId: this.clientId,
-        transportMessage: msg,
-        tags: ['invariant-violation'],
-      });
-
-      throw new Error(err);
-    }
-
-    return this.getOrCreateSession({ to }).session.send(msg);
-  }
-
-  // control helpers
-  sendCloseControl(to: TransportClientId, streamId: string) {
-    return this.send(to, {
-      streamId: streamId,
-      controlFlags: ControlFlags.StreamClosedBit,
-      payload: {
-        type: 'CLOSE' as const,
-      } satisfies Static<typeof ControlMessagePayloadSchema>,
-    });
-  }
-
-  sendRequestCloseControl(to: TransportClientId, streamId: string) {
-    return this.send(to, {
-      streamId: streamId,
-      controlFlags: ControlFlags.StreamCloseRequestBit,
-      payload: {
-        type: 'CLOSE' as const,
-      } satisfies Static<typeof ControlMessagePayloadSchema>,
-    });
-  }
-
-  sendAbort(
-    to: TransportClientId,
-    streamId: string,
-    payload: ErrResult<
-      Static<typeof OutputReaderErrorSchema | typeof InputReaderErrorSchema>
-    >,
-  ) {
-    return this.send(to, {
-      streamId: streamId,
-      controlFlags: ControlFlags.StreamAbortBit,
-      payload: payload,
-    });
-  }
+  abstract send(to: TransportClientId, msg: PartialTransportMessage): string;
 
   protected protocolError(type: ProtocolErrorType, message: string) {
     this.eventDispatcher.dispatchEvent('protocolError', { type, message });
@@ -628,7 +167,7 @@ export abstract class Transport<ConnType extends Connection> {
     this.status = 'closed';
 
     for (const session of this.sessions.values()) {
-      this.deleteSession({ session, closeHandshakingConnection: true });
+      this.deleteSession(session);
     }
 
     this.eventDispatcher.dispatchEvent('transportStatus', {
@@ -642,5 +181,90 @@ export abstract class Transport<ConnType extends Connection> {
 
   getStatus(): TransportStatus {
     return this.status;
+  }
+
+  protected updateSession<S extends Session<ConnType>>(session: S): S {
+    const activeSession = this.sessions.get(session.to);
+    if (activeSession && activeSession.id !== session.id) {
+      const msg = `attempt to transition active session for ${session.to} but active session (${activeSession.id}) is different from handle (${session.id})`;
+      throw new Error(msg);
+    }
+
+    this.sessions.set(session.to, session);
+
+    if (!activeSession) {
+      this.eventDispatcher.dispatchEvent('sessionStatus', {
+        status: 'connect',
+        session: session,
+      });
+    }
+
+    this.eventDispatcher.dispatchEvent('sessionTransition', {
+      state: session.state,
+      session: session,
+    } as EventMap['sessionTransition']);
+
+    return session;
+  }
+
+  // state transitions
+  protected deleteSession(session: Session<ConnType>) {
+    session.log?.info(`closing session ${session.id}`, session.loggingMetadata);
+
+    this.eventDispatcher.dispatchEvent('sessionStatus', {
+      status: 'disconnect',
+      session: session,
+    });
+
+    session.close();
+    this.sessions.delete(session.to);
+  }
+
+  // common listeners
+  protected onSessionGracePeriodElapsed(session: SessionNoConnection) {
+    this.log?.warn(
+      `session to ${session.to} grace period elapsed, closing`,
+      session.loggingMetadata,
+    );
+
+    this.deleteSession(session);
+  }
+
+  protected onConnectingFailed(
+    session: SessionConnecting<ConnType>,
+  ): SessionNoConnection {
+    // transition to no connection
+    const noConnectionSession =
+      SessionStateGraph.transition.ConnectingToNoConnection(session, {
+        onSessionGracePeriodElapsed: () => {
+          this.onSessionGracePeriodElapsed(noConnectionSession);
+        },
+      });
+
+    return this.updateSession(noConnectionSession);
+  }
+
+  protected onConnClosed(
+    session: SessionHandshaking<ConnType> | SessionConnected<ConnType>,
+  ): SessionNoConnection {
+    // transition to no connection
+    let noConnectionSession: SessionNoConnection;
+    if (session.state === SessionState.Handshaking) {
+      noConnectionSession =
+        SessionStateGraph.transition.HandshakingToNoConnection(session, {
+          onSessionGracePeriodElapsed: () => {
+            this.onSessionGracePeriodElapsed(noConnectionSession);
+          },
+        });
+    } else {
+      noConnectionSession =
+        SessionStateGraph.transition.ConnectedToNoConnection(session, {
+          onSessionGracePeriodElapsed: () => {
+            this.onSessionGracePeriodElapsed(noConnectionSession);
+          },
+        });
+    }
+
+    return this.updateSession(noConnectionSession);
   }
 }

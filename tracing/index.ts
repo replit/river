@@ -8,7 +8,7 @@ import {
 } from '@opentelemetry/api';
 import { version as RIVER_VERSION } from '../package.json';
 import { ValidProcType } from '../router';
-import { ClientTransport, Connection, Session } from '../transport';
+import { ClientTransport, Connection } from '../transport';
 
 export interface PropagationContext {
   traceparent: string;
@@ -32,7 +32,9 @@ export function getPropagationContext(
 }
 
 export function createSessionTelemetryInfo(
-  session: Session<Connection>,
+  sessionId: string,
+  to: string,
+  from: string,
   propagationCtx?: PropagationContext,
 ): TelemetryInfo {
   const parentCtx = propagationCtx
@@ -40,13 +42,13 @@ export function createSessionTelemetryInfo(
     : context.active();
 
   const span = tracer.startSpan(
-    `session ${session.id}`,
+    `session ${sessionId}`,
     {
       attributes: {
         component: 'river',
-        'river.session.id': session.id,
-        'river.session.to': session.to,
-        'river.session.from': session.from,
+        'river.session.id': sessionId,
+        'river.session.to': to,
+        'river.session.from': from,
       },
     },
     parentCtx,

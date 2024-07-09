@@ -1,5 +1,4 @@
 import { Static } from '@sinclair/typebox';
-import { ServerTransport } from '../transport';
 import {
   PayloadType,
   ProcedureErrorSchemaType,
@@ -25,6 +24,9 @@ import {
   ControlFlags,
   isStreamCloseRequest,
   isStreamAbort,
+  requestCloseStreamMessage,
+  closeStreamMessage,
+  abortMessage,
 } from '../transport/message';
 import {
   ServiceContext,
@@ -35,12 +37,15 @@ import { Logger, MessageMetadata } from '../logging/log';
 import { Value } from '@sinclair/typebox/value';
 import { Err, Result, Ok, ErrResultSchema, ErrResult } from './result';
 import { EventMap } from '../transport/events';
-import { Connection } from '../transport/session';
 import { coerceErrorString } from '../util/stringify';
 import { Span, SpanStatusCode } from '@opentelemetry/api';
 import { PropagationContext, createHandlerSpan } from '../tracing';
 import { ServerHandshakeOptions } from './handshake';
+import { Connection } from '../transport/connection';
+import { ServerTransport } from '../transport/server';
 import { ReadStreamImpl, WriteStreamImpl } from './streams';
+
+type StreamId = string;
 
 /**
  * A result schema for errors that can be passed to input's readstream
@@ -59,7 +64,7 @@ export interface Server<Services extends AnyServiceSchemaMap> {
   /**
    * A set of stream ids that are currently open.
    */
-  openStreams: Set<string>;
+  openStreams: Set<StreamId>;
 }
 
 type InputHandlerReturn = Promise<(() => void) | void>;
@@ -76,6 +81,7 @@ interface NewProcStreamInput {
   tracingCtx?: PropagationContext;
   initPayload: Static<PayloadType>;
   from: string;
+  sessionId: string;
 }
 
 class RiverServer<Services extends AnyServiceSchemaMap>
@@ -193,6 +199,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     controlFlags,
     initPayload,
     from,
+    sessionId,
     tracingCtx,
   }: NewProcStreamInput) {
     this.openStreams.add(streamId);
@@ -381,7 +388,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       Static<PayloadType>,
       Static<typeof InputReaderErrorSchema>
     >(() => {
-      this.transport.sendRequestCloseControl(from, streamId);
+      this.transport.send(from, requestCloseStreamMessage(streamId));
     });
     inputReader.onClose(() => {
       if (outputWriter.isClosed()) {
@@ -404,7 +411,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       if (!procClosesWithResponse && cleanClose) {
         // we ended, send a close bit back to the client
         // also, if the client has disconnected, we don't need to send a close
-        this.transport.sendCloseControl(from, streamId);
+        this.transport.send(from, closeStreamMessage(streamId));
       }
 
       if (inputReader.isClosed()) {
@@ -440,6 +447,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     const serviceContextWithTransportInfo: ProcedureHandlerContext<object> = {
       ...this.getContext(service, serviceName),
       from,
+      sessionId,
       metadata: sessionMetadata,
       abortController: handlerAbortController,
       clientAbortSignal: clientAbortController.signal,
@@ -626,8 +634,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       return null;
     }
 
-    const sessionMetadata =
-      this.transport.sessionHandshakeMetadata.get(session);
+    const sessionMetadata = this.transport.sessionHandshakeMetadata.get(
+      session.to,
+    );
     if (!sessionMetadata) {
       const errMessage = `session doesn't have handshake metadata`;
       this.log?.error(errMessage, {
@@ -791,6 +800,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       tracingCtx: initMessage.tracing,
       initPayload: initMessage.payload,
       from: initMessage.from,
+      sessionId: session.id,
     };
   }
 
@@ -809,12 +819,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
     abortedForSession.add(streamId);
 
-    this.transport.sendAbort(to, streamId, payload);
+    this.transport.send(to, abortMessage(streamId, payload));
   }
 }
 
 class LRUSet {
-  private items: Set<string>;
+  private items: Set<StreamId>;
   private maxItems: number;
 
   constructor(maxItems: number) {

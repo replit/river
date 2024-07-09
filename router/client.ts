@@ -16,9 +16,11 @@ import {
   ControlMessageCloseSchema,
   isStreamCloseRequest,
   isStreamAbort,
+  closeStreamMessage,
+  requestCloseStreamMessage,
+  abortMessage,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
-import { nanoid } from 'nanoid';
 import {
   BaseErrorSchemaType,
   Err,
@@ -27,11 +29,12 @@ import {
   ErrResultSchema,
 } from './result';
 import { EventMap } from '../transport/events';
-import { Connection } from '../transport/session';
+import { Connection } from '../transport/connection';
 import { Logger } from '../logging';
 import { createProcTelemetryInfo, getPropagationContext } from '../tracing';
 import { ClientHandshakeOptions } from './handshake';
-import { ClientTransport } from '../transport';
+import { ClientTransport } from '../transport/client';
+import { generateId } from '../transport/id';
 import {
   ReadStream,
   ReadStreamImpl,
@@ -113,30 +116,30 @@ type ServiceClient<Router extends AnyService> = {
         rpc: RpcFn<Router, ProcName>;
       }
     : ProcType<Router, ProcName> extends 'upload'
-    ? {
-        // If your go-to-definition ended up here, you probably meant to
-        // go to the procedure name. For example:
-        // riverClient.myService.someprocedure.upload({})
-        //            click here ^^^^^^^^^^^^^
-        upload: UploadFn<Router, ProcName>;
-      }
-    : ProcType<Router, ProcName> extends 'stream'
-    ? {
-        // If your go-to-definition ended up here, you probably meant to
-        // go to the procedure name. For example:
-        // riverClient.myService.someprocedure.stream({})
-        //            click here ^^^^^^^^^^^^^
-        stream: StreamFn<Router, ProcName>;
-      }
-    : ProcType<Router, ProcName> extends 'subscription'
-    ? {
-        // If your go-to-definition ended up here, you probably meant to
-        // go to the procedure name. For example:
-        // riverClient.myService.subscribe.stream({})
-        //            click here ^^^^^^^^^^^^^
-        subscribe: SubscriptionFn<Router, ProcName>;
-      }
-    : never;
+      ? {
+          // If your go-to-definition ended up here, you probably meant to
+          // go to the procedure name. For example:
+          // riverClient.myService.someprocedure.upload({})
+          //            click here ^^^^^^^^^^^^^
+          upload: UploadFn<Router, ProcName>;
+        }
+      : ProcType<Router, ProcName> extends 'stream'
+        ? {
+            // If your go-to-definition ended up here, you probably meant to
+            // go to the procedure name. For example:
+            // riverClient.myService.someprocedure.stream({})
+            //            click here ^^^^^^^^^^^^^
+            stream: StreamFn<Router, ProcName>;
+          }
+        : ProcType<Router, ProcName> extends 'subscription'
+          ? {
+              // If your go-to-definition ended up here, you probably meant to
+              // go to the procedure name. For example:
+              // riverClient.myService.subscribe.stream({})
+              //            click here ^^^^^^^^^^^^^
+              subscribe: SubscriptionFn<Router, ProcName>;
+            }
+          : never;
 };
 
 /**
@@ -222,7 +225,7 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
 
   const clientOptions = { ...defaultClientOptions, ...providedClientOptions };
   if (clientOptions.eagerlyConnect) {
-    void transport.connect(serverId);
+    transport.connect(serverId);
   }
 
   return _createRecursiveProxy((opts) => {
@@ -235,8 +238,8 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
 
     const [init, callOptions] = opts.args;
 
-    if (clientOptions.connectOnInvoke && !transport.connections.has(serverId)) {
-      void transport.connect(serverId);
+    if (clientOptions.connectOnInvoke && !transport.sessions.has(serverId)) {
+      transport.connect(serverId);
     }
 
     if (
@@ -266,12 +269,12 @@ type ClientProcReturn<ProcType extends ValidProcType> = ReturnType<
   ProcType extends 'rpc'
     ? RpcFn<AnyService, string>
     : ProcType extends 'upload'
-    ? UploadFn<AnyService, string>
-    : ProcType extends 'stream'
-    ? StreamFn<AnyService, string>
-    : ProcType extends 'subscription'
-    ? SubscriptionFn<AnyService, string>
-    : never
+      ? UploadFn<AnyService, string>
+      : ProcType extends 'stream'
+        ? StreamFn<AnyService, string>
+        : ProcType extends 'subscription'
+          ? SubscriptionFn<AnyService, string>
+          : never
 >;
 
 function handleProc(
@@ -285,7 +288,7 @@ function handleProc(
 ): ClientProcReturn<ValidProcType> {
   const procClosesWithInit = procType === 'rpc' || procType === 'subscription';
 
-  const streamId = nanoid();
+  const streamId = generateId();
   const { span, ctx } = createProcTelemetryInfo(
     transport,
     procType,
@@ -306,7 +309,7 @@ function handleProc(
     span.addEvent('inputWriter closed');
 
     if (!procClosesWithInit && cleanClose) {
-      transport.sendCloseControl(serverId, streamId);
+      transport.send(serverId, closeStreamMessage(streamId));
     }
 
     if (outputReader.isClosed()) {
@@ -318,7 +321,7 @@ function handleProc(
     Static<PayloadType>,
     Static<BaseErrorSchemaType>
   >(() => {
-    transport.sendRequestCloseControl(serverId, streamId);
+    transport.send(serverId, requestCloseStreamMessage(streamId));
   });
   outputReader.onClose(() => {
     span.addEvent('outputReader closed');
@@ -355,13 +358,15 @@ function handleProc(
     }
 
     inputWriter.close();
-    transport.sendAbort(
+    transport.send(
       serverId,
-      streamId,
-      Err({
-        code: ABORT_CODE,
-        message: 'Aborted by client',
-      }),
+      abortMessage(
+        streamId,
+        Err({
+          code: ABORT_CODE,
+          message: 'Aborted by client',
+        }),
+      ),
     );
   }
 

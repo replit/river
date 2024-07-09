@@ -1,4 +1,5 @@
-import { TransportClientId } from '../transport';
+import { TransportClientId } from '../transport/message';
+import { SessionId } from '../transport/sessionStateMachine/common';
 
 /**
  * ServiceContext exist for the purpose of declaration merging
@@ -54,7 +55,11 @@ export type ProcedureHandlerContext<State> = ServiceContext & {
    */
   metadata: ParsedMetadata;
   /**
-   * The ID of the client that sent this request.
+   * The ID of the session that sent this request.
+   */
+  sessionId: SessionId;
+  /**
+   * The ID of the client that sent this request. There may be multiple sessions per client.
    */
   from: TransportClientId;
   /**

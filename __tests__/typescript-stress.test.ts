@@ -1,4 +1,4 @@
-import { assert, describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { Procedure } from '../router/procedures';
 import { ServiceSchema } from '../router/services';
 import { Type } from '@sinclair/typebox';
@@ -318,7 +318,7 @@ describe('ResultUwrap types', () => {
     }
 
     // Then
-    assert(result.ok);
+    expect(result.ok).toBe(true);
     expect(acceptOk(result.payload)).toEqual({ hello: 'world' });
   });
 
@@ -332,7 +332,7 @@ describe('ResultUwrap types', () => {
     }
 
     // Then
-    assert(!result.ok);
+    expect(result.ok).toBe(false);
     expect(acceptErr(result.payload)).toEqual({
       code: 'world',
       message: 'hello',

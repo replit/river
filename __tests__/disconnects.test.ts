@@ -1,5 +1,10 @@
 import { assert, beforeEach, describe, expect, test } from 'vitest';
-import { getIteratorFromStream, iterNext } from '../util/testHelpers';
+import {
+  closeAllConnections,
+  getIteratorFromStream,
+  iterNext,
+  numberOfConnections,
+} from '../util/testHelpers';
 import {
   SubscribableServiceSchema,
   TestServiceSchema,
@@ -53,11 +58,12 @@ describe.each(testMatrix())(
 
       // start procedure
       await client.test.add.rpc({ n: 3 });
-      expect(clientTransport.connections.size).toEqual(1);
-      expect(serverTransport.connections.size).toEqual(1);
+      expect(numberOfConnections(clientTransport)).toEqual(1);
+      expect(numberOfConnections(serverTransport)).toEqual(1);
 
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
 
       const procPromise = client.test.add.rpc({ n: 4 });
       // end procedure
@@ -72,8 +78,8 @@ describe.each(testMatrix())(
         payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
       });
 
-      await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -102,11 +108,12 @@ describe.each(testMatrix())(
       const result = await iterNext(outputIterator);
       assert(result.ok);
 
-      expect(clientTransport.connections.size).toEqual(1);
-      expect(serverTransport.connections.size).toEqual(1);
+      expect(numberOfConnections(clientTransport)).toEqual(1);
+      expect(numberOfConnections(serverTransport)).toEqual(1);
 
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
 
       const nextResPromise = iterNext(outputIterator);
       // end procedure
@@ -121,8 +128,8 @@ describe.each(testMatrix())(
         payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
       });
 
-      await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -161,41 +168,57 @@ describe.each(testMatrix())(
       const outputReader1 = client1.subscribable.value.subscribe({});
       const outputIterator1 = getIteratorFromStream(outputReader1);
       let result = await iterNext(outputIterator1);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 0 });
+      expect(result).toStrictEqual({
+        ok: true,
+        payload: { result: 0 },
+      });
 
       const outputReader2 = client2.subscribable.value.subscribe({});
       const outputIterator2 = getIteratorFromStream(outputReader2);
       result = await iterNext(outputIterator2);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 0 });
+      expect(result).toStrictEqual({
+        ok: true,
+        payload: { result: 0 },
+      });
 
       // client2 adds a value
       const add1 = await client2.subscribable.add.rpc({ n: 1 });
-      assert(add1.ok);
+      expect(add1).toStrictEqual({ ok: true, payload: { result: 1 } });
 
       // both clients should receive the updated value
       result = await iterNext(outputIterator1);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 1 });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 1 } });
       result = await iterNext(outputIterator2);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 1 });
+      expect(result).toStrictEqual({ ok: true, payload: { result: 1 } });
 
       // all clients are connected
-      expect(client1Transport.connections.size).toEqual(1);
-      expect(client2Transport.connections.size).toEqual(1);
-      expect(serverTransport.connections.size).toEqual(2);
+      expect(numberOfConnections(client1Transport)).toEqual(1);
+      expect(numberOfConnections(client2Transport)).toEqual(1);
+      expect(numberOfConnections(serverTransport)).toEqual(2);
 
       // kill the connection for client2
       client2Transport.reconnectOnConnectionDrop = false;
-      client2Transport.connections.forEach((conn) => conn.close());
+      closeAllConnections(client2Transport);
+
+      // wait for connections to reflect that
+      await waitFor(() => {
+        expect(numberOfConnections(client1Transport)).toEqual(1);
+        expect(numberOfConnections(client2Transport)).toEqual(0);
+        expect(numberOfConnections(serverTransport)).toEqual(1);
+      });
 
       // client1 who is still connected can still add values and receive updates
-      const add2Promise = client1.subscribable.add.rpc({ n: 2 });
+      const add2 = await client1.subscribable.add.rpc({ n: 2 });
+      expect(add2).toStrictEqual({ ok: true, payload: { result: 3 } });
+      result = await iterNext(outputIterator1);
+      expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
+
+      // try receiving a value from client2
       const nextResPromise = iterNext(outputIterator2);
 
       // after we've disconnected, hit end of grace period
+      // because this advances the global timer, we need to wait for client1 to reconnect
+      // after missing some heartbeats
       await advanceFakeTimersBySessionGrace();
 
       await expect(nextResPromise).resolves.toMatchObject({
@@ -204,19 +227,16 @@ describe.each(testMatrix())(
         payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
       });
 
-      // client1 who is still connected can still add values and receive updates
-      assert((await add2Promise).ok);
-      result = await iterNext(outputIterator1);
-      assert(result.ok);
-      expect(result.payload).toStrictEqual({ result: 3 });
-
       // at this point, only client1 is connected
-      await waitFor(() => expect(client1Transport.connections.size).toEqual(1));
-      await waitFor(() => expect(client2Transport.connections.size).toEqual(0));
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      await waitFor(() => {
+        expect(numberOfConnections(client1Transport)).toEqual(1);
+        expect(numberOfConnections(client2Transport)).toEqual(0);
+        expect(numberOfConnections(serverTransport)).toEqual(1);
+      });
 
-      // cleanup client1 (client2 is already disconnected)
+      expect(outputReader2.isClosed()).toBe(true);
       await outputReader1.requestClose();
+
       await testFinishesCleanly({
         clientTransports: [client1Transport, client2Transport],
         serverTransport,
@@ -248,11 +268,12 @@ describe.each(testMatrix())(
       // end procedure
 
       // need to wait for connection to be established
-      await waitFor(() => expect(clientTransport.connections.size).toEqual(1));
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(1));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
 
       clientTransport.reconnectOnConnectionDrop = false;
-      clientTransport.connections.forEach((conn) => conn.close());
+      closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
 
       // after we've disconnected, hit end of grace period
       await advanceFakeTimersBySessionGrace();
@@ -264,8 +285,8 @@ describe.each(testMatrix())(
         payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
       });
 
-      await waitFor(() => expect(clientTransport.connections.size).toEqual(0));
-      await waitFor(() => expect(serverTransport.connections.size).toEqual(0));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,

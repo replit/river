@@ -19,10 +19,12 @@ import {
   StreamProcedure,
   UNCAUGHT_ERROR_CODE,
 } from '../router/procedures';
-import { ControlFlags } from '../transport/message';
+import { ControlFlags, abortMessage } from '../transport/message';
 import { TestSetupHelpers } from './fixtures/transports';
 import { nanoid } from 'nanoid';
 import { ProcedureHandlerContext } from '../router/context';
+
+const serverId = 'SERVER';
 
 describe.each(testMatrix())(
   'client initiated abort ($transport.name transport, $codec.name codec)',
@@ -335,7 +337,6 @@ describe.each(testMatrix())(
         async ({ procedureType }) => {
           const clientTransport = getClientTransport('client');
           const serverTransport = getServerTransport();
-          const serverId = 'SERVER';
           const serviceName = 'service';
           const procedureName = procedureType;
           const handler = vi.fn().mockImplementation(
@@ -367,6 +368,8 @@ describe.each(testMatrix())(
             await cleanupTransports([clientTransport, serverTransport]);
           });
 
+          clientTransport.connect(serverId);
+
           const streamId = nanoid();
           clientTransport.send(serverId, {
             streamId,
@@ -392,13 +395,15 @@ describe.each(testMatrix())(
           const onClientAbort = vi.fn();
           ctx.clientAbortSignal.onabort = onClientAbort;
 
-          clientTransport.sendAbort(
+          clientTransport.send(
             serverId,
-            streamId,
-            Err({
-              code: ABORT_CODE,
-              message: '',
-            }),
+            abortMessage(
+              streamId,
+              Err({
+                code: ABORT_CODE,
+                message: '',
+              }),
+            ),
           );
 
           await waitFor(() => {
@@ -546,13 +551,15 @@ describe.each(testMatrix())(
 
         const initStreamId = serverOnMessage.mock.calls[0][0].streamId;
 
-        serverTransport.sendAbort(
+        serverTransport.send(
           'client',
-          initStreamId,
-          Err({
-            code: ABORT_CODE,
-            message: '',
-          }),
+          abortMessage(
+            initStreamId,
+            Err({
+              code: ABORT_CODE,
+              message: '',
+            }),
+          ),
         );
 
         await expect(resP).resolves.toEqual({
@@ -599,13 +606,15 @@ describe.each(testMatrix())(
 
         const initStreamId = serverOnMessage.mock.calls[0][0].streamId;
 
-        serverTransport.sendAbort(
+        serverTransport.send(
           'client',
-          initStreamId,
-          Err({
-            code: ABORT_CODE,
-            message: '',
-          }),
+          abortMessage(
+            initStreamId,
+            Err({
+              code: ABORT_CODE,
+              message: '',
+            }),
+          ),
         );
 
         await expect(finalize()).resolves.toEqual({
@@ -653,13 +662,15 @@ describe.each(testMatrix())(
 
         const initStreamId = serverOnMessage.mock.calls[0][0].streamId;
 
-        serverTransport.sendAbort(
+        serverTransport.send(
           'client',
-          initStreamId,
-          Err({
-            code: ABORT_CODE,
-            message: '',
-          }),
+          abortMessage(
+            initStreamId,
+            Err({
+              code: ABORT_CODE,
+              message: '',
+            }),
+          ),
         );
 
         await expect(outputReader.asArray()).resolves.toEqual([
@@ -708,13 +719,15 @@ describe.each(testMatrix())(
 
         const initStreamId = serverOnMessage.mock.calls[0][0].streamId;
 
-        serverTransport.sendAbort(
+        serverTransport.send(
           'client',
-          initStreamId,
-          Err({
-            code: ABORT_CODE,
-            message: '',
-          }),
+          abortMessage(
+            initStreamId,
+            Err({
+              code: ABORT_CODE,
+              message: '',
+            }),
+          ),
         );
 
         await expect(outputReader.asArray()).resolves.toEqual([
@@ -740,7 +753,6 @@ describe.each(testMatrix())(
         const clientTransport = getClientTransport('client');
         const serverTransport = getServerTransport();
         const handler = vi.fn<[ProcedureHandlerContext<object>]>();
-        const serverId = 'SERVER';
         const serviceName = 'service';
         const procedureName = procedureType;
 
@@ -767,6 +779,7 @@ describe.each(testMatrix())(
         };
 
         const server = createServer(serverTransport, services);
+        clientTransport.connect(serverId);
 
         addPostTestCleanup(async () => {
           await cleanupTransports([clientTransport, serverTransport]);
@@ -826,7 +839,6 @@ describe.each(testMatrix())(
         addPostTestCleanup(() =>
           cleanupTransports([clientTransport, serverTransport]),
         );
-        const serverId = 'SERVER';
 
         const handler = vi
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -849,8 +861,9 @@ describe.each(testMatrix())(
         };
 
         createServer(serverTransport, services);
+        clientTransport.connect(serverId);
 
-        const serverSendAbortSpy = vi.spyOn(serverTransport, 'sendAbort');
+        const serverSendSpy = vi.spyOn(serverTransport, 'send');
 
         const serverOnMessage = vi.fn<[EventMap['message']]>();
         serverTransport.addEventListener('message', serverOnMessage);
@@ -886,7 +899,18 @@ describe.each(testMatrix())(
         });
 
         expect(handler).toHaveBeenCalledTimes(1);
-        expect(serverSendAbortSpy).toHaveBeenCalledTimes(1);
+        expect(serverSendSpy).toHaveBeenCalledWith('client', {
+          streamId,
+          controlFlags: ControlFlags.StreamAbortBit,
+          payload: {
+            ok: false,
+            payload: {
+              code: ABORT_CODE,
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              message: expect.any(String),
+            },
+          },
+        });
 
         await waitFor(() => {
           expect(clientOnMessage).toHaveBeenCalledTimes(1);
@@ -1021,7 +1045,6 @@ describe.each(testMatrix())(
         const clientTransport = getClientTransport('client');
         const serverTransport = getServerTransport();
 
-        const serverId = 'SERVER';
         const serviceName = 'service';
         const procedureName = procedureType;
 
@@ -1045,6 +1068,7 @@ describe.each(testMatrix())(
         };
 
         const server = createServer(serverTransport, services);
+        clientTransport.connect(serverId);
 
         addPostTestCleanup(async () => {
           await cleanupTransports([clientTransport, serverTransport]);

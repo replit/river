@@ -18,7 +18,10 @@ export type Logger = {
   [key in LoggingLevel]: (msg: string, metadata?: MessageMetadata) => void;
 };
 
-export type Tags = 'invariant-violation' | 'invalid-request';
+export type Tags =
+  | 'invariant-violation'
+  | 'state-transition'
+  | 'invalid-request';
 
 const cleanedLogFn = (log: LogFn) => {
   return (msg: string, metadata?: MessageMetadata) => {

@@ -7,6 +7,8 @@ import {
   createDummyTransportMessage,
   payloadToTransportMessage,
   createLocalWebSocketClient,
+  numberOfConnections,
+  getTransportConnections,
 } from '../../../util/testHelpers';
 import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
@@ -14,6 +16,7 @@ import {
   advanceFakeTimersBySessionGrace,
   cleanupTransports,
   testFinishesCleanly,
+  waitFor,
 } from '../../../__tests__/fixtures/cleanup';
 import { PartialTransportMessage } from '../../message';
 import type NodeWs from 'ws';
@@ -43,7 +46,7 @@ describe('sending and receiving across websockets works', async () => {
       'client',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
-    await clientTransport.connect(serverTransport.clientId);
+    clientTransport.connect(serverTransport.clientId);
     addPostTestCleanup(async () => {
       await cleanupTransports([clientTransport, serverTransport]);
     });
@@ -77,7 +80,7 @@ describe('sending and receiving across websockets works', async () => {
       );
 
       // client to server
-      await client.connect(serverTransport.clientId);
+      client.connect(serverTransport.clientId);
       const initMsg = makeDummyMessage('hello server');
       const initMsgId = client.send(serverId, initMsg);
       await expect(
@@ -124,16 +127,18 @@ describe('sending and receiving across websockets works', async () => {
     await new Promise((resolve) => (ws.onopen = resolve));
 
     // we never sent a handshake so there should be no connections or sessions
-    expect(serverTransport.connections.size).toBe(0);
+    expect(numberOfConnections(serverTransport)).toBe(0);
     expect(serverTransport.sessions.size).toBe(0);
 
     // advance time past the grace period
     await advanceFakeTimersBySessionGrace();
 
     // the connection should have been cleaned up
-    expect(serverTransport.connections.size).toBe(0);
-    expect(serverTransport.sessions.size).toBe(0);
-    expect(ws.readyState).toBe(ws.CLOSED);
+    await waitFor(() => {
+      expect(numberOfConnections(serverTransport)).toBe(0);
+      expect(serverTransport.sessions.size).toBe(0);
+      expect(ws.readyState).toBe(ws.CLOSED);
+    });
 
     await testFinishesCleanly({
       clientTransports: [],
@@ -147,7 +152,8 @@ describe('sending and receiving across websockets works', async () => {
       'client',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
-    await clientTransport.connect(serverTransport.clientId);
+
+    clientTransport.connect(serverTransport.clientId);
     addPostTestCleanup(async () => {
       await cleanupTransports([clientTransport, serverTransport]);
     });
@@ -161,9 +167,9 @@ describe('sending and receiving across websockets works', async () => {
     ).resolves.toStrictEqual(msg1.payload);
 
     // unclean client disconnect
-    clientTransport.sessions.forEach((session) =>
-      (session.connection?.ws as NodeWs).terminate(),
-    );
+    for (const conn of getTransportConnections(clientTransport)) {
+      (conn.ws as NodeWs).terminate();
+    }
 
     // by this point the client should have reconnected
     const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
@@ -183,7 +189,7 @@ describe('sending and receiving across websockets works', async () => {
       'client',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
-    await clientTransport.connect(serverTransport.clientId);
+    clientTransport.connect(serverTransport.clientId);
     addPostTestCleanup(async () => {
       await cleanupTransports([clientTransport, serverTransport]);
     });
@@ -199,9 +205,9 @@ describe('sending and receiving across websockets works', async () => {
     // unclean server disconnect. Note that the Node implementation sends the reason on the
     // `onclose`, but (some?) browsers call the `onerror` handler before it since it was an unclean
     // exit.
-    serverTransport.sessions.forEach((session) =>
-      (session.connection?.ws as NodeWs).terminate(),
-    );
+    for (const conn of getTransportConnections(clientTransport)) {
+      (conn.ws as NodeWs).terminate();
+    }
 
     // by this point the client should have reconnected
     const msg2Id = clientTransport.send(serverTransport.clientId, msg2);

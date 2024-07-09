@@ -7,7 +7,16 @@ export type {
   ProvidedClientTransportOptions as ClientTransportOptions,
   ProvidedServerTransportOptions as ServerTransportOptions,
 } from './options';
-export { Connection, Session } from './session';
+export {
+  Session,
+  SessionState,
+  type SessionNoConnection,
+  type SessionConnecting,
+  type SessionHandshaking,
+  type SessionConnected,
+  type SessionWaitingForHandshake,
+} from './sessionStateMachine';
+export { Connection } from './connection';
 export {
   TransportMessageSchema,
   OpaqueTransportMessageSchema,

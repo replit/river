@@ -1,6 +1,11 @@
 import { Type, TSchema, Static } from '@sinclair/typebox';
-import { nanoid } from 'nanoid';
 import { PropagationContext } from '../tracing';
+import { generateId } from './id';
+import {
+  ErrResult,
+  InputReaderErrorSchema,
+  OutputReaderErrorSchema,
+} from '../router';
 
 /**
  * Control flags for transport messages.
@@ -81,18 +86,33 @@ export const ControlMessageHandshakeRequestSchema = Type.Object({
    * used by the server to know whether this is a new or a reestablished connection, and whether it
    * is compatible with what it already has.
    */
-  expectedSessionState: Type.Optional(
-    Type.Object({
-      /**
-       * reconnect is set to true if the client explicitly wants to reestablish an existing
-       * connection.
-       */
-      reconnect: Type.Boolean(),
-      nextExpectedSeq: Type.Integer(),
-    }),
-  ),
+  expectedSessionState: Type.Object({
+    // what the client expects the server to send next
+    nextExpectedSeq: Type.Integer(),
+    // TODO: remove optional once we know all servers
+    // are nextSentSeq here
+    // what the server expects the client to send next
+    nextSentSeq: Type.Optional(Type.Integer()),
+  }),
+
   metadata: Type.Optional(Type.Unknown()),
 });
+
+export const HandshakeErrorRetriableResponseCodes = Type.Union([
+  Type.Literal('SESSION_STATE_MISMATCH'),
+]);
+
+export const HandshakeErrorFatalResponseCodes = Type.Union([
+  Type.Literal('MALFORMED_HANDSHAKE_META'),
+  Type.Literal('MALFORMED_HANDSHAKE'),
+  Type.Literal('PROTOCOL_VERSION_MISMATCH'),
+  Type.Literal('REJECTED_BY_CUSTOM_HANDLER'),
+]);
+
+export const HandshakeErrorResponseCodes = Type.Union([
+  HandshakeErrorRetriableResponseCodes,
+  HandshakeErrorFatalResponseCodes,
+]);
 
 export const ControlMessageHandshakeResponseSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_RESP'),
@@ -104,6 +124,9 @@ export const ControlMessageHandshakeResponseSchema = Type.Object({
     Type.Object({
       ok: Type.Literal(false),
       reason: Type.String(),
+      // TODO: remove optional once we know all servers
+      // are sending code here
+      code: Type.Optional(HandshakeErrorResponseCodes),
     }),
   ]),
 });
@@ -176,12 +199,12 @@ export function handshakeRequestMessage({
   tracing?: PropagationContext;
 }): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {
   return {
-    id: nanoid(),
+    id: generateId(),
     from,
     to,
     seq: 0,
     ack: 0,
-    streamId: nanoid(),
+    streamId: generateId(),
     controlFlags: 0,
     tracing,
     payload: {
@@ -210,17 +233,52 @@ export function handshakeResponseMessage({
   status: Static<typeof ControlMessageHandshakeResponseSchema>['status'];
 }): TransportMessage<Static<typeof ControlMessageHandshakeResponseSchema>> {
   return {
-    id: nanoid(),
+    id: generateId(),
     from,
     to,
     seq: 0,
     ack: 0,
-    streamId: nanoid(),
+    streamId: generateId(),
     controlFlags: 0,
     payload: {
       type: 'HANDSHAKE_RESP',
       status,
     } satisfies Static<typeof ControlMessageHandshakeResponseSchema>,
+  };
+}
+
+export function closeStreamMessage(streamId: string): PartialTransportMessage {
+  return {
+    streamId,
+    controlFlags: ControlFlags.StreamClosedBit,
+    payload: {
+      type: 'CLOSE' as const,
+    } satisfies Static<typeof ControlMessagePayloadSchema>,
+  };
+}
+
+export function requestCloseStreamMessage(
+  streamId: string,
+): PartialTransportMessage {
+  return {
+    streamId,
+    controlFlags: ControlFlags.StreamCloseRequestBit,
+    payload: {
+      type: 'CLOSE' as const,
+    } satisfies Static<typeof ControlMessagePayloadSchema>,
+  };
+}
+
+export function abortMessage(
+  streamId: string,
+  payload: ErrResult<
+    Static<typeof OutputReaderErrorSchema | typeof InputReaderErrorSchema>
+  >,
+) {
+  return {
+    streamId,
+    controlFlags: ControlFlags.StreamAbortBit,
+    payload,
   };
 }
 
