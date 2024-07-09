@@ -288,9 +288,7 @@ export abstract class ServerTransport<
       // invariant: ordering must be correct
       const clientNextExpectedSeq =
         msg.payload.expectedSessionState.nextExpectedSeq;
-      // TODO: remove nullish coalescing when we're sure this is always set
-      const clientNextSentSeq =
-        msg.payload.expectedSessionState.nextSentSeq ?? 0;
+      const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq;
       const ourNextSeq = oldSession.nextSeq();
       const ourAck = oldSession.ack;
 
@@ -374,9 +372,7 @@ export abstract class ServerTransport<
 
       const clientNextExpectedSeq =
         msg.payload.expectedSessionState.nextExpectedSeq;
-      // TODO: remove nullish coalescing when we're sure this is always set
-      const clientNextSentSeq =
-        msg.payload.expectedSessionState.nextSentSeq ?? 0;
+      const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq;
 
       if (clientNextSentSeq > 0 || clientNextExpectedSeq > 0) {
         // we don't have a session, but the client is trying to reconnect

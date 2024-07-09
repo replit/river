@@ -1,5 +1,9 @@
 import { Connection } from '../connection';
-import { IdentifiedSession, SessionState } from './common';
+import {
+  IdentifiedSession,
+  IdentifiedSessionProps,
+  SessionState,
+} from './common';
 
 export interface SessionConnectingListeners {
   onConnectionEstablished: (conn: Connection) => void;
@@ -7,6 +11,12 @@ export interface SessionConnectingListeners {
 
   // timeout related
   onConnectionTimeout: () => void;
+}
+
+export interface SessionConnectingProps<ConnType extends Connection>
+  extends IdentifiedSessionProps {
+  connPromise: Promise<ConnType>;
+  listeners: SessionConnectingListeners;
 }
 
 /*
@@ -26,27 +36,23 @@ export class SessionConnecting<
 
   connectionTimeout?: ReturnType<typeof setTimeout>;
 
-  constructor(
-    connPromise: Promise<ConnType>,
-    listeners: SessionConnectingListeners,
-    ...args: ConstructorParameters<typeof IdentifiedSession>
-  ) {
-    super(...args);
-    this.connPromise = connPromise;
-    this.listeners = listeners;
+  constructor(props: SessionConnectingProps<ConnType>) {
+    super(props);
+    this.connPromise = props.connPromise;
+    this.listeners = props.listeners;
 
     this.connectionTimeout = setTimeout(() => {
-      listeners.onConnectionTimeout();
+      this.listeners.onConnectionTimeout();
     }, this.options.connectionTimeoutMs);
 
-    connPromise.then(
+    this.connPromise.then(
       (conn) => {
         if (this._isConsumed) return;
-        listeners.onConnectionEstablished(conn);
+        this.listeners.onConnectionEstablished(conn);
       },
       (err) => {
         if (this._isConsumed) return;
-        listeners.onConnectionFailed(err);
+        this.listeners.onConnectionFailed(err);
       },
     );
   }

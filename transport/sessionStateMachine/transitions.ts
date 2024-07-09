@@ -7,7 +7,11 @@ import {
   SessionNoConnection,
   SessionNoConnectionListeners,
 } from './SessionNoConnection';
-import { IdentifiedSession, SessionOptions } from './common';
+import {
+  IdentifiedSession,
+  IdentifiedSessionProps,
+  SessionOptions,
+} from './common';
 import { PropagationContext, createSessionTelemetryInfo } from '../../tracing';
 import { SessionWaitingForHandshake } from './SessionWaitingForHandshake';
 import {
@@ -24,18 +28,18 @@ import { Logger } from '../../logging';
 
 function inheritSharedSession(
   session: IdentifiedSession,
-): ConstructorParameters<typeof IdentifiedSession> {
-  return [
-    session.id,
-    session.from,
-    session.to,
-    session.seq,
-    session.ack,
-    session.sendBuffer,
-    session.telemetry,
-    session.options,
-    session.log,
-  ];
+): IdentifiedSessionProps {
+  return {
+    id: session.id,
+    from: session.from,
+    to: session.to,
+    seq: session.seq,
+    ack: session.ack,
+    sendBuffer: session.sendBuffer,
+    telemetry: session.telemetry,
+    options: session.options,
+    log: session.log,
+  };
 }
 
 /*
@@ -74,18 +78,18 @@ export const SessionStateGraph = {
       const telemetry = createSessionTelemetryInfo(id, to, from);
       const sendBuffer: Array<OpaqueTransportMessage> = [];
 
-      const session = new SessionNoConnection(
+      const session = new SessionNoConnection({
         listeners,
         id,
         from,
         to,
-        0,
-        0,
+        seq: 0,
+        ack: 0,
         sendBuffer,
         telemetry,
         options,
         log,
-      );
+      });
 
       session.log?.info(`session ${session.id} created in NoConnection state`, {
         ...session.loggingMetadata,
@@ -101,13 +105,13 @@ export const SessionStateGraph = {
       options: SessionOptions,
       log?: Logger,
     ): SessionWaitingForHandshake<ConnType> {
-      const session = new SessionWaitingForHandshake(
+      const session = new SessionWaitingForHandshake({
         conn,
         listeners,
         from,
         options,
         log,
-      );
+      });
 
       session.log?.info(`session created in WaitingForHandshake state`, {
         ...session.loggingMetadata,
@@ -129,11 +133,11 @@ export const SessionStateGraph = {
       const carriedState = inheritSharedSession(oldSession);
       oldSession._handleStateExit();
 
-      const session = new SessionConnecting(
+      const session = new SessionConnecting({
         connPromise,
         listeners,
         ...carriedState,
-      );
+      });
       session.log?.info(
         `session ${session.id} transition from NoConnection to Connecting`,
         {
@@ -151,7 +155,11 @@ export const SessionStateGraph = {
       const carriedState = inheritSharedSession(oldSession);
       oldSession._handleStateExit();
 
-      const session = new SessionHandshaking(conn, listeners, ...carriedState);
+      const session = new SessionHandshaking({
+        conn,
+        listeners,
+        ...carriedState,
+      });
       session.log?.info(
         `session ${session.id} transition from Connecting to Handshaking`,
         {
@@ -170,7 +178,11 @@ export const SessionStateGraph = {
       const conn = oldSession.conn;
       oldSession._handleStateExit();
 
-      const session = new SessionConnected(conn, listeners, ...carriedState);
+      const session = new SessionConnected({
+        conn,
+        listeners,
+        ...carriedState,
+      });
       session.log?.info(
         `session ${session.id} transition from Handshaking to Connected`,
         {
@@ -191,27 +203,35 @@ export const SessionStateGraph = {
     ): SessionConnected<ConnType> {
       const conn = pendingSession.conn;
       const { from, options } = pendingSession;
-      const carriedState: ConstructorParameters<typeof IdentifiedSession> =
-        oldSession
-          ? // old session exists, inherit state
-            inheritSharedSession(oldSession)
-          : // old session does not exist, create new state
-            [
+      const carriedState: IdentifiedSessionProps = oldSession
+        ? // old session exists, inherit state
+          inheritSharedSession(oldSession)
+        : // old session does not exist, create new state
+          {
+            id: sessionId,
+            from,
+            to,
+            seq: 0,
+            ack: 0,
+            sendBuffer: [],
+            telemetry: createSessionTelemetryInfo(
               sessionId,
-              from,
               to,
-              0,
-              0,
-              [],
-              createSessionTelemetryInfo(sessionId, to, from, propagationCtx),
-              options,
-              pendingSession.log,
-            ];
+              from,
+              propagationCtx,
+            ),
+            options,
+            log: pendingSession.log,
+          };
 
       pendingSession._handleStateExit();
       oldSession?._handleStateExit();
 
-      const session = new SessionConnected(conn, listeners, ...carriedState);
+      const session = new SessionConnected({
+        conn,
+        listeners,
+        ...carriedState,
+      });
       session.log?.info(
         `session ${session.id} transition from WaitingForHandshake to Connected`,
         {
@@ -231,7 +251,7 @@ export const SessionStateGraph = {
       oldSession.bestEffortClose();
       oldSession._handleStateExit();
 
-      const session = new SessionNoConnection(listeners, ...carriedState);
+      const session = new SessionNoConnection({ listeners, ...carriedState });
       session.log?.info(
         `session ${session.id} transition from Connecting to NoConnection`,
         {
@@ -250,7 +270,7 @@ export const SessionStateGraph = {
       oldSession.conn.close();
       oldSession._handleStateExit();
 
-      const session = new SessionNoConnection(listeners, ...carriedState);
+      const session = new SessionNoConnection({ listeners, ...carriedState });
       session.log?.info(
         `session ${session.id} transition from Handshaking to NoConnection`,
         {
@@ -269,7 +289,7 @@ export const SessionStateGraph = {
       oldSession.conn.close();
       oldSession._handleStateExit();
 
-      const session = new SessionNoConnection(listeners, ...carriedState);
+      const session = new SessionNoConnection({ listeners, ...carriedState });
       session.log?.info(
         `session ${session.id} transition from Connected to NoConnection`,
         {

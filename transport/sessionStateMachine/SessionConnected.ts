@@ -6,7 +6,11 @@ import {
   PartialTransportMessage,
   isAck,
 } from '../message';
-import { IdentifiedSession, SessionState } from './common';
+import {
+  IdentifiedSession,
+  IdentifiedSessionProps,
+  SessionState,
+} from './common';
 import { Connection } from '../connection';
 import { SpanStatusCode } from '@opentelemetry/api';
 
@@ -15,6 +19,12 @@ export interface SessionConnectedListeners {
   onConnectionClosed: () => void;
   onMessage: (msg: OpaqueTransportMessage) => void;
   onInvalidMessage: (reason: string) => void;
+}
+
+export interface SessionConnectedProps<ConnType extends Connection>
+  extends IdentifiedSessionProps {
+  conn: ConnType;
+  listeners: SessionConnectedListeners;
 }
 
 /*
@@ -50,18 +60,14 @@ export class SessionConnected<
     return constructedMsg.id;
   }
 
-  constructor(
-    conn: ConnType,
-    listeners: SessionConnectedListeners,
-    ...args: ConstructorParameters<typeof IdentifiedSession>
-  ) {
-    super(...args);
-    this.conn = conn;
-    this.listeners = listeners;
+  constructor(props: SessionConnectedProps<ConnType>) {
+    super(props);
+    this.conn = props.conn;
+    this.listeners = props.listeners;
 
     this.conn.addDataListener(this.onMessageData);
-    this.conn.addCloseListener(listeners.onConnectionClosed);
-    this.conn.addErrorListener(listeners.onConnectionErrored);
+    this.conn.addCloseListener(this.listeners.onConnectionClosed);
+    this.conn.addErrorListener(this.listeners.onConnectionErrored);
 
     // send any buffered messages
     if (this.sendBuffer.length > 0) {
@@ -72,7 +78,7 @@ export class SessionConnected<
     }
 
     for (const msg of this.sendBuffer) {
-      conn.send(this.options.codec.toBuffer(msg));
+      this.conn.send(this.options.codec.toBuffer(msg));
     }
 
     // dont explicity clear the buffer, we'll just filter out old messages

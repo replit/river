@@ -1,6 +1,10 @@
 import { Connection } from '../connection';
 import { OpaqueTransportMessage, TransportMessage } from '../message';
-import { IdentifiedSession, SessionState } from './common';
+import {
+  IdentifiedSession,
+  IdentifiedSessionProps,
+  SessionState,
+} from './common';
 
 export interface SessionHandshakingListeners {
   onConnectionErrored: (err: unknown) => void;
@@ -10,6 +14,12 @@ export interface SessionHandshakingListeners {
 
   // timeout related
   onHandshakeTimeout: () => void;
+}
+
+export interface SessionHandshakingProps<ConnType extends Connection>
+  extends IdentifiedSessionProps {
+  conn: ConnType;
+  listeners: SessionHandshakingListeners;
 }
 
 /*
@@ -28,22 +38,18 @@ export class SessionHandshaking<
 
   handshakeTimeout: ReturnType<typeof setTimeout>;
 
-  constructor(
-    conn: ConnType,
-    listeners: SessionHandshakingListeners,
-    ...args: ConstructorParameters<typeof IdentifiedSession>
-  ) {
-    super(...args);
-    this.conn = conn;
-    this.listeners = listeners;
+  constructor(props: SessionHandshakingProps<ConnType>) {
+    super(props);
+    this.conn = props.conn;
+    this.listeners = props.listeners;
 
     this.handshakeTimeout = setTimeout(() => {
-      listeners.onHandshakeTimeout();
+      this.listeners.onHandshakeTimeout();
     }, this.options.handshakeTimeoutMs);
 
     this.conn.addDataListener(this.onHandshakeData);
-    this.conn.addErrorListener(listeners.onConnectionErrored);
-    this.conn.addCloseListener(listeners.onConnectionClosed);
+    this.conn.addErrorListener(this.listeners.onConnectionErrored);
+    this.conn.addCloseListener(this.listeners.onConnectionClosed);
   }
 
   onHandshakeData = (msg: Uint8Array) => {

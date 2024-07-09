@@ -1,8 +1,16 @@
-import { IdentifiedSession, SessionState } from './common';
+import {
+  IdentifiedSession,
+  IdentifiedSessionProps,
+  SessionState,
+} from './common';
 
 export interface SessionNoConnectionListeners {
   // timeout related
   onSessionGracePeriodElapsed: () => void;
+}
+
+export interface SessionNoConnectionProps extends IdentifiedSessionProps {
+  listeners: SessionNoConnectionListeners;
 }
 
 /*
@@ -17,12 +25,9 @@ export class SessionNoConnection extends IdentifiedSession {
 
   gracePeriodTimeout?: ReturnType<typeof setTimeout>;
 
-  constructor(
-    listeners: SessionNoConnectionListeners,
-    ...args: ConstructorParameters<typeof IdentifiedSession>
-  ) {
-    super(...args);
-    this.listeners = listeners;
+  constructor(props: SessionNoConnectionProps) {
+    super(props);
+    this.listeners = props.listeners;
 
     this.gracePeriodTimeout = setTimeout(() => {
       this.listeners.onSessionGracePeriodElapsed();
