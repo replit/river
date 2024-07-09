@@ -76,7 +76,7 @@ export const ControlMessageCloseSchema = Type.Object({
   type: Type.Literal('CLOSE'),
 });
 
-export const PROTOCOL_VERSION = 'v2.0';
+export const PROTOCOL_VERSION = 'v1.1';
 export const ControlMessageHandshakeRequestSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_REQ'),
   protocolVersion: Type.String(),
