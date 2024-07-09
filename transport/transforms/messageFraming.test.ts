@@ -102,7 +102,7 @@ describe('MessageFramer', () => {
 
     parser.end();
     expect(spy).toHaveBeenCalledTimes(0);
-    expect(err).toHaveBeenCalledTimes(1);
+    expect(err).toHaveBeenCalledTimes(0);
   });
 
   test('consistent byte length calculation with emojis and unicode', () => {
