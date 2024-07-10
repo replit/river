@@ -82,6 +82,7 @@ interface NewProcStreamInput {
   initPayload: Static<PayloadType>;
   from: string;
   sessionId: string;
+  protocolVersion: string;
 }
 
 class RiverServer<Services extends AnyServiceSchemaMap>
@@ -201,6 +202,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     from,
     sessionId,
     tracingCtx,
+    protocolVersion,
   }: NewProcStreamInput) {
     this.openStreams.add(streamId);
 
@@ -282,7 +284,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         outputWriter.triggerCloseRequest();
       }
 
-      if (isStreamAbort(msg.controlFlags)) {
+      if (isStreamAbortBackwardsCompat(msg.controlFlags, protocolVersion)) {
         let abortResult: Static<typeof InputErrResultSchema>;
         if (Value.Check(InputErrResultSchema, msg.payload)) {
           abortResult = msg.payload;
@@ -361,7 +363,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         );
       }
 
-      if (isStreamClose(msg.controlFlags)) {
+      if (isStreamCloseBackwardsCompat(msg.controlFlags, protocolVersion)) {
         inputReader.triggerClose();
       }
     };
@@ -384,6 +386,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       onFinishedCallbacks.length = 0;
     };
 
+    const procClosesWithResponse =
+      procedure.type === 'rpc' || procedure.type === 'upload';
+
     const inputReader = new ReadStreamImpl<
       Static<PayloadType>,
       Static<typeof InputReaderErrorSchema>
@@ -391,19 +396,28 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       this.transport.send(from, requestCloseStreamMessage(streamId));
     });
     inputReader.onClose(() => {
+      // TODO remove once clients migrate to v2
+      if (protocolVersion === 'v1.1') {
+        // in v1.1 a close in either direction should close everything
+        // for upload/rpc it will handle the close after it responds
+        if (!procClosesWithResponse && !outputWriter.isClosed()) {
+          outputWriter.close();
+        }
+      }
+
       if (outputWriter.isClosed()) {
         cleanup();
       }
     });
 
-    const procClosesWithResponse =
-      procedure.type === 'rpc' || procedure.type === 'upload';
     const outputWriter = new WriteStreamImpl<
       Result<Static<PayloadType>, Static<ProcedureErrorSchemaType>>
     >((response) => {
       this.transport.send(from, {
         streamId,
-        controlFlags: procClosesWithResponse ? ControlFlags.StreamClosedBit : 0,
+        controlFlags: procClosesWithResponse
+          ? getStreamCloseBackwardsCompat(protocolVersion)
+          : 0,
         payload: response,
       });
     });
@@ -411,7 +425,20 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       if (!procClosesWithResponse && cleanClose) {
         // we ended, send a close bit back to the client
         // also, if the client has disconnected, we don't need to send a close
+
+        const message = closeStreamMessage(streamId);
+        // TODO remove once clients migrate to v2
+        message.controlFlags = getStreamCloseBackwardsCompat(protocolVersion);
+
         this.transport.send(from, closeStreamMessage(streamId));
+      }
+
+      // TODO remove once clients migrate to v2
+      if (protocolVersion === 'v1.1') {
+        // in v1.1 a close in either direction should close everything
+        if (!inputReader.isClosed()) {
+          inputReader.triggerClose();
+        }
       }
 
       if (inputReader.isClosed()) {
@@ -433,7 +460,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       );
     };
 
-    if (isStreamClose(controlFlags)) {
+    if (isStreamCloseBackwardsCompat(controlFlags, protocolVersion)) {
       inputReader.triggerClose();
     } else if (procedure.type === 'rpc' || procedure.type === 'subscription') {
       // Though things can work just fine if they eventually follow up with a stream
@@ -801,6 +828,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       initPayload: initMessage.payload,
       from: initMessage.from,
       sessionId: session.id,
+      protocolVersion: session.protocolVersion,
     };
   }
 
@@ -819,7 +847,13 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
     abortedForSession.add(streamId);
 
-    this.transport.send(to, abortMessage(streamId, payload));
+    this.transport.send(
+      to,
+      // TODO remove once clients migrate to v2
+      this.transport.sessions.get(to)?.protocolVersion === 'v1.1'
+        ? closeStreamMessage(streamId)
+        : abortMessage(streamId, payload),
+    );
   }
 }
 
@@ -847,6 +881,42 @@ class LRUSet {
   has(item: string) {
     return this.items.has(item);
   }
+}
+
+// TODO remove once clients migrate to v2
+function isStreamAbortBackwardsCompat(
+  controlFlags: ControlFlags,
+  protocolVersion: string,
+) {
+  if (protocolVersion === 'v1.1') {
+    // in 1.1 we don't have abort
+    return false;
+  }
+
+  return isStreamAbort(controlFlags);
+}
+
+// TODO remove once clients migrate to v2
+function isStreamCloseBackwardsCompat(
+  controlFlags: ControlFlags,
+  protocolVersion: string,
+) {
+  if (protocolVersion === 'v1.1') {
+    // in v1.1 the bits for close is what we use for abort now
+    return isStreamAbort(controlFlags);
+  }
+
+  return isStreamClose(controlFlags);
+}
+
+// TODO remove once clients migrate to v2
+function getStreamCloseBackwardsCompat(protocolVersion: string) {
+  if (protocolVersion === 'v1.1') {
+    // in v1.1 the bits for close is what we use for abort now
+    return ControlFlags.StreamAbortBit;
+  }
+
+  return ControlFlags.StreamClosedBit;
 }
 
 /**

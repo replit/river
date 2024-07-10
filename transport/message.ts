@@ -76,7 +76,9 @@ export const ControlMessageCloseSchema = Type.Object({
   type: Type.Literal('CLOSE'),
 });
 
-export const PROTOCOL_VERSION = 'v1.1';
+export const currentProtocolVersion = 'v2.0';
+export const acceptedProtocolVersions = ['v1.1', currentProtocolVersion];
+
 export const ControlMessageHandshakeRequestSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_REQ'),
   protocolVersion: Type.String(),
@@ -209,7 +211,7 @@ export function handshakeRequestMessage({
     tracing,
     payload: {
       type: 'HANDSHAKE_REQ',
-      protocolVersion: PROTOCOL_VERSION,
+      protocolVersion: currentProtocolVersion,
       sessionId,
       expectedSessionState,
       metadata,

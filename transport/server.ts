@@ -5,10 +5,11 @@ import {
   ControlMessageHandshakeRequestSchema,
   HandshakeErrorResponseCodes,
   OpaqueTransportMessage,
-  PROTOCOL_VERSION,
+  acceptedProtocolVersions,
   PartialTransportMessage,
   TransportClientId,
   handshakeResponseMessage,
+  currentProtocolVersion,
 } from './message';
 import {
   ProvidedServerTransportOptions,
@@ -56,7 +57,7 @@ export abstract class ServerTransport<
     };
     this.log?.info(`initiated server transport`, {
       clientId: this.clientId,
-      protocolVersion: PROTOCOL_VERSION,
+      protocolVersion: currentProtocolVersion,
     });
   }
 
@@ -237,11 +238,11 @@ export abstract class ServerTransport<
 
     // invariant: handshake request passes all the validation
     const gotVersion = msg.payload.protocolVersion;
-    if (gotVersion !== PROTOCOL_VERSION) {
+    if (!acceptedProtocolVersions.includes(gotVersion)) {
       this.rejectHandshakeRequest(
         session,
         msg.from,
-        `expected protocol version ${PROTOCOL_VERSION}, got ${gotVersion}`,
+        `expected protocol version oneof [${acceptedProtocolVersions.toString()}], got ${gotVersion}`,
         'PROTOCOL_VERSION_MISMATCH',
         {
           ...session.loggingMetadata,
@@ -446,6 +447,7 @@ export abstract class ServerTransport<
             this.deleteSession(connectedSession);
           },
         },
+        gotVersion,
       );
 
     this.sessionHandshakeMetadata.set(connectedSession.to, parsedMetadata);

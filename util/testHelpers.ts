@@ -19,6 +19,7 @@ import net from 'node:net';
 import {
   OpaqueTransportMessage,
   PartialTransportMessage,
+  currentProtocolVersion,
 } from '../transport/message';
 import { coerceErrorString } from './stringify';
 import { Transport } from '../transport/transport';
@@ -181,6 +182,7 @@ export function dummySession() {
       },
     },
     testingSessionOptions,
+    currentProtocolVersion,
   );
 }
 

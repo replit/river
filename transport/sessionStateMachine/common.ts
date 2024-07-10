@@ -192,6 +192,7 @@ export abstract class IdentifiedSession extends CommonSession {
   readonly id: SessionId;
   readonly telemetry: TelemetryInfo;
   readonly to: TransportClientId;
+  readonly protocolVersion: string;
 
   /**
    * Index of the message we will send next (excluding handshake)
@@ -213,6 +214,7 @@ export abstract class IdentifiedSession extends CommonSession {
     sendBuffer: Array<OpaqueTransportMessage>,
     telemetry: TelemetryInfo,
     options: SessionOptions,
+    protocolVersion: string,
     log: Logger | undefined,
   ) {
     super(from, options, log);
@@ -223,6 +225,7 @@ export abstract class IdentifiedSession extends CommonSession {
     this.sendBuffer = sendBuffer;
     this.telemetry = telemetry;
     this.log = log;
+    this.protocolVersion = protocolVersion;
   }
 
   get loggingMetadata(): MessageMetadata {
