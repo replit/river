@@ -386,6 +386,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       onFinishedCallbacks.length = 0;
     };
 
+    const procClosesWithResponse =
+      procedure.type === 'rpc' || procedure.type === 'upload';
+
     const inputReader = new ReadStreamImpl<
       Static<PayloadType>,
       Static<typeof InputReaderErrorSchema>
@@ -393,13 +396,20 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       this.transport.send(from, requestCloseStreamMessage(streamId));
     });
     inputReader.onClose(() => {
+      // TODO remove once clients migrate to v2
+      if (protocolVersion === 'v1.1') {
+        // in v1.1 a close in either direction should close everything
+        // for upload/rpc it will handle the close after it responds
+        if (!procClosesWithResponse && !outputWriter.isClosed()) {
+          outputWriter.close();
+        }
+      }
+
       if (outputWriter.isClosed()) {
         cleanup();
       }
     });
 
-    const procClosesWithResponse =
-      procedure.type === 'rpc' || procedure.type === 'upload';
     const outputWriter = new WriteStreamImpl<
       Result<Static<PayloadType>, Static<ProcedureErrorSchemaType>>
     >((response) => {
@@ -425,6 +435,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
       // TODO remove once clients migrate to v2
       if (protocolVersion === 'v1.1') {
+        // in v1.1 a close in either direction should close everything
         if (!inputReader.isClosed()) {
           inputReader.triggerClose();
         }
@@ -891,6 +902,7 @@ function isStreamCloseBackwardsCompat(
   protocolVersion: string,
 ) {
   if (protocolVersion === 'v1.1') {
+    // in v1.1 the bits for close is what we use for abort now
     return isStreamAbort(controlFlags);
   }
 
@@ -900,6 +912,7 @@ function isStreamCloseBackwardsCompat(
 // TODO remove once clients migrate to v2
 function getStreamCloseBackwardsCompat(protocolVersion: string) {
   if (protocolVersion === 'v1.1') {
+    // in v1.1 the bits for close is what we use for abort now
     return ControlFlags.StreamAbortBit;
   }
 
