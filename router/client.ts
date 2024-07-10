@@ -116,30 +116,30 @@ type ServiceClient<Router extends AnyService> = {
         rpc: RpcFn<Router, ProcName>;
       }
     : ProcType<Router, ProcName> extends 'upload'
-      ? {
-          // If your go-to-definition ended up here, you probably meant to
-          // go to the procedure name. For example:
-          // riverClient.myService.someprocedure.upload({})
-          //            click here ^^^^^^^^^^^^^
-          upload: UploadFn<Router, ProcName>;
-        }
-      : ProcType<Router, ProcName> extends 'stream'
-        ? {
-            // If your go-to-definition ended up here, you probably meant to
-            // go to the procedure name. For example:
-            // riverClient.myService.someprocedure.stream({})
-            //            click here ^^^^^^^^^^^^^
-            stream: StreamFn<Router, ProcName>;
-          }
-        : ProcType<Router, ProcName> extends 'subscription'
-          ? {
-              // If your go-to-definition ended up here, you probably meant to
-              // go to the procedure name. For example:
-              // riverClient.myService.subscribe.stream({})
-              //            click here ^^^^^^^^^^^^^
-              subscribe: SubscriptionFn<Router, ProcName>;
-            }
-          : never;
+    ? {
+        // If your go-to-definition ended up here, you probably meant to
+        // go to the procedure name. For example:
+        // riverClient.myService.someprocedure.upload({})
+        //            click here ^^^^^^^^^^^^^
+        upload: UploadFn<Router, ProcName>;
+      }
+    : ProcType<Router, ProcName> extends 'stream'
+    ? {
+        // If your go-to-definition ended up here, you probably meant to
+        // go to the procedure name. For example:
+        // riverClient.myService.someprocedure.stream({})
+        //            click here ^^^^^^^^^^^^^
+        stream: StreamFn<Router, ProcName>;
+      }
+    : ProcType<Router, ProcName> extends 'subscription'
+    ? {
+        // If your go-to-definition ended up here, you probably meant to
+        // go to the procedure name. For example:
+        // riverClient.myService.subscribe.stream({})
+        //            click here ^^^^^^^^^^^^^
+        subscribe: SubscriptionFn<Router, ProcName>;
+      }
+    : never;
 };
 
 /**
@@ -269,12 +269,12 @@ type ClientProcReturn<ProcType extends ValidProcType> = ReturnType<
   ProcType extends 'rpc'
     ? RpcFn<AnyService, string>
     : ProcType extends 'upload'
-      ? UploadFn<AnyService, string>
-      : ProcType extends 'stream'
-        ? StreamFn<AnyService, string>
-        : ProcType extends 'subscription'
-          ? SubscriptionFn<AnyService, string>
-          : never
+    ? UploadFn<AnyService, string>
+    : ProcType extends 'stream'
+    ? StreamFn<AnyService, string>
+    : ProcType extends 'subscription'
+    ? SubscriptionFn<AnyService, string>
+    : never
 >;
 
 function handleProc(
