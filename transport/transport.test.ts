@@ -735,12 +735,29 @@ describe.each(testMatrix())(
 
       await waitFor(() => expect(onConnect).toHaveBeenCalledTimes(1));
       closeAllConnections(clientTransport);
-      await waitFor(() => expect(onConnect).toHaveBeenCalledTimes(2));
+      await waitFor(() => {
+        expect(onConnect).toHaveBeenCalledTimes(2);
+        expect(numberOfConnections(clientTransport)).toEqual(1);
+        expect(numberOfConnections(serverTransport)).toEqual(1);
+      });
+
+      const oldClientSessionId = serverTransport.sessions.get('client')?.id;
+      const oldServerSessionId = clientTransport.sessions.get('SERVER')?.id;
+      expect(oldClientSessionId).not.toBeUndefined();
+      expect(oldServerSessionId).not.toBeUndefined();
 
       // make sure our connection is still intact even after session grace elapses
       await advanceFakeTimersBySessionGrace();
-      expect(numberOfConnections(clientTransport)).toEqual(1);
-      expect(numberOfConnections(serverTransport)).toEqual(1);
+
+      await waitFor(() => {
+        expect(numberOfConnections(clientTransport)).toEqual(1);
+        expect(numberOfConnections(serverTransport)).toEqual(1);
+      });
+
+      const newClientSessionId = serverTransport.sessions.get('client')?.id;
+      const newServerSessionId = clientTransport.sessions.get('SERVER')?.id;
+      expect(newClientSessionId).toBe(oldClientSessionId);
+      expect(newServerSessionId).toBe(oldServerSessionId);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
