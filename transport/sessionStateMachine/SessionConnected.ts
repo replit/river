@@ -30,17 +30,19 @@ export class SessionConnected<
   conn: ConnType;
   listeners: SessionConnectedListeners;
 
-  heartbeatHandle?: ReturnType<typeof setInterval> | undefined;
-  heartbeatMisses = 0;
+  private activeHeartbeatHandle?: ReturnType<typeof setInterval> | undefined;
+  private activeHeartbeatMisses = 0;
+
+  private passiveHearbeatHandle?: ReturnType<typeof setTimeout> | undefined;
 
   get isActivelyHeartbeating() {
-    return this.heartbeatHandle !== undefined;
+    return this.activeHeartbeatHandle !== undefined;
   }
 
   updateBookkeeping(ack: number, seq: number) {
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
     this.ack = seq + 1;
-    this.heartbeatMisses = 0;
+    this.activeHeartbeatMisses = 0;
   }
 
   send(msg: PartialTransportMessage): string {
@@ -80,8 +82,8 @@ export class SessionConnected<
   }
 
   startActiveHeartbeat() {
-    this.heartbeatHandle = setInterval(() => {
-      const misses = this.heartbeatMisses;
+    this.activeHeartbeatHandle = setInterval(() => {
+      const misses = this.activeHeartbeatMisses;
       const missDuration = misses * this.options.heartbeatIntervalMs;
       if (misses >= this.options.heartbeatsUntilDead) {
         this.log?.info(
@@ -90,14 +92,34 @@ export class SessionConnected<
         );
         this.telemetry.span.addEvent('closing connection due to inactivity');
         this.conn.close();
-        clearInterval(this.heartbeatHandle);
-        this.heartbeatHandle = undefined;
+        clearInterval(this.activeHeartbeatHandle);
+        this.activeHeartbeatHandle = undefined;
         return;
       }
 
       this.sendHeartbeat();
-      this.heartbeatMisses++;
+      this.activeHeartbeatMisses++;
     }, this.options.heartbeatIntervalMs);
+  }
+
+  waitForNextHeartbeat() {
+    const duration =
+      this.options.heartbeatsUntilDead * this.options.heartbeatIntervalMs;
+
+    if (this.passiveHearbeatHandle) {
+      clearTimeout(this.passiveHearbeatHandle);
+      this.passiveHearbeatHandle = undefined;
+    }
+
+    this.passiveHearbeatHandle = setTimeout(() => {
+      this.log?.info(
+        `closing connection to ${this.to} due to not receiving a heartbeat in the last ${duration}ms`,
+        this.loggingMetadata,
+      );
+      this.telemetry.span.addEvent('closing connection due to inactivity');
+      this.conn.close();
+      this.passiveHearbeatHandle = undefined;
+    }, duration);
   }
 
   private sendHeartbeat() {
@@ -166,6 +188,7 @@ export class SessionConnected<
     // heartbeat mode and should send a response to the ack
     if (!this.isActivelyHeartbeating) {
       this.sendHeartbeat();
+      this.waitForNextHeartbeat();
     }
   };
 
@@ -174,8 +197,10 @@ export class SessionConnected<
     this.conn.removeDataListener(this.onMessageData);
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
-    clearInterval(this.heartbeatHandle);
-    this.heartbeatHandle = undefined;
+    clearInterval(this.activeHeartbeatHandle);
+    this.activeHeartbeatHandle = undefined;
+    clearTimeout(this.passiveHearbeatHandle);
+    this.passiveHearbeatHandle = undefined;
   }
 
   _handleClose(): void {
