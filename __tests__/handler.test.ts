@@ -69,6 +69,19 @@ describe('server-side test', () => {
     expect(output.readableLength).toBe(0);
   });
 
+  test('stream empty', async () => {
+    const [input, output] = asClientStream(
+      { count: 0 },
+      service.procedures.echo,
+    );
+    input.end();
+
+    const result = await output.next();
+    expect(result).toStrictEqual({ done: true, value: undefined });
+
+    expect(output.readableLength).toBe(0);
+  });
+
   test('stream with initialization', async () => {
     const [input, output] = asClientStream(
       { count: 0 },
@@ -153,6 +166,13 @@ describe('server-side test', () => {
     input.push({ n: 2 });
     input.end();
     expect(await result).toStrictEqual({ ok: true, payload: { result: 3 } });
+  });
+
+  test('uploads empty', async () => {
+    const service = UploadableServiceSchema.instantiate({});
+    const [input, result] = asClientUpload({}, service.procedures.addMultiple);
+    input.end();
+    expect(await result).toStrictEqual({ ok: true, payload: { result: 0 } });
   });
 
   test('uploads with initialization', async () => {
