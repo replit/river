@@ -33,7 +33,7 @@ export class SessionConnected<
   private activeHeartbeatHandle?: ReturnType<typeof setInterval> | undefined;
   private activeHeartbeatMisses = 0;
 
-  private passiveHearbeatHandle?: ReturnType<typeof setTimeout> | undefined;
+  private passiveHeartbeatHandle?: ReturnType<typeof setTimeout> | undefined;
 
   get isActivelyHeartbeating() {
     return this.activeHeartbeatHandle !== undefined;
@@ -106,19 +106,19 @@ export class SessionConnected<
     const duration =
       this.options.heartbeatsUntilDead * this.options.heartbeatIntervalMs;
 
-    if (this.passiveHearbeatHandle) {
-      clearTimeout(this.passiveHearbeatHandle);
-      this.passiveHearbeatHandle = undefined;
+    if (this.passiveHeartbeatHandle) {
+      clearTimeout(this.passiveHeartbeatHandle);
+      this.passiveHeartbeatHandle = undefined;
     }
 
-    this.passiveHearbeatHandle = setTimeout(() => {
+    this.passiveHeartbeatHandle = setTimeout(() => {
       this.log?.info(
         `closing connection to ${this.to} due to not receiving a heartbeat in the last ${duration}ms`,
         this.loggingMetadata,
       );
       this.telemetry.span.addEvent('closing connection due to inactivity');
       this.conn.close();
-      this.passiveHearbeatHandle = undefined;
+      this.passiveHeartbeatHandle = undefined;
     }, duration);
   }
 
@@ -199,9 +199,9 @@ export class SessionConnected<
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
     clearInterval(this.activeHeartbeatHandle);
+    clearTimeout(this.passiveHeartbeatHandle);
     this.activeHeartbeatHandle = undefined;
-    clearTimeout(this.passiveHearbeatHandle);
-    this.passiveHearbeatHandle = undefined;
+    this.passiveHeartbeatHandle = undefined;
   }
 
   _handleClose(): void {
