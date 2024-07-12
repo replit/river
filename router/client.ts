@@ -362,9 +362,17 @@ function handleStream(
       transport.send(serverId, m);
     }
 
-    // after ending input stream, send a close message to the server
     if (!healthyClose) return;
-    transport.send(serverId, closeStreamMessage(streamId));
+    // after ending input stream, send a close message to the server
+    const m = closeStreamMessage(streamId);
+    if (firstMessage) {
+      m.serviceName = serviceName;
+      m.procedureName = procedureName;
+      m.tracing = getPropagationContext(ctx);
+      m.controlFlags |= ControlFlags.StreamOpenBit;
+      firstMessage = false;
+    }
+    transport.send(serverId, m);
   };
 
   void pipeInputToTransport();
@@ -529,9 +537,17 @@ function handleUpload(
       transport.send(serverId, m);
     }
 
-    // after ending input stream, send a close message to the server
     if (!healthyClose) return;
-    transport.send(serverId, closeStreamMessage(streamId));
+    // after ending input stream, send a close message to the server
+    const m = closeStreamMessage(streamId);
+    if (firstMessage) {
+      m.serviceName = serviceName;
+      m.procedureName = procedureName;
+      m.tracing = getPropagationContext(ctx);
+      m.controlFlags |= ControlFlags.StreamOpenBit;
+      firstMessage = false;
+    }
+    transport.send(serverId, m);
   };
 
   void pipeInputToTransport();
