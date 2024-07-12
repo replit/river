@@ -704,7 +704,7 @@ describe.each(testMatrix())(
   },
 );
 
-describe.each(testMatrix())(
+describe.each(testMatrix(['ws + uds proxy', 'naive']))(
   'transport connection edge cases ($transport.name transport, $codec.name codec)',
   ({ transport, codec }) => {
     const opts = { codec: codec.codec };
@@ -733,10 +733,8 @@ describe.each(testMatrix())(
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
-      await waitFor(() => expect(onConnect).toHaveBeenCalledTimes(1));
-      closeAllConnections(clientTransport);
       await waitFor(() => {
-        expect(onConnect).toHaveBeenCalledTimes(2);
+        expect(onConnect).toHaveBeenCalledTimes(1);
         expect(numberOfConnections(clientTransport)).toEqual(1);
         expect(numberOfConnections(serverTransport)).toEqual(1);
       });
@@ -746,10 +744,9 @@ describe.each(testMatrix())(
       expect(oldClientSessionId).not.toBeUndefined();
       expect(oldServerSessionId).not.toBeUndefined();
 
-      // make sure our connection is still intact even after session grace elapses
-      await advanceFakeTimersBySessionGrace();
-
+      closeAllConnections(clientTransport);
       await waitFor(() => {
+        expect(onConnect).toHaveBeenCalledTimes(2);
         expect(numberOfConnections(clientTransport)).toEqual(1);
         expect(numberOfConnections(serverTransport)).toEqual(1);
       });

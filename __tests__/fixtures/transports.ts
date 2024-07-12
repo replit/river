@@ -205,8 +205,6 @@ export const transports: Array<TransportMatrixEntry> = [
       let port: number;
       let wss: NodeWs.Server;
 
-      const codec = opts?.client?.codec ?? BinaryCodec;
-
       async function setupProxyServer() {
         udsServer = net.createServer();
         await onUdsServeReady(udsServer, socketPath);
@@ -222,7 +220,6 @@ export const transports: Array<TransportMatrixEntry> = [
         wss = createWebSocketServer(proxyServer);
 
         // dumb proxy
-        // assume that we are using the binary msgpack protocol
         wss.on('connection', (ws) => {
           const framer = MessageFramer.createFramedStream();
           const uds = net.createConnection(socketPath);
@@ -236,23 +233,11 @@ export const transports: Array<TransportMatrixEntry> = [
           // ws -> uds
           ws.onmessage = (msg) => {
             const data = msg.data as Uint8Array;
-            const res = codec.fromBuffer(data);
-            if (!res) return;
-            if (!Value.Check(OpaqueTransportMessageSchema, res)) {
-              return;
-            }
-
             uds.write(MessageFramer.write(data));
           };
 
           // ws <- uds
           uds.pipe(framer).on('data', (data: Uint8Array) => {
-            const res = codec.fromBuffer(data);
-            if (!res) return;
-            if (!Value.Check(OpaqueTransportMessageSchema, res)) {
-              return;
-            }
-
             ws.send(data);
           });
 
