@@ -6,7 +6,6 @@ import {
   getTransportConnections,
   closeAllConnections,
   numberOfConnections,
-  testingSessionOptions,
 } from '../util/testHelpers';
 import { EventMap, ProtocolError } from '../transport/events';
 import {
@@ -181,15 +180,15 @@ describe.each(testMatrix())(
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
-      const oldClientSessionId = serverTransport.sessions.get('client')?.id;
-      const oldServerSessionId = clientTransport.sessions.get('SERVER')?.id;
-      expect(oldClientSessionId).not.toBeUndefined();
-      expect(oldServerSessionId).not.toBeUndefined();
-
       await waitFor(() => {
         expect(numberOfConnections(serverTransport)).toBe(1);
         expect(numberOfConnections(clientTransport)).toBe(1);
       });
+
+      const oldClientSessionId = serverTransport.sessions.get('client')?.id;
+      const oldServerSessionId = clientTransport.sessions.get('SERVER')?.id;
+      expect(oldClientSessionId).not.toBeUndefined();
+      expect(oldServerSessionId).not.toBeUndefined();
 
       await advanceFakeTimersBySessionGrace();
 
