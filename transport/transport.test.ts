@@ -704,7 +704,7 @@ describe.each(testMatrix())(
   },
 );
 
-describe.each(testMatrix(['ws + uds proxy', 'naive']))(
+describe.each(testMatrix())(
   'transport connection edge cases ($transport.name transport, $codec.name codec)',
   ({ transport, codec }) => {
     const opts = { codec: codec.codec };

@@ -101,7 +101,7 @@ export class SessionConnected<
   }
 
   private sendHeartbeat() {
-    this.log?.info('sending heartbeat', this.loggingMetadata);
+    this.log?.debug('sending heartbeat', this.loggingMetadata);
     this.send({
       streamId: 'heartbeat',
       controlFlags: ControlFlags.AckBit,

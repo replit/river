@@ -1,7 +1,6 @@
 import {
   ClientTransport,
   Connection,
-  OpaqueTransportMessageSchema,
   ServerTransport,
   TransportClientId,
 } from '../../transport';
@@ -29,8 +28,6 @@ import {
   ServerHandshakeOptions,
 } from '../../router/handshake';
 import { MessageFramer } from '../../transport/transforms/messageFraming';
-import { BinaryCodec } from '../../codec';
-import { Value } from '@sinclair/typebox/value';
 
 export type ValidTransports = 'ws' | 'unix sockets' | 'ws + uds proxy';
 
