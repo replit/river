@@ -6,6 +6,7 @@ import {
   getTransportConnections,
   closeAllConnections,
   numberOfConnections,
+  testingSessionOptions,
 } from '../util/testHelpers';
 import { EventMap, ProtocolError } from '../transport/events';
 import {
@@ -166,6 +167,39 @@ describe.each(testMatrix())(
       });
 
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
+    test('idle transport stays alive', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      clientTransport.connect(serverTransport.clientId);
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      const oldClientSessionId = serverTransport.sessions.get('client')?.id;
+      const oldServerSessionId = clientTransport.sessions.get('SERVER')?.id;
+      expect(oldClientSessionId).not.toBeUndefined();
+      expect(oldServerSessionId).not.toBeUndefined();
+
+      await waitFor(() => {
+        expect(numberOfConnections(serverTransport)).toBe(1);
+        expect(numberOfConnections(clientTransport)).toBe(1);
+      });
+
+      await advanceFakeTimersBySessionGrace();
+
+      expect(numberOfConnections(serverTransport)).toBe(1);
+      expect(numberOfConnections(clientTransport)).toBe(1);
+      const newClientSessionId = serverTransport.sessions.get('client')?.id;
+      const newServerSessionId = clientTransport.sessions.get('SERVER')?.id;
+      expect(newClientSessionId).toBe(oldClientSessionId);
+      expect(newServerSessionId).toBe(oldServerSessionId);
+
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
