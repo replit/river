@@ -131,6 +131,54 @@ export interface ServiceConfiguration<State extends object> {
   initializeState: (extendedContext: ServiceContext) => State;
 }
 
+// TODO remove once clients migrate to v2
+export interface SerializedProcedureSchemaProtocolv1 {
+  init?: PayloadType;
+  input: PayloadType;
+  output: PayloadType;
+  errors?: ProcedureErrorSchemaType;
+  type: 'rpc' | 'subscription' | 'upload' | 'stream';
+}
+
+// TODO remove once clients migrate to v2
+export interface SerializedServiceSchemaProtocolv1 {
+  procedures: Record<string, SerializedProcedureSchemaProtocolv1>;
+}
+
+// TODO remove once clients migrate to v2
+export interface SerializedServerSchemaProtocolv1 {
+  handshakeSchema?: TSchema;
+  services: Record<string, SerializedServiceSchemaProtocolv1>;
+}
+
+// TODO remove once clients migrate to v2
+/**
+ * Same as {@link serializeSchema} but with a format that is compatible with
+ * protocolv1. This is useful to be able to continue to generate schemas for older
+ * clients as they are still supported.
+ */
+export function serializeSchemaBackwardsCompatible(
+  services: AnyServiceSchemaMap,
+  handshakeSchema?: TSchema,
+): SerializedServerSchemaProtocolv1 {
+  const serializedServiceObject = Object.entries(services).reduce<
+    Record<string, SerializedServiceSchemaProtocolv1>
+  >((acc, [name, value]) => {
+    acc[name] = value.serializeBackwardsCompatible();
+    return acc;
+  }, {});
+
+  const schema: SerializedServerSchemaProtocolv1 = {
+    services: serializedServiceObject,
+  };
+
+  if (handshakeSchema) {
+    schema.handshakeSchema = Type.Strict(handshakeSchema);
+  }
+
+  return schema;
+}
+
 export interface SerializedProcedureSchema {
   init: PayloadType;
   input?: PayloadType;
@@ -148,6 +196,9 @@ export interface SerializedServerSchema {
   services: Record<string, SerializedServiceSchema>;
 }
 
+/**
+ * Serializes a server schema into a plain object that is JSON compatible.
+ */
 export function serializeSchema(
   services: AnyServiceSchemaMap,
   handshakeSchema?: TSchema,
@@ -398,6 +449,70 @@ export class ServiceSchema<
               : {}),
           },
         ]),
+      ),
+    };
+  }
+
+  // TODO remove once clients migrate to v2
+  /**
+   * Same as {@link ServiceSchema.serialize}, but with a format that is compatible with
+   * protocol v1. This is useful to be able to continue to generate schemas for older
+   * clients as they are still supported.
+   */
+  serializeBackwardsCompatible(): SerializedServiceSchemaProtocolv1 {
+    return {
+      procedures: Object.fromEntries(
+        Object.entries(this.procedures).map(
+          ([procName, procDef]): [
+            string,
+            SerializedProcedureSchemaProtocolv1,
+          ] => {
+            if (procDef.type === 'rpc' || procDef.type === 'subscription') {
+              return [
+                procName,
+                {
+                  // BACKWARDS COMPAT: map init to input for protocolv1
+                  // this is the only change needed to make it compatible.
+                  input: Type.Strict(procDef.init),
+                  output: Type.Strict(procDef.output),
+                  // Only add `description` field if the type declares it.
+                  ...('description' in procDef
+                    ? { description: procDef.description }
+                    : {}),
+                  // Only add the `errors` field if the type declares it.
+                  ...('errors' in procDef
+                    ? {
+                        errors: Type.Strict(procDef.errors),
+                      }
+                    : {}),
+                  type: procDef.type,
+                },
+              ];
+            }
+
+            // No backwards compatibility needed for upload and stream types, as having an `init`
+            // all the time is compatible with protocol v1.
+            return [
+              procName,
+              {
+                init: Type.Strict(procDef.init),
+                output: Type.Strict(procDef.output),
+                // Only add `description` field if the type declares it.
+                ...('description' in procDef
+                  ? { description: procDef.description }
+                  : {}),
+                // Only add the `errors` field if the type declares it.
+                ...('errors' in procDef
+                  ? {
+                      errors: Type.Strict(procDef.errors),
+                    }
+                  : {}),
+                type: procDef.type,
+                input: Type.Strict(procDef.input),
+              },
+            ];
+          },
+        ),
       ),
     };
   }
