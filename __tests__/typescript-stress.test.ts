@@ -45,11 +45,11 @@ const fnBody = Procedure.rpc<
   init: input,
   output,
   errors,
-  async handler(_state, msg) {
-    if ('c' in msg) {
-      return Ok({ b: msg.c });
+  async handler({ requestInit }) {
+    if ('c' in requestInit) {
+      return Ok({ b: requestInit.c });
     } else {
-      return Ok({ b: msg.a });
+      return Ok({ b: requestInit.a });
     }
   },
 });
@@ -213,7 +213,7 @@ const services = {
     rpc: Procedure.rpc({
       init: Type.Object({ n: Type.Number() }),
       output: Type.Object({ n: Type.Number() }),
-      async handler(_, { n }) {
+      async handler({ requestInit: { n } }) {
         return Ok({ n });
       },
     }),
@@ -221,22 +221,22 @@ const services = {
       init: Type.Object({}),
       input: Type.Object({ n: Type.Number() }),
       output: Type.Object({ n: Type.Number() }),
-      async handler(_c, _init, _input, output) {
-        output.write(Ok({ n: 1 }));
+      async handler({ responseWriter }) {
+        responseWriter.write(Ok({ n: 1 }));
       },
     }),
     subscription: Procedure.subscription({
       init: Type.Object({ n: Type.Number() }),
       output: Type.Object({ n: Type.Number() }),
-      async handler(_c, _init, output) {
-        output.write(Ok({ n: 1 }));
+      async handler({ responseWriter }) {
+        responseWriter.write(Ok({ n: 1 }));
       },
     }),
     upload: Procedure.upload({
       init: Type.Object({}),
       input: Type.Object({ n: Type.Number() }),
       output: Type.Object({ n: Type.Number() }),
-      async handler(_c, _init, _input) {
+      async handler() {
         return Ok({ n: 1 });
       },
     }),
@@ -269,8 +269,8 @@ describe('Output<> type', () => {
     }
 
     // Then
-    const [, outputReader] = client.test.stream.stream({});
-    void iterNext(getIteratorFromStream(outputReader))
+    const { responseReader } = client.test.stream.stream({});
+    void iterNext(getIteratorFromStream(responseReader))
       .then(unwrap)
       .then(acceptOutput);
     expect(client).toBeTruthy();
@@ -285,8 +285,8 @@ describe('Output<> type', () => {
     }
 
     // Then
-    const outputReader = client.test.subscription.subscribe({ n: 1 });
-    void iterNext(getIteratorFromStream(outputReader))
+    const { responseReader } = client.test.subscription.subscribe({ n: 1 });
+    void iterNext(getIteratorFromStream(responseReader))
       .then(unwrap)
       .then(acceptOutput);
 
@@ -300,7 +300,7 @@ describe('Output<> type', () => {
     }
 
     // Then
-    const [, finalize] = client.test.upload.upload({});
+    const { finalize } = client.test.upload.upload({});
     void finalize().then(acceptOutput);
 
     expect(client).toBeTruthy();

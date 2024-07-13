@@ -60,10 +60,10 @@ export const INVALID_REQUEST_CODE = 'INVALID_REQUEST' as const;
 export const ABORT_CODE = 'ABORT' as const;
 
 /**
- * OutputReaderErrorSchema is the schema for all the errors that can be
+ * ResponseReaderErrorSchema is the schema for all the errors that can be
  * emitted in the Output ReadStream on the client.
  */
-export const OutputReaderErrorSchema = Type.Object({
+export const ResponseReaderErrorSchema = Type.Object({
   code: Type.Union([
     Type.Literal(INTERNAL_RIVER_ERROR_CODE),
     Type.Literal(UNCAUGHT_ERROR_CODE),
@@ -75,10 +75,10 @@ export const OutputReaderErrorSchema = Type.Object({
 });
 
 /**
- * InputReaderErrorSchema is the schema for all the errors that can be
+ * RequestReaderErrorSchema is the schema for all the errors that can be
  * emitted in the Input ReadStream on the server.
  */
-export const InputReaderErrorSchema = Type.Object({
+export const RequestReaderErrorSchema = Type.Object({
   code: Type.Union([
     Type.Literal(UNCAUGHT_ERROR_CODE),
     Type.Literal(UNEXPECTED_DISCONNECT_CODE),
@@ -116,10 +116,13 @@ export interface RpcProcedure<
   output: Output;
   errors: Err;
   description?: string;
-  handler(
-    context: ProcedureHandlerContext<State>,
-    init: Static<Init>,
-  ): Promise<Result<Static<Output>, Static<Err>>>;
+  handler({
+    ctx,
+    requestInit,
+  }: {
+    ctx: ProcedureHandlerContext<State>;
+    requestInit: Static<Init>;
+  }): Promise<Result<Static<Output>, Static<Err>>>;
 }
 
 /**
@@ -145,11 +148,18 @@ export interface UploadProcedure<
   output: Output;
   errors: Err;
   description?: string;
-  handler(
-    context: ProcedureHandlerContext<State>,
-    init: Static<Init>,
-    input: ReadStream<Static<Input>, Static<typeof InputReaderErrorSchema>>,
-  ): Promise<Result<Static<Output>, Static<Err>>>;
+  handler({
+    ctx,
+    requestInit,
+    requestReader,
+  }: {
+    ctx: ProcedureHandlerContext<State>;
+    requestInit: Static<Init>;
+    requestReader: ReadStream<
+      Static<Input>,
+      Static<typeof RequestReaderErrorSchema>
+    >;
+  }): Promise<Result<Static<Output>, Static<Err>>>;
 }
 
 /**
@@ -171,11 +181,15 @@ export interface SubscriptionProcedure<
   output: Output;
   errors: Err;
   description?: string;
-  handler(
-    context: ProcedureHandlerContext<State>,
-    init: Static<Init>,
-    output: WriteStream<Result<Static<Output>, Static<Err>>>,
-  ): Promise<void | undefined>;
+  handler({
+    ctx,
+    requestInit,
+    responseWriter,
+  }: {
+    ctx: ProcedureHandlerContext<State>;
+    requestInit: Static<Init>;
+    responseWriter: WriteStream<Result<Static<Output>, Static<Err>>>;
+  }): Promise<void | undefined>;
 }
 
 /**
@@ -201,12 +215,20 @@ export interface StreamProcedure<
   output: Output;
   errors: Err;
   description?: string;
-  handler(
-    context: ProcedureHandlerContext<State>,
-    init: Static<Init>,
-    input: ReadStream<Static<Input>, Static<typeof InputReaderErrorSchema>>,
-    output: WriteStream<Result<Static<Output>, Static<Err>>>,
-  ): Promise<void | undefined>;
+  handler({
+    ctx,
+    requestInit,
+    requestReader,
+    responseWriter,
+  }: {
+    ctx: ProcedureHandlerContext<State>;
+    requestInit: Static<Init>;
+    requestReader: ReadStream<
+      Static<Input>,
+      Static<typeof RequestReaderErrorSchema>
+    >;
+    responseWriter: WriteStream<Result<Static<Output>, Static<Err>>>;
+  }): Promise<void | undefined>;
 }
 
 /**

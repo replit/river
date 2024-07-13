@@ -2,8 +2,8 @@ import { Static } from '@sinclair/typebox';
 import {
   PayloadType,
   ProcedureErrorSchemaType,
-  InputReaderErrorSchema,
-  OutputReaderErrorSchema,
+  RequestReaderErrorSchema,
+  ResponseReaderErrorSchema,
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
   AnyProcedure,
@@ -50,7 +50,7 @@ type StreamId = string;
 /**
  * A result schema for errors that can be passed to input's readstream
  */
-const InputErrResultSchema = ErrResultSchema(InputReaderErrorSchema);
+const InputErrResultSchema = ErrResultSchema(RequestReaderErrorSchema);
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -211,19 +211,19 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     let cleanClose = true;
 
     const onServerAbort = (errResult: Static<typeof InputErrResultSchema>) => {
-      if (inputReader.isClosed() && outputWriter.isClosed()) {
+      if (requestReader.isClosed() && responseWriter.isClosed()) {
         // Everything already closed, no-op.
         return;
       }
 
       cleanClose = false;
 
-      if (!inputReader.isClosed()) {
-        inputReader.pushValue(errResult);
-        inputReader.triggerClose();
+      if (!requestReader.isClosed()) {
+        requestReader.pushValue(errResult);
+        requestReader.triggerClose();
       }
 
-      outputWriter.close();
+      responseWriter.close();
       this.abortStream(from, streamId, errResult);
     };
 
@@ -255,14 +255,14 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         code: UNEXPECTED_DISCONNECT_CODE,
         message: `client unexpectedly disconnected`,
       } as const;
-      if (!inputReader.isClosed()) {
-        inputReader.pushValue(Err(errPayload));
-        inputReader.triggerClose();
+      if (!requestReader.isClosed()) {
+        requestReader.pushValue(Err(errPayload));
+        requestReader.triggerClose();
       }
 
       clientAbortController.abort(errPayload);
 
-      outputWriter.close();
+      responseWriter.close();
     };
     this.transport.addEventListener('sessionStatus', onSessionStatus);
 
@@ -283,7 +283,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       if (isStreamCloseRequest(msg.controlFlags)) {
-        outputWriter.triggerCloseRequest();
+        responseWriter.triggerCloseRequest();
       }
 
       if (isStreamAbortBackwardsCompat(msg.controlFlags, protocolVersion)) {
@@ -306,19 +306,19 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           });
         }
 
-        if (!inputReader.isClosed()) {
-          inputReader.pushValue(abortResult);
-          inputReader.triggerClose();
+        if (!requestReader.isClosed()) {
+          requestReader.pushValue(abortResult);
+          requestReader.triggerClose();
         }
 
-        outputWriter.close();
+        responseWriter.close();
 
         clientAbortController.abort(abortResult.payload);
 
         return;
       }
 
-      if (inputReader.isClosed()) {
+      if (requestReader.isClosed()) {
         this.log?.warn('Received message after input stream is closed', {
           ...loggingMetadata,
           clientId: this.transport.clientId,
@@ -337,7 +337,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       if ('input' in procedure && Value.Check(procedure.input, msg.payload)) {
-        inputReader.pushValue(Ok(msg.payload));
+        requestReader.pushValue(Ok(msg.payload));
       } else if (!Value.Check(ControlMessagePayloadSchema, msg.payload)) {
         const validationErrors = [
           ...Value.Errors(ControlMessagePayloadSchema, msg.payload),
@@ -366,7 +366,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       if (isStreamCloseBackwardsCompat(msg.controlFlags, protocolVersion)) {
-        inputReader.triggerClose();
+        requestReader.triggerClose();
       }
     };
     this.transport.addEventListener('message', onMessage);
@@ -391,32 +391,32 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     const procClosesWithResponse =
       procedure.type === 'rpc' || procedure.type === 'upload';
 
-    const inputReader = new ReadStreamImpl<
+    const requestReader = new ReadStreamImpl<
       Static<PayloadType>,
-      Static<typeof InputReaderErrorSchema>
+      Static<typeof RequestReaderErrorSchema>
     >(() => {
       this.transport.send(from, requestCloseStreamMessage(streamId));
     });
-    inputReader.onClose(() => {
+    requestReader.onClose(() => {
       // TODO remove once clients migrate to v2
       if (protocolVersion === 'v1.1') {
         // in v1.1 a close in either direction should close everything
         // for upload/rpc it will handle the close after it responds
-        if (!procClosesWithResponse && !outputWriter.isClosed()) {
-          outputWriter.close();
+        if (!procClosesWithResponse && !responseWriter.isClosed()) {
+          responseWriter.close();
         }
       }
 
-      if (outputWriter.isClosed()) {
+      if (responseWriter.isClosed()) {
         cleanup();
       }
     });
 
     if (passInitAsInputForBackwardsCompat) {
-      inputReader.pushValue(Ok(initPayload));
+      requestReader.pushValue(Ok(initPayload));
     }
 
-    const outputWriter = new WriteStreamImpl<
+    const responseWriter = new WriteStreamImpl<
       Result<Static<PayloadType>, Static<ProcedureErrorSchemaType>>
     >((response) => {
       this.transport.send(from, {
@@ -427,7 +427,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         payload: response,
       });
     });
-    outputWriter.onClose(() => {
+    responseWriter.onClose(() => {
       if (!procClosesWithResponse && cleanClose) {
         // we ended, send a close bit back to the client
         // also, if the client has disconnected, we don't need to send a close
@@ -442,12 +442,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       // TODO remove once clients migrate to v2
       if (protocolVersion === 'v1.1') {
         // in v1.1 a close in either direction should close everything
-        if (!inputReader.isClosed()) {
-          inputReader.triggerClose();
+        if (!requestReader.isClosed()) {
+          requestReader.triggerClose();
         }
       }
 
-      if (inputReader.isClosed()) {
+      if (requestReader.isClosed()) {
         cleanup();
       }
     });
@@ -467,7 +467,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     };
 
     if (isStreamCloseBackwardsCompat(controlFlags, protocolVersion)) {
-      inputReader.triggerClose();
+      requestReader.triggerClose();
     } else if (procedure.type === 'rpc' || procedure.type === 'subscription') {
       // Though things can work just fine if they eventually follow up with a stream
       // control message with a close bit set, it's an unusual client implementation!
@@ -485,7 +485,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       abortController: handlerAbortController,
       clientAbortSignal: clientAbortController.signal,
       onRequestFinished: (cb) => {
-        if (inputReader.isClosed() && outputWriter.isClosed()) {
+        if (requestReader.isClosed() && responseWriter.isClosed()) {
           // Everything already closed, call cleanup immediately.
           try {
             cb();
@@ -512,18 +512,18 @@ class RiverServer<Services extends AnyServiceSchemaMap>
             try {
               // TODO handle never resolving after cleanup/full close
               // which would lead to us holding on to the closure forever
-              const outputMessage = await procedure.handler(
-                serviceContextWithTransportInfo,
-                initPayload,
-              );
+              const outputMessage = await procedure.handler({
+                ctx: serviceContextWithTransportInfo,
+                requestInit: initPayload,
+              });
 
-              if (outputWriter.isClosed()) {
+              if (responseWriter.isClosed()) {
                 // A disconnect happened
                 return;
               }
 
-              outputWriter.write(outputMessage);
-              outputWriter.close();
+              responseWriter.write(outputMessage);
+              responseWriter.close();
             } catch (err) {
               onHandlerError(err, span);
             } finally {
@@ -543,12 +543,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
             try {
               // TODO handle never resolving after cleanup/full close
               // which would lead to us holding on to the closure forever
-              await procedure.handler(
-                serviceContextWithTransportInfo,
-                initPayload,
-                inputReader,
-                outputWriter,
-              );
+              await procedure.handler({
+                ctx: serviceContextWithTransportInfo,
+                requestInit: initPayload,
+                requestReader,
+                responseWriter,
+              });
             } catch (err) {
               onHandlerError(err, span);
             } finally {
@@ -569,11 +569,13 @@ class RiverServer<Services extends AnyServiceSchemaMap>
             try {
               // TODO handle never resolving after cleanup/full close
               // which would lead to us holding on to the closure forever
-              await procedure.handler(
-                serviceContextWithTransportInfo,
-                passInitAsInputForBackwardsCompat ? {} : initPayload,
-                outputWriter,
-              );
+              await procedure.handler({
+                ctx: serviceContextWithTransportInfo,
+                requestInit: passInitAsInputForBackwardsCompat
+                  ? {}
+                  : initPayload,
+                responseWriter,
+              });
             } catch (err) {
               onHandlerError(err, span);
             } finally {
@@ -593,18 +595,20 @@ class RiverServer<Services extends AnyServiceSchemaMap>
             try {
               // TODO handle never resolving after cleanup/full close
               // which would lead to us holding on to the closure forever
-              const outputMessage = await procedure.handler(
-                serviceContextWithTransportInfo,
-                passInitAsInputForBackwardsCompat ? {} : initPayload,
-                inputReader,
-              );
+              const outputMessage = await procedure.handler({
+                ctx: serviceContextWithTransportInfo,
+                requestInit: passInitAsInputForBackwardsCompat
+                  ? {}
+                  : initPayload,
+                requestReader,
+              });
 
-              if (outputWriter.isClosed()) {
+              if (responseWriter.isClosed()) {
                 // A disconnect happened
                 return;
               }
-              outputWriter.write(outputMessage);
-              outputWriter.close();
+              responseWriter.write(outputMessage);
+              responseWriter.close();
             } catch (err) {
               onHandlerError(err, span);
             } finally {
@@ -857,7 +861,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
   abortStream(
     to: string,
     streamId: string,
-    payload: ErrResult<Static<typeof OutputReaderErrorSchema>>,
+    payload: ErrResult<Static<typeof ResponseReaderErrorSchema>>,
   ) {
     let abortedForSession = this.serverAbortedStreams.get(to);
 

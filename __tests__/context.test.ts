@@ -41,7 +41,7 @@ describe('should handle incompatabilities', async () => {
         testrpc: Procedure.rpc({
           init: Type.Object({}),
           output: Type.String(),
-          handler: async (ctx) => {
+          handler: async ({ ctx }) => {
             return Ok((ctx as unknown as typeof extendedContext).testctx);
           },
         }),
@@ -81,7 +81,7 @@ describe('should handle incompatabilities', async () => {
           testrpc: Procedure.rpc({
             init: Type.Object({}),
             output: Type.String(),
-            handler: async (ctx) => {
+            handler: async ({ ctx }) => {
               return Ok(ctx.state.fromctx);
             },
           }),

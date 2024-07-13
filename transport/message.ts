@@ -3,8 +3,8 @@ import { PropagationContext } from '../tracing';
 import { generateId } from './id';
 import {
   ErrResult,
-  InputReaderErrorSchema,
-  OutputReaderErrorSchema,
+  RequestReaderErrorSchema,
+  ResponseReaderErrorSchema,
 } from '../router';
 
 /**
@@ -274,7 +274,7 @@ export function requestCloseStreamMessage(
 export function abortMessage(
   streamId: string,
   payload: ErrResult<
-    Static<typeof OutputReaderErrorSchema | typeof InputReaderErrorSchema>
+    Static<typeof ResponseReaderErrorSchema | typeof RequestReaderErrorSchema>
   >,
 ) {
   return {

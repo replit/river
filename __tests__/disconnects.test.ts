@@ -101,10 +101,10 @@ describe.each(testMatrix())(
       });
 
       // start procedure
-      const [inputWriter, outputReader] = client.test.echo.stream({});
-      const outputIterator = getIteratorFromStream(outputReader);
+      const { requestWriter, responseReader } = client.test.echo.stream({});
+      const outputIterator = getIteratorFromStream(responseReader);
 
-      inputWriter.write({ msg: 'abc', ignore: false });
+      requestWriter.write({ msg: 'abc', ignore: false });
       const result = await iterNext(outputIterator);
       assert(result.ok);
 
@@ -165,16 +165,18 @@ describe.each(testMatrix())(
 
       // start procedure
       // client1 and client2 both subscribe
-      const outputReader1 = client1.subscribable.value.subscribe({});
-      const outputIterator1 = getIteratorFromStream(outputReader1);
+      const { responseReader: responseReader1 } =
+        client1.subscribable.value.subscribe({});
+      const outputIterator1 = getIteratorFromStream(responseReader1);
       let result = await iterNext(outputIterator1);
       expect(result).toStrictEqual({
         ok: true,
         payload: { result: 0 },
       });
 
-      const outputReader2 = client2.subscribable.value.subscribe({});
-      const outputIterator2 = getIteratorFromStream(outputReader2);
+      const { responseReader: responseReader2 } =
+        client2.subscribable.value.subscribe({});
+      const outputIterator2 = getIteratorFromStream(responseReader2);
       result = await iterNext(outputIterator2);
       expect(result).toStrictEqual({
         ok: true,
@@ -234,8 +236,8 @@ describe.each(testMatrix())(
         expect(numberOfConnections(serverTransport)).toEqual(1);
       });
 
-      expect(outputReader2.isClosed()).toBe(true);
-      await outputReader1.requestClose();
+      expect(responseReader2.isClosed()).toBe(true);
+      await responseReader1.requestClose();
 
       await testFinishesCleanly({
         clientTransports: [client1Transport, client2Transport],
@@ -260,11 +262,11 @@ describe.each(testMatrix())(
       });
 
       // start procedure
-      const [inputWriter, getAddResult] = client.uploadable.addMultiple.upload(
+      const { requestWriter, finalize } = client.uploadable.addMultiple.upload(
         {},
       );
-      inputWriter.write({ n: 1 });
-      inputWriter.write({ n: 2 });
+      requestWriter.write({ n: 1 });
+      requestWriter.write({ n: 2 });
       // end procedure
 
       // need to wait for connection to be established
@@ -279,7 +281,7 @@ describe.each(testMatrix())(
       await advanceFakeTimersBySessionGrace();
 
       // we should get an error + expect the streams to be cleaned up
-      await expect(getAddResult()).resolves.toMatchObject({
+      await expect(finalize()).resolves.toMatchObject({
         ok: false,
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),

@@ -139,7 +139,7 @@ describe.each(testMatrix())(
 
         const abortController = new AbortController();
         const signal = abortController.signal;
-        const [inputWriter, finalize] = client.service.upload.upload(
+        const { requestWriter, finalize } = client.service.upload.upload(
           {},
           { signal },
         );
@@ -150,7 +150,7 @@ describe.each(testMatrix())(
 
         abortController.abort();
 
-        expect(inputWriter.isClosed());
+        expect(requestWriter.isClosed());
         await expect(finalize()).resolves.toEqual({
           ok: false,
           payload: {
@@ -209,7 +209,10 @@ describe.each(testMatrix())(
 
         const abortController = new AbortController();
         const signal = abortController.signal;
-        const outputReader = client.service.subscribe.subscribe({}, { signal });
+        const { responseReader } = client.service.subscribe.subscribe(
+          {},
+          { signal },
+        );
 
         await waitFor(() => {
           expect(serverOnMessage).toHaveBeenCalledTimes(1);
@@ -217,8 +220,8 @@ describe.each(testMatrix())(
 
         abortController.abort();
 
-        expect(outputReader.isClosed());
-        await expect(outputReader.asArray()).resolves.toEqual([
+        expect(responseReader.isClosed());
+        await expect(responseReader.asArray()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -279,7 +282,7 @@ describe.each(testMatrix())(
 
         const abortController = new AbortController();
         const signal = abortController.signal;
-        const [inputWriter, outputReader] = client.service.stream.stream(
+        const { requestWriter, responseReader } = client.service.stream.stream(
           {},
           { signal },
         );
@@ -290,9 +293,9 @@ describe.each(testMatrix())(
 
         abortController.abort();
 
-        expect(outputReader.isClosed());
-        expect(inputWriter.isClosed());
-        await expect(outputReader.asArray()).resolves.toEqual([
+        expect(responseReader.isClosed());
+        expect(requestWriter.isClosed());
+        await expect(responseReader.asArray()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -389,9 +392,11 @@ describe.each(testMatrix())(
 
           expect(server.openStreams.size).toEqual(1);
           expect(handler).toHaveBeenCalledTimes(1);
-          const ctx =
+          const { ctx } =
             // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            handler.mock.calls[0][0] as ProcedureHandlerContext<object>;
+            handler.mock.calls[0][0] as {
+              ctx: ProcedureHandlerContext<object>;
+            };
           const onClientAbort = vi.fn();
           ctx.clientAbortSignal.onabort = onClientAbort;
 
@@ -448,25 +453,23 @@ describe.each(testMatrix())(
 
         const clientAbortController = new AbortController();
 
-        const [clientInputWriter, clientOutputReader] =
-          client.service.stream.stream(
-            {},
-            { signal: clientAbortController.signal },
-          );
+        const { requestWriter, responseReader } = client.service.stream.stream(
+          {},
+          { signal: clientAbortController.signal },
+        );
 
         await waitFor(() => {
           expect(handler).toHaveBeenCalledTimes(1);
         });
 
-        const [ctx, , serverInputReader, serverOutputWriter] =
-          handler.mock.calls[0];
+        const [{ ctx, requestReader, responseWriter }] = handler.mock.calls[0];
         const onClientAbort = vi.fn();
         ctx.clientAbortSignal.onabort = onClientAbort;
 
         clientAbortController.abort();
         // this should be ignored by the client since it already aborted
-        serverOutputWriter.write({ ok: true, payload: {} });
-        expect(await clientOutputReader.asArray()).toEqual([
+        responseWriter.write({ ok: true, payload: {} });
+        expect(await responseReader.asArray()).toEqual([
           {
             ok: false,
             payload: {
@@ -476,13 +479,13 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(clientOutputReader.isClosed());
-        expect(clientInputWriter.isClosed());
+        expect(responseReader.isClosed());
+        expect(requestWriter.isClosed());
 
         await waitFor(() => {
           expect(onClientAbort).toHaveBeenCalled();
         });
-        expect(await serverInputReader.asArray()).toEqual([
+        expect(await requestReader.asArray()).toEqual([
           {
             ok: false,
             payload: {
@@ -492,8 +495,8 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(serverInputReader.isClosed());
-        expect(serverOutputWriter.isClosed());
+        expect(requestReader.isClosed());
+        expect(responseWriter.isClosed());
       });
     });
   },
@@ -598,7 +601,7 @@ describe.each(testMatrix())(
         const serverOnMessage = vi.fn<[EventMap['message']]>();
         serverTransport.addEventListener('message', serverOnMessage);
 
-        const [inputWriter, finalize] = client.service.upload.upload({});
+        const { requestWriter, finalize } = client.service.upload.upload({});
 
         await waitFor(() => {
           expect(serverOnMessage).toHaveBeenCalledTimes(1);
@@ -625,7 +628,7 @@ describe.each(testMatrix())(
             message: expect.any(String),
           },
         });
-        expect(inputWriter.isClosed());
+        expect(requestWriter.isClosed());
       });
 
       test('stream', async () => {
@@ -654,7 +657,9 @@ describe.each(testMatrix())(
         const serverOnMessage = vi.fn<[EventMap['message']]>();
         serverTransport.addEventListener('message', serverOnMessage);
 
-        const [inputWriter, outputReader] = client.service.stream.stream({});
+        const { requestWriter, responseReader } = client.service.stream.stream(
+          {},
+        );
 
         await waitFor(() => {
           expect(serverOnMessage).toHaveBeenCalledTimes(1);
@@ -673,7 +678,7 @@ describe.each(testMatrix())(
           ),
         );
 
-        await expect(outputReader.asArray()).resolves.toEqual([
+        await expect(responseReader.asArray()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -683,7 +688,7 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(inputWriter.isClosed());
+        expect(requestWriter.isClosed());
       });
 
       test('subscribe', async () => {
@@ -711,7 +716,7 @@ describe.each(testMatrix())(
         const serverOnMessage = vi.fn<[EventMap['message']]>();
         serverTransport.addEventListener('message', serverOnMessage);
 
-        const outputReader = client.service.subscribe.subscribe({});
+        const { responseReader } = client.service.subscribe.subscribe({});
 
         await waitFor(() => {
           expect(serverOnMessage).toHaveBeenCalledTimes(1);
@@ -730,7 +735,7 @@ describe.each(testMatrix())(
           ),
         );
 
-        await expect(outputReader.asArray()).resolves.toEqual([
+        await expect(responseReader.asArray()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -752,7 +757,7 @@ describe.each(testMatrix())(
       ] as const)('$procedureType', async ({ procedureType }) => {
         const clientTransport = getClientTransport('client');
         const serverTransport = getServerTransport();
-        const handler = vi.fn<[ProcedureHandlerContext<object>]>();
+        const handler = vi.fn<[{ ctx: ProcedureHandlerContext<object> }]>();
         const serviceName = 'service';
         const procedureName = procedureType;
 
@@ -767,8 +772,8 @@ describe.each(testMatrix())(
                   }
                 : {}),
               output: Type.Object({}),
-              async handler(ctx: ProcedureHandlerContext<object>) {
-                handler(ctx);
+              async handler({ ctx }: { ctx: ProcedureHandlerContext<object> }) {
+                handler({ ctx });
 
                 return new Promise(() => {
                   // never resolves
@@ -807,7 +812,7 @@ describe.each(testMatrix())(
 
         expect(server.openStreams.size).toEqual(1);
         expect(handler).toHaveBeenCalledTimes(1);
-        const [ctx] = handler.mock.calls[0];
+        const [{ ctx }] = handler.mock.calls[0];
         ctx.abortController.abort();
 
         await waitFor(() => {
@@ -884,7 +889,7 @@ describe.each(testMatrix())(
           expect(handler).toHaveBeenCalledTimes(1);
         });
 
-        const [ctx] = handler.mock.calls[0];
+        const [{ ctx }] = handler.mock.calls[0];
         ctx.abortController.abort();
         // input for the stream should be ignored
         // instead of leading to an error response
@@ -964,20 +969,20 @@ describe.each(testMatrix())(
           serverTransport.clientId,
         );
 
-        const [clientInputWriter, clientOutputReader] =
-          client.service.stream.stream({});
+        const { requestWriter, responseReader } = client.service.stream.stream(
+          {},
+        );
 
         await waitFor(() => {
           expect(handler).toHaveBeenCalledTimes(1);
         });
 
-        const [ctx, , serverInputReader, serverOutputWriter] =
-          handler.mock.calls[0];
+        const [{ ctx, requestReader, responseWriter }] = handler.mock.calls[0];
 
         ctx.abortController.abort();
         // this should be ignored by the server since it already aborted
-        clientInputWriter.write({ ok: true, payload: {} });
-        expect(await serverInputReader.asArray()).toEqual([
+        requestWriter.write({ ok: true, payload: {} });
+        expect(await requestReader.asArray()).toEqual([
           {
             ok: false,
             payload: {
@@ -987,10 +992,10 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(serverInputReader.isClosed());
-        expect(serverOutputWriter.isClosed());
+        expect(requestReader.isClosed());
+        expect(responseWriter.isClosed());
 
-        expect(await clientOutputReader.asArray()).toEqual([
+        expect(await responseReader.asArray()).toEqual([
           {
             ok: false,
             payload: {
@@ -1000,8 +1005,8 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(clientOutputReader.isClosed());
-        expect(clientInputWriter.isClosed());
+        expect(responseReader.isClosed());
+        expect(requestWriter.isClosed());
       });
     });
   },
@@ -1147,21 +1152,21 @@ describe.each(testMatrix())(
           serverTransport.clientId,
         );
 
-        const [clientInputWriter, clientOutputReader] =
-          client.service.stream.stream({});
+        const { requestWriter, responseReader } = client.service.stream.stream(
+          {},
+        );
 
         await waitFor(() => {
           expect(handler).toHaveBeenCalledTimes(1);
         });
 
-        const [, , serverInputReader, serverOutputWriter] =
-          handler.mock.calls[0];
+        const [{ requestReader, responseWriter }] = handler.mock.calls[0];
 
         const errorMessage = Math.random().toString();
         rejectable.reject(new Error(errorMessage));
         // this should be ignored by the server since it already aborted
-        clientInputWriter.write({ ok: true, payload: {} });
-        expect(await serverInputReader.asArray()).toEqual([
+        requestWriter.write({ ok: true, payload: {} });
+        expect(await requestReader.asArray()).toEqual([
           {
             ok: false,
             payload: {
@@ -1170,10 +1175,10 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(serverInputReader.isClosed());
-        expect(serverOutputWriter.isClosed());
+        expect(requestReader.isClosed());
+        expect(responseWriter.isClosed());
 
-        expect(await clientOutputReader.asArray()).toEqual([
+        expect(await responseReader.asArray()).toEqual([
           {
             ok: false,
             payload: {
@@ -1182,8 +1187,8 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(clientOutputReader.isClosed());
-        expect(clientInputWriter.isClosed());
+        expect(responseReader.isClosed());
+        expect(requestWriter.isClosed());
       });
     });
   },

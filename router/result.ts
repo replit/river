@@ -130,29 +130,32 @@ export type Output<
   Fn extends (...args: never) => unknown = (...args: never) => unknown,
 > = RiverClient extends Client<infer __ServiceSchemaMap>
   ? Procedure extends object
-    ? Procedure extends object & { rpc: infer RpcHandler extends Fn }
-      ? Awaited<ReturnType<RpcHandler>>
-      : Procedure extends object & { upload: infer UploadHandler extends Fn }
-      ? ReturnType<UploadHandler> extends [
-          infer __UploadInputMessage,
-          (...args: never) => Promise<infer UploadOutputMessage>,
-        ]
+    ? Procedure extends object & { rpc: infer RpcFn extends Fn }
+      ? Awaited<ReturnType<RpcFn>>
+      : Procedure extends object & { upload: infer UploadFn extends Fn }
+      ? ReturnType<UploadFn> extends {
+          finalize: (...args: never) => Promise<infer UploadOutputMessage>;
+        }
         ? UploadOutputMessage
         : never
-      : Procedure extends object & { stream: infer StreamHandler extends Fn }
-      ? ReturnType<StreamHandler> extends [
-          infer __StreamInputMessage,
-          ReadStream<infer StreamOutputMessage, Static<BaseErrorSchemaType>>,
-        ]
+      : Procedure extends object & { stream: infer StreamFn extends Fn }
+      ? ReturnType<StreamFn> extends {
+          responseReader: ReadStream<
+            infer StreamOutputMessage,
+            Static<BaseErrorSchemaType>
+          >;
+        }
         ? StreamOutputMessage
         : never
       : Procedure extends object & {
-          subscribe: infer SubscriptionHandler extends Fn;
+          subscribe: infer SubscriptionFn extends Fn;
         }
-      ? Awaited<ReturnType<SubscriptionHandler>> extends ReadStream<
-          infer SubscriptionOutputMessage,
-          Static<BaseErrorSchemaType>
-        >
+      ? Awaited<ReturnType<SubscriptionFn>> extends {
+          responseReader: ReadStream<
+            infer SubscriptionOutputMessage,
+            Static<BaseErrorSchemaType>
+          >;
+        }
         ? SubscriptionOutputMessage
         : never
       : never

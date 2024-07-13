@@ -18,7 +18,7 @@ const testServiceProcedures = TestServiceScaffold.procedures({
   add: Procedure.rpc({
     init: Type.Object({ n: Type.Number() }),
     output: Type.Object({ result: Type.Number() }),
-    async handler(ctx, { n }) {
+    async handler({ ctx, requestInit: { n } }) {
       ctx.state.count += n;
       return Ok({ result: ctx.state.count });
     },
@@ -27,7 +27,7 @@ const testServiceProcedures = TestServiceScaffold.procedures({
   array: Procedure.rpc({
     init: Type.Object({ n: Type.Number() }),
     output: Type.Array(Type.Number()),
-    async handler(ctx, { n }) {
+    async handler({ ctx, requestInit: { n } }) {
       ctx.state.count += n;
       return Ok([ctx.state.count]);
     },
@@ -37,9 +37,9 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     init: Type.Object({}),
     input: Type.Object({ n: Type.Number() }),
     output: Type.Array(Type.Number()),
-    async handler(_, _init, inputStream, returnStream) {
-      for await (const msg of inputStream) {
-        returnStream.write(Ok([unwrap(msg).n]));
+    async handler({ requestReader, responseWriter }) {
+      for await (const msg of requestReader) {
+        responseWriter.write(Ok([unwrap(msg).n]));
       }
     },
   }),
@@ -48,18 +48,18 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     init: Type.Object({}),
     input: EchoRequest,
     output: EchoResponse,
-    async handler(_ctx, _init, inputStream, returnStream) {
-      returnStream.onCloseRequest(() => {
-        returnStream.close();
+    async handler({ requestReader, responseWriter }) {
+      responseWriter.onCloseRequest(() => {
+        responseWriter.close();
       });
 
-      for await (const input of inputStream) {
+      for await (const input of requestReader) {
         const { ignore, msg } = unwrap(input);
         if (!ignore) {
-          returnStream.write(Ok({ response: msg }));
+          responseWriter.write(Ok({ response: msg }));
         }
       }
-      returnStream.close();
+      responseWriter.close();
     },
   }),
 
@@ -67,15 +67,17 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     init: Type.Object({ prefix: Type.String() }),
     input: EchoRequest,
     output: EchoResponse,
-    async handler(_ctx, init, inputStream, returnStream) {
-      returnStream.onCloseRequest(() => {
-        returnStream.close();
+    async handler({ requestInit, requestReader, responseWriter }) {
+      responseWriter.onCloseRequest(() => {
+        responseWriter.close();
       });
 
-      for await (const input of inputStream) {
+      for await (const input of requestReader) {
         const { ignore, msg } = unwrap(input);
         if (!ignore) {
-          returnStream.write(Ok({ response: `${init.prefix} ${msg}` }));
+          responseWriter.write(
+            Ok({ response: `${requestInit.prefix} ${msg}` }),
+          );
         }
       }
     },
@@ -103,8 +105,8 @@ const testServiceProcedures = TestServiceScaffold.procedures({
         { description: 'B' },
       ),
     ]),
-    async handler(_, input) {
-      return Ok(input);
+    async handler({ requestInit }) {
+      return Ok(requestInit);
     },
   }),
 
@@ -136,7 +138,7 @@ export const OrderingServiceSchema = ServiceSchema.define(
     add: Procedure.rpc({
       init: Type.Object({ n: Type.Number() }),
       output: Type.Object({ n: Type.Number() }),
-      async handler(ctx, { n }) {
+      async handler({ ctx, requestInit: { n } }) {
         ctx.state.msgs.push(n);
         return Ok({ n });
       },
@@ -145,7 +147,7 @@ export const OrderingServiceSchema = ServiceSchema.define(
     getAll: Procedure.rpc({
       init: Type.Object({}),
       output: Type.Object({ msgs: Type.Array(Type.Number()) }),
-      async handler(ctx, _msg) {
+      async handler({ ctx }) {
         return Ok({ msgs: ctx.state.msgs });
       },
     }),
@@ -156,7 +158,7 @@ export const BinaryFileServiceSchema = ServiceSchema.define({
   getFile: Procedure.rpc({
     init: Type.Object({ file: Type.String() }),
     output: Type.Object({ contents: Type.Uint8Array() }),
-    async handler(_ctx, { file }) {
+    async handler({ requestInit: { file } }) {
       const bytes: Uint8Array = Buffer.from(`contents for file ${file}`);
       return Ok({ contents: bytes });
     },
@@ -177,7 +179,7 @@ export const FallibleServiceSchema = ServiceSchema.define({
         extras: Type.Object({ test: Type.String() }),
       }),
     ]),
-    async handler(_ctx, { a, b }) {
+    async handler({ requestInit: { a, b } }) {
       if (b === 0) {
         return Err({
           code: DIV_BY_ZERO,
@@ -202,20 +204,20 @@ export const FallibleServiceSchema = ServiceSchema.define({
       code: Type.Literal(STREAM_ERROR),
       message: Type.String(),
     }),
-    async handler(_ctx, _init, inputStream, outputStream) {
-      for await (const input of inputStream) {
+    async handler({ requestReader, responseWriter }) {
+      for await (const input of requestReader) {
         const { msg, throwError, throwResult } = unwrap(input);
         if (throwError) {
           throw new Error('some message');
         } else if (throwResult) {
-          outputStream.write(
+          responseWriter.write(
             Err({
               code: STREAM_ERROR,
               message: 'field throwResult was set to true',
             }),
           );
         } else {
-          outputStream.write(Ok({ response: msg }));
+          responseWriter.write(Ok({ response: msg }));
         }
       }
     },
@@ -228,7 +230,7 @@ export const SubscribableServiceSchema = ServiceSchema.define(
     add: Procedure.rpc({
       init: Type.Object({ n: Type.Number() }),
       output: Type.Object({ result: Type.Number() }),
-      async handler(ctx, { n }) {
+      async handler({ ctx, requestInit: { n } }) {
         ctx.state.count.set((prev) => prev + n);
         return Ok({ result: ctx.state.count.get() });
       },
@@ -237,15 +239,15 @@ export const SubscribableServiceSchema = ServiceSchema.define(
     value: Procedure.subscription({
       init: Type.Object({}),
       output: Type.Object({ result: Type.Number() }),
-      async handler(ctx, _msg, returnStream) {
+      async handler({ ctx, responseWriter }) {
         const dispose1 = ctx.state.count.observe((count) => {
-          returnStream.write(Ok({ result: count }));
+          responseWriter.write(Ok({ result: count }));
         });
 
         ctx.onRequestFinished(dispose1);
 
-        const dispose2 = returnStream.onCloseRequest(() => {
-          returnStream.close();
+        const dispose2 = responseWriter.onCloseRequest(() => {
+          responseWriter.close();
         });
 
         ctx.onRequestFinished(dispose2);
@@ -259,9 +261,9 @@ export const UploadableServiceSchema = ServiceSchema.define({
     init: Type.Object({}),
     input: Type.Object({ n: Type.Number() }),
     output: Type.Object({ result: Type.Number() }),
-    async handler(_ctx, _init, inputStream) {
+    async handler({ requestReader }) {
       let result = 0;
-      for await (const input of inputStream) {
+      for await (const input of requestReader) {
         result += unwrap(input).n;
       }
 
@@ -273,12 +275,12 @@ export const UploadableServiceSchema = ServiceSchema.define({
     init: Type.Object({ prefix: Type.String() }),
     input: Type.Object({ n: Type.Number() }),
     output: Type.Object({ result: Type.String() }),
-    async handler(_ctx, init, inputStream) {
+    async handler({ requestInit, requestReader }) {
       let result = 0;
-      for await (const input of inputStream) {
+      for await (const input of requestReader) {
         result += unwrap(input).n;
       }
-      return Ok({ result: `${init.prefix} ${result}` });
+      return Ok({ result: `${requestInit.prefix} ${result}` });
     },
   }),
 });
@@ -294,16 +296,16 @@ export const NonObjectSchemas = ServiceSchema.define({
   add: Procedure.rpc({
     init: Type.Number(),
     output: Type.Number(),
-    async handler(_ctx, n) {
-      return Ok(n + 1);
+    async handler({ requestInit }) {
+      return Ok(requestInit + 1);
     },
   }),
 
   echoRecursive: Procedure.rpc({
     init: RecursivePayload,
     output: RecursivePayload,
-    async handler(_ctx, msg) {
-      return Ok(msg);
+    async handler({ requestInit }) {
+      return Ok(requestInit);
     },
   }),
 });

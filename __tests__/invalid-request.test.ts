@@ -580,10 +580,10 @@ describe('aborts invalid request', () => {
       newRequiredField: Type.String(),
     });
 
-    const [inputWriter, outputReader] = client.service.stream.stream({});
+    const { requestWriter, responseReader } = client.service.stream.stream({});
 
-    inputWriter.write({ oldField: 'heyyo' });
-    expect(await outputReader.asArray()).toEqual([
+    requestWriter.write({ oldField: 'heyyo' });
+    expect(await responseReader.asArray()).toEqual([
       {
         ok: false,
         payload: {

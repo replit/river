@@ -201,11 +201,11 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const [inputWriter, outputReader] = client.test.echo.stream({});
-      inputWriter.write({ msg: '1', ignore: false });
-      inputWriter.write({ msg: '2', ignore: false });
+      const { requestWriter, responseReader } = client.test.echo.stream({});
+      requestWriter.write({ msg: '1', ignore: false });
+      requestWriter.write({ msg: '2', ignore: false });
 
-      const outputIterator = getIteratorFromStream(outputReader);
+      const outputIterator = getIteratorFromStream(responseReader);
       const result1 = await iterNext(outputIterator);
       expect(result1).toStrictEqual({
         ok: true,
@@ -213,9 +213,9 @@ describe.each(testMatrix())(
       });
 
       // ensure we only have one stream despite pushing multiple messages.
-      inputWriter.close();
+      requestWriter.close();
       await waitFor(() => expect(server.openStreams.size).toEqual(1));
-      await outputReader.requestClose();
+      await responseReader.requestClose();
       // ensure we no longer have any open streams since the input was closed.
       await waitFor(() => expect(server.openStreams.size).toEqual(0));
 
@@ -272,8 +272,8 @@ describe.each(testMatrix())(
 
       // start procedure
 
-      const outputReader = client.subscribable.value.subscribe({});
-      const outputIterator = getIteratorFromStream(outputReader);
+      const { responseReader } = client.subscribable.value.subscribe({});
+      const outputIterator = getIteratorFromStream(responseReader);
       let result = await iterNext(outputIterator);
       expect(result).toStrictEqual({
         ok: true,
@@ -288,7 +288,7 @@ describe.each(testMatrix())(
         payload: { result: 1 },
       });
 
-      await outputReader.requestClose();
+      await responseReader.requestClose();
       // end procedure
 
       // number of message handlers shouldn't increase after subscription ends
@@ -337,14 +337,14 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const [inputWriter, getAddResult] = client.uploadable.addMultiple.upload(
+      const { requestWriter, finalize } = client.uploadable.addMultiple.upload(
         {},
       );
-      inputWriter.write({ n: 1 });
-      inputWriter.write({ n: 2 });
-      inputWriter.close();
+      requestWriter.write({ n: 1 });
+      requestWriter.write({ n: 2 });
+      requestWriter.close();
 
-      const result = await getAddResult();
+      const result = await finalize();
       expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
       // end procedure
 
@@ -383,10 +383,10 @@ describe.each(testMatrix())(
       });
 
       // start a stream
-      const [inputWriter, outputReader] = client.test.echo.stream({});
-      inputWriter.write({ msg: '1', ignore: false });
+      const { requestWriter, responseReader } = client.test.echo.stream({});
+      requestWriter.write({ msg: '1', ignore: false });
 
-      const outputIterator = getIteratorFromStream(outputReader);
+      const outputIterator = getIteratorFromStream(responseReader);
       const result1 = await iterNext(outputIterator);
       expect(result1).toStrictEqual({ ok: true, payload: { response: '1' } });
 
@@ -404,7 +404,7 @@ describe.each(testMatrix())(
 
       // push on the old stream and make sure its not sent
 
-      expect(() => inputWriter.write({ msg: '2', ignore: false })).toThrow();
+      expect(() => requestWriter.write({ msg: '2', ignore: false })).toThrow();
       const result2 = await iterNext(outputIterator);
       expect(result2).toMatchObject({ ok: false });
 
@@ -458,7 +458,7 @@ describe('handler registered cleanups', async () => {
               }
             : {}),
           output: Type.Object({}),
-          async handler(ctx: ProcedureHandlerContext<object>) {
+          async handler({ ctx }: { ctx: ProcedureHandlerContext<object> }) {
             handler(ctx);
 
             return new Promise(() => {

@@ -51,17 +51,17 @@ describe('server-side test', () => {
   });
 
   test('stream basic', async () => {
-    const [inputWriter, outputReader] = asClientStream(
+    const { requestWriter, responseReader } = asClientStream(
       { count: 0 },
       service.procedures.echo,
     );
 
-    inputWriter.write({ msg: 'abc', ignore: false });
-    inputWriter.write({ msg: 'def', ignore: true });
-    inputWriter.write({ msg: 'ghi', ignore: false });
-    inputWriter.close();
+    requestWriter.write({ msg: 'abc', ignore: false });
+    requestWriter.write({ msg: 'def', ignore: true });
+    requestWriter.write({ msg: 'ghi', ignore: false });
+    requestWriter.close();
 
-    const outputIterator = getIteratorFromStream(outputReader);
+    const outputIterator = getIteratorFromStream(responseReader);
     const result1 = await iterNext(outputIterator);
     expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
@@ -75,29 +75,29 @@ describe('server-side test', () => {
   });
 
   test('stream empty', async () => {
-    const [input, output] = asClientStream(
+    const { requestWriter, responseReader } = asClientStream(
       { count: 0 },
       service.procedures.echo,
     );
-    input.close();
+    requestWriter.close();
 
-    const result = await getIteratorFromStream(output).next();
+    const result = await getIteratorFromStream(responseReader).next();
     expect(result).toStrictEqual({ done: true, value: undefined });
   });
 
   test('stream with initialization', async () => {
-    const [inputWriter, outputReader] = asClientStream(
+    const { requestWriter, responseReader } = asClientStream(
       { count: 0 },
       service.procedures.echoWithPrefix,
       { prefix: 'test' },
     );
 
-    inputWriter.write({ msg: 'abc', ignore: false });
-    inputWriter.write({ msg: 'def', ignore: true });
-    inputWriter.write({ msg: 'ghi', ignore: false });
-    inputWriter.close();
+    requestWriter.write({ msg: 'abc', ignore: false });
+    requestWriter.write({ msg: 'def', ignore: true });
+    requestWriter.write({ msg: 'ghi', ignore: false });
+    requestWriter.close();
 
-    const outputIterator = getIteratorFromStream(outputReader);
+    const outputIterator = getIteratorFromStream(responseReader);
     const result1 = await iterNext(outputIterator);
     expect(result1).toStrictEqual({
       ok: true,
@@ -110,7 +110,7 @@ describe('server-side test', () => {
       payload: { response: 'test ghi' },
     });
 
-    await outputReader.requestClose();
+    await responseReader.requestClose();
     expect(await outputIterator.next()).toEqual({
       done: true,
       value: undefined,
@@ -119,17 +119,17 @@ describe('server-side test', () => {
 
   test('fallible stream', async () => {
     const service = FallibleServiceSchema.instantiate({});
-    const [inputWriter, outputReader] = asClientStream(
+    const { requestWriter, responseReader } = asClientStream(
       {},
       service.procedures.echo,
     );
 
-    inputWriter.write({ msg: 'abc', throwResult: false, throwError: false });
-    const outputIterator = getIteratorFromStream(outputReader);
+    requestWriter.write({ msg: 'abc', throwResult: false, throwError: false });
+    const outputIterator = getIteratorFromStream(responseReader);
     const result1 = await iterNext(outputIterator);
     expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
-    inputWriter.write({ msg: 'def', throwResult: true, throwError: false });
+    requestWriter.write({ msg: 'def', throwResult: true, throwError: false });
     const result2 = await iterNext(outputIterator);
     expect(result2).toStrictEqual({
       ok: false,
@@ -139,7 +139,7 @@ describe('server-side test', () => {
       },
     });
 
-    inputWriter.write({ msg: 'ghi', throwResult: false, throwError: true });
+    requestWriter.write({ msg: 'ghi', throwResult: false, throwError: true });
     const result3 = await iterNext(outputIterator);
     expect(result3).toStrictEqual({
       ok: false,
@@ -149,7 +149,7 @@ describe('server-side test', () => {
       },
     });
 
-    inputWriter.close();
+    requestWriter.close();
   });
 
   test('subscriptions', async () => {
@@ -158,8 +158,8 @@ describe('server-side test', () => {
     const add = asClientRpc(state, service.procedures.add);
     const subscribe = asClientSubscription(state, service.procedures.value);
 
-    const outputReader = subscribe({});
-    const outputIterator = getIteratorFromStream(outputReader);
+    const { responseReader } = subscribe({});
+    const outputIterator = getIteratorFromStream(responseReader);
     const streamResult1 = await iterNext(outputIterator);
     expect(streamResult1).toStrictEqual({ ok: true, payload: { result: 0 } });
 
@@ -172,14 +172,14 @@ describe('server-side test', () => {
 
   test('uploads', async () => {
     const service = UploadableServiceSchema.instantiate({});
-    const [inputWriter, getAddResult] = asClientUpload(
+    const [requestWriter, getAddResult] = asClientUpload(
       {},
       service.procedures.addMultiple,
     );
 
-    inputWriter.write({ n: 1 });
-    inputWriter.write({ n: 2 });
-    inputWriter.close();
+    requestWriter.write({ n: 1 });
+    requestWriter.write({ n: 2 });
+    requestWriter.close();
     expect(await getAddResult()).toStrictEqual({
       ok: true,
       payload: { result: 3 },
@@ -188,11 +188,11 @@ describe('server-side test', () => {
 
   test('uploads empty', async () => {
     const service = UploadableServiceSchema.instantiate({});
-    const [inputWriter, finalize] = asClientUpload(
+    const [requestWriter, finalize] = asClientUpload(
       {},
       service.procedures.addMultiple,
     );
-    inputWriter.close();
+    requestWriter.close();
     expect(await finalize()).toStrictEqual({
       ok: true,
       payload: { result: 0 },
@@ -201,15 +201,15 @@ describe('server-side test', () => {
 
   test('uploads with initialization', async () => {
     const service = UploadableServiceSchema.instantiate({});
-    const [inputWriter, getAddResult] = asClientUpload(
+    const [requestWriter, getAddResult] = asClientUpload(
       {},
       service.procedures.addMultipleWithPrefix,
       { prefix: 'test' },
     );
 
-    inputWriter.write({ n: 1 });
-    inputWriter.write({ n: 2 });
-    inputWriter.close();
+    requestWriter.write({ n: 1 });
+    requestWriter.write({ n: 2 });
+    requestWriter.close();
     expect(await getAddResult()).toStrictEqual({
       ok: true,
       payload: { result: 'test 3' },

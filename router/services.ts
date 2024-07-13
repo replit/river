@@ -6,7 +6,7 @@ import {
   AnyProcedure,
   PayloadType,
   ProcedureErrorSchemaType,
-  OutputReaderErrorSchema,
+  ResponseReaderErrorSchema,
 } from './procedures';
 import { ServiceContext } from './context';
 
@@ -103,7 +103,7 @@ export type ProcErrors<
   ProcName extends keyof S['procedures'],
 > =
   | Static<S['procedures'][ProcName]['errors']>
-  | Static<typeof OutputReaderErrorSchema>;
+  | Static<typeof ResponseReaderErrorSchema>;
 
 /**
  * Helper to get the type of procedure in a service.

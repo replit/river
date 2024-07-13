@@ -7,8 +7,8 @@ import {
   Procedure,
   Result,
   ProcedureErrorSchemaType,
-  InputReaderErrorSchema,
-  OutputReaderErrorSchema,
+  RequestReaderErrorSchema,
+  ResponseReaderErrorSchema,
   ServiceContext,
   ProcedureHandlerContext,
   UNCAUGHT_ERROR_CODE,
@@ -206,27 +206,33 @@ export function asClientRpc<
   return async (
     msg: Static<Init>,
   ): Promise<
-    Result<Static<Output>, Static<Err> | Static<typeof OutputReaderErrorSchema>>
+    Result<
+      Static<Output>,
+      Static<Err> | Static<typeof ResponseReaderErrorSchema>
+    >
   > => {
     return proc
-      .handler(dummyCtx(state, session, extendedContext), msg)
+      .handler({
+        ctx: dummyCtx(state, session, extendedContext),
+        requestInit: msg,
+      })
       .catch(catchProcError);
   };
 }
 
-function createOutputPipe<
+function createResponsePipe<
   Output extends PayloadType,
   Err extends ProcedureErrorSchemaType,
 >(): {
   reader: ReadStream<
     Static<Output>,
-    Static<Err> | Static<typeof OutputReaderErrorSchema>
+    Static<Err> | Static<typeof ResponseReaderErrorSchema>
   >;
   writer: WriteStream<Result<Static<Output>, Static<Err>>>;
 } {
   const reader = new ReadStreamImpl<
     Static<Output>,
-    Static<Err> | Static<typeof OutputReaderErrorSchema>
+    Static<Err> | Static<typeof ResponseReaderErrorSchema>
   >(() => {
     // Make it async to simulate request going over the wire
     // using promises so that we don't get affected by fake timers.
@@ -250,13 +256,13 @@ function createOutputPipe<
   return { reader, writer };
 }
 
-function createInputPipe<Input extends PayloadType>(): {
-  reader: ReadStream<Static<Input>, Static<typeof InputReaderErrorSchema>>;
+function createRequestPipe<Input extends PayloadType>(): {
+  reader: ReadStream<Static<Input>, Static<typeof RequestReaderErrorSchema>>;
   writer: WriteStream<Static<Input>>;
 } {
   const reader = new ReadStreamImpl<
     Static<Input>,
-    Static<typeof InputReaderErrorSchema>
+    Static<typeof RequestReaderErrorSchema>
   >(() => {
     // Make it async to simulate request going over the wire
     // using promises so that we don't get affected by fake timers.
@@ -290,20 +296,26 @@ export function asClientStream<
   init?: Static<Init>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
-): [WriteStream<Static<Input>>, ReadStream<Static<Output>, Static<Err>>] {
-  const inputPipe = createInputPipe<Input>();
-  const outputPipe = createOutputPipe<Output, Err>();
+): {
+  requestWriter: WriteStream<Static<Input>>;
+  responseReader: ReadStream<Static<Output>, Static<Err>>;
+} {
+  const requestPipe = createRequestPipe<Input>();
+  const responsePipe = createResponsePipe<Output, Err>();
 
   void proc
-    .handler(
-      dummyCtx(state, session, extendedContext),
-      init ?? {},
-      inputPipe.reader,
-      outputPipe.writer,
-    )
-    .catch((err: unknown) => outputPipe.writer.write(catchProcError(err)));
+    .handler({
+      ctx: dummyCtx(state, session, extendedContext),
+      requestInit: init ?? {},
+      requestReader: requestPipe.reader,
+      responseWriter: responsePipe.writer,
+    })
+    .catch((err: unknown) => responsePipe.writer.write(catchProcError(err)));
 
-  return [inputPipe.writer, outputPipe.reader];
+  return {
+    requestWriter: requestPipe.writer,
+    responseReader: responsePipe.reader,
+  };
 }
 
 export function asClientSubscription<
@@ -316,19 +328,21 @@ export function asClientSubscription<
   proc: Procedure<State, 'subscription', Init, null, Output, Err>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
-): (msg: Static<Init>) => ReadStream<Static<Output>, Static<Err>> {
-  const outputPipe = createOutputPipe<Output, Err>();
+): (msg: Static<Init>) => {
+  responseReader: ReadStream<Static<Output>, Static<Err>>;
+} {
+  const responsePipe = createResponsePipe<Output, Err>();
 
   return (msg: Static<Init>) => {
     void proc
-      .handler(
-        dummyCtx(state, session, extendedContext),
-        msg,
-        outputPipe.writer,
-      )
-      .catch((err: unknown) => outputPipe.writer.write(catchProcError(err)));
+      .handler({
+        ctx: dummyCtx(state, session, extendedContext),
+        requestInit: msg,
+        responseWriter: responsePipe.writer,
+      })
+      .catch((err: unknown) => responsePipe.writer.write(catchProcError(err)));
 
-    return outputPipe.reader;
+    return { responseReader: responsePipe.reader };
   };
 }
 
@@ -348,16 +362,16 @@ export function asClientUpload<
   WriteStream<Static<Input>>,
   () => Promise<Result<Static<Output>, Static<Err>>>,
 ] {
-  const inputPipe = createInputPipe<Input>();
+  const requestPipe = createRequestPipe<Input>();
   const result = proc
-    .handler(
-      dummyCtx(state, session, extendedContext),
-      init ?? {},
-      inputPipe.reader,
-    )
+    .handler({
+      ctx: dummyCtx(state, session, extendedContext),
+      requestInit: init ?? {},
+      requestReader: requestPipe.reader,
+    })
     .catch(catchProcError);
 
-  return [inputPipe.writer, () => result];
+  return [requestPipe.writer, () => result];
 }
 
 export function getTransportConnections<ConnType extends Connection>(

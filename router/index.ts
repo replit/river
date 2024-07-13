@@ -31,8 +31,8 @@ export {
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
   INVALID_REQUEST_CODE,
-  OutputReaderErrorSchema,
-  InputReaderErrorSchema,
+  ResponseReaderErrorSchema,
+  RequestReaderErrorSchema,
 } from './procedures';
 export { createClient } from './client';
 export type { Client } from './client';
