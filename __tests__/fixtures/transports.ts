@@ -77,6 +77,15 @@ export const transports: Array<TransportMatrixEntry> = [
             clientTransport.extendHandshake(handshakeOptions);
           }
 
+          clientTransport.bindLogger((msg, ctx, level) => {
+            if (ctx?.tags?.includes('invariant-violation')) {
+              console.error('invariant violation', { msg, ctx, level });
+              throw new Error(
+                `Invariant violation encountered: [${level}] ${msg}`,
+              );
+            }
+          }, 'debug');
+
           transports.push(clientTransport);
           return clientTransport;
         },
@@ -86,6 +95,15 @@ export const transports: Array<TransportMatrixEntry> = [
             'SERVER',
             opts?.server,
           );
+
+          serverTransport.bindLogger((msg, ctx, level) => {
+            if (ctx?.tags?.includes('invariant-violation')) {
+              console.error('invariant violation', { msg, ctx, level });
+              throw new Error(
+                `Invariant violation encountered: [${level}] ${msg}`,
+              );
+            }
+          }, 'debug');
 
           if (handshakeOptions) {
             serverTransport.extendHandshake(handshakeOptions);

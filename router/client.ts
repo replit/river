@@ -273,6 +273,7 @@ function handleRpc(
     tracing: getPropagationContext(ctx),
     controlFlags: ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit,
   });
+  let cleanedUp = false;
 
   const responsePromise = new Promise((resolve) => {
     // on disconnect, set a timer to return an error
@@ -288,6 +289,8 @@ function handleRpc(
     });
 
     function cleanup() {
+      if (cleanedUp) return;
+      cleanedUp = true;
       transport.removeEventListener('message', onMessage);
       transport.removeEventListener('sessionStatus', onSessionStatus);
       span.end();
@@ -326,7 +329,8 @@ function handleStream(
   const inputStream = pushable({ objectMode: true });
   const outputStream = pushable({ objectMode: true });
   let firstMessage = true;
-  let healthyClose = true;
+  let sentClose = false;
+  let cleanedUp = false;
 
   if (init) {
     transport.send(serverId, {
@@ -362,13 +366,15 @@ function handleStream(
       transport.send(serverId, m);
     }
 
-    if (!healthyClose) return;
+    if (sentClose) return;
+    sentClose = true;
     // after ending input stream, send a close message to the server
     const m = closeStreamMessage(streamId);
+    // TODO: remove these fields once we are confident of the fix.
+    m.serviceName = serviceName;
+    m.procedureName = procedureName;
+    m.tracing = getPropagationContext(ctx);
     if (firstMessage) {
-      m.serviceName = serviceName;
-      m.procedureName = procedureName;
-      m.tracing = getPropagationContext(ctx);
       m.controlFlags |= ControlFlags.StreamOpenBit;
       firstMessage = false;
     }
@@ -390,6 +396,8 @@ function handleStream(
   }
 
   function cleanup() {
+    if (cleanedUp) return;
+    cleanedUp = true;
     inputStream.end();
     outputStream.end();
     transport.removeEventListener('message', onMessage);
@@ -405,7 +413,7 @@ function handleStream(
         message: `${serverId} unexpectedly disconnected`,
       }),
     );
-    healthyClose = false;
+    sentClose = true;
     cleanup();
   });
 
@@ -439,7 +447,8 @@ function handleSubscribe(
     controlFlags: ControlFlags.StreamOpenBit,
   });
 
-  let healthyClose = true;
+  let sentClose = false;
+  let cleanedUp = false;
 
   // transport -> output
   const outputStream = pushable({ objectMode: true });
@@ -455,6 +464,8 @@ function handleSubscribe(
   }
 
   function cleanup() {
+    if (cleanedUp) return;
+    cleanedUp = true;
     outputStream.end();
     transport.removeEventListener('message', onMessage);
     transport.removeEventListener('sessionStatus', onSessionStatus);
@@ -463,8 +474,14 @@ function handleSubscribe(
 
   const closeHandler = () => {
     cleanup();
-    if (!healthyClose) return;
-    transport.send(serverId, closeStreamMessage(streamId));
+    if (sentClose) return;
+    sentClose = true;
+    const m = closeStreamMessage(streamId);
+    // TODO: remove these fields once we are confident of the fix.
+    m.serviceName = serviceName;
+    m.procedureName = procedureName;
+    m.tracing = getPropagationContext(ctx);
+    transport.send(serverId, m);
   };
 
   // close stream after disconnect + grace period elapses
@@ -475,7 +492,7 @@ function handleSubscribe(
         message: `${serverId} unexpectedly disconnected`,
       }),
     );
-    healthyClose = false;
+    sentClose = true;
     cleanup();
   });
 
@@ -501,7 +518,8 @@ function handleUpload(
   );
   const inputStream = pushable({ objectMode: true });
   let firstMessage = true;
-  let healthyClose = true;
+  let sentClose = false;
+  let cleanedUp = false;
 
   if (init) {
     transport.send(serverId, {
@@ -537,13 +555,15 @@ function handleUpload(
       transport.send(serverId, m);
     }
 
-    if (!healthyClose) return;
+    if (sentClose) return;
+    sentClose = true;
     // after ending input stream, send a close message to the server
     const m = closeStreamMessage(streamId);
+    // TODO: remove these fields once we are confident of the fix.
+    m.serviceName = serviceName;
+    m.procedureName = procedureName;
+    m.tracing = getPropagationContext(ctx);
     if (firstMessage) {
-      m.serviceName = serviceName;
-      m.procedureName = procedureName;
-      m.tracing = getPropagationContext(ctx);
       m.controlFlags |= ControlFlags.StreamOpenBit;
       firstMessage = false;
     }
@@ -556,7 +576,7 @@ function handleUpload(
     // on disconnect, set a timer to return an error
     // on (re)connect, clear the timer
     const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
-      healthyClose = false;
+      sentClose = true;
       cleanup();
       resolve(
         Err({
@@ -567,6 +587,8 @@ function handleUpload(
     });
 
     function cleanup() {
+      if (cleanedUp) return;
+      cleanedUp = true;
       inputStream.end();
       transport.removeEventListener('message', onMessage);
       transport.removeEventListener('sessionStatus', onSessionStatus);
