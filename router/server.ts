@@ -83,6 +83,7 @@ interface NewProcStreamInput {
   from: string;
   sessionId: string;
   protocolVersion: string;
+  passInitAsInputForBackwardsCompat: boolean;
 }
 
 class RiverServer<Services extends AnyServiceSchemaMap>
@@ -203,6 +204,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     sessionId,
     tracingCtx,
     protocolVersion,
+    passInitAsInputForBackwardsCompat,
   }: NewProcStreamInput) {
     this.openStreams.add(streamId);
 
@@ -410,6 +412,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
     });
 
+    if (passInitAsInputForBackwardsCompat) {
+      inputReader.pushValue(Ok(initPayload));
+    }
+
     const outputWriter = new WriteStreamImpl<
       Result<Static<PayloadType>, Static<ProcedureErrorSchemaType>>
     >((response) => {
@@ -565,7 +571,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               // which would lead to us holding on to the closure forever
               await procedure.handler(
                 serviceContextWithTransportInfo,
-                initPayload,
+                passInitAsInputForBackwardsCompat ? null : initPayload,
                 outputWriter,
               );
             } catch (err) {
@@ -589,7 +595,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               // which would lead to us holding on to the closure forever
               const outputMessage = await procedure.handler(
                 serviceContextWithTransportInfo,
-                initPayload,
+                passInitAsInputForBackwardsCompat ? null : initPayload,
                 inputReader,
               );
 
@@ -791,7 +797,22 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
     const procedure = service.procedures[initMessage.procedureName];
 
-    if (!Value.Check(procedure.init, initMessage.payload)) {
+    let passInitAsInputForBackwardsCompat = false;
+    if (
+      session.protocolVersion === 'v1.1' &&
+      (procedure.type === 'upload' || procedure.type === 'stream') &&
+      Value.Check(procedure.input, initMessage.payload) &&
+      Value.Check(procedure.init, {})
+    ) {
+      // TODO remove once clients migrate to v2
+      // In v1.1 sometimes the first message is not `init`, but instead it's the `input`
+      // this backwards compatibility path requires procedures to define their `init` as
+      // an empty-object-compatible-schema (i.e. either actually empty or optional values)
+      // The reason we don't check if `init` is satisified here is because false positives
+      // are easy to hit, we'll err on the side of caution and treat it as an input, servers
+      // that expect v1.1 clients should handle this case themselves.
+      passInitAsInputForBackwardsCompat = true;
+    } else if (!Value.Check(procedure.init, initMessage.payload)) {
       const errMessage = `procedure init failed validation`;
       this.log?.warn(errMessage, {
         ...session.loggingMetadata,
@@ -829,6 +850,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       from: initMessage.from,
       sessionId: session.id,
       protocolVersion: session.protocolVersion,
+      passInitAsInputForBackwardsCompat,
     };
   }
 
