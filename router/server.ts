@@ -571,7 +571,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               // which would lead to us holding on to the closure forever
               await procedure.handler(
                 serviceContextWithTransportInfo,
-                passInitAsInputForBackwardsCompat ? {} : initPayload,
+                passInitAsInputForBackwardsCompat ? null : initPayload,
                 outputWriter,
               );
             } catch (err) {
@@ -595,7 +595,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               // which would lead to us holding on to the closure forever
               const outputMessage = await procedure.handler(
                 serviceContextWithTransportInfo,
-                passInitAsInputForBackwardsCompat ? {} : initPayload,
+                passInitAsInputForBackwardsCompat ? null : initPayload,
                 inputReader,
               );
 
@@ -798,37 +798,39 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     const procedure = service.procedures[initMessage.procedureName];
 
     let passInitAsInputForBackwardsCompat = false;
-    if (!Value.Check(procedure.init, initMessage.payload)) {
+    if (
+      session.protocolVersion === 'v1.1' &&
+      (procedure.type === 'upload' || procedure.type === 'stream') &&
+      Value.Check(procedure.input, initMessage.payload) &&
+      Value.Check(procedure.init, {})
+    ) {
       // TODO remove once clients migrate to v2
       // In v1.1 sometimes the first message is not `init`, but instead it's the `input`
-      // this backwards compatibility path requires procedures to accept an empty object as `init`
-      if (
-        session.protocolVersion === 'v1.1' &&
-        (procedure.type === 'upload' || procedure.type === 'stream') &&
-        Value.Check(procedure.input, initMessage.payload) &&
-        Value.Check(procedure.init, {})
-      ) {
-        passInitAsInputForBackwardsCompat = true;
-      } else {
-        const errMessage = `procedure init failed validation`;
-        this.log?.warn(errMessage, {
-          ...session.loggingMetadata,
-          clientId: this.transport.clientId,
-          transportMessage: initMessage,
-          tags: ['invalid-request'],
-        });
+      // this backwards compatibility path requires procedures to define their `init` as
+      // an empty-object-compatible-schema (i.e. either actually empty or optional values)
+      // The reason we don't check if `init` is satisified here is because false positives
+      // are easy to hit, we'll err on the side of caution and treat it as an input, servers
+      // that expect v1.1 clients should handle this case themselves.
+      passInitAsInputForBackwardsCompat = true;
+    } else if (!Value.Check(procedure.init, initMessage.payload)) {
+      const errMessage = `procedure init failed validation`;
+      this.log?.warn(errMessage, {
+        ...session.loggingMetadata,
+        clientId: this.transport.clientId,
+        transportMessage: initMessage,
+        tags: ['invalid-request'],
+      });
 
-        this.abortStream(
-          initMessage.from,
-          initMessage.streamId,
-          Err({
-            code: INVALID_REQUEST_CODE,
-            message: errMessage,
-          }),
-        );
+      this.abortStream(
+        initMessage.from,
+        initMessage.streamId,
+        Err({
+          code: INVALID_REQUEST_CODE,
+          message: errMessage,
+        }),
+      );
 
-        return null;
-      }
+      return null;
     }
 
     return {
