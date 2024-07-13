@@ -391,7 +391,7 @@ describe.each(testMatrix())(
       });
     });
 
-    test.only('subscription idempotent close', async () => {
+    test('subscription idempotent close', async () => {
       // setup
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
