@@ -178,11 +178,37 @@ describe.each(testMatrix())(
       const result3 = await iterNext(outputIterator);
       expect(result3).toStrictEqual({ ok: true, payload: { response: 'end' } });
 
-      await outputReader.requestClose();
-
       // after the server stream is ended, the client stream should be ended too
       const result4 = await outputIterator.next();
       expect(result4).toStrictEqual({ done: true, value: undefined });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('stream empty', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = { test: TestServiceSchema };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // test
+      const [input, output] = client.test.echo.stream({});
+      input.close();
+
+      const result = await getIteratorFromStream(output).next();
+      expect(result).toStrictEqual({ done: true, value: undefined });
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -350,6 +376,35 @@ describe.each(testMatrix())(
 
       const result = await getResult();
       expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('upload empty', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = {
+        uploadable: UploadableServiceSchema,
+      };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // test
+      const [addStream, addResult] = client.uploadable.addMultiple.upload({});
+      addStream.close();
+      const result = await addResult();
+      expect(result).toStrictEqual({ ok: true, payload: { result: 0 } });
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],

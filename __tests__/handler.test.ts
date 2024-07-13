@@ -68,12 +68,21 @@ describe('server-side test', () => {
     const result2 = await iterNext(outputIterator);
     expect(result2).toStrictEqual({ ok: true, payload: { response: 'ghi' } });
 
-    await outputReader.requestClose();
-
     expect(await outputIterator.next()).toEqual({
       done: true,
       value: undefined,
     });
+  });
+
+  test('stream empty', async () => {
+    const [input, output] = asClientStream(
+      { count: 0 },
+      service.procedures.echo,
+    );
+    input.close();
+
+    const result = await getIteratorFromStream(output).next();
+    expect(result).toStrictEqual({ done: true, value: undefined });
   });
 
   test('stream with initialization', async () => {
@@ -174,6 +183,19 @@ describe('server-side test', () => {
     expect(await getAddResult()).toStrictEqual({
       ok: true,
       payload: { result: 3 },
+    });
+  });
+
+  test('uploads empty', async () => {
+    const service = UploadableServiceSchema.instantiate({});
+    const [inputWriter, finalize] = asClientUpload(
+      {},
+      service.procedures.addMultiple,
+    );
+    inputWriter.close();
+    expect(await finalize()).toStrictEqual({
+      ok: true,
+      payload: { result: 0 },
     });
   });
 

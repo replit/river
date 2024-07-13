@@ -283,15 +283,14 @@ export abstract class ServerTransport<
       | 'unknown session'
       | 'transparent reconnection'
       | 'hard reconnection' = 'new session';
+    const clientNextExpectedSeq =
+      msg.payload.expectedSessionState.nextExpectedSeq;
+    const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq ?? 0;
+
     if (oldSession && oldSession.id === msg.payload.sessionId) {
       connectCase = 'transparent reconnection';
 
       // invariant: ordering must be correct
-      const clientNextExpectedSeq =
-        msg.payload.expectedSessionState.nextExpectedSeq;
-      // TODO: remove nullish coalescing when we're sure this is always set
-      const clientNextSentSeq =
-        msg.payload.expectedSessionState.nextSentSeq ?? 0;
       const ourNextSeq = oldSession.nextSeq();
       const ourAck = oldSession.ack;
 
@@ -368,33 +367,34 @@ export abstract class ServerTransport<
       connectCase = 'hard reconnection';
 
       // just nuke the old session entirely and proceed as if this was new
+      this.log?.info(
+        `client is reconnecting to a new session (${msg.payload.sessionId}) with an old session (${oldSession.id}) already existing, closing old session`,
+        {
+          ...session.loggingMetadata,
+          connectedTo: msg.from,
+          sessionId: msg.payload.sessionId,
+        },
+      );
       this.deleteSession(oldSession);
       oldSession = undefined;
-    } else {
+    }
+
+    if (!oldSession && (clientNextSentSeq > 0 || clientNextExpectedSeq > 0)) {
+      // we don't have a session, but the client is trying to reconnect
+      // to an old session. we can't do anything about this, so we reject
       connectCase = 'unknown session';
-
-      const clientNextExpectedSeq =
-        msg.payload.expectedSessionState.nextExpectedSeq;
-      // TODO: remove nullish coalescing when we're sure this is always set
-      const clientNextSentSeq =
-        msg.payload.expectedSessionState.nextSentSeq ?? 0;
-
-      if (clientNextSentSeq > 0 || clientNextExpectedSeq > 0) {
-        // we don't have a session, but the client is trying to reconnect
-        // to an old session. we can't do anything about this, so we reject
-        this.rejectHandshakeRequest(
-          session,
-          msg.from,
-          `client is trying to reconnect to a session the server don't know about: ${msg.payload.sessionId}`,
-          'SESSION_STATE_MISMATCH',
-          {
-            ...session.loggingMetadata,
-            connectedTo: msg.from,
-            transportMessage: msg,
-          },
-        );
-        return;
-      }
+      this.rejectHandshakeRequest(
+        session,
+        msg.from,
+        `client is trying to reconnect to a session the server don't know about: ${msg.payload.sessionId}`,
+        'SESSION_STATE_MISMATCH',
+        {
+          ...session.loggingMetadata,
+          connectedTo: msg.from,
+          transportMessage: msg,
+        },
+      );
+      return;
     }
 
     // from this point on, we're committed to connecting

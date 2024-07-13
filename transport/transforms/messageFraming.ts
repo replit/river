@@ -55,11 +55,6 @@ export class Uint32LengthPrefixFraming extends Transform {
   }
 
   _flush(cb: TransformCallback) {
-    // if there's any leftover data that doesn't form a complete message
-    if (this.receivedBuffer.length) {
-      this.emit('error', new Error('got incomplete message while flushing'));
-    }
-
     this.receivedBuffer = Buffer.alloc(0);
     cb();
   }

@@ -14,8 +14,6 @@ import {
   UNCAUGHT_ERROR_CODE,
 } from '../router';
 import { Static } from '@sinclair/typebox';
-import { nanoid } from 'nanoid';
-import net from 'node:net';
 import {
   OpaqueTransportMessage,
   PartialTransportMessage,
@@ -80,15 +78,6 @@ export function onWsServerReady(server: http.Server): Promise<number> {
         reject(new Error("couldn't find a port to allocate"));
       }
     });
-  });
-}
-
-export function onUdsServeReady(
-  server: net.Server,
-  path: string,
-): Promise<void> {
-  return new Promise<void>((resolve) => {
-    server.listen(path, resolve);
   });
 }
 
@@ -370,10 +359,6 @@ export function asClientUpload<
 
   return [inputPipe.writer, () => result];
 }
-
-export const getUnixSocketPath = () => {
-  return `/tmp/${nanoid()}.sock`;
-};
 
 export function getTransportConnections<ConnType extends Connection>(
   transport: Transport<ConnType>,

@@ -172,6 +172,39 @@ describe.each(testMatrix())(
       });
     });
 
+    test('idle transport stays alive', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      clientTransport.connect(serverTransport.clientId);
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(numberOfConnections(serverTransport)).toBe(1);
+        expect(numberOfConnections(clientTransport)).toBe(1);
+      });
+
+      const oldClientSessionId = serverTransport.sessions.get('client')?.id;
+      const oldServerSessionId = clientTransport.sessions.get('SERVER')?.id;
+      expect(oldClientSessionId).not.toBeUndefined();
+      expect(oldServerSessionId).not.toBeUndefined();
+
+      await advanceFakeTimersBySessionGrace();
+
+      expect(numberOfConnections(serverTransport)).toBe(1);
+      expect(numberOfConnections(clientTransport)).toBe(1);
+      const newClientSessionId = serverTransport.sessions.get('client')?.id;
+      const newServerSessionId = clientTransport.sessions.get('SERVER')?.id;
+      expect(newClientSessionId).toBe(oldClientSessionId);
+      expect(newServerSessionId).toBe(oldServerSessionId);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
     test('heartbeats should not interrupt normal operation', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -733,14 +766,28 @@ describe.each(testMatrix())(
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
-      await waitFor(() => expect(onConnect).toHaveBeenCalledTimes(1));
-      closeAllConnections(clientTransport);
-      await waitFor(() => expect(onConnect).toHaveBeenCalledTimes(2));
+      await waitFor(() => {
+        expect(onConnect).toHaveBeenCalledTimes(1);
+        expect(numberOfConnections(clientTransport)).toEqual(1);
+        expect(numberOfConnections(serverTransport)).toEqual(1);
+      });
 
-      // make sure our connection is still intact even after session grace elapses
-      await advanceFakeTimersBySessionGrace();
-      expect(numberOfConnections(clientTransport)).toEqual(1);
-      expect(numberOfConnections(serverTransport)).toEqual(1);
+      const oldClientSessionId = serverTransport.sessions.get('client')?.id;
+      const oldServerSessionId = clientTransport.sessions.get('SERVER')?.id;
+      expect(oldClientSessionId).not.toBeUndefined();
+      expect(oldServerSessionId).not.toBeUndefined();
+
+      closeAllConnections(clientTransport);
+      await waitFor(() => {
+        expect(onConnect).toHaveBeenCalledTimes(2);
+        expect(numberOfConnections(clientTransport)).toEqual(1);
+        expect(numberOfConnections(serverTransport)).toEqual(1);
+      });
+
+      const newClientSessionId = serverTransport.sessions.get('client')?.id;
+      const newServerSessionId = clientTransport.sessions.get('SERVER')?.id;
+      expect(newClientSessionId).toBe(oldClientSessionId);
+      expect(newServerSessionId).toBe(oldServerSessionId);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],

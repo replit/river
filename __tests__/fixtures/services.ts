@@ -59,6 +59,7 @@ const testServiceProcedures = TestServiceScaffold.procedures({
           returnStream.write(Ok({ response: msg }));
         }
       }
+      returnStream.close();
     },
   }),
 
