@@ -217,6 +217,45 @@ describe.each(testMatrix())(
       });
     });
 
+    test('stream idempotent close', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = { test: TestServiceSchema };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // test
+      const [input, output, close] = await client.test.echo.stream();
+      input.push({ msg: 'abc', ignore: false });
+      input.end();
+      input.end();
+
+      const result1 = await iterNext(output);
+      expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
+      const result2 = await output.next();
+      expect(result2).toStrictEqual({ done: true, value: undefined });
+      close();
+
+      // Make sure that the handlers have finished.
+      await advanceFakeTimersBySessionGrace();
+
+      // "Accidentally" call close() again, as a joke.
+      close();
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
     test('stream with init message', async () => {
       // setup
       const clientTransport = getClientTransport('client');
@@ -343,6 +382,46 @@ describe.each(testMatrix())(
       result = await iterNext(subscription);
       expect(result).toStrictEqual({ ok: true, payload: { result: 4 } });
 
+      close();
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test.only('subscription idempotent close', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = {
+        subscribable: SubscribableServiceSchema,
+      };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // test
+      const [subscription, close] = await client.subscribable.value.subscribe(
+        {},
+      );
+      const result1 = await iterNext(subscription);
+      expect(result1).toStrictEqual({ ok: true, payload: { result: 0 } });
+      close();
+
+      // Make sure that the handlers have finished.
+      await advanceFakeTimersBySessionGrace();
+
+      const result2 = await subscription.next();
+      expect(result2).toStrictEqual({ done: true, value: undefined });
+
+      // "Accidentally" call close() again, as a joke.
       close();
 
       await testFinishesCleanly({
