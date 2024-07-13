@@ -571,7 +571,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               // which would lead to us holding on to the closure forever
               await procedure.handler(
                 serviceContextWithTransportInfo,
-                passInitAsInputForBackwardsCompat ? null : initPayload,
+                passInitAsInputForBackwardsCompat ? {} : initPayload,
                 outputWriter,
               );
             } catch (err) {
@@ -595,7 +595,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               // which would lead to us holding on to the closure forever
               const outputMessage = await procedure.handler(
                 serviceContextWithTransportInfo,
-                passInitAsInputForBackwardsCompat ? null : initPayload,
+                passInitAsInputForBackwardsCompat ? {} : initPayload,
                 inputReader,
               );
 
