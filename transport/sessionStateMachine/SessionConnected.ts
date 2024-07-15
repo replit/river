@@ -91,6 +91,13 @@ export class SessionConnected<
         );
         this.telemetry.span.addEvent('closing connection due to inactivity');
 
+        // it is OK to close this even on the client when we can't trust the client timer
+        // due to browser throttling or hibernation
+        // at worst, this interval will fire later than what the server expects and the server
+        // will have already closed the connection
+        // this just helps us in cases where we have a proxying setup where the server has closed
+        // the connection but the proxy hasn't synchronized the server-side close to the client so
+        // the client isn't stuck with a pseudo-dead connection forever
         this.conn.close();
         clearInterval(this.heartbeatHandle);
         this.heartbeatHandle = undefined;
