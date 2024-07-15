@@ -38,19 +38,14 @@ export class SessionConnected<
   conn: ConnType;
   listeners: SessionConnectedListeners;
 
-  private activeHeartbeatHandle?: ReturnType<typeof setInterval> | undefined;
-  private activeHeartbeatMisses = 0;
-
-  private passiveHeartbeatHandle?: ReturnType<typeof setTimeout> | undefined;
-
-  get isActivelyHeartbeating() {
-    return this.activeHeartbeatHandle !== undefined;
-  }
+  private heartbeatHandle?: ReturnType<typeof setInterval> | undefined;
+  private heartbeatMisses = 0;
+  isActivelyHeartbeating: boolean;
 
   updateBookkeeping(ack: number, seq: number) {
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
     this.ack = seq + 1;
-    this.activeHeartbeatMisses = 0;
+    this.heartbeatMisses = 0;
   }
 
   send(msg: PartialTransportMessage): string {
@@ -83,11 +78,11 @@ export class SessionConnected<
 
     // dont explicity clear the buffer, we'll just filter out old messages
     // when we receive an ack
-  }
 
-  startActiveHeartbeat() {
-    this.activeHeartbeatHandle = setInterval(() => {
-      const misses = this.activeHeartbeatMisses;
+    // setup heartbeat
+    this.isActivelyHeartbeating = false;
+    this.heartbeatHandle = setInterval(() => {
+      const misses = this.heartbeatMisses;
       const missDuration = misses * this.options.heartbeatIntervalMs;
       if (misses >= this.options.heartbeatsUntilDead) {
         this.log?.info(
@@ -97,39 +92,21 @@ export class SessionConnected<
         this.telemetry.span.addEvent('closing connection due to inactivity');
 
         this.conn.close();
-        clearInterval(this.activeHeartbeatHandle);
-        this.activeHeartbeatHandle = undefined;
+        clearInterval(this.heartbeatHandle);
+        this.heartbeatHandle = undefined;
         return;
       }
 
-      this.sendHeartbeat();
-      this.activeHeartbeatMisses++;
+      if (this.isActivelyHeartbeating) {
+        this.sendHeartbeat();
+      }
+
+      this.heartbeatMisses++;
     }, this.options.heartbeatIntervalMs);
   }
 
-  // kill the connection if we don't receive a heartbeat in time
-  // realistically, this only happens in a proxy scenario where the connection might
-  // be desynchronized
-  startPassiveHeartbeatCheck() {
-    const duration =
-      this.options.heartbeatsUntilDead * this.options.heartbeatIntervalMs;
-
-    if (this.passiveHeartbeatHandle) {
-      clearTimeout(this.passiveHeartbeatHandle);
-      this.passiveHeartbeatHandle = undefined;
-    }
-
-    this.passiveHeartbeatHandle = setTimeout(() => {
-      this.log?.info(
-        `closing connection to ${this.to} due to not receiving a heartbeat in the last ${duration}ms`,
-        this.loggingMetadata,
-      );
-      this.telemetry.span.addEvent('closing connection due to inactivity');
-
-      this.conn.close();
-      clearTimeout(this.passiveHeartbeatHandle);
-      this.passiveHeartbeatHandle = undefined;
-    }, duration);
+  startActiveHeartbeat() {
+    this.isActivelyHeartbeating = true;
   }
 
   private sendHeartbeat() {
@@ -199,7 +176,6 @@ export class SessionConnected<
     // heartbeat mode and should send a response to the ack
     if (!this.isActivelyHeartbeating) {
       this.sendHeartbeat();
-      this.startPassiveHeartbeatCheck();
     }
   };
 
@@ -208,10 +184,8 @@ export class SessionConnected<
     this.conn.removeDataListener(this.onMessageData);
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
-    clearInterval(this.activeHeartbeatHandle);
-    clearTimeout(this.passiveHeartbeatHandle);
-    this.activeHeartbeatHandle = undefined;
-    this.passiveHeartbeatHandle = undefined;
+    clearInterval(this.heartbeatHandle);
+    this.heartbeatHandle = undefined;
   }
 
   _handleClose(): void {

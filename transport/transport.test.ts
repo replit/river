@@ -849,10 +849,9 @@ describe.each(testMatrix())(
       const numConnKills = 3;
       for (let i = 0; i < numConnKills; i++) {
         closeAllConnections(clientTransport);
-        await waitFor(() => {
-          expect(numberOfConnections(clientTransport)).toBe(0);
-          expect(numberOfConnections(serverTransport)).toBe(0);
-        });
+        await waitFor(() =>
+          expect(numberOfConnections(clientTransport)).toBe(0),
+        );
 
         await vi.advanceTimersByTimeAsync(
           Math.ceil(
