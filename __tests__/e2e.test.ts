@@ -708,6 +708,9 @@ describe.each(testMatrix())(
       // kill the session
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+
       await advanceFakeTimersBySessionGrace();
       clientTransport.reconnectOnConnectionDrop = true;
 
@@ -754,6 +757,9 @@ describe.each(testMatrix())(
       // kill the session
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+
       await advanceFakeTimersBySessionGrace();
 
       // we should have no connections

@@ -73,6 +73,8 @@ describe.each(testMatrix())(
       expect(oldServerSessionId).toBe(oldClientSessionId);
 
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // by this point the client should have reconnected
       const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
@@ -132,6 +134,7 @@ describe.each(testMatrix())(
       // disconnect and wait for reconnection
       closeAllConnections(clientTransport);
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // wait a bit to let the reconnect budget restore
       await advanceFakeTimersByConnectionBackoff();
@@ -446,6 +449,8 @@ describe.each(testMatrix())(
 
       // clean disconnect + reconnect within grace period
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // wait for connection status to propagate to server
       // session    >  c------| (connected)
@@ -478,8 +483,8 @@ describe.each(testMatrix())(
       // connection >  c--x   c-----x  | (disconnected)
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
-      await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
-      await waitFor(() => expect(serverConnStart).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       await advanceFakeTimersBySessionGrace();
       await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(1));
@@ -779,6 +784,9 @@ describe.each(testMatrix())(
       expect(oldServerSessionId).not.toBeUndefined();
 
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+
       await waitFor(() => {
         expect(onConnect).toHaveBeenCalledTimes(2);
         expect(numberOfConnections(clientTransport)).toEqual(1);
@@ -932,6 +940,8 @@ describe.each(testMatrix())(
       // kill the client
       clientTransport.close();
       closeAllConnections(serverTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // queue up some messages
       serverTransport.send(
@@ -1027,6 +1037,8 @@ describe.each(testMatrix())(
       // bring client side connections down and stop trying to reconnect
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // buffer some messages
       clientTransport.send(
@@ -1074,6 +1086,9 @@ describe.each(testMatrix())(
 
       // disconnect and wait for reconnection.
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+
       await advanceFakeTimersByConnectionBackoff();
 
       // Ensure that the session survived the reconnection. And not just that a session was not
@@ -1432,6 +1447,7 @@ describe.each(testMatrix())(
       // now, let's wait until the connection is considered dead
       closeAllConnections(clientTransport);
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // should have reconnected by now
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
