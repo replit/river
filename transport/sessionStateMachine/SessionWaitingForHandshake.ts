@@ -2,14 +2,17 @@ import { MessageMetadata } from '../../logging';
 import { Connection } from '../connection';
 import { TransportMessage } from '../message';
 import { SessionHandshakingListeners } from './SessionHandshaking';
-import { CommonSession, SessionState } from './common';
+import { CommonSession, CommonSessionProps, SessionState } from './common';
+
+export interface SessionWaitingForHandshakeProps<ConnType extends Connection>
+  extends CommonSessionProps {
+  conn: ConnType;
+  listeners: SessionHandshakingListeners;
+}
 
 /*
  * Server-side session that has a connection but is waiting for the client to identify itself.
- *
- * Valid transitions:
- * - WaitingForHandshake -> NoConnection (on close)
- * - WaitingForHandshake -> Connected (on handshake)
+ * See transitions.ts for valid transitions.
  */
 export class SessionWaitingForHandshake<
   ConnType extends Connection,
@@ -20,22 +23,18 @@ export class SessionWaitingForHandshake<
 
   handshakeTimeout?: ReturnType<typeof setTimeout>;
 
-  constructor(
-    conn: ConnType,
-    listeners: SessionHandshakingListeners,
-    ...args: ConstructorParameters<typeof CommonSession>
-  ) {
-    super(...args);
-    this.conn = conn;
-    this.listeners = listeners;
+  constructor(props: SessionWaitingForHandshakeProps<ConnType>) {
+    super(props);
+    this.conn = props.conn;
+    this.listeners = props.listeners;
 
     this.handshakeTimeout = setTimeout(() => {
-      listeners.onHandshakeTimeout();
+      this.listeners.onHandshakeTimeout();
     }, this.options.handshakeTimeoutMs);
 
     this.conn.addDataListener(this.onHandshakeData);
-    this.conn.addErrorListener(listeners.onConnectionErrored);
-    this.conn.addCloseListener(listeners.onConnectionClosed);
+    this.conn.addErrorListener(this.listeners.onConnectionErrored);
+    this.conn.addCloseListener(this.listeners.onConnectionClosed);
   }
 
   onHandshakeData = (msg: Uint8Array) => {

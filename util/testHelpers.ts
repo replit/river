@@ -18,15 +18,17 @@ import {
 import { coerceErrorString } from './stringify';
 import { Transport } from '../transport/transport';
 import { WsLike } from '../transport/impls/ws/wslike';
-import { defaultTransportOptions } from '../transport/options';
+import {
+  defaultClientTransportOptions,
+  defaultTransportOptions,
+} from '../transport/options';
 import { generateId } from '../transport/id';
 import { Connection } from '../transport/connection';
+import { SessionState } from '../transport/sessionStateMachine/common';
 import {
   Session,
-  SessionOptions,
-  SessionState,
-} from '../transport/sessionStateMachine/common';
-import { SessionStateGraph } from '../transport/sessionStateMachine';
+  SessionStateGraph,
+} from '../transport/sessionStateMachine/transitions';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
@@ -132,7 +134,8 @@ function catchProcError(err: unknown) {
   return Err({ code: UNCAUGHT_ERROR, message: errorMsg });
 }
 
-export const testingSessionOptions: SessionOptions = defaultTransportOptions;
+export const testingSessionOptions = defaultTransportOptions;
+export const testingClientSessionOptions = defaultClientTransportOptions;
 
 export function dummySession() {
   return SessionStateGraph.entrypoints.NoConnection(

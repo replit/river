@@ -23,15 +23,14 @@ import {
   defaultTransportOptions,
 } from './options';
 import {
-  Session,
   SessionConnected,
   SessionConnecting,
   SessionHandshaking,
   SessionNoConnection,
   SessionState,
-  SessionStateGraph,
 } from './sessionStateMachine';
 import { Connection } from './connection';
+import { Session, SessionStateGraph } from './sessionStateMachine/transitions';
 
 /**
  * Represents the possible states of a transport.

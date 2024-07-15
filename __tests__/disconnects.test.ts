@@ -60,6 +60,7 @@ describe.each(testMatrix())(
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       const procPromise = client.test.add.rpc({ n: 4 });
       // end procedure
@@ -108,6 +109,7 @@ describe.each(testMatrix())(
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       const nextResPromise = iterNext(output);
       // end procedure
@@ -268,6 +270,7 @@ describe.each(testMatrix())(
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // after we've disconnected, hit end of grace period
       await advanceFakeTimersBySessionGrace();
