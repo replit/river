@@ -9,20 +9,33 @@ import {
   ControlMessageAckSchema,
   handshakeRequestMessage,
 } from '../message';
-import { ERR_CONSUMED, Session, SessionState } from './common';
+import { ERR_CONSUMED, IdentifiedSession, SessionState } from './common';
 import { Static } from '@sinclair/typebox';
-import { SessionHandshakingListeners } from './SessionHandshaking';
-import { SessionConnectedListeners } from './SessionConnected';
-import { SessionConnectingListeners } from './SessionConnecting';
-import { SessionNoConnectionListeners } from './SessionNoConnection';
+import {
+  SessionHandshaking,
+  SessionHandshakingListeners,
+} from './SessionHandshaking';
+import {
+  SessionConnected,
+  SessionConnectedListeners,
+} from './SessionConnected';
+import {
+  SessionConnecting,
+  SessionConnectingListeners,
+} from './SessionConnecting';
+import {
+  SessionNoConnection,
+  SessionNoConnectionListeners,
+} from './SessionNoConnection';
 import { SessionStateGraph } from './transitions';
 import { SessionWaitingForHandshake } from './SessionWaitingForHandshake';
 import { Connection } from '../connection';
-import { SessionBackingOffListeners } from './SessionBackingOff';
+import {
+  SessionBackingOff,
+  SessionBackingOffListeners,
+} from './SessionBackingOff';
 
-function persistedSessionState<ConnType extends Connection>(
-  session: Session<ConnType>,
-) {
+function persistedSessionState(session: IdentifiedSession) {
   return {
     id: session.id,
     from: session.from,
@@ -132,7 +145,8 @@ function createSessionNoConnection() {
 }
 
 function createSessionBackingOff(backoffMs = 0) {
-  let session: Session<MockConnection> = createSessionNoConnection().session;
+  let session: SessionNoConnection | SessionBackingOff =
+    createSessionNoConnection().session;
 
   const listeners = createSessionBackingOffListeners();
   session = SessionStateGraph.transition.NoConnectionToBackingOff(
@@ -145,7 +159,8 @@ function createSessionBackingOff(backoffMs = 0) {
 }
 
 function createSessionConnecting() {
-  let session: Session<MockConnection> = createSessionBackingOff().session;
+  let session: SessionBackingOff | SessionConnecting<MockConnection> =
+    createSessionBackingOff().session;
   const { pendingConn, connect, error } = getPendingMockConnection();
   const listeners = createSessionConnectingListeners();
 
@@ -160,7 +175,9 @@ function createSessionConnecting() {
 
 async function createSessionHandshaking() {
   const sessionHandle = createSessionConnecting();
-  let session: Session<MockConnection> = sessionHandle.session;
+  let session:
+    | SessionConnecting<MockConnection>
+    | SessionHandshaking<MockConnection> = sessionHandle.session;
   const { connect } = sessionHandle;
 
   connect();
@@ -177,7 +194,9 @@ async function createSessionHandshaking() {
 
 async function createSessionConnected() {
   const sessionHandle = await createSessionHandshaking();
-  let session: Session<MockConnection> = sessionHandle.session;
+  let session:
+    | SessionHandshaking<MockConnection>
+    | SessionConnected<MockConnection> = sessionHandle.session;
   const listeners = createSessionConnectedListeners();
 
   session = SessionStateGraph.transition.HandshakingToConnected(
@@ -232,7 +251,8 @@ describe('session state machine', () => {
   describe('state transitions', () => {
     test('no connection -> backing off', async () => {
       const sessionHandle = createSessionNoConnection();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session: SessionNoConnection | SessionBackingOff =
+        sessionHandle.session;
       expect(session.state).toBe(SessionState.NoConnection);
       const sessionStateToBePersisted = persistedSessionState(session);
       const onSessionGracePeriodElapsed =
@@ -262,7 +282,8 @@ describe('session state machine', () => {
 
     test('backing off -> connecting', async () => {
       const sessionHandle = createSessionBackingOff();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session: SessionBackingOff | SessionConnecting<MockConnection> =
+        sessionHandle.session;
       expect(session.state).toBe(SessionState.BackingOff);
       const sessionStateToBePersisted = persistedSessionState(session);
 
@@ -286,7 +307,9 @@ describe('session state machine', () => {
 
     test('connecting -> handshaking', async () => {
       const sessionHandle = createSessionConnecting();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session:
+        | SessionConnecting<MockConnection>
+        | SessionHandshaking<MockConnection> = sessionHandle.session;
       const { connect } = sessionHandle;
       const sessionStateToBePersisted = persistedSessionState(session);
       const onConnectionTimeout = sessionHandle.onConnectionTimeout;
@@ -320,7 +343,9 @@ describe('session state machine', () => {
 
     test('handshaking -> connected', async () => {
       const sessionHandle = await createSessionHandshaking();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session:
+        | SessionHandshaking<MockConnection>
+        | SessionConnected<MockConnection> = sessionHandle.session;
       const oldListeners = {
         onHandshakeData: [...session.conn.dataListeners],
         onConnectionClosed: [...session.conn.closeListeners],
@@ -368,10 +393,10 @@ describe('session state machine', () => {
       expect(onHandshakeTimeout).not.toHaveBeenCalled();
     });
 
-    test('pending (no existing session) -> connected', async () => {
+    test('waiting (no existing session) -> connected', async () => {
       const sessionHandle = createSessionWaitingForHandshake();
       let session:
-        | Session<MockConnection>
+        | SessionConnected<MockConnection>
         | SessionWaitingForHandshake<MockConnection> = sessionHandle.session;
 
       const oldListeners = {
@@ -420,9 +445,12 @@ describe('session state machine', () => {
       expect(onHandshakeTimeout).not.toHaveBeenCalled();
     });
 
-    test('pending (existing session) -> connected', async () => {
+    test('waiting (existing session) -> connected', async () => {
       const oldSessionHandle = createSessionNoConnection();
-      const oldSession: Session<MockConnection> = oldSessionHandle.session;
+      const oldSession:
+        | SessionConnected<MockConnection>
+        | SessionNoConnection
+        | SessionWaitingForHandshake<MockConnection> = oldSessionHandle.session;
       oldSession.send(payloadToTransportMessage('hello'));
       oldSession.send(payloadToTransportMessage('world'));
       expect(oldSession.sendBuffer.length).toBe(2);
@@ -431,7 +459,7 @@ describe('session state machine', () => {
 
       const sessionHandle = createSessionWaitingForHandshake();
       let session:
-        | Session<MockConnection>
+        | SessionConnected<MockConnection>
         | SessionWaitingForHandshake<MockConnection> = sessionHandle.session;
 
       const listeners = createSessionConnectedListeners();
@@ -456,7 +484,8 @@ describe('session state machine', () => {
     test('backing off -> no connection', async () => {
       const backoffMs = 5000;
       const sessionHandle = createSessionBackingOff(backoffMs);
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session: SessionBackingOff | SessionNoConnection =
+        sessionHandle.session;
       const sessionStateToBePersisted = persistedSessionState(session);
       const onBackoffFinished = sessionHandle.onBackoffFinished;
 
@@ -481,7 +510,8 @@ describe('session state machine', () => {
 
     test('connecting (conn failed) -> no connection', async () => {
       const sessionHandle = createSessionConnecting();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session: SessionConnecting<MockConnection> | SessionNoConnection =
+        sessionHandle.session;
       const connPromise = session.connPromise;
       const { error } = sessionHandle;
 
@@ -511,7 +541,8 @@ describe('session state machine', () => {
 
     test('connecting (conn ok) -> no connection', async () => {
       const sessionHandle = createSessionConnecting();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session: SessionConnecting<MockConnection> | SessionNoConnection =
+        sessionHandle.session;
       const connPromise = session.connPromise;
       const { connect } = sessionHandle;
 
@@ -547,7 +578,8 @@ describe('session state machine', () => {
 
     test('handshaking -> no connection', async () => {
       const sessionHandle = await createSessionHandshaking();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session: SessionHandshaking<MockConnection> | SessionNoConnection =
+        sessionHandle.session;
       const conn = session.conn;
       const oldListeners = {
         onHandshakeData: [...conn.dataListeners],
@@ -597,7 +629,8 @@ describe('session state machine', () => {
 
     test('connected -> no connection', async () => {
       const sessionHandle = await createSessionConnected();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session: SessionConnected<MockConnection> | SessionNoConnection =
+        sessionHandle.session;
       const conn = session.conn;
       const oldListeners = {
         onMessageData: [...conn.dataListeners],
@@ -643,7 +676,8 @@ describe('session state machine', () => {
   describe('state transitions preserve buffer, seq, ack', () => {
     test('no connection -> backing off', async () => {
       const sessionHandle = createSessionNoConnection();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session: SessionNoConnection | SessionBackingOff =
+        sessionHandle.session;
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
       expect(session.sendBuffer.length).toBe(2);
@@ -663,7 +697,8 @@ describe('session state machine', () => {
 
     test('backing off -> connecting', async () => {
       const sessionHandle = createSessionBackingOff();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session: SessionBackingOff | SessionConnecting<MockConnection> =
+        sessionHandle.session;
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
       expect(session.sendBuffer.length).toBe(2);
@@ -684,7 +719,9 @@ describe('session state machine', () => {
 
     test('connecting -> handshaking', async () => {
       const sessionHandle = createSessionConnecting();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session:
+        | SessionConnecting<MockConnection>
+        | SessionHandshaking<MockConnection> = sessionHandle.session;
       const { connect } = sessionHandle;
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
@@ -707,7 +744,9 @@ describe('session state machine', () => {
 
     test('handshaking -> connected', async () => {
       const sessionHandle = await createSessionHandshaking();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session:
+        | SessionHandshaking<MockConnection>
+        | SessionConnected<MockConnection> = sessionHandle.session;
       const sendBuffer = session.sendBuffer;
 
       session.send(payloadToTransportMessage('hello'));
@@ -728,7 +767,8 @@ describe('session state machine', () => {
 
     test('backing off -> no connection', async () => {
       const sessionHandle = createSessionBackingOff();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session: SessionBackingOff | SessionNoConnection =
+        sessionHandle.session;
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
       expect(session.sendBuffer.length).toBe(2);
@@ -747,7 +787,8 @@ describe('session state machine', () => {
 
     test('connecting -> no connection', async () => {
       const sessionHandle = createSessionConnecting();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session: SessionConnecting<MockConnection> | SessionNoConnection =
+        sessionHandle.session;
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
       expect(session.sendBuffer.length).toBe(2);
@@ -766,7 +807,8 @@ describe('session state machine', () => {
 
     test('handshaking -> no connection', async () => {
       const sessionHandle = await createSessionHandshaking();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session: SessionHandshaking<MockConnection> | SessionNoConnection =
+        sessionHandle.session;
       const sendBuffer = session.sendBuffer;
 
       session.send(payloadToTransportMessage('hello'));
@@ -787,7 +829,8 @@ describe('session state machine', () => {
 
     test('connected -> no connection', async () => {
       const sessionHandle = await createSessionConnected();
-      let session: Session<MockConnection> = sessionHandle.session;
+      let session: SessionConnected<MockConnection> | SessionNoConnection =
+        sessionHandle.session;
       const sendBuffer = session.sendBuffer;
 
       session.send(payloadToTransportMessage('hello'));
@@ -809,7 +852,8 @@ describe('session state machine', () => {
   describe('stale handles post-transition', () => {
     test('no connection -> backing off: stale handle', async () => {
       const sessionHandle = createSessionNoConnection();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session: SessionNoConnection | SessionBackingOff =
+        sessionHandle.session;
       const { onSessionGracePeriodElapsed } = sessionHandle;
 
       const listeners = createSessionBackingOffListeners();
@@ -829,7 +873,8 @@ describe('session state machine', () => {
 
     test('backing off -> connecting: stale handle', async () => {
       const sessionHandle = createSessionBackingOff();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session: SessionBackingOff | SessionConnecting<MockConnection> =
+        sessionHandle.session;
       const { pendingConn } = getPendingMockConnection();
       const listeners = createSessionConnectingListeners();
       SessionStateGraph.transition.BackingOffToConnecting(
@@ -847,7 +892,9 @@ describe('session state machine', () => {
 
     test('connecting -> handshaking: stale handle', async () => {
       const sessionHandle = createSessionConnecting();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session:
+        | SessionConnecting<MockConnection>
+        | SessionHandshaking<MockConnection> = sessionHandle.session;
       const { connect } = sessionHandle;
 
       connect();
@@ -868,7 +915,9 @@ describe('session state machine', () => {
 
     test('handshaking -> connected: stale handle', async () => {
       const sessionHandle = await createSessionHandshaking();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session:
+        | SessionHandshaking<MockConnection>
+        | SessionConnected<MockConnection> = sessionHandle.session;
       const listeners = createSessionConnectedListeners();
       SessionStateGraph.transition.HandshakingToConnected(session, listeners);
 
@@ -879,10 +928,10 @@ describe('session state machine', () => {
       }).toThrowError(ERR_CONSUMED);
     });
 
-    test('pending -> connected: stale handle', async () => {
+    test('waiting -> connected: stale handle', async () => {
       const sessionHandle = createSessionWaitingForHandshake();
       const session:
-        | Session<MockConnection>
+        | SessionConnected<MockConnection>
         | SessionWaitingForHandshake<MockConnection> = sessionHandle.session;
       const listeners = createSessionConnectedListeners();
       SessionStateGraph.transition.WaitingForHandshakeToConnected(
@@ -900,7 +949,8 @@ describe('session state machine', () => {
 
     test('backing off -> no connection: stale handle', async () => {
       const sessionHandle = createSessionBackingOff();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session: SessionBackingOff | SessionNoConnection =
+        sessionHandle.session;
       const listeners = createSessionNoConnectionListeners();
       SessionStateGraph.transition.BackingOffToNoConnection(session, listeners);
 
@@ -913,7 +963,8 @@ describe('session state machine', () => {
 
     test('connecting -> no connection: stale handle', async () => {
       const sessionHandle = createSessionConnecting();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session: SessionConnecting<MockConnection> | SessionNoConnection =
+        sessionHandle.session;
       const listeners = createSessionNoConnectionListeners();
       SessionStateGraph.transition.ConnectingToNoConnection(session, listeners);
 
@@ -926,7 +977,8 @@ describe('session state machine', () => {
 
     test('handshaking -> no connection: stale handle', async () => {
       const sessionHandle = await createSessionHandshaking();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session: SessionHandshaking<MockConnection> | SessionNoConnection =
+        sessionHandle.session;
       const listeners = createSessionNoConnectionListeners();
       SessionStateGraph.transition.HandshakingToNoConnection(
         session,
@@ -942,7 +994,8 @@ describe('session state machine', () => {
 
     test('connected -> no connection: stale handle', async () => {
       const sessionHandle = await createSessionConnected();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session: SessionConnected<MockConnection> | SessionNoConnection =
+        sessionHandle.session;
       const listeners = createSessionNoConnectionListeners();
       SessionStateGraph.transition.ConnectedToNoConnection(session, listeners);
 
@@ -957,7 +1010,7 @@ describe('session state machine', () => {
   describe('close cleanup', () => {
     test('no connection', async () => {
       const sessionHandle = createSessionNoConnection();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
 
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
@@ -969,7 +1022,7 @@ describe('session state machine', () => {
     test('backing off', async () => {
       const backoffMs = 500;
       const sessionHandle = createSessionBackingOff(backoffMs);
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
 
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
@@ -980,7 +1033,7 @@ describe('session state machine', () => {
 
     test('connecting', async () => {
       const sessionHandle = createSessionConnecting();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const { connect } = sessionHandle;
 
       session.send(payloadToTransportMessage('hello'));
@@ -995,7 +1048,7 @@ describe('session state machine', () => {
 
     test('handshaking', async () => {
       const sessionHandle = await createSessionHandshaking();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
 
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
@@ -1008,7 +1061,7 @@ describe('session state machine', () => {
 
     test('connected', async () => {
       const sessionHandle = await createSessionConnected();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
 
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
@@ -1021,8 +1074,7 @@ describe('session state machine', () => {
 
     test('pending identification', async () => {
       const sessionHandle = createSessionWaitingForHandshake();
-      const session: SessionWaitingForHandshake<MockConnection> =
-        sessionHandle.session;
+      const session = sessionHandle.session;
 
       session.close();
       const conn = session.conn;
@@ -1033,7 +1085,7 @@ describe('session state machine', () => {
   describe('event listeners', () => {
     test('no connection event listeners: onSessionGracePeriodElapsed', async () => {
       const sessionHandle = createSessionNoConnection();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const { onSessionGracePeriodElapsed } = sessionHandle;
       expect(session.state).toBe(SessionState.NoConnection);
       expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
@@ -1046,7 +1098,7 @@ describe('session state machine', () => {
     test('backing off event listeners: onBackoffFinished', async () => {
       const backoffMs = 500;
       const sessionHandle = createSessionBackingOff(backoffMs);
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const { onBackoffFinished } = sessionHandle;
       expect(session.state).toBe(SessionState.BackingOff);
       expect(onBackoffFinished).not.toHaveBeenCalled();
@@ -1057,7 +1109,7 @@ describe('session state machine', () => {
 
     test('connecting event listeners: connectionEstablished', async () => {
       const sessionHandle = createSessionConnecting();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const {
         connect,
         onConnectionEstablished: connectionEstablished,
@@ -1083,7 +1135,7 @@ describe('session state machine', () => {
 
     test('connecting event listeners: connectionFailed', async () => {
       const sessionHandle = createSessionConnecting();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const { error, onConnectionEstablished, onConnectionFailed } =
         sessionHandle;
       expect(session.state).toBe(SessionState.Connecting);
@@ -1106,7 +1158,7 @@ describe('session state machine', () => {
 
     test('connecting event listeners: connectionTimeout', async () => {
       const sessionHandle = createSessionConnecting();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const {
         onConnectionEstablished,
         onConnectionFailed,
@@ -1125,7 +1177,7 @@ describe('session state machine', () => {
 
     test('handshaking event listeners: connectionErrored', async () => {
       const sessionHandle = await createSessionHandshaking();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const conn = session.conn;
       const { onHandshake, onConnectionClosed, onConnectionErrored } =
         sessionHandle;
@@ -1151,7 +1203,7 @@ describe('session state machine', () => {
 
     test('handshaking event listeners: connectionClosed', async () => {
       const sessionHandle = await createSessionHandshaking();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const conn = session.conn;
       const { onHandshake, onConnectionClosed, onConnectionErrored } =
         sessionHandle;
@@ -1174,7 +1226,7 @@ describe('session state machine', () => {
 
     test('handshaking event listeners: onHandshakeData', async () => {
       const sessionHandle = await createSessionHandshaking();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const { onHandshake, onConnectionClosed, onConnectionErrored } =
         sessionHandle;
       expect(session.state).toBe(SessionState.Handshaking);
@@ -1207,7 +1259,7 @@ describe('session state machine', () => {
 
     test('handshaking event listeners: handshakeTimeout', async () => {
       const sessionHandle = await createSessionHandshaking();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const {
         onHandshake,
         onConnectionClosed,
@@ -1231,9 +1283,7 @@ describe('session state machine', () => {
 
     test('pending identification event listeners: connectionErrored', async () => {
       const sessionHandle = createSessionWaitingForHandshake();
-      const session:
-        | Session<MockConnection>
-        | SessionWaitingForHandshake<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
 
       const conn = session.conn;
       const { onHandshake, onConnectionClosed, onConnectionErrored } =
@@ -1260,9 +1310,7 @@ describe('session state machine', () => {
 
     test('pending identification event listeners: connectionClosed', async () => {
       const sessionHandle = createSessionWaitingForHandshake();
-      const session:
-        | Session<MockConnection>
-        | SessionWaitingForHandshake<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
 
       const conn = session.conn;
       const { onHandshake, onConnectionClosed, onConnectionErrored } =
@@ -1286,9 +1334,7 @@ describe('session state machine', () => {
 
     test('pending identification event listeners: onHandshakeData', async () => {
       const sessionHandle = createSessionWaitingForHandshake();
-      const session:
-        | Session<MockConnection>
-        | SessionWaitingForHandshake<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
 
       const { onHandshake, onConnectionClosed, onConnectionErrored } =
         sessionHandle;
@@ -1322,9 +1368,7 @@ describe('session state machine', () => {
 
     test('pending identification event listeners: handshakeTimeout', async () => {
       const sessionHandle = createSessionWaitingForHandshake();
-      const session:
-        | Session<MockConnection>
-        | SessionWaitingForHandshake<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
 
       const {
         onHandshake,
@@ -1349,7 +1393,7 @@ describe('session state machine', () => {
 
     test('connected event listeners: connectionErrored', async () => {
       const sessionHandle = await createSessionConnected();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const conn = session.conn;
       const { onMessage, onConnectionClosed, onConnectionErrored } =
         sessionHandle;
@@ -1375,7 +1419,7 @@ describe('session state machine', () => {
 
     test('connected event listeners: connectionClosed', async () => {
       const sessionHandle = await createSessionConnected();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const conn = session.conn;
       const { onMessage, onConnectionClosed, onConnectionErrored } =
         sessionHandle;
@@ -1398,7 +1442,7 @@ describe('session state machine', () => {
 
     test('connected event listeners: onMessageData', async () => {
       const sessionHandle = await createSessionConnected();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const { onMessage, onConnectionClosed, onConnectionErrored } =
         sessionHandle;
       expect(session.state).toBe(SessionState.Connected);
@@ -1423,7 +1467,7 @@ describe('session state machine', () => {
   describe('heartbeats', () => {
     test('active heartbeating works and is cleared on state transition', async () => {
       const sessionHandle = await createSessionConnected();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const conn = session.conn;
 
       // wait for heartbeat timer
@@ -1446,7 +1490,7 @@ describe('session state machine', () => {
 
     test('passive heartbeating echoes back acks', async () => {
       const sessionHandle = await createSessionConnected();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const conn = session.conn;
 
       // wait for heartbeat timer
@@ -1472,7 +1516,7 @@ describe('session state machine', () => {
 
     test('does not dispatch acks', async () => {
       const sessionHandle = await createSessionConnected();
-      const session: Session<MockConnection> = sessionHandle.session;
+      const session = sessionHandle.session;
       const conn = session.conn;
 
       // send a heartbeat

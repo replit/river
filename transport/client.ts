@@ -24,7 +24,10 @@ import { MessageMetadata } from '../logging';
 import { SessionConnecting } from './sessionStateMachine/SessionConnecting';
 import { SessionHandshaking } from './sessionStateMachine/SessionHandshaking';
 import { SessionConnected } from './sessionStateMachine/SessionConnected';
-import { SessionStateGraph } from './sessionStateMachine/transitions';
+import {
+  ClientSession,
+  ClientSessionStateGraph,
+} from './sessionStateMachine/transitions';
 import { SessionState } from './sessionStateMachine/common';
 import { SessionNoConnection } from './sessionStateMachine/SessionNoConnection';
 import { SessionBackingOff } from './sessionStateMachine/SessionBackingOff';
@@ -52,11 +55,14 @@ export abstract class ClientTransport<
    */
   handshakeExtensions?: ClientHandshakeOptions;
 
+  sessions: Map<TransportClientId, ClientSession<ConnType>>;
+
   constructor(
     clientId: TransportClientId,
     providedOptions?: ProvidedClientTransportOptions,
   ) {
     super(clientId, providedOptions);
+    this.sessions = new Map();
     this.options = {
       ...defaultClientTransportOptions,
       ...providedOptions,
@@ -107,7 +113,7 @@ export abstract class ClientTransport<
   }
 
   private createUnconnectedSession(to: string): SessionNoConnection {
-    const session = SessionStateGraph.entrypoints.NoConnection(
+    const session = ClientSessionStateGraph.entrypoint(
       to,
       this.clientId,
       {
@@ -144,41 +150,45 @@ export abstract class ClientTransport<
   ): SessionHandshaking<ConnType> {
     // transition to handshaking
     const handshakingSession =
-      SessionStateGraph.transition.ConnectingToHandshaking(session, conn, {
-        onConnectionErrored: (err) => {
-          // just log, when we error we also emit close
-          const errStr = coerceErrorString(err);
-          this.log?.error(
-            `connection to ${handshakingSession.to} errored during handshake: ${errStr}`,
-            handshakingSession.loggingMetadata,
-          );
+      ClientSessionStateGraph.transition.ConnectingToHandshaking(
+        session,
+        conn,
+        {
+          onConnectionErrored: (err) => {
+            // just log, when we error we also emit close
+            const errStr = coerceErrorString(err);
+            this.log?.error(
+              `connection to ${handshakingSession.to} errored during handshake: ${errStr}`,
+              handshakingSession.loggingMetadata,
+            );
+          },
+          onConnectionClosed: () => {
+            this.log?.warn(
+              `connection to ${handshakingSession.to} closed during handshake`,
+              handshakingSession.loggingMetadata,
+            );
+            this.onConnClosed(handshakingSession);
+          },
+          onHandshake: (msg) => {
+            this.onHandshakeResponse(handshakingSession, msg);
+          },
+          onInvalidHandshake: (reason) => {
+            this.log?.error(
+              `invalid handshake: ${reason}`,
+              handshakingSession.loggingMetadata,
+            );
+            this.deleteSession(session);
+            this.protocolError(ProtocolError.HandshakeFailed, reason);
+          },
+          onHandshakeTimeout: () => {
+            this.log?.error(
+              `connection to ${handshakingSession.to} timed out during handshake`,
+              handshakingSession.loggingMetadata,
+            );
+            this.onConnClosed(handshakingSession);
+          },
         },
-        onConnectionClosed: () => {
-          this.log?.warn(
-            `connection to ${handshakingSession.to} closed during handshake`,
-            handshakingSession.loggingMetadata,
-          );
-          this.onConnClosed(handshakingSession);
-        },
-        onHandshake: (msg) => {
-          this.onHandshakeResponse(handshakingSession, msg);
-        },
-        onInvalidHandshake: (reason) => {
-          this.log?.error(
-            `invalid handshake: ${reason}`,
-            handshakingSession.loggingMetadata,
-          );
-          this.deleteSession(session);
-          this.protocolError(ProtocolError.HandshakeFailed, reason);
-        },
-        onHandshakeTimeout: () => {
-          this.log?.error(
-            `connection to ${handshakingSession.to} timed out during handshake`,
-            handshakingSession.loggingMetadata,
-          );
-          this.onConnClosed(handshakingSession);
-        },
-      });
+      );
 
     this.updateSession(handshakingSession);
     void this.sendHandshake(handshakingSession);
@@ -259,7 +269,7 @@ export abstract class ClientTransport<
     });
 
     const connectedSession =
-      SessionStateGraph.transition.HandshakingToConnected(session, {
+      ClientSessionStateGraph.transition.HandshakingToConnected(session, {
         onConnectionErrored: (err) => {
           // just log, when we error we also emit close
           const errStr = coerceErrorString(err);
@@ -330,7 +340,7 @@ export abstract class ClientTransport<
 
     this.retryBudget.consumeBudget();
     const backingOffSession =
-      SessionStateGraph.transition.NoConnectionToBackingOff(
+      ClientSessionStateGraph.transition.NoConnectionToBackingOff(
         session,
         backoffMs,
         {
@@ -367,7 +377,7 @@ export abstract class ClientTransport<
   ) {
     // transition to connecting
     const connectingSession =
-      SessionStateGraph.transition.BackingOffToConnecting(
+      ClientSessionStateGraph.transition.BackingOffToConnecting(
         session,
         connPromise,
         {

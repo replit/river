@@ -46,41 +46,15 @@ function inheritSharedSession(
   };
 }
 
-/*
- * Session state machine:
- * 1. SessionNoConnection is the client entrypoint as
- *    we know who the other side is already, we just need to connect
- * 5. SessionWaitingForHandshake is the server entrypoint
- *    as we have a connection but don't know who the other side is yet
- *
- *                           0. SessionNoConnection         ◄──┐
- *                           │  reconnect / connect attempt    │
- *                           ▼                                 │
- *                           1. SessionBackingOff              │
- *                           │  backoff complete            ───┤ explicit close
- *                           ▼                                 │
- *                           2. SessionConnecting              │
- *                           │  connect success  ──────────────┤ connect failure
- *                           ▼                                 │
- *                           3. SessionHandshaking             │
- *                           │  handshake success       ┌──────┤ connection drop
- * 5. PendingIdentification  │  handshake failure  ─────┤      │
- * │  handshake success      ▼                          │      │ connection drop
- * ├───────────────────────► 4. SessionConnected        │      │ heartbeat misses
- * │                         │  invalid message  ───────┼──────┘
- * │                         ▼                          │
- * └───────────────────────► x. Destroy Session   ◄─────┘
- *   handshake failure
- */
 export const SessionStateGraph = {
   entrypoints: {
-    NoConnection(
+    NoConnection: (
       to: TransportClientId,
       from: TransportClientId,
       listeners: SessionNoConnectionListeners,
       options: SessionOptions,
       log?: Logger,
-    ) {
+    ) => {
       const id = `session-${generateId()}`;
       const telemetry = createSessionTelemetryInfo(id, to, from);
       const sendBuffer: Array<OpaqueTransportMessage> = [];
@@ -105,13 +79,13 @@ export const SessionStateGraph = {
 
       return session;
     },
-    WaitingForHandshake<ConnType extends Connection>(
+    WaitingForHandshake: <ConnType extends Connection>(
       from: TransportClientId,
       conn: ConnType,
       listeners: SessionHandshakingListeners,
       options: SessionOptions,
       log?: Logger,
-    ): SessionWaitingForHandshake<ConnType> {
+    ): SessionWaitingForHandshake<ConnType> => {
       const session = new SessionWaitingForHandshake({
         conn,
         listeners,
@@ -132,11 +106,11 @@ export const SessionStateGraph = {
   // After a session is transitioned, any usage of the old session will throw.
   transition: {
     // happy path transitions
-    NoConnectionToBackingOff(
+    NoConnectionToBackingOff: (
       oldSession: SessionNoConnection,
       backoffMs: number,
       listeners: SessionBackingOffListeners,
-    ): SessionBackingOff {
+    ): SessionBackingOff => {
       const carriedState = inheritSharedSession(oldSession);
       oldSession._handleStateExit();
 
@@ -155,11 +129,11 @@ export const SessionStateGraph = {
       );
       return session;
     },
-    BackingOffToConnecting<ConnType extends Connection>(
+    BackingOffToConnecting: <ConnType extends Connection>(
       oldSession: SessionBackingOff,
       connPromise: Promise<ConnType>,
       listeners: SessionConnectingListeners,
-    ): SessionConnecting<ConnType> {
+    ): SessionConnecting<ConnType> => {
       const carriedState = inheritSharedSession(oldSession);
       oldSession._handleStateExit();
 
@@ -178,11 +152,11 @@ export const SessionStateGraph = {
       );
       return session;
     },
-    ConnectingToHandshaking<ConnType extends Connection>(
+    ConnectingToHandshaking: <ConnType extends Connection>(
       oldSession: SessionConnecting<ConnType>,
       conn: ConnType,
       listeners: SessionHandshakingListeners,
-    ): SessionHandshaking<ConnType> {
+    ): SessionHandshaking<ConnType> => {
       const carriedState = inheritSharedSession(oldSession);
       oldSession._handleStateExit();
 
@@ -202,10 +176,10 @@ export const SessionStateGraph = {
 
       return session;
     },
-    HandshakingToConnected<ConnType extends Connection>(
+    HandshakingToConnected: <ConnType extends Connection>(
       oldSession: SessionHandshaking<ConnType>,
       listeners: SessionConnectedListeners,
-    ): SessionConnected<ConnType> {
+    ): SessionConnected<ConnType> => {
       const carriedState = inheritSharedSession(oldSession);
       const conn = oldSession.conn;
       oldSession._handleStateExit();
@@ -226,14 +200,14 @@ export const SessionStateGraph = {
 
       return session;
     },
-    WaitingForHandshakeToConnected<ConnType extends Connection>(
+    WaitingForHandshakeToConnected: <ConnType extends Connection>(
       pendingSession: SessionWaitingForHandshake<ConnType>,
       oldSession: SessionNoConnection | undefined,
       sessionId: string,
       to: TransportClientId,
       propagationCtx: PropagationContext | undefined,
       listeners: SessionConnectedListeners,
-    ): SessionConnected<ConnType> {
+    ): SessionConnected<ConnType> => {
       const conn = pendingSession.conn;
       const { from, options } = pendingSession;
       const carriedState: IdentifiedSessionProps = oldSession
@@ -276,10 +250,10 @@ export const SessionStateGraph = {
       return session;
     },
     // disconnect paths
-    BackingOffToNoConnection(
+    BackingOffToNoConnection: (
       oldSession: SessionBackingOff,
       listeners: SessionNoConnectionListeners,
-    ): SessionNoConnection {
+    ): SessionNoConnection => {
       const carriedState = inheritSharedSession(oldSession);
       oldSession._handleStateExit();
 
@@ -294,10 +268,10 @@ export const SessionStateGraph = {
 
       return session;
     },
-    ConnectingToNoConnection<ConnType extends Connection>(
+    ConnectingToNoConnection: <ConnType extends Connection>(
       oldSession: SessionConnecting<ConnType>,
       listeners: SessionNoConnectionListeners,
-    ): SessionNoConnection {
+    ): SessionNoConnection => {
       const carriedState = inheritSharedSession(oldSession);
       oldSession.bestEffortClose();
       oldSession._handleStateExit();
@@ -313,10 +287,10 @@ export const SessionStateGraph = {
 
       return session;
     },
-    HandshakingToNoConnection<ConnType extends Connection>(
+    HandshakingToNoConnection: <ConnType extends Connection>(
       oldSession: SessionHandshaking<ConnType>,
       listeners: SessionNoConnectionListeners,
-    ): SessionNoConnection {
+    ): SessionNoConnection => {
       const carriedState = inheritSharedSession(oldSession);
       oldSession.conn.close();
       oldSession._handleStateExit();
@@ -332,10 +306,10 @@ export const SessionStateGraph = {
 
       return session;
     },
-    ConnectedToNoConnection<ConnType extends Connection>(
+    ConnectedToNoConnection: <ConnType extends Connection>(
       oldSession: SessionConnected<ConnType>,
       listeners: SessionNoConnectionListeners,
-    ): SessionNoConnection {
+    ): SessionNoConnection => {
       const carriedState = inheritSharedSession(oldSession);
       oldSession.conn.close();
       oldSession._handleStateExit();
@@ -353,3 +327,78 @@ export const SessionStateGraph = {
     },
   },
 } as const;
+
+const transitions = SessionStateGraph.transition;
+
+/*
+ * 0. SessionNoConnection         ◄──┐
+ * │  reconnect / connect attempt    │
+ * ▼                                 │
+ * 1. SessionBackingOff              │
+ * │                              ───┤ explicit close
+ * ▼                                 │
+ * 2. SessionConnecting              │
+ * │  connect success  ──────────────┤ connect failure
+ * ▼                                 │
+ * 3. SessionHandshaking             │
+ * │  handshake success       ┌──────┤ connection drop
+ * │  handshake failure  ─────┤      │
+ * ▼                          │      │ connection drop
+ * 4. SessionConnected        │      │ heartbeat misses
+ * │  invalid message  ───────┼──────┘
+ * ▼                          │
+ * x. Destroy Session   ◄─────┘
+ */
+export const ClientSessionStateGraph = {
+  entrypoint: SessionStateGraph.entrypoints.NoConnection,
+  transition: {
+    // happy paths
+    NoConnectionToBackingOff: transitions.NoConnectionToBackingOff,
+    BackingOffToConnecting: transitions.BackingOffToConnecting,
+    ConnectingToHandshaking: transitions.ConnectingToHandshaking,
+    HandshakingToConnected: transitions.HandshakingToConnected,
+    // disconnect paths
+    BackingOffToNoConnection: transitions.BackingOffToNoConnection,
+    ConnectingToNoConnection: transitions.ConnectingToNoConnection,
+    HandshakingToNoConnection: transitions.HandshakingToNoConnection,
+    ConnectedToNoConnection: transitions.ConnectedToNoConnection,
+  },
+};
+
+export type ClientSession<ConnType extends Connection> =
+  | SessionNoConnection
+  | SessionBackingOff
+  | SessionConnecting<ConnType>
+  | SessionHandshaking<ConnType>
+  | SessionConnected<ConnType>;
+
+/*
+ * 0. SessionNoConnection         ◄──┐
+ * │  reconnect / connect attempt    │
+ * ▼                                 │
+ * 1. WaitingForHandshake            │
+ * │  handshake success       ┌──────┤ connection drop
+ * │  handshake failure  ─────┤      │
+ * ▼                          │      │ connection drop
+ * 2. SessionConnected        │      │ heartbeat misses
+ * │  invalid message  ───────┼──────┘
+ * ▼                          │
+ * x. Destroy Session   ◄─────┘
+ */
+export const ServerSessionStateGraph = {
+  entrypoint: SessionStateGraph.entrypoints.WaitingForHandshake,
+  transition: {
+    // happy paths
+    WaitingForHandshakeToConnected: transitions.WaitingForHandshakeToConnected,
+    // disconnect paths
+    ConnectedToNoConnection: transitions.ConnectedToNoConnection,
+  },
+};
+
+export type ServerSession<ConnType extends Connection> =
+  // SessionWaitingForHandshake<ConnType> is stored separately in the server transport
+  SessionConnected<ConnType> | SessionNoConnection;
+
+export type Session<ConnType extends Connection> =
+  | ClientSession<ConnType>
+  | ServerSession<ConnType>;

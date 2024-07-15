@@ -8,14 +8,8 @@ import {
   TransportMessage,
 } from '../message';
 import { Value } from '@sinclair/typebox/value';
-import { SessionNoConnection } from './SessionNoConnection';
-import { SessionConnecting } from './SessionConnecting';
-import { SessionHandshaking } from './SessionHandshaking';
-import { SessionConnected } from './SessionConnected';
 import { Codec } from '../../codec';
-import { Connection } from '../connection';
 import { generateId } from '../id';
-import { SessionBackingOff } from './SessionBackingOff';
 
 export const enum SessionState {
   NoConnection = 'NoConnection',
@@ -25,13 +19,6 @@ export const enum SessionState {
   Connected = 'Connected',
   WaitingForHandshake = 'WaitingForHandshake',
 }
-
-export type Session<ConnType extends Connection> =
-  | SessionNoConnection
-  | SessionBackingOff
-  | SessionConnecting<ConnType>
-  | SessionHandshaking<ConnType>
-  | SessionConnected<ConnType>;
 
 export const ERR_CONSUMED = `session state has been consumed and is no longer valid`;
 

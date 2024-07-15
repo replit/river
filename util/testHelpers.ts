@@ -24,8 +24,11 @@ import {
 } from '../transport/options';
 import { generateId } from '../transport/id';
 import { Connection } from '../transport/connection';
-import { Session, SessionState } from '../transport/sessionStateMachine/common';
-import { SessionStateGraph } from '../transport/sessionStateMachine';
+import { SessionState } from '../transport/sessionStateMachine/common';
+import {
+  Session,
+  SessionStateGraph,
+} from '../transport/sessionStateMachine/transitions';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
