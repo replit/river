@@ -18,14 +18,13 @@ import {
 import { coerceErrorString } from './stringify';
 import { Transport } from '../transport/transport';
 import { WsLike } from '../transport/impls/ws/wslike';
-import { defaultTransportOptions } from '../transport/options';
+import {
+  defaultClientTransportOptions,
+  defaultTransportOptions,
+} from '../transport/options';
 import { generateId } from '../transport/id';
 import { Connection } from '../transport/connection';
-import {
-  Session,
-  SessionOptions,
-  SessionState,
-} from '../transport/sessionStateMachine/common';
+import { Session, SessionState } from '../transport/sessionStateMachine/common';
 import { SessionStateGraph } from '../transport/sessionStateMachine';
 
 /**
@@ -132,7 +131,8 @@ function catchProcError(err: unknown) {
   return Err({ code: UNCAUGHT_ERROR, message: errorMsg });
 }
 
-export const testingSessionOptions: SessionOptions = defaultTransportOptions;
+export const testingSessionOptions = defaultTransportOptions;
+export const testingClientSessionOptions = defaultClientTransportOptions;
 
 export function dummySession() {
   return SessionStateGraph.entrypoints.NoConnection(

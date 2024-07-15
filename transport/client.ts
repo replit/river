@@ -27,6 +27,7 @@ import { SessionConnected } from './sessionStateMachine/SessionConnected';
 import { SessionStateGraph } from './sessionStateMachine/transitions';
 import { SessionState } from './sessionStateMachine/common';
 import { SessionNoConnection } from './sessionStateMachine/SessionNoConnection';
+import { SessionBackingOff } from './sessionStateMachine/SessionBackingOff';
 
 export abstract class ClientTransport<
   ConnType extends Connection,
@@ -282,7 +283,7 @@ export abstract class ClientTransport<
       });
 
     this.updateSession(connectedSession);
-    this.retryBudget.startRestoringBudget(connectedSession.to);
+    this.retryBudget.startRestoringBudget();
   }
 
   /**
@@ -312,52 +313,63 @@ export abstract class ClientTransport<
     }
 
     // check budget
-    if (!this.retryBudget.hasBudget(to)) {
-      const budgetConsumed = this.retryBudget.getBudgetConsumed(to);
+    if (!this.retryBudget.hasBudget()) {
+      const budgetConsumed = this.retryBudget.getBudgetConsumed();
       const errMsg = `tried to connect to ${to} but retry budget exceeded (more than ${budgetConsumed} attempts in the last ${this.retryBudget.totalBudgetRestoreTime}ms)`;
       this.log?.error(errMsg, session.loggingMetadata);
       this.protocolError(ProtocolError.RetriesExceeded, errMsg);
       return;
     }
 
-    let sleep = Promise.resolve();
-    const backoffMs = this.retryBudget.getBackoffMs(to);
-    if (backoffMs > 0) {
-      sleep = new Promise((resolve) => setTimeout(resolve, backoffMs));
-    }
+    const backoffMs = this.retryBudget.getBackoffMs();
 
     this.log?.info(
       `attempting connection to ${to} (${backoffMs}ms backoff)`,
       session.loggingMetadata,
     );
 
-    this.retryBudget.consumeBudget(to);
-    const reconnectPromise = tracer.startActiveSpan('connect', async (span) => {
-      try {
-        span.addEvent('backoff', { backoffMs });
-        await sleep;
-        if (this.getStatus() !== 'open') {
-          throw new Error('transport state is no longer open');
-        }
-
-        span.addEvent('connecting');
-        return await this.createNewOutgoingConnection(to);
-      } catch (err) {
-        // rethrow the error so that the promise is rejected
-        // as it was before we wrapped it in a span
-        const errStr = coerceErrorString(err);
-        span.recordException(errStr);
-        span.setStatus({ code: SpanStatusCode.ERROR });
-        throw err;
-      } finally {
-        span.end();
-      }
-    });
-
-    const connectingSession =
-      SessionStateGraph.transition.NoConnectionToConnecting(
+    this.retryBudget.consumeBudget();
+    const backingOffSession =
+      SessionStateGraph.transition.NoConnectionToBackingOff(
         session,
-        reconnectPromise,
+        backoffMs,
+        {
+          onBackoffFinished: () => {
+            const reconnectPromise = tracer.startActiveSpan(
+              'connect',
+              async (span) => {
+                try {
+                  return await this.createNewOutgoingConnection(to);
+                } catch (err) {
+                  // rethrow the error so that the promise is rejected
+                  // as it was before we wrapped it in a span
+                  const errStr = coerceErrorString(err);
+                  span.recordException(errStr);
+                  span.setStatus({ code: SpanStatusCode.ERROR });
+                  throw err;
+                } finally {
+                  span.end();
+                }
+              },
+            );
+
+            this.onBackoffFinished(backingOffSession, reconnectPromise);
+          },
+        },
+      );
+
+    this.updateSession(backingOffSession);
+  }
+
+  protected onBackoffFinished(
+    session: SessionBackingOff,
+    connPromise: Promise<ConnType>,
+  ) {
+    // transition to connecting
+    const connectingSession =
+      SessionStateGraph.transition.BackingOffToConnecting(
+        session,
+        connPromise,
         {
           onConnectionEstablished: (conn) => {
             this.log?.debug(

@@ -359,6 +359,15 @@ export abstract class ServerTransport<
           });
 
         oldSession = noConnectionSession;
+      } else if (oldSession.state === SessionState.BackingOff) {
+        const noConnectionSession =
+          SessionStateGraph.transition.BackingOffToNoConnection(oldSession, {
+            onSessionGracePeriodElapsed: () => {
+              this.onSessionGracePeriodElapsed(noConnectionSession);
+            },
+          });
+
+        oldSession = noConnectionSession;
       }
 
       this.updateSession(oldSession);

@@ -18,6 +18,7 @@ import { SessionNoConnectionListeners } from './SessionNoConnection';
 import { SessionStateGraph } from './transitions';
 import { SessionWaitingForHandshake } from './SessionWaitingForHandshake';
 import { Connection } from '../connection';
+import { SessionBackingOffListeners } from './SessionBackingOff';
 
 function persistedSessionState<ConnType extends Connection>(
   session: Session<ConnType>,
@@ -85,6 +86,12 @@ function createSessionNoConnectionListeners(): SessionNoConnectionListeners {
   };
 }
 
+function createSessionBackingOffListeners(): SessionBackingOffListeners {
+  return {
+    onBackoffFinished: vi.fn(),
+  };
+}
+
 function createSessionConnectingListeners(): SessionConnectingListeners {
   return {
     onConnectionEstablished: vi.fn(),
@@ -124,12 +131,25 @@ function createSessionNoConnection() {
   return { session, ...listeners };
 }
 
-function createSessionConnecting() {
+function createSessionBackingOff(backoffMs = 0) {
   let session: Session<MockConnection> = createSessionNoConnection().session;
+
+  const listeners = createSessionBackingOffListeners();
+  session = SessionStateGraph.transition.NoConnectionToBackingOff(
+    session,
+    backoffMs,
+    listeners,
+  );
+
+  return { session, ...listeners };
+}
+
+function createSessionConnecting() {
+  let session: Session<MockConnection> = createSessionBackingOff().session;
   const { pendingConn, connect, error } = getPendingMockConnection();
   const listeners = createSessionConnectingListeners();
 
-  session = SessionStateGraph.transition.NoConnectionToConnecting(
+  session = SessionStateGraph.transition.BackingOffToConnecting(
     session,
     pendingConn,
     listeners,
@@ -210,7 +230,7 @@ describe('session state machine', () => {
   });
 
   describe('state transitions', () => {
-    test('no connection -> connecting', async () => {
+    test('no connection -> backing off', async () => {
       const sessionHandle = createSessionNoConnection();
       let session: Session<MockConnection> = sessionHandle.session;
       expect(session.state).toBe(SessionState.NoConnection);
@@ -218,17 +238,16 @@ describe('session state machine', () => {
       const onSessionGracePeriodElapsed =
         sessionHandle.onSessionGracePeriodElapsed;
 
-      const { pendingConn } = getPendingMockConnection();
-      const listeners = createSessionConnectingListeners();
-      session = SessionStateGraph.transition.NoConnectionToConnecting(
+      const backoffMs = 5000;
+      const listeners = createSessionBackingOffListeners();
+      session = SessionStateGraph.transition.NoConnectionToBackingOff(
         session,
-        pendingConn,
+        backoffMs,
         listeners,
       );
 
-      expect(session.state).toBe(SessionState.Connecting);
-      expect(listeners.onConnectionEstablished).not.toHaveBeenCalled();
-      expect(listeners.onConnectionFailed).not.toHaveBeenCalled();
+      expect(session.state).toBe(SessionState.BackingOff);
+      expect(listeners.onBackoffFinished).not.toHaveBeenCalled();
       expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
 
       // make sure the persisted state is the same
@@ -239,6 +258,30 @@ describe('session state machine', () => {
       // advance time and make sure timer doesn't go off
       vi.advanceTimersByTime(testingSessionOptions.sessionDisconnectGraceMs);
       expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+    });
+
+    test('backing off -> connecting', async () => {
+      const sessionHandle = createSessionBackingOff();
+      let session: Session<MockConnection> = sessionHandle.session;
+      expect(session.state).toBe(SessionState.BackingOff);
+      const sessionStateToBePersisted = persistedSessionState(session);
+
+      const { pendingConn } = getPendingMockConnection();
+      const listeners = createSessionConnectingListeners();
+      session = SessionStateGraph.transition.BackingOffToConnecting(
+        session,
+        pendingConn,
+        listeners,
+      );
+
+      expect(session.state).toBe(SessionState.Connecting);
+      expect(listeners.onConnectionEstablished).not.toHaveBeenCalled();
+      expect(listeners.onConnectionFailed).not.toHaveBeenCalled();
+
+      // make sure the persisted state is the same
+      expect(persistedSessionState(session)).toStrictEqual(
+        sessionStateToBePersisted,
+      );
     });
 
     test('connecting -> handshaking', async () => {
@@ -410,6 +453,32 @@ describe('session state machine', () => {
       expect(session.conn.status).toBe('open');
     });
 
+    test('backing off -> no connection', async () => {
+      const backoffMs = 5000;
+      const sessionHandle = createSessionBackingOff(backoffMs);
+      let session: Session<MockConnection> = sessionHandle.session;
+      const sessionStateToBePersisted = persistedSessionState(session);
+      const onBackoffFinished = sessionHandle.onBackoffFinished;
+
+      const listeners = createSessionNoConnectionListeners();
+      session = SessionStateGraph.transition.BackingOffToNoConnection(
+        session,
+        listeners,
+      );
+
+      expect(session.state).toBe(SessionState.NoConnection);
+      expect(onBackoffFinished).not.toHaveBeenCalled();
+
+      // make sure the persisted state is the same
+      expect(persistedSessionState(session)).toStrictEqual(
+        sessionStateToBePersisted,
+      );
+
+      // advance time and make sure timer doesn't go off
+      vi.advanceTimersByTime(backoffMs);
+      expect(onBackoffFinished).not.toHaveBeenCalled();
+    });
+
     test('connecting (conn failed) -> no connection', async () => {
       const sessionHandle = createSessionConnecting();
       let session: Session<MockConnection> = sessionHandle.session;
@@ -572,7 +641,7 @@ describe('session state machine', () => {
   });
 
   describe('state transitions preserve buffer, seq, ack', () => {
-    test('no connection -> connecting', async () => {
+    test('no connection -> backing off', async () => {
       const sessionHandle = createSessionNoConnection();
       let session: Session<MockConnection> = sessionHandle.session;
       session.send(payloadToTransportMessage('hello'));
@@ -581,8 +650,28 @@ describe('session state machine', () => {
       expect(session.seq).toBe(2);
       expect(session.ack).toBe(0);
 
+      session = SessionStateGraph.transition.NoConnectionToBackingOff(
+        session,
+        0,
+        createSessionBackingOffListeners(),
+      );
+
+      expect(session.sendBuffer.length).toBe(2);
+      expect(session.seq).toBe(2);
+      expect(session.ack).toBe(0);
+    });
+
+    test('backing off -> connecting', async () => {
+      const sessionHandle = createSessionBackingOff();
+      let session: Session<MockConnection> = sessionHandle.session;
+      session.send(payloadToTransportMessage('hello'));
+      session.send(payloadToTransportMessage('world'));
+      expect(session.sendBuffer.length).toBe(2);
+      expect(session.seq).toBe(2);
+      expect(session.ack).toBe(0);
+
       const { pendingConn } = getPendingMockConnection();
-      session = SessionStateGraph.transition.NoConnectionToConnecting(
+      session = SessionStateGraph.transition.BackingOffToConnecting(
         session,
         pendingConn,
         createSessionConnectingListeners(),
@@ -633,6 +722,25 @@ describe('session state machine', () => {
       );
 
       expect(sendBuffer.length).toBe(2);
+      expect(session.seq).toBe(2);
+      expect(session.ack).toBe(0);
+    });
+
+    test('backing off -> no connection', async () => {
+      const sessionHandle = createSessionBackingOff();
+      let session: Session<MockConnection> = sessionHandle.session;
+      session.send(payloadToTransportMessage('hello'));
+      session.send(payloadToTransportMessage('world'));
+      expect(session.sendBuffer.length).toBe(2);
+      expect(session.seq).toBe(2);
+      expect(session.ack).toBe(0);
+
+      session = SessionStateGraph.transition.BackingOffToNoConnection(
+        session,
+        createSessionNoConnectionListeners(),
+      );
+
+      expect(session.sendBuffer.length).toBe(2);
       expect(session.seq).toBe(2);
       expect(session.ack).toBe(0);
     });
@@ -699,13 +807,32 @@ describe('session state machine', () => {
   });
 
   describe('stale handles post-transition', () => {
-    test('no connection -> connecting: stale handle', async () => {
+    test('no connection -> backing off: stale handle', async () => {
       const sessionHandle = createSessionNoConnection();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const { onSessionGracePeriodElapsed } = sessionHandle;
+
+      const listeners = createSessionBackingOffListeners();
+      SessionStateGraph.transition.NoConnectionToBackingOff(
+        session,
+        0,
+        listeners,
+      );
+
+      // doing anything on the old session should throw
+      expect(() => session.loggingMetadata).toThrowError(ERR_CONSUMED);
+      expect(() => {
+        session.send(payloadToTransportMessage('hello'));
+      }).toThrowError(ERR_CONSUMED);
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+    });
+
+    test('backing off -> connecting: stale handle', async () => {
+      const sessionHandle = createSessionBackingOff();
       const session: Session<MockConnection> = sessionHandle.session;
       const { pendingConn } = getPendingMockConnection();
       const listeners = createSessionConnectingListeners();
-
-      SessionStateGraph.transition.NoConnectionToConnecting(
+      SessionStateGraph.transition.BackingOffToConnecting(
         session,
         pendingConn,
         listeners,
@@ -771,6 +898,19 @@ describe('session state machine', () => {
       expect(() => session.conn).toThrowError(ERR_CONSUMED);
     });
 
+    test('backing off -> no connection: stale handle', async () => {
+      const sessionHandle = createSessionBackingOff();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const listeners = createSessionNoConnectionListeners();
+      SessionStateGraph.transition.BackingOffToNoConnection(session, listeners);
+
+      // doing anything on the old session should throw
+      expect(() => session.loggingMetadata).toThrowError(ERR_CONSUMED);
+      expect(() => {
+        session.send(payloadToTransportMessage('hello'));
+      }).toThrowError(ERR_CONSUMED);
+    });
+
     test('connecting -> no connection: stale handle', async () => {
       const sessionHandle = createSessionConnecting();
       const session: Session<MockConnection> = sessionHandle.session;
@@ -817,6 +957,18 @@ describe('session state machine', () => {
   describe('close cleanup', () => {
     test('no connection', async () => {
       const sessionHandle = createSessionNoConnection();
+      const session: Session<MockConnection> = sessionHandle.session;
+
+      session.send(payloadToTransportMessage('hello'));
+      session.send(payloadToTransportMessage('world'));
+      expect(session.sendBuffer.length).toBe(2);
+      session.close();
+      expect(session.sendBuffer.length).toBe(0);
+    });
+
+    test('backing off', async () => {
+      const backoffMs = 500;
+      const sessionHandle = createSessionBackingOff(backoffMs);
       const session: Session<MockConnection> = sessionHandle.session;
 
       session.send(payloadToTransportMessage('hello'));
@@ -879,6 +1031,30 @@ describe('session state machine', () => {
   });
 
   describe('event listeners', () => {
+    test('no connection event listeners: onSessionGracePeriodElapsed', async () => {
+      const sessionHandle = createSessionNoConnection();
+      const session: Session<MockConnection> = sessionHandle.session;
+      const { onSessionGracePeriodElapsed } = sessionHandle;
+      expect(session.state).toBe(SessionState.NoConnection);
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(testingSessionOptions.sessionDisconnectGraceMs);
+
+      expect(onSessionGracePeriodElapsed).toHaveBeenCalled();
+    });
+
+    test('backing off event listeners: onBackoffFinished', async () => {
+      const backoffMs = 500;
+      const sessionHandle = createSessionBackingOff(backoffMs);
+      const session: Session<MockConnection> = sessionHandle.session;
+      const { onBackoffFinished } = sessionHandle;
+      expect(session.state).toBe(SessionState.BackingOff);
+      expect(onBackoffFinished).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(backoffMs);
+      expect(onBackoffFinished).toHaveBeenCalled();
+    });
+
     test('connecting event listeners: connectionEstablished', async () => {
       const sessionHandle = createSessionConnecting();
       const session: Session<MockConnection> = sessionHandle.session;

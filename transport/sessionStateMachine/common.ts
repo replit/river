@@ -15,9 +15,11 @@ import { SessionConnected } from './SessionConnected';
 import { Codec } from '../../codec';
 import { Connection } from '../connection';
 import { generateId } from '../id';
+import { SessionBackingOff } from './SessionBackingOff';
 
 export const enum SessionState {
   NoConnection = 'NoConnection',
+  BackingOff = 'BackingOff',
   Connecting = 'Connecting',
   Handshaking = 'Handshaking',
   Connected = 'Connected',
@@ -26,6 +28,7 @@ export const enum SessionState {
 
 export type Session<ConnType extends Connection> =
   | SessionNoConnection
+  | SessionBackingOff
   | SessionConnecting<ConnType>
   | SessionHandshaking<ConnType>
   | SessionConnected<ConnType>;
@@ -135,6 +138,12 @@ export interface SessionOptions {
 }
 
 // all session states have a from and options
+export interface CommonSessionProps {
+  from: TransportClientId;
+  options: SessionOptions;
+  log: Logger | undefined;
+}
+
 export abstract class CommonSession extends StateMachineState {
   readonly from: TransportClientId;
   readonly options: SessionOptions;
@@ -142,11 +151,7 @@ export abstract class CommonSession extends StateMachineState {
   log?: Logger;
   abstract get loggingMetadata(): MessageMetadata;
 
-  constructor(
-    from: TransportClientId,
-    options: SessionOptions,
-    log: Logger | undefined,
-  ) {
+  constructor({ from, options, log }: CommonSessionProps) {
     super();
     this.from = from;
     this.options = options;
@@ -188,6 +193,15 @@ export type InheritedProperties = Pick<
 export type SessionId = string;
 
 // all sessions where we know the other side's client id
+export interface IdentifiedSessionProps extends CommonSessionProps {
+  id: SessionId;
+  to: TransportClientId;
+  seq: number;
+  ack: number;
+  sendBuffer: Array<OpaqueTransportMessage>;
+  telemetry: TelemetryInfo;
+}
+
 export abstract class IdentifiedSession extends CommonSession {
   readonly id: SessionId;
   readonly telemetry: TelemetryInfo;
@@ -204,18 +218,9 @@ export abstract class IdentifiedSession extends CommonSession {
   ack: number;
   sendBuffer: Array<OpaqueTransportMessage>;
 
-  constructor(
-    id: SessionId,
-    from: TransportClientId,
-    to: TransportClientId,
-    seq: number,
-    ack: number,
-    sendBuffer: Array<OpaqueTransportMessage>,
-    telemetry: TelemetryInfo,
-    options: SessionOptions,
-    log: Logger | undefined,
-  ) {
-    super(from, options, log);
+  constructor(props: IdentifiedSessionProps) {
+    const { id, to, seq, ack, sendBuffer, telemetry, log } = props;
+    super(props);
     this.id = id;
     this.to = to;
     this.seq = seq;
