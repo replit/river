@@ -849,12 +849,10 @@ describe.each(testMatrix())(
       const numConnKills = 3;
       for (let i = 0; i < numConnKills; i++) {
         closeAllConnections(clientTransport);
-        await waitFor(() =>
-          expect(numberOfConnections(clientTransport)).toBe(0),
-        );
-        await waitFor(() =>
-          expect(numberOfConnections(serverTransport)).toBe(0),
-        );
+        await waitFor(() => {
+          expect(numberOfConnections(clientTransport)).toBe(0);
+          expect(numberOfConnections(serverTransport)).toBe(0);
+        });
 
         await vi.advanceTimersByTimeAsync(
           Math.ceil(
@@ -865,6 +863,10 @@ describe.each(testMatrix())(
         clientTransport.connect(serverTransport.clientId);
         await waitFor(() => {
           expect(serverConnStart).toHaveBeenCalledTimes(i + 2);
+        });
+        await waitFor(() => {
+          expect(numberOfConnections(clientTransport)).toBe(1);
+          expect(numberOfConnections(serverTransport)).toBe(1);
         });
       }
 
