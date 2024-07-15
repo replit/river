@@ -852,6 +852,9 @@ describe.each(testMatrix())(
         await waitFor(() =>
           expect(numberOfConnections(clientTransport)).toBe(0),
         );
+        await waitFor(() =>
+          expect(numberOfConnections(serverTransport)).toBe(0),
+        );
 
         await vi.advanceTimersByTimeAsync(
           Math.ceil(
