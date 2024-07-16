@@ -20,7 +20,7 @@ export type ClientTransportOptions = TransportOptions & ConnectionRetryOptions;
 export type ProvidedClientTransportOptions = Partial<ClientTransportOptions>;
 
 const defaultConnectionRetryOptions: ConnectionRetryOptions = {
-  baseIntervalMs: 250,
+  baseIntervalMs: 150,
   maxJitterMs: 200,
   maxBackoffMs: 32_000,
   attemptBudgetCapacity: 5,

@@ -24,8 +24,11 @@ import { ProtocolError } from './events';
 import { Connection } from './connection';
 import { MessageMetadata } from '../logging';
 import { SessionWaitingForHandshake } from './sessionStateMachine/SessionWaitingForHandshake';
-import { Session, SessionState } from './sessionStateMachine/common';
-import { SessionStateGraph } from './sessionStateMachine/transitions';
+import { SessionState } from './sessionStateMachine/common';
+import {
+  ServerSession,
+  ServerSessionStateGraph,
+} from './sessionStateMachine/transitions';
 
 export abstract class ServerTransport<
   ConnType extends Connection,
@@ -44,6 +47,8 @@ export abstract class ServerTransport<
    * A map of session handshake data for each session.
    */
   sessionHandshakeMetadata = new Map<TransportClientId, ParsedMetadata>();
+
+  sessions = new Map<TransportClientId, ServerSession<ConnType>>();
   pendingSessions = new Set<SessionWaitingForHandshake<ConnType>>();
 
   constructor(
@@ -51,6 +56,7 @@ export abstract class ServerTransport<
     providedOptions?: ProvidedServerTransportOptions,
   ) {
     super(clientId, providedOptions);
+    this.sessions = new Map();
     this.options = {
       ...defaultServerTransportOptions,
       ...providedOptions,
@@ -102,7 +108,7 @@ export abstract class ServerTransport<
     this.pendingSessions.delete(pendingSession);
   }
 
-  protected deleteSession(session: Session<ConnType>): void {
+  protected deleteSession(session: ServerSession<ConnType>): void {
     this.sessionHandshakeMetadata.delete(session.to);
     super.deleteSession(session);
   }
@@ -116,7 +122,7 @@ export abstract class ServerTransport<
     });
 
     let receivedHandshake = false;
-    const pendingSession = SessionStateGraph.entrypoints.WaitingForHandshake(
+    const pendingSession = ServerSessionStateGraph.entrypoint(
       this.clientId,
       conn,
       {
@@ -333,31 +339,16 @@ export abstract class ServerTransport<
 
       // transparent reconnect seems ok, proceed by transitioning old session
       // to not connected
-      if (oldSession.state === SessionState.Connected) {
+      if (oldSession.state !== SessionState.NoConnection) {
         const noConnectionSession =
-          SessionStateGraph.transition.ConnectedToNoConnection(oldSession, {
-            onSessionGracePeriodElapsed: () => {
-              this.onSessionGracePeriodElapsed(noConnectionSession);
+          ServerSessionStateGraph.transition.ConnectedToNoConnection(
+            oldSession,
+            {
+              onSessionGracePeriodElapsed: () => {
+                this.onSessionGracePeriodElapsed(noConnectionSession);
+              },
             },
-          });
-
-        oldSession = noConnectionSession;
-      } else if (oldSession.state === SessionState.Handshaking) {
-        const noConnectionSession =
-          SessionStateGraph.transition.HandshakingToNoConnection(oldSession, {
-            onSessionGracePeriodElapsed: () => {
-              this.onSessionGracePeriodElapsed(noConnectionSession);
-            },
-          });
-
-        oldSession = noConnectionSession;
-      } else if (oldSession.state === SessionState.Connecting) {
-        const noConnectionSession =
-          SessionStateGraph.transition.ConnectingToNoConnection(oldSession, {
-            onSessionGracePeriodElapsed: () => {
-              this.onSessionGracePeriodElapsed(noConnectionSession);
-            },
-          });
+          );
 
         oldSession = noConnectionSession;
       }
@@ -418,7 +409,7 @@ export abstract class ServerTransport<
 
     // transition
     const connectedSession =
-      SessionStateGraph.transition.WaitingForHandshakeToConnected(
+      ServerSessionStateGraph.transition.WaitingForHandshakeToConnected(
         session,
         // by this point oldSession is either no connection or we dont have an old session
         oldSession,
@@ -458,7 +449,7 @@ export abstract class ServerTransport<
 
   private async validateHandshakeMetadata(
     handshakingSession: SessionWaitingForHandshake<ConnType>,
-    existingSession: Session<ConnType> | undefined,
+    existingSession: ServerSession<ConnType> | undefined,
     rawMetadata: Static<
       typeof ControlMessageHandshakeRequestSchema
     >['metadata'],

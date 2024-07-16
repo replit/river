@@ -60,7 +60,7 @@ type RpcFn<
   Router extends AnyService,
   ProcName extends keyof Router['procedures'],
 > = (
-  init: ProcInit<Router, ProcName>,
+  reqInit: ProcInit<Router, ProcName>,
   options?: CallOptions,
 ) => Promise<
   Result<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>
@@ -70,7 +70,7 @@ type UploadFn<
   Router extends AnyService,
   ProcName extends keyof Router['procedures'],
 > = (
-  init: ProcInit<Router, ProcName>,
+  reqInit: ProcInit<Router, ProcName>,
   options?: CallOptions,
 ) => {
   reqWriter: WriteStream<ProcInput<Router, ProcName>>;
@@ -83,7 +83,7 @@ type StreamFn<
   Router extends AnyService,
   ProcName extends keyof Router['procedures'],
 > = (
-  init: ProcInit<Router, ProcName>,
+  reqInit: ProcInit<Router, ProcName>,
   options?: CallOptions,
 ) => {
   reqWriter: WriteStream<ProcInput<Router, ProcName>>;
@@ -97,7 +97,7 @@ type SubscriptionFn<
   Router extends AnyService,
   ProcName extends keyof Router['procedures'],
 > = (
-  init: ProcInit<Router, ProcName>,
+  reqInit: ProcInit<Router, ProcName>,
   options?: CallOptions,
 ) => {
   resReader: ReadStream<

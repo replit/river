@@ -1,5 +1,3 @@
-import { TransportClientId } from './message';
-
 /**
  * Options to control the backoff and retry behavior of the client transport's connection behaviour.
  *
@@ -43,23 +41,21 @@ export interface ConnectionRetryOptions {
 }
 
 export class LeakyBucketRateLimit {
-  private budgetConsumed: Map<TransportClientId, number>;
-  private intervalHandles: Map<
-    TransportClientId,
-    ReturnType<typeof setInterval>
-  >;
+  private budgetConsumed: number;
+  private intervalHandle?: ReturnType<typeof setInterval>;
   private readonly options: ConnectionRetryOptions;
 
   constructor(options: ConnectionRetryOptions) {
     this.options = options;
-    this.budgetConsumed = new Map();
-    this.intervalHandles = new Map();
+    this.budgetConsumed = 0;
   }
 
-  getBackoffMs(user: TransportClientId) {
-    if (!this.budgetConsumed.has(user)) return 0;
+  getBackoffMs() {
+    if (this.getBudgetConsumed() === 0) {
+      return 0;
+    }
 
-    const exponent = Math.max(0, this.getBudgetConsumed(user) - 1);
+    const exponent = Math.max(0, this.getBudgetConsumed() - 1);
     const jitter = Math.floor(Math.random() * this.options.maxJitterMs);
     const backoffMs = Math.min(
       this.options.baseIntervalMs * 2 ** exponent,
@@ -75,61 +71,56 @@ export class LeakyBucketRateLimit {
     );
   }
 
-  consumeBudget(user: TransportClientId) {
+  consumeBudget() {
     // If we're consuming again, let's ensure that we're not leaking
-    this.stopLeak(user);
-    this.budgetConsumed.set(user, this.getBudgetConsumed(user) + 1);
+    this.stopLeak();
+    this.budgetConsumed = this.getBudgetConsumed() + 1;
   }
 
-  getBudgetConsumed(user: TransportClientId) {
-    return this.budgetConsumed.get(user) ?? 0;
+  getBudgetConsumed() {
+    return this.budgetConsumed;
   }
 
-  hasBudget(user: TransportClientId) {
-    return this.getBudgetConsumed(user) < this.options.attemptBudgetCapacity;
+  hasBudget() {
+    return this.getBudgetConsumed() < this.options.attemptBudgetCapacity;
   }
 
-  startRestoringBudget(user: TransportClientId) {
-    if (this.intervalHandles.has(user)) {
+  startRestoringBudget() {
+    if (this.intervalHandle) {
       return;
     }
 
     const restoreBudgetForUser = () => {
-      const currentBudget = this.budgetConsumed.get(user);
+      const currentBudget = this.budgetConsumed;
       if (!currentBudget) {
-        this.stopLeak(user);
+        this.stopLeak();
         return;
       }
 
       const newBudget = currentBudget - 1;
       if (newBudget === 0) {
-        this.budgetConsumed.delete(user);
         return;
       }
 
-      this.budgetConsumed.set(user, newBudget);
+      this.budgetConsumed = newBudget;
     };
 
-    const intervalHandle = setInterval(
+    this.intervalHandle = setInterval(
       restoreBudgetForUser,
       this.options.budgetRestoreIntervalMs,
     );
-
-    this.intervalHandles.set(user, intervalHandle);
   }
 
-  private stopLeak(user: TransportClientId) {
-    if (!this.intervalHandles.has(user)) {
+  private stopLeak() {
+    if (!this.intervalHandle) {
       return;
     }
 
-    clearInterval(this.intervalHandles.get(user));
-    this.intervalHandles.delete(user);
+    clearInterval(this.intervalHandle);
+    this.intervalHandle = undefined;
   }
 
   close() {
-    for (const user of this.intervalHandles.keys()) {
-      this.stopLeak(user);
-    }
+    this.stopLeak();
   }
 }

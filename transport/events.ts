@@ -22,6 +22,7 @@ export interface EventMap {
     | { state: SessionState.Connected }
     | { state: SessionState.Handshaking }
     | { state: SessionState.Connecting }
+    | { state: SessionState.BackingOff }
     | { state: SessionState.NoConnection };
   protocolError: {
     type: ProtocolErrorType;

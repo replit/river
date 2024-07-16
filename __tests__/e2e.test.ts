@@ -217,6 +217,51 @@ describe.each(testMatrix())(
       });
     });
 
+    test('stream idempotent close', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = { test: TestServiceSchema };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // test
+      const abortController = new AbortController();
+      const { reqWriter, resReader } = client.test.echo.stream(
+        {},
+        { signal: abortController.signal },
+      );
+      reqWriter.write({ msg: 'abc', ignore: false });
+      reqWriter.close();
+      // await resReader.requestClose();
+
+      const output = getIteratorFromStream(resReader);
+      const result1 = await iterNext(output);
+      expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
+      const result2 = await output.next();
+      expect(result2).toStrictEqual({ done: true, value: undefined });
+      abortController.abort();
+
+      // Make sure that the handlers have finished.
+      await advanceFakeTimersBySessionGrace();
+
+      // "Accidentally" close again, as a joke.
+      reqWriter.close();
+      abortController.abort();
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
     test('stream with init message', async () => {
       // setup
       const clientTransport = getClientTransport('client');
@@ -349,6 +394,50 @@ describe.each(testMatrix())(
       expect(result).toStrictEqual({ ok: true, payload: { result: 4 } });
 
       await resReader.requestClose();
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('subscription idempotent close', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = {
+        subscribable: SubscribableServiceSchema,
+      };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // test
+      const abortController = new AbortController();
+      const { resReader } = client.subscribable.value.subscribe(
+        {},
+        { signal: abortController.signal },
+      );
+      const subscription = getIteratorFromStream(resReader);
+      const result1 = await iterNext(subscription);
+      expect(result1).toStrictEqual({ ok: true, payload: { result: 0 } });
+      await resReader.requestClose();
+      abortController.abort();
+
+      // Make sure that the handlers have finished.
+      await advanceFakeTimersBySessionGrace();
+
+      const result2 = await subscription.next();
+      expect(result2).toStrictEqual({ done: true, value: undefined });
+
+      // "Accidentally" call abort() again, as a joke.
+      abortController.abort();
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -636,6 +725,9 @@ describe.each(testMatrix())(
       // kill the session
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+
       await advanceFakeTimersBySessionGrace();
       clientTransport.reconnectOnConnectionDrop = true;
 
@@ -682,6 +774,9 @@ describe.each(testMatrix())(
       // kill the session
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+
       await advanceFakeTimersBySessionGrace();
 
       // we should have no connections

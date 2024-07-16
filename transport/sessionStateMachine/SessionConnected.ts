@@ -6,7 +6,11 @@ import {
   PartialTransportMessage,
   isAck,
 } from '../message';
-import { IdentifiedSession, SessionState } from './common';
+import {
+  IdentifiedSession,
+  IdentifiedSessionProps,
+  SessionState,
+} from './common';
 import { Connection } from '../connection';
 import { SpanStatusCode } from '@opentelemetry/api';
 
@@ -17,11 +21,15 @@ export interface SessionConnectedListeners {
   onInvalidMessage: (reason: string) => void;
 }
 
+export interface SessionConnectedProps<ConnType extends Connection>
+  extends IdentifiedSessionProps {
+  conn: ConnType;
+  listeners: SessionConnectedListeners;
+}
+
 /*
  * A session that is connected and can send and receive messages.
- *
- * Valid transitions:
- * - Connected -> NoConnection (on close)
+ * See transitions.ts for valid transitions.
  */
 export class SessionConnected<
   ConnType extends Connection,
@@ -30,19 +38,14 @@ export class SessionConnected<
   conn: ConnType;
   listeners: SessionConnectedListeners;
 
-  private activeHeartbeatHandle?: ReturnType<typeof setInterval> | undefined;
-  private activeHeartbeatMisses = 0;
-
-  private passiveHeartbeatHandle?: ReturnType<typeof setTimeout> | undefined;
-
-  get isActivelyHeartbeating() {
-    return this.activeHeartbeatHandle !== undefined;
-  }
+  private heartbeatHandle?: ReturnType<typeof setInterval> | undefined;
+  private heartbeatMisses = 0;
+  isActivelyHeartbeating: boolean;
 
   updateBookkeeping(ack: number, seq: number) {
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
     this.ack = seq + 1;
-    this.activeHeartbeatMisses = 0;
+    this.heartbeatMisses = 0;
   }
 
   send(msg: PartialTransportMessage): string {
@@ -52,18 +55,14 @@ export class SessionConnected<
     return constructedMsg.id;
   }
 
-  constructor(
-    conn: ConnType,
-    listeners: SessionConnectedListeners,
-    ...args: ConstructorParameters<typeof IdentifiedSession>
-  ) {
-    super(...args);
-    this.conn = conn;
-    this.listeners = listeners;
+  constructor(props: SessionConnectedProps<ConnType>) {
+    super(props);
+    this.conn = props.conn;
+    this.listeners = props.listeners;
 
     this.conn.addDataListener(this.onMessageData);
-    this.conn.addCloseListener(listeners.onConnectionClosed);
-    this.conn.addErrorListener(listeners.onConnectionErrored);
+    this.conn.addCloseListener(this.listeners.onConnectionClosed);
+    this.conn.addErrorListener(this.listeners.onConnectionErrored);
 
     // send any buffered messages
     if (this.sendBuffer.length > 0) {
@@ -74,16 +73,16 @@ export class SessionConnected<
     }
 
     for (const msg of this.sendBuffer) {
-      conn.send(this.options.codec.toBuffer(msg));
+      this.conn.send(this.options.codec.toBuffer(msg));
     }
 
     // dont explicity clear the buffer, we'll just filter out old messages
     // when we receive an ack
-  }
 
-  startActiveHeartbeat() {
-    this.activeHeartbeatHandle = setInterval(() => {
-      const misses = this.activeHeartbeatMisses;
+    // setup heartbeat
+    this.isActivelyHeartbeating = false;
+    this.heartbeatHandle = setInterval(() => {
+      const misses = this.heartbeatMisses;
       const missDuration = misses * this.options.heartbeatIntervalMs;
       if (misses >= this.options.heartbeatsUntilDead) {
         this.log?.info(
@@ -91,35 +90,30 @@ export class SessionConnected<
           this.loggingMetadata,
         );
         this.telemetry.span.addEvent('closing connection due to inactivity');
+
+        // it is OK to close this even on the client when we can't trust the client timer
+        // due to browser throttling or hibernation
+        // at worst, this interval will fire later than what the server expects and the server
+        // will have already closed the connection
+        // this just helps us in cases where we have a proxying setup where the server has closed
+        // the connection but the proxy hasn't synchronized the server-side close to the client so
+        // the client isn't stuck with a pseudo-dead connection forever
         this.conn.close();
-        clearInterval(this.activeHeartbeatHandle);
-        this.activeHeartbeatHandle = undefined;
+        clearInterval(this.heartbeatHandle);
+        this.heartbeatHandle = undefined;
         return;
       }
 
-      this.sendHeartbeat();
-      this.activeHeartbeatMisses++;
+      if (this.isActivelyHeartbeating) {
+        this.sendHeartbeat();
+      }
+
+      this.heartbeatMisses++;
     }, this.options.heartbeatIntervalMs);
   }
 
-  waitForNextHeartbeat() {
-    const duration =
-      this.options.heartbeatsUntilDead * this.options.heartbeatIntervalMs;
-
-    if (this.passiveHeartbeatHandle) {
-      clearTimeout(this.passiveHeartbeatHandle);
-      this.passiveHeartbeatHandle = undefined;
-    }
-
-    this.passiveHeartbeatHandle = setTimeout(() => {
-      this.log?.info(
-        `closing connection to ${this.to} due to not receiving a heartbeat in the last ${duration}ms`,
-        this.loggingMetadata,
-      );
-      this.telemetry.span.addEvent('closing connection due to inactivity');
-      this.conn.close();
-      this.passiveHeartbeatHandle = undefined;
-    }, duration);
+  startActiveHeartbeat() {
+    this.isActivelyHeartbeating = true;
   }
 
   private sendHeartbeat() {
@@ -189,7 +183,6 @@ export class SessionConnected<
     // heartbeat mode and should send a response to the ack
     if (!this.isActivelyHeartbeating) {
       this.sendHeartbeat();
-      this.waitForNextHeartbeat();
     }
   };
 
@@ -198,10 +191,8 @@ export class SessionConnected<
     this.conn.removeDataListener(this.onMessageData);
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
-    clearInterval(this.activeHeartbeatHandle);
-    clearTimeout(this.passiveHeartbeatHandle);
-    this.activeHeartbeatHandle = undefined;
-    this.passiveHeartbeatHandle = undefined;
+    clearInterval(this.heartbeatHandle);
+    this.heartbeatHandle = undefined;
   }
 
   _handleClose(): void {

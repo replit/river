@@ -15,82 +15,75 @@ describe('LeakyBucketRateLimit', () => {
 
   test('should return 0 backoff time for new user', () => {
     const rateLimit = new LeakyBucketRateLimit(options);
-    const user = 'user1';
-    const backoffMs = rateLimit.getBackoffMs(user);
+    const backoffMs = rateLimit.getBackoffMs();
     expect(backoffMs).toBe(0);
   });
 
   test('should return 0 budget consumed for new user', () => {
     const rateLimit = new LeakyBucketRateLimit(options);
-    const user = 'user1';
-    const budgetConsumed = rateLimit.getBudgetConsumed(user);
+    const budgetConsumed = rateLimit.getBudgetConsumed();
     expect(budgetConsumed).toBe(0);
   });
 
   test('should consume budget correctly', () => {
     const rateLimit = new LeakyBucketRateLimit(options);
-    const user = 'user1';
-    rateLimit.consumeBudget(user);
-    expect(rateLimit.getBudgetConsumed(user)).toBe(1);
+    rateLimit.consumeBudget();
+    expect(rateLimit.getBudgetConsumed()).toBe(1);
   });
 
   test('keeps growing until startRestoringBudget', () => {
     const rateLimit = new LeakyBucketRateLimit(options);
-    const user = 'user1';
-    rateLimit.consumeBudget(user);
-    rateLimit.consumeBudget(user);
-    expect(rateLimit.getBudgetConsumed(user)).toBe(2);
+    rateLimit.consumeBudget();
+    rateLimit.consumeBudget();
+    expect(rateLimit.getBudgetConsumed()).toBe(2);
 
     // Advanding time before startRestoringBudget should be noop
     vi.advanceTimersByTime(options.budgetRestoreIntervalMs);
-    expect(rateLimit.getBudgetConsumed(user)).toBe(2);
+    expect(rateLimit.getBudgetConsumed()).toBe(2);
 
-    rateLimit.startRestoringBudget(user);
-    expect(rateLimit.getBudgetConsumed(user)).toBe(2);
+    rateLimit.startRestoringBudget();
+    expect(rateLimit.getBudgetConsumed()).toBe(2);
     vi.advanceTimersByTime(options.budgetRestoreIntervalMs);
-    expect(rateLimit.getBudgetConsumed(user)).toBe(1);
+    expect(rateLimit.getBudgetConsumed()).toBe(1);
   });
 
   test('stops restoring budget when we consume budget again', () => {
     const rateLimit = new LeakyBucketRateLimit(options);
-    const user = 'user1';
-    rateLimit.consumeBudget(user);
-    rateLimit.consumeBudget(user);
-    expect(rateLimit.getBudgetConsumed(user)).toBe(2);
+    rateLimit.consumeBudget();
+    rateLimit.consumeBudget();
+    expect(rateLimit.getBudgetConsumed()).toBe(2);
 
-    rateLimit.startRestoringBudget(user);
-    expect(rateLimit.getBudgetConsumed(user)).toBe(2);
+    rateLimit.startRestoringBudget();
+    expect(rateLimit.getBudgetConsumed()).toBe(2);
 
-    rateLimit.consumeBudget(user);
-    expect(rateLimit.getBudgetConsumed(user)).toBe(3);
+    rateLimit.consumeBudget();
+    expect(rateLimit.getBudgetConsumed()).toBe(3);
     vi.advanceTimersByTime(options.budgetRestoreIntervalMs);
-    expect(rateLimit.getBudgetConsumed(user)).toBe(3);
+    expect(rateLimit.getBudgetConsumed()).toBe(3);
   });
 
   test('respects maximum backoff time', () => {
     const maxBackoffMs = 50;
     const rateLimit = new LeakyBucketRateLimit({ ...options, maxBackoffMs });
-    const user = 'user1';
 
-    rateLimit.consumeBudget(user);
+    rateLimit.consumeBudget();
 
-    expect(rateLimit.getBackoffMs(user)).toBeLessThanOrEqual(
+    expect(rateLimit.getBackoffMs()).toBeLessThanOrEqual(
       maxBackoffMs + options.maxJitterMs,
     );
-    expect(rateLimit.getBackoffMs(user)).toBeGreaterThanOrEqual(maxBackoffMs);
+    expect(rateLimit.getBackoffMs()).toBeGreaterThanOrEqual(maxBackoffMs);
   });
 
   test('backoff increases', () => {
     const rateLimit = new LeakyBucketRateLimit(options);
-    const user = 'user1';
 
-    rateLimit.consumeBudget(user);
-    const backoffMs1 = rateLimit.getBackoffMs(user);
-    rateLimit.consumeBudget(user);
-    const backoffMs2 = rateLimit.getBackoffMs(user);
+    rateLimit.consumeBudget();
+    const backoffMs1 = rateLimit.getBackoffMs();
+    rateLimit.consumeBudget();
+    const backoffMs2 = rateLimit.getBackoffMs();
     expect(backoffMs2).toBeGreaterThan(backoffMs1);
-    rateLimit.consumeBudget(user);
-    const backoffMs3 = rateLimit.getBackoffMs(user);
+    rateLimit.consumeBudget();
+    const backoffMs3 = rateLimit.getBackoffMs();
     expect(backoffMs3).toBeGreaterThan(backoffMs2);
   });
 
@@ -100,14 +93,13 @@ describe('LeakyBucketRateLimit', () => {
       ...options,
       attemptBudgetCapacity: maxAttempts,
     });
-    const user = 'user1';
 
     for (let i = 0; i < maxAttempts; i++) {
-      expect(rateLimit.hasBudget(user)).toBe(true);
-      rateLimit.consumeBudget(user);
+      expect(rateLimit.hasBudget()).toBe(true);
+      rateLimit.consumeBudget();
     }
 
-    expect(rateLimit.hasBudget(user)).toBe(false);
-    rateLimit.consumeBudget(user);
+    expect(rateLimit.hasBudget()).toBe(false);
+    rateLimit.consumeBudget();
   });
 });

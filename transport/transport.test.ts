@@ -6,6 +6,7 @@ import {
   getTransportConnections,
   closeAllConnections,
   numberOfConnections,
+  testingClientSessionOptions,
 } from '../util/testHelpers';
 import { EventMap, ProtocolError } from '../transport/events';
 import {
@@ -72,6 +73,8 @@ describe.each(testMatrix())(
       expect(oldServerSessionId).toBe(oldClientSessionId);
 
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // by this point the client should have reconnected
       const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
@@ -131,6 +134,7 @@ describe.each(testMatrix())(
       // disconnect and wait for reconnection
       closeAllConnections(clientTransport);
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // wait a bit to let the reconnect budget restore
       await advanceFakeTimersByConnectionBackoff();
@@ -445,6 +449,8 @@ describe.each(testMatrix())(
 
       // clean disconnect + reconnect within grace period
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // wait for connection status to propagate to server
       // session    >  c------| (connected)
@@ -477,8 +483,8 @@ describe.each(testMatrix())(
       // connection >  c--x   c-----x  | (disconnected)
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
-      await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
-      await waitFor(() => expect(serverConnStart).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       await advanceFakeTimersBySessionGrace();
       await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(1));
@@ -778,6 +784,9 @@ describe.each(testMatrix())(
       expect(oldServerSessionId).not.toBeUndefined();
 
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+
       await waitFor(() => {
         expect(onConnect).toHaveBeenCalledTimes(2);
         expect(numberOfConnections(clientTransport)).toEqual(1);
@@ -788,6 +797,90 @@ describe.each(testMatrix())(
       const newServerSessionId = clientTransport.sessions.get('SERVER')?.id;
       expect(newClientSessionId).toBe(oldClientSessionId);
       expect(newServerSessionId).toBe(oldServerSessionId);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
+    test('backoff should not count towards session grace period', async () => {
+      const clientTransport = testHelpers.getClientTransport('client');
+      const serverTransport = testHelpers.getServerTransport();
+      const serverConnStart = vi.fn();
+      const serverSessStart = vi.fn();
+      const serverSessStop = vi.fn();
+      const serverConnHandler = (evt: EventMap['sessionTransition']) => {
+        switch (evt.state) {
+          case SessionState.Connected:
+            serverConnStart();
+            break;
+        }
+      };
+
+      const serverSessHandler = (evt: EventMap['sessionStatus']) => {
+        switch (evt.status) {
+          case 'connect':
+            serverSessStart();
+            break;
+          case 'disconnect':
+            serverSessStop();
+            break;
+        }
+      };
+
+      serverTransport.addEventListener('sessionTransition', serverConnHandler);
+      serverTransport.addEventListener('sessionStatus', serverSessHandler);
+      clientTransport.connect(serverTransport.clientId);
+      clientTransport.reconnectOnConnectionDrop = false;
+      addPostTestCleanup(async () => {
+        serverTransport.removeEventListener(
+          'sessionTransition',
+          serverConnHandler,
+        );
+        serverTransport.removeEventListener(
+          'sessionTransition',
+          serverConnHandler,
+        );
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(serverConnStart).toHaveBeenCalledTimes(1);
+        expect(serverSessStart).toHaveBeenCalledTimes(1);
+        expect(serverSessStop).toHaveBeenCalledTimes(0);
+        expect(numberOfConnections(clientTransport)).toBe(1);
+        expect(numberOfConnections(serverTransport)).toBe(1);
+      });
+
+      // kill the connection
+      const numConnKills = 3;
+      for (let i = 0; i < numConnKills; i++) {
+        closeAllConnections(clientTransport);
+        await waitFor(() => {
+          expect(numberOfConnections(clientTransport)).toBe(0);
+          expect(numberOfConnections(serverTransport)).toBe(0);
+        });
+
+        await vi.advanceTimersByTimeAsync(
+          Math.ceil(
+            testingClientSessionOptions.sessionDisconnectGraceMs / numConnKills,
+          ),
+        );
+
+        clientTransport.connect(serverTransport.clientId);
+        await waitFor(() => {
+          expect(serverConnStart).toHaveBeenCalledTimes(i + 2);
+        });
+        await waitFor(() => {
+          expect(numberOfConnections(clientTransport)).toBe(1);
+          expect(numberOfConnections(serverTransport)).toBe(1);
+        });
+      }
+
+      expect(serverConnStart).toHaveBeenCalledTimes(numConnKills + 1);
+      expect(serverSessStart).toHaveBeenCalledTimes(1);
+      expect(serverSessStop).toHaveBeenCalledTimes(0);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -847,6 +940,8 @@ describe.each(testMatrix())(
       // kill the client
       clientTransport.close();
       closeAllConnections(serverTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // queue up some messages
       serverTransport.send(
@@ -942,6 +1037,8 @@ describe.each(testMatrix())(
       // bring client side connections down and stop trying to reconnect
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // buffer some messages
       clientTransport.send(
@@ -964,7 +1061,7 @@ describe.each(testMatrix())(
 
       // eagerly reconnect client
       clientTransport.reconnectOnConnectionDrop = true;
-      clientTransport.connect('SERVER');
+      clientTransport.connect(serverTransport.clientId);
 
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(2));
@@ -989,6 +1086,9 @@ describe.each(testMatrix())(
 
       // disconnect and wait for reconnection.
       closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+
       await advanceFakeTimersByConnectionBackoff();
 
       // Ensure that the session survived the reconnection. And not just that a session was not
@@ -1347,6 +1447,7 @@ describe.each(testMatrix())(
       // now, let's wait until the connection is considered dead
       closeAllConnections(clientTransport);
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // should have reconnected by now
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));

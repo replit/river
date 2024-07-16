@@ -391,8 +391,9 @@ describe.each(testMatrix())(
       // wait for session to disconnect
       clientTransport.reconnectOnConnectionDrop = false;
       closeAllConnections(clientTransport);
-      await advanceFakeTimersBySessionGrace();
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+      await advanceFakeTimersBySessionGrace();
 
       // reconnect
       clientTransport.reconnectOnConnectionDrop = true;
