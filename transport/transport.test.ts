@@ -1476,7 +1476,7 @@ describe.each(testMatrix())(
       });
 
       const get = vi.fn(async () => ({ foo: 'foo' }));
-      const parse = vi.fn(async () => false);
+      const parse = vi.fn(async () => 'REJECTED_BY_CUSTOM_HANDLER');
       const serverTransport = getServerTransport({
         schema,
         validate: parse,

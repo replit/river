@@ -84,11 +84,21 @@ export const HandshakeErrorRetriableResponseCodes = Type.Union([
   Type.Literal('SESSION_STATE_MISMATCH'),
 ]);
 
-export const HandshakeErrorFatalResponseCodes = Type.Union([
-  Type.Literal('MALFORMED_HANDSHAKE_META'),
-  Type.Literal('MALFORMED_HANDSHAKE'),
-  Type.Literal('PROTOCOL_VERSION_MISMATCH'),
+export const HandshakeErrorCustomHandlerFatalResponseCodes = Type.Union([
+  // The custom validation handler rejected the handler because the client is unsupported.
+  Type.Literal('REJECTED_UNSUPPORTED_CLIENT'),
+  // The custom validation handler rejected the handshake.
   Type.Literal('REJECTED_BY_CUSTOM_HANDLER'),
+]);
+
+export const HandshakeErrorFatalResponseCodes = Type.Union([
+  HandshakeErrorCustomHandlerFatalResponseCodes,
+  // The ciient sent a handshake that doesn't comply with the extended handshake metadata.
+  Type.Literal('MALFORMED_HANDSHAKE_META'),
+  // The ciient sent a handshake that doesn't comply with ControlMessageHandshakeRequestSchema.
+  Type.Literal('MALFORMED_HANDSHAKE'),
+  // The client's protocol version does not match the server's.
+  Type.Literal('PROTOCOL_VERSION_MISMATCH'),
 ]);
 
 export const HandshakeErrorResponseCodes = Type.Union([
