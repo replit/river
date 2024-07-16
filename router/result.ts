@@ -140,7 +140,7 @@ export type Output<
         : never
       : Procedure extends object & { stream: infer StreamFn extends Fn }
       ? ReturnType<StreamFn> extends {
-          responseReader: ReadStream<
+          resReader: ReadStream<
             infer StreamOutputMessage,
             Static<BaseErrorSchemaType>
           >;
@@ -151,7 +151,7 @@ export type Output<
           subscribe: infer SubscriptionFn extends Fn;
         }
       ? Awaited<ReturnType<SubscriptionFn>> extends {
-          responseReader: ReadStream<
+          resReader: ReadStream<
             infer SubscriptionOutputMessage,
             Static<BaseErrorSchemaType>
           >;

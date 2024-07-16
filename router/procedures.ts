@@ -61,7 +61,7 @@ export const ABORT_CODE = 'ABORT' as const;
 
 /**
  * ResponseReaderErrorSchema is the schema for all the errors that can be
- * emitted in the Output ReadStream on the client.
+ * emitted in the ResponseData ReadStream on the client.
  */
 export const ResponseReaderErrorSchema = Type.Object({
   code: Type.Union([
@@ -76,7 +76,7 @@ export const ResponseReaderErrorSchema = Type.Object({
 
 /**
  * RequestReaderErrorSchema is the schema for all the errors that can be
- * emitted in the Input ReadStream on the server.
+ * emitted in the RequestData ReadStream on the server.
  */
 export const RequestReaderErrorSchema = Type.Object({
   code: Type.Union([
@@ -101,28 +101,28 @@ export type ProcedureErrorSchemaType =
  * Procedure for a single message in both directions (1:1).
  *
  * @template State - The context state object.
- * @template Init - The TypeBox schema of the initialization object.
- * @template Output - The TypeBox schema of the output object.
- * @template Err - The TypeBox schema of the error object.
+ * @template RequestInit - The TypeBox schema of the initialization object.
+ * @template ResponseData - The TypeBox schema of the output object.
+ * @template ResponseErr - The TypeBox schema of the error object.
  */
 export interface RpcProcedure<
   State,
-  Init extends PayloadType,
-  Output extends PayloadType,
-  Err extends ProcedureErrorSchemaType,
+  RequestInit extends PayloadType,
+  ResponseData extends PayloadType,
+  ResponseErr extends ProcedureErrorSchemaType,
 > {
   type: 'rpc';
-  init: Init;
-  output: Output;
-  errors: Err;
+  requestInit: RequestInit;
+  responseData: ResponseData;
+  responseError: ResponseErr;
   description?: string;
   handler({
     ctx,
-    requestInit,
+    reqInit,
   }: {
     ctx: ProcedureHandlerContext<State>;
-    requestInit: Static<Init>;
-  }): Promise<Result<Static<Output>, Static<Err>>>;
+    reqInit: Static<RequestInit>;
+  }): Promise<Result<Static<ResponseData>, Static<ResponseErr>>>;
 }
 
 /**
@@ -130,65 +130,65 @@ export interface RpcProcedure<
  * single message from server (n:1).
  *
  * @template State - The context state object.
- * @template Init - The TypeBox schema of the initialization object.
- * @template Input - The TypeBox schema of the input object.
- * @template Output - The TypeBox schema of the output object.
- * @template Err - The TypeBox schema of the error object.
+ * @template RequestInit - The TypeBox schema of the initialization object.
+ * @template RequestData - The TypeBox schema of the input object.
+ * @template ResponseData - The TypeBox schema of the output object.
+ * @template ResponseErr - The TypeBox schema of the error object.
  */
 export interface UploadProcedure<
   State,
-  Init extends PayloadType,
-  Input extends PayloadType,
-  Output extends PayloadType,
-  Err extends ProcedureErrorSchemaType,
+  RequestInit extends PayloadType,
+  RequestData extends PayloadType,
+  ResponseData extends PayloadType,
+  ResponseErr extends ProcedureErrorSchemaType,
 > {
   type: 'upload';
-  init: Init;
-  input: Input;
-  output: Output;
-  errors: Err;
+  requestInit: RequestInit;
+  requestData: RequestData;
+  responseData: ResponseData;
+  responseError: ResponseErr;
   description?: string;
   handler({
     ctx,
-    requestInit,
-    requestReader,
+    reqInit,
+    reqReader,
   }: {
     ctx: ProcedureHandlerContext<State>;
-    requestInit: Static<Init>;
-    requestReader: ReadStream<
-      Static<Input>,
+    reqInit: Static<RequestInit>;
+    reqReader: ReadStream<
+      Static<RequestData>,
       Static<typeof RequestReaderErrorSchema>
     >;
-  }): Promise<Result<Static<Output>, Static<Err>>>;
+  }): Promise<Result<Static<ResponseData>, Static<ResponseErr>>>;
 }
 
 /**
  * Procedure for a single message from client, stream from server (1:n).
  *
  * @template State - The context state object.
- * @template Init - The TypeBox schema of the initialization object.
- * @template Output - The TypeBox schema of the output object.
- * @template Err - The TypeBox schema of the error object.
+ * @template RequestInit - The TypeBox schema of the initialization object.
+ * @template ResponseData - The TypeBox schema of the output object.
+ * @template ResponseErr - The TypeBox schema of the error object.
  */
 export interface SubscriptionProcedure<
   State,
-  Init extends PayloadType,
-  Output extends PayloadType,
-  Err extends ProcedureErrorSchemaType,
+  RequestInit extends PayloadType,
+  ResponseData extends PayloadType,
+  ResponseErr extends ProcedureErrorSchemaType,
 > {
   type: 'subscription';
-  init: Init;
-  output: Output;
-  errors: Err;
+  requestInit: RequestInit;
+  responseData: ResponseData;
+  responseError: ResponseErr;
   description?: string;
   handler({
     ctx,
-    requestInit,
-    responseWriter,
+    reqInit,
+    resWriter,
   }: {
     ctx: ProcedureHandlerContext<State>;
-    requestInit: Static<Init>;
-    responseWriter: WriteStream<Result<Static<Output>, Static<Err>>>;
+    reqInit: Static<RequestInit>;
+    resWriter: WriteStream<Result<Static<ResponseData>, Static<ResponseErr>>>;
   }): Promise<void | undefined>;
 }
 
@@ -197,37 +197,37 @@ export interface SubscriptionProcedure<
  * (n:n).
  *
  * @template State - The context state object.
- * @template Init - The TypeBox schema of the initialization object.
- * @template Input - The TypeBox schema of the input object.
- * @template Output - The TypeBox schema of the output object.
- * @template Err - The TypeBox schema of the error object.
+ * @template RequestInit - The TypeBox schema of the initialization object.
+ * @template RequestData - The TypeBox schema of the input object.
+ * @template ResponseData - The TypeBox schema of the output object.
+ * @template ResponseErr - The TypeBox schema of the error object.
  */
 export interface StreamProcedure<
   State,
-  Init extends PayloadType,
-  Input extends PayloadType,
-  Output extends PayloadType,
-  Err extends ProcedureErrorSchemaType,
+  RequestInit extends PayloadType,
+  RequestData extends PayloadType,
+  ResponseData extends PayloadType,
+  ResponseErr extends ProcedureErrorSchemaType,
 > {
   type: 'stream';
-  init: Init;
-  input: Input;
-  output: Output;
-  errors: Err;
+  requestInit: RequestInit;
+  requestData: RequestData;
+  responseData: ResponseData;
+  responseError: ResponseErr;
   description?: string;
   handler({
     ctx,
-    requestInit,
-    requestReader,
-    responseWriter,
+    reqInit,
+    reqReader,
+    resWriter,
   }: {
     ctx: ProcedureHandlerContext<State>;
-    requestInit: Static<Init>;
-    requestReader: ReadStream<
-      Static<Input>,
+    reqInit: Static<RequestInit>;
+    reqReader: ReadStream<
+      Static<RequestData>,
       Static<typeof RequestReaderErrorSchema>
     >;
-    responseWriter: WriteStream<Result<Static<Output>, Static<Err>>>;
+    resWriter: WriteStream<Result<Static<ResponseData>, Static<ResponseErr>>>;
   }): Promise<void | undefined>;
 }
 
@@ -242,27 +242,39 @@ export interface StreamProcedure<
  *
  * @template State - The TypeBox schema of the state object.
  * @template Ty - The type of the procedure.
- * @template Input - The TypeBox schema of the input object.
- * @template Init - The TypeBox schema of the input initialization object, if any.
- * @template Output - The TypeBox schema of the output object.
+ * @template RequestData - The TypeBox schema of the input object.
+ * @template RequestInit - The TypeBox schema of the input initialization object, if any.
+ * @template ResponseData - The TypeBox schema of the output object.
  */
 export type Procedure<
   State,
   Ty extends ValidProcType,
-  Init extends PayloadType,
-  Input extends PayloadType | null,
-  Output extends PayloadType,
-  Err extends ProcedureErrorSchemaType,
-> = { type: Ty } & (Input extends PayloadType
+  RequestInit extends PayloadType,
+  RequestData extends PayloadType | null,
+  ResponseData extends PayloadType,
+  ResponseErr extends ProcedureErrorSchemaType,
+> = { type: Ty } & (RequestData extends PayloadType
   ? Ty extends 'upload'
-    ? UploadProcedure<State, Init, Input, Output, Err>
+    ? UploadProcedure<
+        State,
+        RequestInit,
+        RequestData,
+        ResponseData,
+        ResponseErr
+      >
     : Ty extends 'stream'
-    ? StreamProcedure<State, Init, Input, Output, Err>
+    ? StreamProcedure<
+        State,
+        RequestInit,
+        RequestData,
+        ResponseData,
+        ResponseErr
+      >
     : never
   : Ty extends 'rpc'
-  ? RpcProcedure<State, Init, Output, Err>
+  ? RpcProcedure<State, RequestInit, ResponseData, ResponseErr>
   : Ty extends 'subscription'
-  ? SubscriptionProcedure<State, Init, Output, Err>
+  ? SubscriptionProcedure<State, RequestInit, ResponseData, ResponseErr>
   : never);
 
 /**
@@ -296,39 +308,48 @@ export type ProcedureMap<State = object> = Record<string, AnyProcedure<State>>;
  * Creates an {@link RpcProcedure}.
  */
 // signature: default errors
-function rpc<State, Init extends PayloadType, Output extends PayloadType>(def: {
-  init: Init;
-  output: Output;
-  errors?: never;
+function rpc<
+  State,
+  RequestInit extends PayloadType,
+  ResponseData extends PayloadType,
+>(def: {
+  requestInit: RequestInit;
+  responseData: ResponseData;
+  responseError?: never;
   description?: string;
-  handler: RpcProcedure<State, Init, Output, TNever>['handler'];
-}): Branded<RpcProcedure<State, Init, Output, TNever>>;
+  handler: RpcProcedure<State, RequestInit, ResponseData, TNever>['handler'];
+}): Branded<RpcProcedure<State, RequestInit, ResponseData, TNever>>;
 
 // signature: explicit errors
 function rpc<
   State,
-  Init extends PayloadType,
-  Output extends PayloadType,
-  Err extends ProcedureErrorSchemaType,
+  RequestInit extends PayloadType,
+  ResponseData extends PayloadType,
+  ResponseErr extends ProcedureErrorSchemaType,
 >(def: {
-  init: Init;
-  output: Output;
-  errors: Err;
+  requestInit: RequestInit;
+  responseData: ResponseData;
+  responseError: ResponseErr;
   description?: string;
-  handler: RpcProcedure<State, Init, Output, Err>['handler'];
-}): Branded<RpcProcedure<State, Init, Output, Err>>;
+  handler: RpcProcedure<
+    State,
+    RequestInit,
+    ResponseData,
+    ResponseErr
+  >['handler'];
+}): Branded<RpcProcedure<State, RequestInit, ResponseData, ResponseErr>>;
 
 // implementation
 function rpc({
-  init,
-  output,
-  errors = Type.Never(),
+  requestInit,
+  responseData,
+  responseError = Type.Never(),
   description,
   handler,
 }: {
-  init: PayloadType;
-  output: PayloadType;
-  errors?: ProcedureErrorSchemaType;
+  requestInit: PayloadType;
+  responseData: PayloadType;
+  responseError?: ProcedureErrorSchemaType;
   description?: string;
   handler: RpcProcedure<
     object,
@@ -340,9 +361,9 @@ function rpc({
   return {
     ...(description ? { description } : {}),
     type: 'rpc',
-    init,
-    output,
-    errors,
+    requestInit,
+    responseData,
+    responseError,
     handler,
   };
 }
@@ -353,47 +374,63 @@ function rpc({
 // signature: init with default errors
 function upload<
   State,
-  Init extends PayloadType,
-  Input extends PayloadType,
-  Output extends PayloadType,
+  RequestInit extends PayloadType,
+  RequestData extends PayloadType,
+  ResponseData extends PayloadType,
 >(def: {
-  init: Init;
-  input: Input;
-  output: Output;
-  errors?: never;
+  requestInit: RequestInit;
+  requestData: RequestData;
+  responseData: ResponseData;
+  responseError?: never;
   description?: string;
-  handler: UploadProcedure<State, Init, Input, Output, TNever>['handler'];
-}): Branded<UploadProcedure<State, Init, Input, Output, TNever>>;
+  handler: UploadProcedure<
+    State,
+    RequestInit,
+    RequestData,
+    ResponseData,
+    TNever
+  >['handler'];
+}): Branded<
+  UploadProcedure<State, RequestInit, RequestData, ResponseData, TNever>
+>;
 
 // signature: init with explicit errors
 function upload<
   State,
-  Init extends PayloadType,
-  Input extends PayloadType,
-  Output extends PayloadType,
-  Err extends ProcedureErrorSchemaType,
+  RequestInit extends PayloadType,
+  RequestData extends PayloadType,
+  ResponseData extends PayloadType,
+  ResponseErr extends ProcedureErrorSchemaType,
 >(def: {
-  init: Init;
-  input: Input;
-  output: Output;
-  errors: Err;
+  requestInit: RequestInit;
+  requestData: RequestData;
+  responseData: ResponseData;
+  responseError: ResponseErr;
   description?: string;
-  handler: UploadProcedure<State, Init, Input, Output, Err>['handler'];
-}): Branded<UploadProcedure<State, Init, Input, Output, Err>>;
+  handler: UploadProcedure<
+    State,
+    RequestInit,
+    RequestData,
+    ResponseData,
+    ResponseErr
+  >['handler'];
+}): Branded<
+  UploadProcedure<State, RequestInit, RequestData, ResponseData, ResponseErr>
+>;
 
 // implementation
 function upload({
-  init,
-  input,
-  output,
-  errors = Type.Never(),
+  requestInit,
+  requestData,
+  responseData,
+  responseError = Type.Never(),
   description,
   handler,
 }: {
-  init: PayloadType;
-  input: PayloadType;
-  output: PayloadType;
-  errors?: ProcedureErrorSchemaType;
+  requestInit: PayloadType;
+  requestData: PayloadType;
+  responseData: PayloadType;
+  responseError?: ProcedureErrorSchemaType;
   description?: string;
   handler: UploadProcedure<
     object,
@@ -406,10 +443,10 @@ function upload({
   return {
     type: 'upload',
     ...(description ? { description } : {}),
-    init,
-    input,
-    output,
-    errors,
+    requestInit,
+    requestData,
+    responseData,
+    responseError,
     handler,
   };
 }
@@ -420,41 +457,53 @@ function upload({
 // signature: default errors
 function subscription<
   State,
-  Init extends PayloadType,
-  Output extends PayloadType,
+  RequestInit extends PayloadType,
+  ResponseData extends PayloadType,
 >(def: {
-  init: Init;
-  output: Output;
-  errors?: never;
+  requestInit: RequestInit;
+  responseData: ResponseData;
+  responseError?: never;
   description?: string;
-  handler: SubscriptionProcedure<State, Init, Output, TNever>['handler'];
-}): Branded<SubscriptionProcedure<State, Init, Output, TNever>>;
+  handler: SubscriptionProcedure<
+    State,
+    RequestInit,
+    ResponseData,
+    TNever
+  >['handler'];
+}): Branded<SubscriptionProcedure<State, RequestInit, ResponseData, TNever>>;
 
 // signature: explicit errors
 function subscription<
   State,
-  Init extends PayloadType,
-  Output extends PayloadType,
-  Err extends ProcedureErrorSchemaType,
+  RequestInit extends PayloadType,
+  ResponseData extends PayloadType,
+  ResponseErr extends ProcedureErrorSchemaType,
 >(def: {
-  init: Init;
-  output: Output;
-  errors: Err;
+  requestInit: RequestInit;
+  responseData: ResponseData;
+  responseError: ResponseErr;
   description?: string;
-  handler: SubscriptionProcedure<State, Init, Output, Err>['handler'];
-}): Branded<SubscriptionProcedure<State, Init, Output, Err>>;
+  handler: SubscriptionProcedure<
+    State,
+    RequestInit,
+    ResponseData,
+    ResponseErr
+  >['handler'];
+}): Branded<
+  SubscriptionProcedure<State, RequestInit, ResponseData, ResponseErr>
+>;
 
 // implementation
 function subscription({
-  init,
-  output,
-  errors = Type.Never(),
+  requestInit,
+  responseData,
+  responseError = Type.Never(),
   description,
   handler,
 }: {
-  init: PayloadType;
-  output: PayloadType;
-  errors?: ProcedureErrorSchemaType;
+  requestInit: PayloadType;
+  responseData: PayloadType;
+  responseError?: ProcedureErrorSchemaType;
   description?: string;
   handler: SubscriptionProcedure<
     object,
@@ -466,9 +515,9 @@ function subscription({
   return {
     type: 'subscription',
     ...(description ? { description } : {}),
-    init,
-    output,
-    errors,
+    requestInit,
+    responseData,
+    responseError,
     handler,
   };
 }
@@ -479,47 +528,63 @@ function subscription({
 // signature: with default errors
 function stream<
   State,
-  Init extends PayloadType,
-  Input extends PayloadType,
-  Output extends PayloadType,
+  RequestInit extends PayloadType,
+  RequestData extends PayloadType,
+  ResponseData extends PayloadType,
 >(def: {
-  init: Init;
-  input: Input;
-  output: Output;
-  errors?: never;
+  requestInit: RequestInit;
+  requestData: RequestData;
+  responseData: ResponseData;
+  responseError?: never;
   description?: string;
-  handler: StreamProcedure<State, Init, Input, Output, TNever>['handler'];
-}): Branded<StreamProcedure<State, Init, Input, Output, TNever>>;
+  handler: StreamProcedure<
+    State,
+    RequestInit,
+    RequestData,
+    ResponseData,
+    TNever
+  >['handler'];
+}): Branded<
+  StreamProcedure<State, RequestInit, RequestData, ResponseData, TNever>
+>;
 
 // signature: explicit errors
 function stream<
   State,
-  Init extends PayloadType,
-  Input extends PayloadType,
-  Output extends PayloadType,
-  Err extends ProcedureErrorSchemaType,
+  RequestInit extends PayloadType,
+  RequestData extends PayloadType,
+  ResponseData extends PayloadType,
+  ResponseErr extends ProcedureErrorSchemaType,
 >(def: {
-  init: Init;
-  input: Input;
-  output: Output;
-  errors: Err;
+  requestInit: RequestInit;
+  requestData: RequestData;
+  responseData: ResponseData;
+  responseError: ResponseErr;
   description?: string;
-  handler: StreamProcedure<State, Init, Input, Output, Err>['handler'];
-}): Branded<StreamProcedure<State, Init, Input, Output, Err>>;
+  handler: StreamProcedure<
+    State,
+    RequestInit,
+    RequestData,
+    ResponseData,
+    ResponseErr
+  >['handler'];
+}): Branded<
+  StreamProcedure<State, RequestInit, RequestData, ResponseData, ResponseErr>
+>;
 
 // implementation
 function stream({
-  init,
-  input,
-  output,
-  errors = Type.Never(),
+  requestInit,
+  requestData,
+  responseData,
+  responseError = Type.Never(),
   description,
   handler,
 }: {
-  init: PayloadType;
-  input: PayloadType;
-  output: PayloadType;
-  errors?: ProcedureErrorSchemaType;
+  requestInit: PayloadType;
+  requestData: PayloadType;
+  responseData: PayloadType;
+  responseError?: ProcedureErrorSchemaType;
   description?: string;
   handler: StreamProcedure<
     object,
@@ -532,10 +597,10 @@ function stream({
   return {
     type: 'stream',
     ...(description ? { description } : {}),
-    init,
-    input,
-    output,
-    errors,
+    requestInit,
+    requestData,
+    responseData,
+    responseError,
     handler,
   };
 }

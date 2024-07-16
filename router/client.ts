@@ -73,7 +73,7 @@ type UploadFn<
   init: ProcInit<Router, ProcName>,
   options?: CallOptions,
 ) => {
-  requestWriter: WriteStream<ProcInput<Router, ProcName>>;
+  reqWriter: WriteStream<ProcInput<Router, ProcName>>;
   finalize: () => Promise<
     Result<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>
   >;
@@ -86,8 +86,8 @@ type StreamFn<
   init: ProcInit<Router, ProcName>,
   options?: CallOptions,
 ) => {
-  requestWriter: WriteStream<ProcInput<Router, ProcName>>;
-  responseReader: ReadStream<
+  reqWriter: WriteStream<ProcInput<Router, ProcName>>;
+  resReader: ReadStream<
     ProcOutput<Router, ProcName>,
     ProcErrors<Router, ProcName>
   >;
@@ -100,7 +100,7 @@ type SubscriptionFn<
   init: ProcInit<Router, ProcName>,
   options?: CallOptions,
 ) => {
-  responseReader: ReadStream<
+  resReader: ReadStream<
     ProcOutput<Router, ProcName>,
     ProcErrors<Router, ProcName>
   >;
@@ -305,7 +305,7 @@ function handleProc(
     streamId,
   );
   let cleanClose = true;
-  const requestWriter = new WriteStreamImpl<Static<PayloadType>>((rawIn) => {
+  const reqWriter = new WriteStreamImpl<Static<PayloadType>>((rawIn) => {
     transport.send(serverId, {
       streamId,
       payload: rawIn,
@@ -313,28 +313,28 @@ function handleProc(
       tracing: getPropagationContext(ctx),
     });
   });
-  requestWriter.onClose(() => {
-    span.addEvent('requestWriter closed');
+  reqWriter.onClose(() => {
+    span.addEvent('reqWriter closed');
 
     if (!procClosesWithInit && cleanClose) {
       transport.send(serverId, closeStreamMessage(streamId));
     }
 
-    if (responseReader.isClosed()) {
+    if (resReader.isClosed()) {
       cleanup();
     }
   });
 
-  const responseReader = new ReadStreamImpl<
+  const resReader = new ReadStreamImpl<
     Static<PayloadType>,
     Static<BaseErrorSchemaType>
   >(() => {
     transport.send(serverId, requestCloseStreamMessage(streamId));
   });
-  responseReader.onClose(() => {
-    span.addEvent('responseReader closed');
+  resReader.onClose(() => {
+    span.addEvent('resReader closed');
 
-    if (requestWriter.isClosed()) {
+    if (reqWriter.isClosed()) {
       cleanup();
     }
   });
@@ -347,7 +347,7 @@ function handleProc(
   }
 
   function onClientAbort() {
-    if (responseReader.isClosed() && requestWriter.isClosed()) {
+    if (resReader.isClosed() && reqWriter.isClosed()) {
       return;
     }
 
@@ -355,17 +355,17 @@ function handleProc(
 
     cleanClose = false;
 
-    if (!responseReader.isClosed()) {
-      responseReader.pushValue(
+    if (!resReader.isClosed()) {
+      resReader.pushValue(
         Err({
           code: ABORT_CODE,
           message: 'Aborted by client',
         }),
       );
-      responseReader.triggerClose();
+      resReader.triggerClose();
     }
 
-    requestWriter.close();
+    reqWriter.close();
     transport.send(
       serverId,
       abortMessage(
@@ -390,7 +390,7 @@ function handleProc(
     }
 
     if (isStreamCloseRequest(msg.controlFlags)) {
-      requestWriter.triggerCloseRequest();
+      reqWriter.triggerCloseRequest();
     }
 
     if (isStreamAbort(msg.controlFlags)) {
@@ -418,17 +418,17 @@ function handleProc(
         );
       }
 
-      if (!responseReader.isClosed()) {
-        responseReader.pushValue(abortResult);
-        responseReader.triggerClose();
+      if (!resReader.isClosed()) {
+        resReader.pushValue(abortResult);
+        resReader.triggerClose();
       }
 
-      requestWriter.close();
+      reqWriter.close();
 
       return;
     }
 
-    if (responseReader.isClosed()) {
+    if (resReader.isClosed()) {
       span.recordException('Received message after output stream is closed');
 
       transport.log?.error('Received message after output stream is closed', {
@@ -441,7 +441,7 @@ function handleProc(
 
     if (!Value.Check(ControlMessageCloseSchema, msg.payload)) {
       if (Value.Check(AnyResultSchema, msg.payload)) {
-        responseReader.pushValue(msg.payload);
+        resReader.pushValue(msg.payload);
       } else {
         transport.log?.error(
           'Got non-control payload, but was not a valid result',
@@ -457,7 +457,7 @@ function handleProc(
     if (isStreamClose(msg.controlFlags)) {
       span.addEvent('received output close');
 
-      responseReader.triggerClose();
+      resReader.triggerClose();
     }
   }
 
@@ -471,16 +471,16 @@ function handleProc(
     }
 
     cleanClose = false;
-    if (!responseReader.isClosed()) {
-      responseReader.pushValue(
+    if (!resReader.isClosed()) {
+      resReader.pushValue(
         Err({
           code: UNEXPECTED_DISCONNECT_CODE,
           message: `${serverId} unexpectedly disconnected`,
         }),
       );
     }
-    requestWriter.close();
-    responseReader.triggerClose();
+    reqWriter.close();
+    resReader.triggerClose();
   }
 
   abortSignal?.addEventListener('abort', onClientAbort);
@@ -499,21 +499,21 @@ function handleProc(
   });
 
   if (procClosesWithInit) {
-    requestWriter.close();
+    reqWriter.close();
   }
 
   if (procType === 'subscription') {
-    return { responseReader };
+    return { resReader };
   }
 
   if (procType === 'rpc') {
-    return getSingleMessage(responseReader, transport.log);
+    return getSingleMessage(resReader, transport.log);
   }
 
   if (procType === 'upload') {
     let didFinalize = false;
     return {
-      requestWriter,
+      reqWriter,
       async finalize() {
         if (didFinalize) {
           throw new Error('upload stream already finalized');
@@ -521,24 +521,24 @@ function handleProc(
 
         didFinalize = true;
 
-        if (!requestWriter.isClosed()) {
-          requestWriter.close();
+        if (!reqWriter.isClosed()) {
+          reqWriter.close();
         }
 
-        return getSingleMessage(responseReader, transport.log);
+        return getSingleMessage(resReader, transport.log);
       },
     };
   }
 
   // good ol' `stream` procType
-  return { requestWriter, responseReader };
+  return { reqWriter, resReader };
 }
 
 async function getSingleMessage(
-  responseReader: ReadStream<unknown, Static<BaseErrorSchemaType>>,
+  resReader: ReadStream<unknown, Static<BaseErrorSchemaType>>,
   log?: Logger,
 ): Promise<Result<unknown, Static<BaseErrorSchemaType>>> {
-  const ret = await responseReader.asArray();
+  const ret = await resReader.asArray();
 
   if (ret.length > 1) {
     log?.error('Expected single message from server, got multiple');

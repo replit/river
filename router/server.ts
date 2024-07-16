@@ -83,7 +83,7 @@ interface NewProcStreamInput {
   from: string;
   sessionId: string;
   protocolVersion: string;
-  passInitAsInputForBackwardsCompat: boolean;
+  passInitAsDataForBackwardsCompat: boolean;
 }
 
 class RiverServer<Services extends AnyServiceSchemaMap>
@@ -204,26 +204,26 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     sessionId,
     tracingCtx,
     protocolVersion,
-    passInitAsInputForBackwardsCompat,
+    passInitAsDataForBackwardsCompat,
   }: NewProcStreamInput) {
     this.openStreams.add(streamId);
 
     let cleanClose = true;
 
     const onServerAbort = (errResult: Static<typeof InputErrResultSchema>) => {
-      if (requestReader.isClosed() && responseWriter.isClosed()) {
+      if (reqReader.isClosed() && resWriter.isClosed()) {
         // Everything already closed, no-op.
         return;
       }
 
       cleanClose = false;
 
-      if (!requestReader.isClosed()) {
-        requestReader.pushValue(errResult);
-        requestReader.triggerClose();
+      if (!reqReader.isClosed()) {
+        reqReader.pushValue(errResult);
+        reqReader.triggerClose();
       }
 
-      responseWriter.close();
+      resWriter.close();
       this.abortStream(from, streamId, errResult);
     };
 
@@ -255,14 +255,14 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         code: UNEXPECTED_DISCONNECT_CODE,
         message: `client unexpectedly disconnected`,
       } as const;
-      if (!requestReader.isClosed()) {
-        requestReader.pushValue(Err(errPayload));
-        requestReader.triggerClose();
+      if (!reqReader.isClosed()) {
+        reqReader.pushValue(Err(errPayload));
+        reqReader.triggerClose();
       }
 
       clientAbortController.abort(errPayload);
 
-      responseWriter.close();
+      resWriter.close();
     };
     this.transport.addEventListener('sessionStatus', onSessionStatus);
 
@@ -283,7 +283,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       if (isStreamCloseRequest(msg.controlFlags)) {
-        responseWriter.triggerCloseRequest();
+        resWriter.triggerCloseRequest();
       }
 
       if (isStreamAbortBackwardsCompat(msg.controlFlags, protocolVersion)) {
@@ -306,19 +306,19 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           });
         }
 
-        if (!requestReader.isClosed()) {
-          requestReader.pushValue(abortResult);
-          requestReader.triggerClose();
+        if (!reqReader.isClosed()) {
+          reqReader.pushValue(abortResult);
+          reqReader.triggerClose();
         }
 
-        responseWriter.close();
+        resWriter.close();
 
         clientAbortController.abort(abortResult.payload);
 
         return;
       }
 
-      if (requestReader.isClosed()) {
+      if (reqReader.isClosed()) {
         this.log?.warn('Received message after input stream is closed', {
           ...loggingMetadata,
           clientId: this.transport.clientId,
@@ -336,17 +336,22 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         return;
       }
 
-      if ('input' in procedure && Value.Check(procedure.input, msg.payload)) {
-        requestReader.pushValue(Ok(msg.payload));
+      if (
+        'requestData' in procedure &&
+        Value.Check(procedure.requestData, msg.payload)
+      ) {
+        reqReader.pushValue(Ok(msg.payload));
       } else if (!Value.Check(ControlMessagePayloadSchema, msg.payload)) {
         const validationErrors = [
           ...Value.Errors(ControlMessagePayloadSchema, msg.payload),
         ];
         let errMessage = 'Expected control payload for procedure with no input';
-        if ('input' in procedure) {
+        if ('requestData' in procedure) {
           errMessage =
             'Expected either control or input payload, validation failed for both';
-          validationErrors.push(...Value.Errors(procedure.input, msg.payload));
+          validationErrors.push(
+            ...Value.Errors(procedure.responseData, msg.payload),
+          );
         }
 
         this.log?.warn(errMessage, {
@@ -366,7 +371,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       if (isStreamCloseBackwardsCompat(msg.controlFlags, protocolVersion)) {
-        requestReader.triggerClose();
+        reqReader.triggerClose();
       }
     };
     this.transport.addEventListener('message', onMessage);
@@ -391,32 +396,32 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     const procClosesWithResponse =
       procedure.type === 'rpc' || procedure.type === 'upload';
 
-    const requestReader = new ReadStreamImpl<
+    const reqReader = new ReadStreamImpl<
       Static<PayloadType>,
       Static<typeof RequestReaderErrorSchema>
     >(() => {
       this.transport.send(from, requestCloseStreamMessage(streamId));
     });
-    requestReader.onClose(() => {
+    reqReader.onClose(() => {
       // TODO remove once clients migrate to v2
       if (protocolVersion === 'v1.1') {
         // in v1.1 a close in either direction should close everything
         // for upload/rpc it will handle the close after it responds
-        if (!procClosesWithResponse && !responseWriter.isClosed()) {
-          responseWriter.close();
+        if (!procClosesWithResponse && !resWriter.isClosed()) {
+          resWriter.close();
         }
       }
 
-      if (responseWriter.isClosed()) {
+      if (resWriter.isClosed()) {
         cleanup();
       }
     });
 
-    if (passInitAsInputForBackwardsCompat) {
-      requestReader.pushValue(Ok(initPayload));
+    if (passInitAsDataForBackwardsCompat) {
+      reqReader.pushValue(Ok(initPayload));
     }
 
-    const responseWriter = new WriteStreamImpl<
+    const resWriter = new WriteStreamImpl<
       Result<Static<PayloadType>, Static<ProcedureErrorSchemaType>>
     >((response) => {
       this.transport.send(from, {
@@ -427,7 +432,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         payload: response,
       });
     });
-    responseWriter.onClose(() => {
+    resWriter.onClose(() => {
       if (!procClosesWithResponse && cleanClose) {
         // we ended, send a close bit back to the client
         // also, if the client has disconnected, we don't need to send a close
@@ -442,12 +447,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       // TODO remove once clients migrate to v2
       if (protocolVersion === 'v1.1') {
         // in v1.1 a close in either direction should close everything
-        if (!requestReader.isClosed()) {
-          requestReader.triggerClose();
+        if (!reqReader.isClosed()) {
+          reqReader.triggerClose();
         }
       }
 
-      if (requestReader.isClosed()) {
+      if (reqReader.isClosed()) {
         cleanup();
       }
     });
@@ -467,7 +472,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     };
 
     if (isStreamCloseBackwardsCompat(controlFlags, protocolVersion)) {
-      requestReader.triggerClose();
+      reqReader.triggerClose();
     } else if (procedure.type === 'rpc' || procedure.type === 'subscription') {
       // Though things can work just fine if they eventually follow up with a stream
       // control message with a close bit set, it's an unusual client implementation!
@@ -485,7 +490,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       abortController: handlerAbortController,
       clientAbortSignal: clientAbortController.signal,
       onRequestFinished: (cb) => {
-        if (requestReader.isClosed() && responseWriter.isClosed()) {
+        if (reqReader.isClosed() && resWriter.isClosed()) {
           // Everything already closed, call cleanup immediately.
           try {
             cb();
@@ -514,16 +519,16 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               // which would lead to us holding on to the closure forever
               const outputMessage = await procedure.handler({
                 ctx: serviceContextWithTransportInfo,
-                requestInit: initPayload,
+                reqInit: initPayload,
               });
 
-              if (responseWriter.isClosed()) {
+              if (resWriter.isClosed()) {
                 // A disconnect happened
                 return;
               }
 
-              responseWriter.write(outputMessage);
-              responseWriter.close();
+              resWriter.write(outputMessage);
+              resWriter.close();
             } catch (err) {
               onHandlerError(err, span);
             } finally {
@@ -545,9 +550,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               // which would lead to us holding on to the closure forever
               await procedure.handler({
                 ctx: serviceContextWithTransportInfo,
-                requestInit: initPayload,
-                requestReader,
-                responseWriter,
+                reqInit: initPayload,
+                reqReader,
+                resWriter,
               });
             } catch (err) {
               onHandlerError(err, span);
@@ -571,10 +576,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               // which would lead to us holding on to the closure forever
               await procedure.handler({
                 ctx: serviceContextWithTransportInfo,
-                requestInit: passInitAsInputForBackwardsCompat
-                  ? {}
-                  : initPayload,
-                responseWriter,
+                reqInit: passInitAsDataForBackwardsCompat ? {} : initPayload,
+                resWriter,
               });
             } catch (err) {
               onHandlerError(err, span);
@@ -597,18 +600,16 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               // which would lead to us holding on to the closure forever
               const outputMessage = await procedure.handler({
                 ctx: serviceContextWithTransportInfo,
-                requestInit: passInitAsInputForBackwardsCompat
-                  ? {}
-                  : initPayload,
-                requestReader,
+                reqInit: passInitAsDataForBackwardsCompat ? {} : initPayload,
+                reqReader,
               });
 
-              if (responseWriter.isClosed()) {
+              if (resWriter.isClosed()) {
                 // A disconnect happened
                 return;
               }
-              responseWriter.write(outputMessage);
-              responseWriter.close();
+              resWriter.write(outputMessage);
+              resWriter.close();
             } catch (err) {
               onHandlerError(err, span);
             } finally {
@@ -801,12 +802,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
     const procedure = service.procedures[initMessage.procedureName];
 
-    let passInitAsInputForBackwardsCompat = false;
+    let passInitAsDataForBackwardsCompat = false;
     if (
       session.protocolVersion === 'v1.1' &&
       (procedure.type === 'upload' || procedure.type === 'stream') &&
-      Value.Check(procedure.input, initMessage.payload) &&
-      Value.Check(procedure.init, {})
+      Value.Check(procedure.requestData, initMessage.payload) &&
+      Value.Check(procedure.requestInit, {})
     ) {
       // TODO remove once clients migrate to v2
       // In v1.1 sometimes the first message is not `init`, but instead it's the `input`
@@ -815,8 +816,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       // The reason we don't check if `init` is satisified here is because false positives
       // are easy to hit, we'll err on the side of caution and treat it as an input, servers
       // that expect v1.1 clients should handle this case themselves.
-      passInitAsInputForBackwardsCompat = true;
-    } else if (!Value.Check(procedure.init, initMessage.payload)) {
+      passInitAsDataForBackwardsCompat = true;
+    } else if (!Value.Check(procedure.requestInit, initMessage.payload)) {
       const errMessage = `procedure init failed validation`;
       this.log?.warn(errMessage, {
         ...session.loggingMetadata,
@@ -854,7 +855,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       from: initMessage.from,
       sessionId: session.id,
       protocolVersion: session.protocolVersion,
-      passInitAsInputForBackwardsCompat,
+      passInitAsDataForBackwardsCompat,
     };
   }
 

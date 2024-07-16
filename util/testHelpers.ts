@@ -214,7 +214,7 @@ export function asClientRpc<
     return proc
       .handler({
         ctx: dummyCtx(state, session, extendedContext),
-        requestInit: msg,
+        reqInit: msg,
       })
       .catch(catchProcError);
   };
@@ -293,12 +293,12 @@ export function asClientStream<
 >(
   state: State,
   proc: Procedure<State, 'stream', Init, Input, Output, Err>,
-  init?: Static<Init>,
+  reqInit?: Static<Init>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ): {
-  requestWriter: WriteStream<Static<Input>>;
-  responseReader: ReadStream<Static<Output>, Static<Err>>;
+  reqWriter: WriteStream<Static<Input>>;
+  resReader: ReadStream<Static<Output>, Static<Err>>;
 } {
   const requestPipe = createRequestPipe<Input>();
   const responsePipe = createResponsePipe<Output, Err>();
@@ -306,15 +306,15 @@ export function asClientStream<
   void proc
     .handler({
       ctx: dummyCtx(state, session, extendedContext),
-      requestInit: init ?? {},
-      requestReader: requestPipe.reader,
-      responseWriter: responsePipe.writer,
+      reqInit: reqInit ?? {},
+      reqReader: requestPipe.reader,
+      resWriter: responsePipe.writer,
     })
     .catch((err: unknown) => responsePipe.writer.write(catchProcError(err)));
 
   return {
-    requestWriter: requestPipe.writer,
-    responseReader: responsePipe.reader,
+    reqWriter: requestPipe.writer,
+    resReader: responsePipe.reader,
   };
 }
 
@@ -329,7 +329,7 @@ export function asClientSubscription<
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ): (msg: Static<Init>) => {
-  responseReader: ReadStream<Static<Output>, Static<Err>>;
+  resReader: ReadStream<Static<Output>, Static<Err>>;
 } {
   const responsePipe = createResponsePipe<Output, Err>();
 
@@ -337,12 +337,12 @@ export function asClientSubscription<
     void proc
       .handler({
         ctx: dummyCtx(state, session, extendedContext),
-        requestInit: msg,
-        responseWriter: responsePipe.writer,
+        reqInit: msg,
+        resWriter: responsePipe.writer,
       })
       .catch((err: unknown) => responsePipe.writer.write(catchProcError(err)));
 
-    return { responseReader: responsePipe.reader };
+    return { resReader: responsePipe.reader };
   };
 }
 
@@ -355,7 +355,7 @@ export function asClientUpload<
 >(
   state: State,
   proc: Procedure<State, 'upload', Init, Input, Output, Err>,
-  init?: Static<Init>,
+  reqInit?: Static<Init>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ): [
@@ -366,8 +366,8 @@ export function asClientUpload<
   const result = proc
     .handler({
       ctx: dummyCtx(state, session, extendedContext),
-      requestInit: init ?? {},
-      requestReader: requestPipe.reader,
+      reqInit: reqInit ?? {},
+      reqReader: requestPipe.reader,
     })
     .catch(catchProcError);
 

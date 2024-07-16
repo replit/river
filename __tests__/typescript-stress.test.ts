@@ -20,12 +20,14 @@ import {
   createServerHandshakeOptions,
 } from '../router/handshake';
 
-const input = Type.Union([
+const requestData = Type.Union([
   Type.Object({ a: Type.Number() }),
   Type.Object({ c: Type.String() }),
 ]);
-const output = Type.Object({ b: Type.Union([Type.Number(), Type.String()]) });
-const errors = Type.Union([
+const responseData = Type.Object({
+  b: Type.Union([Type.Number(), Type.String()]),
+});
+const responseError = Type.Union([
   Type.Object({
     code: Type.Literal('ERROR1'),
     message: Type.String(),
@@ -38,18 +40,18 @@ const errors = Type.Union([
 
 const fnBody = Procedure.rpc<
   Record<string, never>,
-  typeof input,
-  typeof output,
-  typeof errors
+  typeof requestData,
+  typeof responseData,
+  typeof responseError
 >({
-  init: input,
-  output,
-  errors,
-  async handler({ requestInit }) {
-    if ('c' in requestInit) {
-      return Ok({ b: requestInit.c });
+  requestInit: requestData,
+  responseData,
+  responseError,
+  async handler({ reqInit }) {
+    if ('c' in reqInit) {
+      return Ok({ b: reqInit.c });
     } else {
-      return Ok({ b: requestInit.a });
+      return Ok({ b: reqInit.a });
     }
   },
 });
@@ -211,31 +213,31 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
 const services = {
   test: ServiceSchema.define({
     rpc: Procedure.rpc({
-      init: Type.Object({ n: Type.Number() }),
-      output: Type.Object({ n: Type.Number() }),
-      async handler({ requestInit: { n } }) {
+      requestInit: Type.Object({ n: Type.Number() }),
+      responseData: Type.Object({ n: Type.Number() }),
+      async handler({ reqInit: { n } }) {
         return Ok({ n });
       },
     }),
     stream: Procedure.stream({
-      init: Type.Object({}),
-      input: Type.Object({ n: Type.Number() }),
-      output: Type.Object({ n: Type.Number() }),
-      async handler({ responseWriter }) {
-        responseWriter.write(Ok({ n: 1 }));
+      requestInit: Type.Object({}),
+      requestData: Type.Object({ n: Type.Number() }),
+      responseData: Type.Object({ n: Type.Number() }),
+      async handler({ resWriter }) {
+        resWriter.write(Ok({ n: 1 }));
       },
     }),
     subscription: Procedure.subscription({
-      init: Type.Object({ n: Type.Number() }),
-      output: Type.Object({ n: Type.Number() }),
-      async handler({ responseWriter }) {
-        responseWriter.write(Ok({ n: 1 }));
+      requestInit: Type.Object({ n: Type.Number() }),
+      responseData: Type.Object({ n: Type.Number() }),
+      async handler({ resWriter }) {
+        resWriter.write(Ok({ n: 1 }));
       },
     }),
     upload: Procedure.upload({
-      init: Type.Object({}),
-      input: Type.Object({ n: Type.Number() }),
-      output: Type.Object({ n: Type.Number() }),
+      requestInit: Type.Object({}),
+      requestData: Type.Object({ n: Type.Number() }),
+      responseData: Type.Object({ n: Type.Number() }),
       async handler() {
         return Ok({ n: 1 });
       },
@@ -269,8 +271,8 @@ describe('Output<> type', () => {
     }
 
     // Then
-    const { responseReader } = client.test.stream.stream({});
-    void iterNext(getIteratorFromStream(responseReader))
+    const { resReader } = client.test.stream.stream({});
+    void iterNext(getIteratorFromStream(resReader))
       .then(unwrap)
       .then(acceptOutput);
     expect(client).toBeTruthy();
@@ -285,8 +287,8 @@ describe('Output<> type', () => {
     }
 
     // Then
-    const { responseReader } = client.test.subscription.subscribe({ n: 1 });
-    void iterNext(getIteratorFromStream(responseReader))
+    const { resReader } = client.test.subscription.subscribe({ n: 1 });
+    void iterNext(getIteratorFromStream(resReader))
       .then(unwrap)
       .then(acceptOutput);
 

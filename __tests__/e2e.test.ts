@@ -160,14 +160,14 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { requestWriter, responseReader } = client.test.echo.stream({});
-      const outputIterator = getIteratorFromStream(responseReader);
+      const { reqWriter, resReader } = client.test.echo.stream({});
+      const outputIterator = getIteratorFromStream(resReader);
 
-      requestWriter.write({ msg: 'abc', ignore: false });
-      requestWriter.write({ msg: 'def', ignore: true });
-      requestWriter.write({ msg: 'ghi', ignore: false });
-      requestWriter.write({ msg: 'end', ignore: false });
-      requestWriter.close();
+      reqWriter.write({ msg: 'abc', ignore: false });
+      reqWriter.write({ msg: 'def', ignore: true });
+      reqWriter.write({ msg: 'ghi', ignore: false });
+      reqWriter.write({ msg: 'end', ignore: false });
+      reqWriter.close();
 
       const result1 = await iterNext(outputIterator);
       expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
@@ -204,10 +204,10 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { requestWriter, responseReader } = client.test.echo.stream({});
-      requestWriter.close();
+      const { reqWriter, resReader } = client.test.echo.stream({});
+      reqWriter.close();
 
-      const result = await getIteratorFromStream(responseReader).next();
+      const result = await getIteratorFromStream(resReader).next();
       expect(result).toStrictEqual({ done: true, value: undefined });
 
       await testFinishesCleanly({
@@ -232,15 +232,14 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { requestWriter, responseReader } =
-        client.test.echoWithPrefix.stream({
-          prefix: 'test',
-        });
-      const outputIterator = getIteratorFromStream(responseReader);
-      requestWriter.write({ msg: 'abc', ignore: false });
-      requestWriter.write({ msg: 'def', ignore: true });
-      requestWriter.write({ msg: 'ghi', ignore: false });
-      requestWriter.close();
+      const { reqWriter, resReader } = client.test.echoWithPrefix.stream({
+        prefix: 'test',
+      });
+      const outputIterator = getIteratorFromStream(resReader);
+      reqWriter.write({ msg: 'abc', ignore: false });
+      reqWriter.write({ msg: 'def', ignore: true });
+      reqWriter.write({ msg: 'ghi', ignore: false });
+      reqWriter.close();
 
       const result1 = await iterNext(outputIterator);
       expect(result1).toStrictEqual({
@@ -254,7 +253,7 @@ describe.each(testMatrix())(
         payload: { response: 'test ghi' },
       });
 
-      await responseReader.requestClose();
+      await resReader.requestClose();
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -280,9 +279,9 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { requestWriter, responseReader } = client.fallible.echo.stream({});
-      const outputIterator = getIteratorFromStream(responseReader);
-      requestWriter.write({
+      const { reqWriter, resReader } = client.fallible.echo.stream({});
+      const outputIterator = getIteratorFromStream(resReader);
+      reqWriter.write({
         msg: 'abc',
         throwResult: false,
         throwError: false,
@@ -290,14 +289,14 @@ describe.each(testMatrix())(
       const result1 = await iterNext(outputIterator);
       expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
-      requestWriter.write({ msg: 'def', throwResult: true, throwError: false });
+      reqWriter.write({ msg: 'def', throwResult: true, throwError: false });
       const result2 = await iterNext(outputIterator);
       expect(result2).toMatchObject({
         ok: false,
         payload: { code: STREAM_ERROR },
       });
 
-      requestWriter.write({ msg: 'ghi', throwResult: false, throwError: true });
+      reqWriter.write({ msg: 'ghi', throwResult: false, throwError: true });
       const result3 = await iterNext(outputIterator);
       expect(result3).toStrictEqual({
         ok: false,
@@ -307,7 +306,7 @@ describe.each(testMatrix())(
         },
       });
 
-      requestWriter.close();
+      reqWriter.close();
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -332,8 +331,8 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { responseReader } = client.subscribable.value.subscribe({});
-      const outputIterator = getIteratorFromStream(responseReader);
+      const { resReader } = client.subscribable.value.subscribe({});
+      const outputIterator = getIteratorFromStream(resReader);
       let result = await iterNext(outputIterator);
       expect(result).toStrictEqual({ ok: true, payload: { result: 0 } });
 
@@ -349,7 +348,7 @@ describe.each(testMatrix())(
       result = await iterNext(outputIterator);
       expect(result).toStrictEqual({ ok: true, payload: { result: 4 } });
 
-      await responseReader.requestClose();
+      await resReader.requestClose();
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -375,11 +374,9 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { requestWriter, finalize } = client.uploadable.addMultiple.upload(
-        {},
-      );
-      requestWriter.write({ n: 1 });
-      requestWriter.write({ n: 2 });
+      const { reqWriter, finalize } = client.uploadable.addMultiple.upload({});
+      reqWriter.write({ n: 1 });
+      reqWriter.write({ n: 2 });
 
       const result = await finalize();
       expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
@@ -408,10 +405,8 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { requestWriter, finalize } = client.uploadable.addMultiple.upload(
-        {},
-      );
-      requestWriter.close();
+      const { reqWriter, finalize } = client.uploadable.addMultiple.upload({});
+      reqWriter.close();
       const result = await finalize();
       expect(result).toStrictEqual({ ok: true, payload: { result: 0 } });
 
@@ -439,13 +434,13 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { requestWriter, finalize } =
+      const { reqWriter, finalize } =
         client.uploadable.addMultipleWithPrefix.upload({
           prefix: 'test',
         });
-      requestWriter.write({ n: 1 });
-      requestWriter.write({ n: 2 });
-      requestWriter.close();
+      reqWriter.write({ n: 1 });
+      reqWriter.write({ n: 2 });
+      reqWriter.close();
 
       const result = await finalize();
       expect(result).toStrictEqual({ ok: true, payload: { result: 'test 3' } });
@@ -559,15 +554,15 @@ describe.each(testMatrix())(
       const openStreams = [];
       for (let i = 0; i < CONCURRENCY; i++) {
         const streamHandle = client.test.echo.stream({});
-        const { requestWriter } = streamHandle;
-        requestWriter.write({ msg: `${i}-1`, ignore: false });
-        requestWriter.write({ msg: `${i}-2`, ignore: false });
+        const { reqWriter } = streamHandle;
+        reqWriter.write({ msg: `${i}-1`, ignore: false });
+        reqWriter.write({ msg: `${i}-2`, ignore: false });
         openStreams.push(streamHandle);
       }
 
       for (let i = 0; i < CONCURRENCY; i++) {
-        const { responseReader } = openStreams[i];
-        const outputIterator = getIteratorFromStream(responseReader);
+        const { resReader } = openStreams[i];
+        const outputIterator = getIteratorFromStream(resReader);
         const result1 = await iterNext(outputIterator);
         expect(result1).toStrictEqual({
           ok: true,
@@ -583,9 +578,9 @@ describe.each(testMatrix())(
 
       // cleanup
       for (let i = 0; i < CONCURRENCY; i++) {
-        const { requestWriter, responseReader } = openStreams[i];
-        requestWriter.close();
-        await responseReader.requestClose();
+        const { reqWriter, resReader } = openStreams[i];
+        reqWriter.close();
+        await resReader.requestClose();
       }
 
       await testFinishesCleanly({
@@ -772,8 +767,8 @@ describe.each(testMatrix())(
       const services = {
         test: ServiceSchema.define({
           getData: Procedure.rpc({
-            init: Type.Object({}),
-            output: Type.Object({
+            requestInit: Type.Object({}),
+            responseData: Type.Object({
               data: Type.String(),
               extra: Type.Number(),
             }),

@@ -39,8 +39,8 @@ describe('should handle incompatabilities', async () => {
     const services = {
       testservice: ServiceSchema.define({
         testrpc: Procedure.rpc({
-          init: Type.Object({}),
-          output: Type.String(),
+          requestInit: Type.Object({}),
+          responseData: Type.String(),
           handler: async ({ ctx }) => {
             return Ok((ctx as unknown as typeof extendedContext).testctx);
           },
@@ -79,8 +79,8 @@ describe('should handle incompatabilities', async () => {
       testservice: TestServiceScaffold.finalize({
         ...TestServiceScaffold.procedures({
           testrpc: Procedure.rpc({
-            init: Type.Object({}),
-            output: Type.String(),
+            requestInit: Type.Object({}),
+            responseData: Type.String(),
             handler: async ({ ctx }) => {
               return Ok(ctx.state.fromctx);
             },

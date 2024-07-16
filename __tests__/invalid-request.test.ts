@@ -46,9 +46,9 @@ describe('aborts invalid request', () => {
     const services = {
       service: ServiceSchema.define({
         stream: Procedure.stream({
-          init: Type.Object({}),
-          input: Type.Object({}),
-          output: Type.Object({}),
+          requestInit: Type.Object({}),
+          requestData: Type.Object({}),
+          responseData: Type.Object({}),
           handler: async () => undefined,
         }),
       }),
@@ -98,9 +98,9 @@ describe('aborts invalid request', () => {
     const services = {
       service: ServiceSchema.define({
         stream: Procedure.stream({
-          init: Type.Object({}),
-          input: Type.Object({}),
-          output: Type.Object({}),
+          requestInit: Type.Object({}),
+          requestData: Type.Object({}),
+          responseData: Type.Object({}),
           handler: async () => undefined,
         }),
       }),
@@ -149,9 +149,9 @@ describe('aborts invalid request', () => {
     const services = {
       service: ServiceSchema.define({
         stream: Procedure.stream({
-          init: Type.Object({}),
-          input: Type.Object({}),
-          output: Type.Object({}),
+          requestInit: Type.Object({}),
+          requestData: Type.Object({}),
+          responseData: Type.Object({}),
           handler: async () => undefined,
         }),
       }),
@@ -200,9 +200,9 @@ describe('aborts invalid request', () => {
     const services = {
       service: ServiceSchema.define({
         stream: Procedure.stream({
-          init: Type.Object({}),
-          input: Type.Object({}),
-          output: Type.Object({}),
+          requestInit: Type.Object({}),
+          requestData: Type.Object({}),
+          responseData: Type.Object({}),
           handler: async () => undefined,
         }),
       }),
@@ -252,9 +252,9 @@ describe('aborts invalid request', () => {
     const services = {
       service: ServiceSchema.define({
         stream: Procedure.stream({
-          init: Type.Object({}),
-          input: Type.Object({}),
-          output: Type.Object({}),
+          requestInit: Type.Object({}),
+          requestData: Type.Object({}),
+          responseData: Type.Object({}),
           handler: async () => undefined,
         }),
       }),
@@ -306,9 +306,9 @@ describe('aborts invalid request', () => {
     const services = {
       service: ServiceSchema.define({
         stream: Procedure.stream({
-          init: Type.Object({ mustSendThings: Type.String() }),
-          input: Type.Object({}),
-          output: Type.Object({}),
+          requestInit: Type.Object({ mustSendThings: Type.String() }),
+          requestData: Type.Object({}),
+          responseData: Type.Object({}),
           handler: async () => undefined,
         }),
       }),
@@ -358,9 +358,9 @@ describe('aborts invalid request', () => {
     const services = {
       service: ServiceSchema.define({
         stream: Procedure.stream({
-          init: Type.Object({}),
-          input: Type.Object({ mustSendThings: Type.String() }),
-          output: Type.Object({}),
+          requestInit: Type.Object({}),
+          requestData: Type.Object({ mustSendThings: Type.String() }),
+          responseData: Type.Object({}),
           handler: async () => undefined,
         }),
       }),
@@ -420,8 +420,8 @@ describe('aborts invalid request', () => {
     const services = {
       service: ServiceSchema.define({
         rpc: Procedure.rpc({
-          init: Type.Object({}),
-          output: Type.Object({}),
+          requestInit: Type.Object({}),
+          responseData: Type.Object({}),
           handler: async () => ({ ok: true, payload: {} }),
         }),
       }),
@@ -479,9 +479,9 @@ describe('aborts invalid request', () => {
     const services = {
       service: ServiceSchema.define({
         stream: Procedure.stream({
-          init: Type.Object({}),
-          input: Type.Object({}),
-          output: Type.Object({}),
+          requestInit: Type.Object({}),
+          requestData: Type.Object({}),
+          responseData: Type.Object({}),
           handler: async () => undefined,
         }),
       }),
@@ -545,14 +545,14 @@ describe('aborts invalid request', () => {
     const services = {
       service: ServiceSchema.define({
         rpc: Procedure.rpc({
-          init: Type.Object({}),
-          output: Type.Object({}),
+          requestInit: Type.Object({}),
+          responseData: Type.Object({}),
           handler: async () => ({ ok: true, payload: {} }),
         }),
         stream: Procedure.stream({
-          init: Type.Object({}),
-          input: Type.Object({ oldField: Type.String() }),
-          output: Type.Object({}),
+          requestInit: Type.Object({}),
+          requestData: Type.Object({ oldField: Type.String() }),
+          responseData: Type.Object({}),
           handler: async () => undefined,
         }),
       }),
@@ -576,14 +576,14 @@ describe('aborts invalid request', () => {
     });
 
     // @ts-expect-error monkey-patched incompatible change :D
-    services.service.procedures.stream.input = Type.Object({
+    services.service.procedures.stream.requestData = Type.Object({
       newRequiredField: Type.String(),
     });
 
-    const { requestWriter, responseReader } = client.service.stream.stream({});
+    const { reqWriter, resReader } = client.service.stream.stream({});
 
-    requestWriter.write({ oldField: 'heyyo' });
-    expect(await responseReader.asArray()).toEqual([
+    reqWriter.write({ oldField: 'heyyo' });
+    expect(await resReader.asArray()).toEqual([
       {
         ok: false,
         payload: {
@@ -607,9 +607,9 @@ describe('aborts invalid request', () => {
       const services = {
         service: ServiceSchema.define({
           stream: Procedure.stream({
-            init: Type.Object({}),
-            input: Type.Object({}),
-            output: Type.Object({}),
+            requestInit: Type.Object({}),
+            requestData: Type.Object({}),
+            responseData: Type.Object({}),
             handler: async () => undefined,
           }),
         }),
@@ -692,9 +692,9 @@ describe('aborts invalid request', () => {
       const services = {
         service: ServiceSchema.define({
           stream: Procedure.stream({
-            init: Type.Object({}),
-            input: Type.Object({}),
-            output: Type.Object({}),
+            requestInit: Type.Object({}),
+            requestData: Type.Object({}),
+            responseData: Type.Object({}),
             handler: async () => undefined,
           }),
         }),
@@ -793,9 +793,9 @@ describe('aborts invalid request', () => {
       const services = {
         service: ServiceSchema.define({
           stream: Procedure.stream({
-            init: Type.Object({}),
-            input: Type.Object({}),
-            output: Type.Object({}),
+            requestInit: Type.Object({}),
+            requestData: Type.Object({}),
+            responseData: Type.Object({}),
             handler: async () => undefined,
           }),
         }),

@@ -92,8 +92,8 @@ export const ExampleService = ServiceSchema.define(
   // procedures
   {
     add: Procedure.rpc({
-      input: Type.Object({ n: Type.Number() }),
-      output: Type.Object({ result: Type.Number() }),
+      requestData: Type.Object({ n: Type.Number() }),
+      responseData: Type.Object({ result: Type.Number() }),
       errors: Type.Never(),
       // note that a handler is unique per user RPC
       async handler(ctx, { n }) {

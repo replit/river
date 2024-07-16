@@ -101,10 +101,10 @@ describe.each(testMatrix())(
       });
 
       // start procedure
-      const { requestWriter, responseReader } = client.test.echo.stream({});
-      const outputIterator = getIteratorFromStream(responseReader);
+      const { reqWriter, resReader } = client.test.echo.stream({});
+      const outputIterator = getIteratorFromStream(resReader);
 
-      requestWriter.write({ msg: 'abc', ignore: false });
+      reqWriter.write({ msg: 'abc', ignore: false });
       const result = await iterNext(outputIterator);
       assert(result.ok);
 
@@ -165,7 +165,7 @@ describe.each(testMatrix())(
 
       // start procedure
       // client1 and client2 both subscribe
-      const { responseReader: responseReader1 } =
+      const { resReader: responseReader1 } =
         client1.subscribable.value.subscribe({});
       const outputIterator1 = getIteratorFromStream(responseReader1);
       let result = await iterNext(outputIterator1);
@@ -174,7 +174,7 @@ describe.each(testMatrix())(
         payload: { result: 0 },
       });
 
-      const { responseReader: responseReader2 } =
+      const { resReader: responseReader2 } =
         client2.subscribable.value.subscribe({});
       const outputIterator2 = getIteratorFromStream(responseReader2);
       result = await iterNext(outputIterator2);
@@ -262,11 +262,9 @@ describe.each(testMatrix())(
       });
 
       // start procedure
-      const { requestWriter, finalize } = client.uploadable.addMultiple.upload(
-        {},
-      );
-      requestWriter.write({ n: 1 });
-      requestWriter.write({ n: 2 });
+      const { reqWriter, finalize } = client.uploadable.addMultiple.upload({});
+      reqWriter.write({ n: 1 });
+      reqWriter.write({ n: 2 });
       // end procedure
 
       // need to wait for connection to be established

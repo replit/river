@@ -201,11 +201,11 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const { requestWriter, responseReader } = client.test.echo.stream({});
-      requestWriter.write({ msg: '1', ignore: false });
-      requestWriter.write({ msg: '2', ignore: false });
+      const { reqWriter, resReader } = client.test.echo.stream({});
+      reqWriter.write({ msg: '1', ignore: false });
+      reqWriter.write({ msg: '2', ignore: false });
 
-      const outputIterator = getIteratorFromStream(responseReader);
+      const outputIterator = getIteratorFromStream(resReader);
       const result1 = await iterNext(outputIterator);
       expect(result1).toStrictEqual({
         ok: true,
@@ -213,9 +213,9 @@ describe.each(testMatrix())(
       });
 
       // ensure we only have one stream despite pushing multiple messages.
-      requestWriter.close();
+      reqWriter.close();
       await waitFor(() => expect(server.openStreams.size).toEqual(1));
-      await responseReader.requestClose();
+      await resReader.requestClose();
       // ensure we no longer have any open streams since the input was closed.
       await waitFor(() => expect(server.openStreams.size).toEqual(0));
 
@@ -272,8 +272,8 @@ describe.each(testMatrix())(
 
       // start procedure
 
-      const { responseReader } = client.subscribable.value.subscribe({});
-      const outputIterator = getIteratorFromStream(responseReader);
+      const { resReader } = client.subscribable.value.subscribe({});
+      const outputIterator = getIteratorFromStream(resReader);
       let result = await iterNext(outputIterator);
       expect(result).toStrictEqual({
         ok: true,
@@ -288,7 +288,7 @@ describe.each(testMatrix())(
         payload: { result: 1 },
       });
 
-      await responseReader.requestClose();
+      await resReader.requestClose();
       // end procedure
 
       // number of message handlers shouldn't increase after subscription ends
@@ -337,12 +337,10 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const { requestWriter, finalize } = client.uploadable.addMultiple.upload(
-        {},
-      );
-      requestWriter.write({ n: 1 });
-      requestWriter.write({ n: 2 });
-      requestWriter.close();
+      const { reqWriter, finalize } = client.uploadable.addMultiple.upload({});
+      reqWriter.write({ n: 1 });
+      reqWriter.write({ n: 2 });
+      reqWriter.close();
 
       const result = await finalize();
       expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
@@ -383,10 +381,10 @@ describe.each(testMatrix())(
       });
 
       // start a stream
-      const { requestWriter, responseReader } = client.test.echo.stream({});
-      requestWriter.write({ msg: '1', ignore: false });
+      const { reqWriter, resReader } = client.test.echo.stream({});
+      reqWriter.write({ msg: '1', ignore: false });
 
-      const outputIterator = getIteratorFromStream(responseReader);
+      const outputIterator = getIteratorFromStream(resReader);
       const result1 = await iterNext(outputIterator);
       expect(result1).toStrictEqual({ ok: true, payload: { response: '1' } });
 
@@ -404,7 +402,7 @@ describe.each(testMatrix())(
 
       // push on the old stream and make sure its not sent
 
-      expect(() => requestWriter.write({ msg: '2', ignore: false })).toThrow();
+      expect(() => reqWriter.write({ msg: '2', ignore: false })).toThrow();
       const result2 = await iterNext(outputIterator);
       expect(result2).toMatchObject({ ok: false });
 
@@ -451,13 +449,13 @@ describe('handler registered cleanups', async () => {
       [serviceName]: ServiceSchema.define({
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any
         [procedureType]: (Procedure[procedureType] as any)({
-          init: Type.Object({}),
+          requestInit: Type.Object({}),
           ...(procedureType === 'stream' || procedureType === 'upload'
             ? {
-                input: Type.Object({}),
+                requestData: Type.Object({}),
               }
             : {}),
-          output: Type.Object({}),
+          responseData: Type.Object({}),
           async handler({ ctx }: { ctx: ProcedureHandlerContext<object> }) {
             handler(ctx);
 

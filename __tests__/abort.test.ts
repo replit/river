@@ -51,8 +51,8 @@ describe.each(testMatrix())(
         const services = {
           service: ServiceSchema.define({
             rpc: Procedure.rpc({
-              init: Type.Object({}),
-              output: Type.Object({}),
+              requestInit: Type.Object({}),
+              responseData: Type.Object({}),
               async handler() {
                 throw new Error('unimplemented');
               },
@@ -117,9 +117,9 @@ describe.each(testMatrix())(
         const services = {
           service: ServiceSchema.define({
             upload: Procedure.upload({
-              init: Type.Object({}),
-              input: Type.Object({}),
-              output: Type.Object({}),
+              requestInit: Type.Object({}),
+              requestData: Type.Object({}),
+              responseData: Type.Object({}),
               async handler() {
                 throw new Error('unimplemented');
               },
@@ -139,7 +139,7 @@ describe.each(testMatrix())(
 
         const abortController = new AbortController();
         const signal = abortController.signal;
-        const { requestWriter, finalize } = client.service.upload.upload(
+        const { reqWriter, finalize } = client.service.upload.upload(
           {},
           { signal },
         );
@@ -150,7 +150,7 @@ describe.each(testMatrix())(
 
         abortController.abort();
 
-        expect(requestWriter.isClosed());
+        expect(reqWriter.isClosed());
         await expect(finalize()).resolves.toEqual({
           ok: false,
           payload: {
@@ -188,8 +188,8 @@ describe.each(testMatrix())(
         const services = {
           service: ServiceSchema.define({
             subscribe: Procedure.subscription({
-              init: Type.Object({}),
-              output: Type.Object({}),
+              requestInit: Type.Object({}),
+              responseData: Type.Object({}),
               async handler() {
                 throw new Error('unimplemented');
               },
@@ -209,7 +209,7 @@ describe.each(testMatrix())(
 
         const abortController = new AbortController();
         const signal = abortController.signal;
-        const { responseReader } = client.service.subscribe.subscribe(
+        const { resReader } = client.service.subscribe.subscribe(
           {},
           { signal },
         );
@@ -220,8 +220,8 @@ describe.each(testMatrix())(
 
         abortController.abort();
 
-        expect(responseReader.isClosed());
-        await expect(responseReader.asArray()).resolves.toEqual([
+        expect(resReader.isClosed());
+        await expect(resReader.asArray()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -260,9 +260,9 @@ describe.each(testMatrix())(
         const services = {
           service: ServiceSchema.define({
             stream: Procedure.stream({
-              init: Type.Object({}),
-              input: Type.Object({}),
-              output: Type.Object({}),
+              requestInit: Type.Object({}),
+              requestData: Type.Object({}),
+              responseData: Type.Object({}),
               async handler() {
                 throw new Error('unimplemented');
               },
@@ -282,7 +282,7 @@ describe.each(testMatrix())(
 
         const abortController = new AbortController();
         const signal = abortController.signal;
-        const { requestWriter, responseReader } = client.service.stream.stream(
+        const { reqWriter, resReader } = client.service.stream.stream(
           {},
           { signal },
         );
@@ -293,9 +293,9 @@ describe.each(testMatrix())(
 
         abortController.abort();
 
-        expect(responseReader.isClosed());
-        expect(requestWriter.isClosed());
-        await expect(responseReader.asArray()).resolves.toEqual([
+        expect(resReader.isClosed());
+        expect(reqWriter.isClosed());
+        await expect(resReader.asArray()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -353,13 +353,13 @@ describe.each(testMatrix())(
             [serviceName]: ServiceSchema.define({
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any
               [procedureType]: (Procedure[procedureType] as any)({
-                init: Type.Object({}),
+                requestInit: Type.Object({}),
                 ...(procedureType === 'stream' || procedureType === 'upload'
                   ? {
-                      input: Type.Object({}),
+                      requestData: Type.Object({}),
                     }
                   : {}),
-                output: Type.Object({}),
+                responseData: Type.Object({}),
                 handler,
               }),
             }),
@@ -438,9 +438,9 @@ describe.each(testMatrix())(
         const services = {
           service: ServiceSchema.define({
             stream: Procedure.stream({
-              init: Type.Object({}),
-              input: Type.Object({}),
-              output: Type.Object({}),
+              requestInit: Type.Object({}),
+              requestData: Type.Object({}),
+              responseData: Type.Object({}),
               handler,
             }),
           }),
@@ -453,7 +453,7 @@ describe.each(testMatrix())(
 
         const clientAbortController = new AbortController();
 
-        const { requestWriter, responseReader } = client.service.stream.stream(
+        const { reqWriter, resReader } = client.service.stream.stream(
           {},
           { signal: clientAbortController.signal },
         );
@@ -462,14 +462,14 @@ describe.each(testMatrix())(
           expect(handler).toHaveBeenCalledTimes(1);
         });
 
-        const [{ ctx, requestReader, responseWriter }] = handler.mock.calls[0];
+        const [{ ctx, reqReader, resWriter }] = handler.mock.calls[0];
         const onClientAbort = vi.fn();
         ctx.clientAbortSignal.onabort = onClientAbort;
 
         clientAbortController.abort();
         // this should be ignored by the client since it already aborted
-        responseWriter.write({ ok: true, payload: {} });
-        expect(await responseReader.asArray()).toEqual([
+        resWriter.write({ ok: true, payload: {} });
+        expect(await resReader.asArray()).toEqual([
           {
             ok: false,
             payload: {
@@ -479,13 +479,13 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(responseReader.isClosed());
-        expect(requestWriter.isClosed());
+        expect(resReader.isClosed());
+        expect(reqWriter.isClosed());
 
         await waitFor(() => {
           expect(onClientAbort).toHaveBeenCalled();
         });
-        expect(await requestReader.asArray()).toEqual([
+        expect(await reqReader.asArray()).toEqual([
           {
             ok: false,
             payload: {
@@ -495,8 +495,8 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(requestReader.isClosed());
-        expect(responseWriter.isClosed());
+        expect(reqReader.isClosed());
+        expect(resWriter.isClosed());
       });
     });
   },
@@ -527,8 +527,8 @@ describe.each(testMatrix())(
         const services = {
           service: ServiceSchema.define({
             rpc: Procedure.rpc({
-              init: Type.Object({}),
-              output: Type.Object({}),
+              requestInit: Type.Object({}),
+              responseData: Type.Object({}),
               async handler() {
                 throw new Error('unimplemented');
               },
@@ -581,9 +581,9 @@ describe.each(testMatrix())(
         const services = {
           service: ServiceSchema.define({
             upload: Procedure.upload({
-              init: Type.Object({}),
-              input: Type.Object({}),
-              output: Type.Object({}),
+              requestInit: Type.Object({}),
+              requestData: Type.Object({}),
+              responseData: Type.Object({}),
               async handler() {
                 throw new Error('unimplemented');
               },
@@ -601,7 +601,7 @@ describe.each(testMatrix())(
         const serverOnMessage = vi.fn<[EventMap['message']]>();
         serverTransport.addEventListener('message', serverOnMessage);
 
-        const { requestWriter, finalize } = client.service.upload.upload({});
+        const { reqWriter, finalize } = client.service.upload.upload({});
 
         await waitFor(() => {
           expect(serverOnMessage).toHaveBeenCalledTimes(1);
@@ -628,7 +628,7 @@ describe.each(testMatrix())(
             message: expect.any(String),
           },
         });
-        expect(requestWriter.isClosed());
+        expect(reqWriter.isClosed());
       });
 
       test('stream', async () => {
@@ -637,9 +637,9 @@ describe.each(testMatrix())(
         const services = {
           service: ServiceSchema.define({
             stream: Procedure.stream({
-              init: Type.Object({}),
-              input: Type.Object({}),
-              output: Type.Object({}),
+              requestInit: Type.Object({}),
+              requestData: Type.Object({}),
+              responseData: Type.Object({}),
               async handler() {
                 throw new Error('unimplemented');
               },
@@ -657,9 +657,7 @@ describe.each(testMatrix())(
         const serverOnMessage = vi.fn<[EventMap['message']]>();
         serverTransport.addEventListener('message', serverOnMessage);
 
-        const { requestWriter, responseReader } = client.service.stream.stream(
-          {},
-        );
+        const { reqWriter, resReader } = client.service.stream.stream({});
 
         await waitFor(() => {
           expect(serverOnMessage).toHaveBeenCalledTimes(1);
@@ -678,7 +676,7 @@ describe.each(testMatrix())(
           ),
         );
 
-        await expect(responseReader.asArray()).resolves.toEqual([
+        await expect(resReader.asArray()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -688,7 +686,7 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(requestWriter.isClosed());
+        expect(reqWriter.isClosed());
       });
 
       test('subscribe', async () => {
@@ -697,8 +695,8 @@ describe.each(testMatrix())(
         const services = {
           service: ServiceSchema.define({
             subscribe: Procedure.subscription({
-              init: Type.Object({}),
-              output: Type.Object({}),
+              requestInit: Type.Object({}),
+              responseData: Type.Object({}),
               async handler() {
                 throw new Error('unimplemented');
               },
@@ -716,7 +714,7 @@ describe.each(testMatrix())(
         const serverOnMessage = vi.fn<[EventMap['message']]>();
         serverTransport.addEventListener('message', serverOnMessage);
 
-        const { responseReader } = client.service.subscribe.subscribe({});
+        const { resReader } = client.service.subscribe.subscribe({});
 
         await waitFor(() => {
           expect(serverOnMessage).toHaveBeenCalledTimes(1);
@@ -735,7 +733,7 @@ describe.each(testMatrix())(
           ),
         );
 
-        await expect(responseReader.asArray()).resolves.toEqual([
+        await expect(resReader.asArray()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -765,13 +763,13 @@ describe.each(testMatrix())(
           [serviceName]: ServiceSchema.define({
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any
             [procedureType]: (Procedure[procedureType] as any)({
-              init: Type.Object({}),
+              requestInit: Type.Object({}),
               ...(procedureType === 'stream' || procedureType === 'upload'
                 ? {
-                    input: Type.Object({}),
+                    requestData: Type.Object({}),
                   }
                 : {}),
-              output: Type.Object({}),
+              responseData: Type.Object({}),
               async handler({ ctx }: { ctx: ProcedureHandlerContext<object> }) {
                 handler({ ctx });
 
@@ -857,9 +855,9 @@ describe.each(testMatrix())(
         const services = {
           service: ServiceSchema.define({
             stream: Procedure.stream({
-              init: Type.Object({}),
-              input: Type.Object({}),
-              output: Type.Object({}),
+              requestInit: Type.Object({}),
+              requestData: Type.Object({}),
+              responseData: Type.Object({}),
               handler,
             }),
           }),
@@ -956,9 +954,9 @@ describe.each(testMatrix())(
         const services = {
           service: ServiceSchema.define({
             stream: Procedure.stream({
-              init: Type.Object({}),
-              input: Type.Object({}),
-              output: Type.Object({}),
+              requestInit: Type.Object({}),
+              requestData: Type.Object({}),
+              responseData: Type.Object({}),
               handler,
             }),
           }),
@@ -969,20 +967,18 @@ describe.each(testMatrix())(
           serverTransport.clientId,
         );
 
-        const { requestWriter, responseReader } = client.service.stream.stream(
-          {},
-        );
+        const { reqWriter, resReader } = client.service.stream.stream({});
 
         await waitFor(() => {
           expect(handler).toHaveBeenCalledTimes(1);
         });
 
-        const [{ ctx, requestReader, responseWriter }] = handler.mock.calls[0];
+        const [{ ctx, reqReader, resWriter }] = handler.mock.calls[0];
 
         ctx.abortController.abort();
         // this should be ignored by the server since it already aborted
-        requestWriter.write({ ok: true, payload: {} });
-        expect(await requestReader.asArray()).toEqual([
+        reqWriter.write({ ok: true, payload: {} });
+        expect(await reqReader.asArray()).toEqual([
           {
             ok: false,
             payload: {
@@ -992,10 +988,10 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(requestReader.isClosed());
-        expect(responseWriter.isClosed());
+        expect(reqReader.isClosed());
+        expect(resWriter.isClosed());
 
-        expect(await responseReader.asArray()).toEqual([
+        expect(await resReader.asArray()).toEqual([
           {
             ok: false,
             payload: {
@@ -1005,8 +1001,8 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(responseReader.isClosed());
-        expect(requestWriter.isClosed());
+        expect(resReader.isClosed());
+        expect(reqWriter.isClosed());
       });
     });
   },
@@ -1058,13 +1054,13 @@ describe.each(testMatrix())(
           [serviceName]: ServiceSchema.define({
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any
             [procedureType]: (Procedure[procedureType] as any)({
-              init: Type.Object({}),
+              requestInit: Type.Object({}),
               ...(procedureType === 'stream' || procedureType === 'upload'
                 ? {
-                    input: Type.Object({}),
+                    requestData: Type.Object({}),
                   }
                 : {}),
-              output: Type.Object({}),
+              responseData: Type.Object({}),
               async handler() {
                 return rejectable.promise;
               },
@@ -1139,9 +1135,9 @@ describe.each(testMatrix())(
         const services = {
           service: ServiceSchema.define({
             stream: Procedure.stream({
-              init: Type.Object({}),
-              input: Type.Object({}),
-              output: Type.Object({}),
+              requestInit: Type.Object({}),
+              requestData: Type.Object({}),
+              responseData: Type.Object({}),
               handler,
             }),
           }),
@@ -1152,21 +1148,19 @@ describe.each(testMatrix())(
           serverTransport.clientId,
         );
 
-        const { requestWriter, responseReader } = client.service.stream.stream(
-          {},
-        );
+        const { reqWriter, resReader } = client.service.stream.stream({});
 
         await waitFor(() => {
           expect(handler).toHaveBeenCalledTimes(1);
         });
 
-        const [{ requestReader, responseWriter }] = handler.mock.calls[0];
+        const [{ reqReader, resWriter }] = handler.mock.calls[0];
 
         const errorMessage = Math.random().toString();
         rejectable.reject(new Error(errorMessage));
         // this should be ignored by the server since it already aborted
-        requestWriter.write({ ok: true, payload: {} });
-        expect(await requestReader.asArray()).toEqual([
+        reqWriter.write({ ok: true, payload: {} });
+        expect(await reqReader.asArray()).toEqual([
           {
             ok: false,
             payload: {
@@ -1175,10 +1169,10 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(requestReader.isClosed());
-        expect(responseWriter.isClosed());
+        expect(reqReader.isClosed());
+        expect(resWriter.isClosed());
 
-        expect(await responseReader.asArray()).toEqual([
+        expect(await resReader.asArray()).toEqual([
           {
             ok: false,
             payload: {
@@ -1187,8 +1181,8 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(responseReader.isClosed());
-        expect(requestWriter.isClosed());
+        expect(resReader.isClosed());
+        expect(reqWriter.isClosed());
       });
     });
   },

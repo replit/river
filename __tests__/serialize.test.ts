@@ -592,4 +592,229 @@ describe('serialize service to jsonschema', () => {
       },
     });
   });
+
+  test('serialize backwards compatible with v1', () => {
+    expect(TestServiceSchema.serializeBackwardsCompatible()).toStrictEqual({
+      procedures: {
+        add: {
+          input: {
+            properties: {
+              n: { type: 'number' },
+            },
+            required: ['n'],
+            type: 'object',
+          },
+          output: {
+            properties: {
+              result: { type: 'number' },
+            },
+            required: ['result'],
+            type: 'object',
+          },
+          errors: {
+            not: {},
+          },
+          type: 'rpc',
+        },
+        array: {
+          errors: {
+            not: {},
+          },
+          input: {
+            properties: {
+              n: {
+                type: 'number',
+              },
+            },
+            required: ['n'],
+            type: 'object',
+          },
+          output: {
+            items: {
+              type: 'number',
+            },
+            type: 'array',
+          },
+          type: 'rpc',
+        },
+        arrayStream: {
+          errors: {
+            not: {},
+          },
+          init: {
+            properties: {},
+            type: 'object',
+          },
+          input: {
+            properties: {
+              n: {
+                type: 'number',
+              },
+            },
+            required: ['n'],
+            type: 'object',
+          },
+          output: {
+            items: {
+              type: 'number',
+            },
+            type: 'array',
+          },
+          type: 'stream',
+        },
+        echo: {
+          init: {
+            properties: {},
+            type: 'object',
+          },
+          input: {
+            properties: {
+              msg: { type: 'string' },
+              ignore: { type: 'boolean' },
+            },
+            required: ['msg', 'ignore'],
+            type: 'object',
+          },
+          output: {
+            properties: {
+              response: { type: 'string' },
+            },
+            required: ['response'],
+            type: 'object',
+          },
+          errors: {
+            not: {},
+          },
+          type: 'stream',
+        },
+        echoWithPrefix: {
+          errors: {
+            not: {},
+          },
+          init: {
+            properties: {
+              prefix: {
+                type: 'string',
+              },
+            },
+            required: ['prefix'],
+            type: 'object',
+          },
+          input: {
+            properties: {
+              ignore: {
+                type: 'boolean',
+              },
+              msg: {
+                type: 'string',
+              },
+            },
+            required: ['msg', 'ignore'],
+            type: 'object',
+          },
+          output: {
+            properties: {
+              response: {
+                type: 'string',
+              },
+            },
+            required: ['response'],
+            type: 'object',
+          },
+          type: 'stream',
+        },
+        echoUnion: {
+          description: 'Echos back whatever we sent',
+          errors: {
+            not: {},
+          },
+          input: {
+            anyOf: [
+              {
+                description: 'A',
+                properties: {
+                  a: {
+                    description: 'A number',
+                    type: 'number',
+                  },
+                },
+                required: ['a'],
+                type: 'object',
+              },
+              {
+                description: 'B',
+                properties: {
+                  b: {
+                    description: 'A string',
+                    type: 'string',
+                  },
+                },
+                required: ['b'],
+                type: 'object',
+              },
+            ],
+          },
+          output: {
+            anyOf: [
+              {
+                description: 'A',
+                properties: {
+                  a: {
+                    description: 'A number',
+                    type: 'number',
+                  },
+                },
+                required: ['a'],
+                type: 'object',
+              },
+              {
+                description: 'B',
+                properties: {
+                  b: {
+                    description: 'A string',
+                    type: 'string',
+                  },
+                },
+                required: ['b'],
+                type: 'object',
+              },
+            ],
+          },
+          type: 'rpc',
+        },
+        unimplementedSubscription: {
+          errors: {
+            not: {},
+          },
+          input: {
+            properties: {},
+            type: 'object',
+          },
+          output: {
+            properties: {},
+            type: 'object',
+          },
+          type: 'subscription',
+        },
+        unimplementedUpload: {
+          errors: {
+            not: {},
+          },
+          init: {
+            properties: {},
+            type: 'object',
+          },
+          input: {
+            properties: {},
+            type: 'object',
+          },
+          output: {
+            properties: {},
+            type: 'object',
+          },
+          type: 'upload',
+        },
+      },
+    });
+  });
 });

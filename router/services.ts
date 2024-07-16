@@ -69,7 +69,7 @@ export type ProcHandler<
 export type ProcInit<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = Static<S['procedures'][ProcName]['init']>;
+> = Static<S['procedures'][ProcName]['requestInit']>;
 
 /**
  * Helper to get the type definition for the procedure input of a service.
@@ -79,8 +79,8 @@ export type ProcInit<
 export type ProcInput<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName] extends { input: PayloadType }
-  ? Static<S['procedures'][ProcName]['input']>
+> = S['procedures'][ProcName] extends { requestData: PayloadType }
+  ? Static<S['procedures'][ProcName]['requestData']>
   : never;
 
 /**
@@ -91,7 +91,7 @@ export type ProcInput<
 export type ProcOutput<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = Static<S['procedures'][ProcName]['output']>;
+> = Static<S['procedures'][ProcName]['responseData']>;
 
 /**
  * Helper to get the type definition for the procedure errors of a service.
@@ -102,7 +102,7 @@ export type ProcErrors<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
 > =
-  | Static<S['procedures'][ProcName]['errors']>
+  | Static<S['procedures'][ProcName]['responseError']>
   | Static<typeof ResponseReaderErrorSchema>;
 
 /**
@@ -282,8 +282,8 @@ export class ServiceSchema<
    *
    * const incrementProcedures = MyServiceScaffold.procedures({
    *   increment: Procedure.rpc({
-   *     init: Type.Object({ amount: Type.Number() }),
-   *     output: Type.Object({ current: Type.Number() }),
+   *     requestInit: Type.Object({ amount: Type.Number() }),
+   *     responseData: Type.Object({ current: Type.Number() }),
    *     async handler(ctx, init) {
    *       ctx.state.count += init.amount;
    *       return Ok({ current: ctx.state.count });
@@ -309,8 +309,8 @@ export class ServiceSchema<
    *   .scaffold({ initializeState: () => ({ count: 0 }) })
    *   .finalize({
    *     increment: Procedure.rpc({
-   *       init: Type.Object({ amount: Type.Number() }),
-   *       output: Type.Object({ current: Type.Number() }),
+   *       requestInit: Type.Object({ amount: Type.Number() }),
+   *       responseData: Type.Object({ current: Type.Number() }),
    *       async handler(ctx, init) {
    *         ctx.state.count += init.amount;
    *         return Ok({ current: ctx.state.count });
@@ -342,8 +342,8 @@ export class ServiceSchema<
    *   { initializeState: () => ({ count: 0 }) },
    *   {
    *     increment: Procedure.rpc({
-   *       init: Type.Object({ amount: Type.Number() }),
-   *       output: Type.Object({ current: Type.Number() }),
+   *       requestInit: Type.Object({ amount: Type.Number() }),
+   *       responseData: Type.Object({ current: Type.Number() }),
    *       async handler(ctx, init) {
    *         ctx.state.count += init.amount;
    *         return Ok({ current: ctx.state.count });
@@ -377,8 +377,8 @@ export class ServiceSchema<
    * ```
    * const service = ServiceSchema.define({
    *   add: Procedure.rpc({
-   *     init: Type.Object({ a: Type.Number(), b: Type.Number() }),
-   *     output: Type.Object({ result: Type.Number() }),
+   *     requestInit: Type.Object({ a: Type.Number(), b: Type.Number() }),
+   *     responseData: Type.Object({ result: Type.Number() }),
    *     async handler(ctx, init) {
    *       return Ok({ result: init.a + init.b });
    *     }
@@ -428,23 +428,23 @@ export class ServiceSchema<
         Object.entries(this.procedures).map(([procName, procDef]) => [
           procName,
           {
-            init: Type.Strict(procDef.init),
-            output: Type.Strict(procDef.output),
+            init: Type.Strict(procDef.requestInit),
+            output: Type.Strict(procDef.responseData),
             // Only add `description` field if the type declares it.
             ...('description' in procDef
               ? { description: procDef.description }
               : {}),
             // Only add the `errors` field if the type declares it.
-            ...('errors' in procDef
+            ...('responseError' in procDef
               ? {
-                  errors: Type.Strict(procDef.errors),
+                  errors: Type.Strict(procDef.responseError),
                 }
               : {}),
             type: procDef.type,
             // Only add the `input` field if the type declares it.
-            ...('input' in procDef
+            ...('requestData' in procDef
               ? {
-                  input: Type.Strict(procDef.input),
+                  input: Type.Strict(procDef.requestData),
                 }
               : {}),
           },
@@ -473,16 +473,16 @@ export class ServiceSchema<
                 {
                   // BACKWARDS COMPAT: map init to input for protocolv1
                   // this is the only change needed to make it compatible.
-                  input: Type.Strict(procDef.init),
-                  output: Type.Strict(procDef.output),
+                  input: Type.Strict(procDef.requestInit),
+                  output: Type.Strict(procDef.responseData),
                   // Only add `description` field if the type declares it.
                   ...('description' in procDef
                     ? { description: procDef.description }
                     : {}),
                   // Only add the `errors` field if the type declares it.
-                  ...('errors' in procDef
+                  ...('responseError' in procDef
                     ? {
-                        errors: Type.Strict(procDef.errors),
+                        errors: Type.Strict(procDef.responseError),
                       }
                     : {}),
                   type: procDef.type,
@@ -495,20 +495,20 @@ export class ServiceSchema<
             return [
               procName,
               {
-                init: Type.Strict(procDef.init),
-                output: Type.Strict(procDef.output),
+                init: Type.Strict(procDef.requestInit),
+                output: Type.Strict(procDef.responseData),
                 // Only add `description` field if the type declares it.
                 ...('description' in procDef
                   ? { description: procDef.description }
                   : {}),
                 // Only add the `errors` field if the type declares it.
-                ...('errors' in procDef
+                ...('responseError' in procDef
                   ? {
-                      errors: Type.Strict(procDef.errors),
+                      errors: Type.Strict(procDef.responseError),
                     }
                   : {}),
                 type: procDef.type,
-                input: Type.Strict(procDef.input),
+                input: Type.Strict(procDef.requestData),
               },
             ];
           },
