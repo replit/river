@@ -1512,12 +1512,14 @@ describe.each(testMatrix())(
         expect(clientHandshakeFailed).toHaveBeenCalledTimes(1);
         expect(clientHandshakeFailed).toHaveBeenCalledWith({
           type: ProtocolError.HandshakeFailed,
+          code: 'REJECTED_BY_CUSTOM_HANDLER',
           message: 'handshake failed: rejected by handshake handler',
         });
         expect(parse).toHaveBeenCalledTimes(1);
         expect(serverRejectedConnection).toHaveBeenCalledTimes(1);
         expect(serverRejectedConnection).toHaveBeenCalledWith({
           type: ProtocolError.HandshakeFailed,
+          code: 'REJECTED_BY_CUSTOM_HANDLER',
           message: 'rejected by handshake handler',
         });
       });

@@ -172,13 +172,17 @@ export abstract class ServerTransport<
           receivedHandshake = true;
           void this.onHandshakeRequest(pendingSession, msg);
         },
-        onInvalidHandshake: (reason) => {
+        onInvalidHandshake: (reason, code) => {
           this.log?.error(
             `invalid handshake: ${reason}`,
             pendingSession.loggingMetadata,
           );
           this.deletePendingSession(pendingSession);
-          this.protocolError(ProtocolError.HandshakeFailed, reason);
+          this.protocolError({
+            type: ProtocolError.HandshakeFailed,
+            code,
+            message: reason,
+          });
         },
       },
       this.options,
@@ -214,7 +218,11 @@ export abstract class ServerTransport<
       }),
     );
 
-    this.protocolError(ProtocolError.HandshakeFailed, reason);
+    this.protocolError({
+      type: ProtocolError.HandshakeFailed,
+      code,
+      message: reason,
+    });
     this.deletePendingSession(session);
   }
 
@@ -434,7 +442,10 @@ export abstract class ServerTransport<
           },
           onMessage: (msg) => this.handleMsg(msg),
           onInvalidMessage: (reason) => {
-            this.protocolError(ProtocolError.MessageOrderingViolated, reason);
+            this.protocolError({
+              type: ProtocolError.MessageOrderingViolated,
+              message: reason,
+            });
             this.deleteSession(connectedSession);
           },
         },
