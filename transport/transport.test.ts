@@ -346,6 +346,46 @@ describe.each(testMatrix())(
       });
     });
 
+    test('session grace elapses during long reconnect loop', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      clientTransport.reconnectOnConnectionDrop = true;
+      clientTransport.connect(serverTransport.clientId);
+
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
+
+      // disconnect the client
+      closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+
+      // should still have a session
+      expect(serverTransport.sessions.size).toBe(1);
+      expect(clientTransport.sessions.size).toBe(1);
+
+      for (
+        let i = 0;
+        i < testingClientSessionOptions.sessionDisconnectGraceMs / 1000;
+        i++
+      ) {
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+
+      // grace is elapsed, should have no sessions
+      expect(serverTransport.sessions.size).toBe(0);
+      expect(clientTransport.sessions.size).toBe(0);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
     test('both client and server transport get connect/disconnect notifs', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
