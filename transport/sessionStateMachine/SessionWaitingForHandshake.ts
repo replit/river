@@ -1,13 +1,21 @@
+import { Static } from '@sinclair/typebox';
 import { MessageMetadata } from '../../logging';
 import { Connection } from '../connection';
-import { OpaqueTransportMessage, TransportMessage } from '../message';
+import {
+  HandshakeErrorResponseCodes,
+  OpaqueTransportMessage,
+  TransportMessage,
+} from '../message';
 import { CommonSession, CommonSessionProps, SessionState } from './common';
 
 export interface SessionWaitingForHandshakeListeners {
   onConnectionErrored: (err: unknown) => void;
   onConnectionClosed: () => void;
   onHandshake: (msg: OpaqueTransportMessage) => void;
-  onInvalidHandshake: (reason: string) => void;
+  onInvalidHandshake: (
+    reason: string,
+    code: Static<typeof HandshakeErrorResponseCodes>,
+  ) => void;
 
   // timeout related
   onHandshakeTimeout: () => void;
