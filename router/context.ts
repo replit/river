@@ -41,7 +41,7 @@ export interface ServiceContext {}
  * ```
  */
 /* eslint-disable-next-line @typescript-eslint/no-empty-interface */
-export interface ParsedMetadata {}
+export interface ParsedMetadata extends Record<string, unknown> {}
 
 /**
  * The {@link ServiceContext} with state. This is what is passed to procedures.

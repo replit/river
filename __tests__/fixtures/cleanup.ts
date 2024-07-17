@@ -31,7 +31,6 @@ export async function advanceFakeTimersByDisconnectGrace() {
 }
 
 export async function advanceFakeTimersBySessionGrace() {
-  // await advanceFakeTimersByDisconnectGrace();
   await vi.advanceTimersByTimeAsync(
     testingSessionOptions.sessionDisconnectGraceMs,
   );

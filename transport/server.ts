@@ -501,20 +501,23 @@ export abstract class ServerTransport<
       ? this.sessionHandshakeMetadata.get(existingSession.to)
       : undefined;
 
-    const parsedMetadata = await this.handshakeExtensions.validate(
+    const parsedMetadataOrFailureCode = await this.handshakeExtensions.validate(
       rawMetadata,
       previousParsedMetadata,
     );
 
     // handler rejected the connection
     if (
-      Value.Check(HandshakeErrorCustomHandlerFatalResponseCodes, parsedMetadata)
+      Value.Check(
+        HandshakeErrorCustomHandlerFatalResponseCodes,
+        parsedMetadataOrFailureCode,
+      )
     ) {
       this.rejectHandshakeRequest(
         handshakingSession,
         from,
         'rejected by handshake handler',
-        parsedMetadata,
+        parsedMetadataOrFailureCode,
         {
           ...handshakingSession.loggingMetadata,
           connectedTo: from,
@@ -525,6 +528,6 @@ export abstract class ServerTransport<
       return false;
     }
 
-    return parsedMetadata;
+    return parsedMetadataOrFailureCode;
   }
 }

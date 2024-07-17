@@ -28,6 +28,8 @@ import {
   ProvidedClientTransportOptions,
   ProvidedTransportOptions,
 } from './options';
+import { coloredStringLogger } from '../logging';
+import { ParsedMetadata } from '../router';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
@@ -339,46 +341,6 @@ describe.each(testMatrix())(
       await expect(
         Promise.all([...first90Promises, ...last10Promises]),
       ).resolves.toStrictEqual(clientMsgs.map((msg) => msg.payload));
-
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-      });
-    });
-
-    test('session grace elapses during long reconnect loop', async () => {
-      const clientTransport = getClientTransport('client');
-      const serverTransport = getServerTransport();
-      clientTransport.reconnectOnConnectionDrop = true;
-      clientTransport.connect(serverTransport.clientId);
-
-      addPostTestCleanup(async () => {
-        await cleanupTransports([clientTransport, serverTransport]);
-      });
-
-      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
-      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
-
-      // disconnect the client
-      closeAllConnections(clientTransport);
-      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
-      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
-
-      // should still have a session
-      expect(serverTransport.sessions.size).toBe(1);
-      expect(clientTransport.sessions.size).toBe(1);
-
-      for (
-        let i = 0;
-        i < testingClientSessionOptions.sessionDisconnectGraceMs / 1000;
-        i++
-      ) {
-        await vi.advanceTimersByTimeAsync(1000);
-      }
-
-      // grace is elapsed, should have no sessions
-      expect(serverTransport.sessions.size).toBe(0);
-      expect(clientTransport.sessions.size).toBe(0);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -723,9 +685,10 @@ describe.each(testMatrix())(
       const get = vi.fn();
 
       const parse = vi.fn(() => {
-        const promise = new Promise(() => {
+        const promise = new Promise<ParsedMetadata>(() => {
           // noop we never want this to return
         });
+
         return promise;
       });
 
@@ -843,88 +806,85 @@ describe.each(testMatrix())(
       });
     });
 
-    test('backoff should not count towards session grace period', async () => {
-      const clientTransport = testHelpers.getClientTransport('client');
-      const serverTransport = testHelpers.getServerTransport();
-      const serverConnStart = vi.fn();
-      const serverSessStart = vi.fn();
-      const serverSessStop = vi.fn();
-      const serverConnHandler = (evt: EventMap['sessionTransition']) => {
-        switch (evt.state) {
-          case SessionState.Connected:
-            serverConnStart();
-            break;
+    // make a custom auth thing that rejects all connections
+    // session grace should elapse at some point despite retry loop
+    test('session grace elapses during long reconnect loop', async () => {
+      let attemptNumber = 0;
+      let connsReachedServer = 0;
+      const schema = Type.Object({
+        attemptNumber: Type.Number(),
+      });
+      const clientTransport = testHelpers.getClientTransport('client', {
+        schema,
+        construct() {
+          return { attemptNumber: attemptNumber++ };
+        },
+      });
+      const serverTransport = testHelpers.getServerTransport({
+        schema,
+        async validate(_metadata, _previousParsedMetadata) {
+          connsReachedServer++;
+          await new Promise((resolve) =>
+            setTimeout(resolve, testingClientSessionOptions.handshakeTimeoutMs),
+          );
+          return {};
+        },
+      });
+
+      const onSessionDisconnect = vi.fn();
+      const sessionStatusListener = (evt: EventMap['sessionStatus']) => {
+        if (evt.status === 'disconnect') {
+          onSessionDisconnect();
         }
       };
 
-      const serverSessHandler = (evt: EventMap['sessionStatus']) => {
-        switch (evt.status) {
-          case 'connect':
-            serverSessStart();
-            break;
-          case 'disconnect':
-            serverSessStop();
-            break;
-        }
-      };
-
-      serverTransport.addEventListener('sessionTransition', serverConnHandler);
-      serverTransport.addEventListener('sessionStatus', serverSessHandler);
-      clientTransport.connect(serverTransport.clientId);
-      clientTransport.reconnectOnConnectionDrop = false;
+      clientTransport.addEventListener('sessionStatus', sessionStatusListener);
       addPostTestCleanup(async () => {
-        serverTransport.removeEventListener(
-          'sessionTransition',
-          serverConnHandler,
-        );
-        serverTransport.removeEventListener(
-          'sessionTransition',
-          serverConnHandler,
+        clientTransport.removeEventListener(
+          'sessionStatus',
+          sessionStatusListener,
         );
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
-      await waitFor(() => {
-        expect(serverConnStart).toHaveBeenCalledTimes(1);
-        expect(serverSessStart).toHaveBeenCalledTimes(1);
-        expect(serverSessStop).toHaveBeenCalledTimes(0);
-        expect(numberOfConnections(clientTransport)).toBe(1);
-        expect(numberOfConnections(serverTransport)).toBe(1);
-      });
-
-      // kill the connection
-      const numConnKills = 3;
-      for (let i = 0; i < numConnKills; i++) {
-        closeAllConnections(clientTransport);
-        await waitFor(() => {
-          expect(numberOfConnections(clientTransport)).toBe(0);
-          expect(numberOfConnections(serverTransport)).toBe(0);
-        });
-
-        await vi.advanceTimersByTimeAsync(
-          Math.ceil(
-            testingClientSessionOptions.sessionDisconnectGraceMs / numConnKills,
-          ),
-        );
+      // enter the retry loop
+      let timeAdvanced = 0;
+      for (
+        let i = 0;
+        i < testingClientSessionOptions.attemptBudgetCapacity;
+        i++
+      ) {
+        const backoff =
+          clientTransport.retryBudget.getBackoffMs() +
+          testingClientSessionOptions.maxJitterMs;
 
         clientTransport.connect(serverTransport.clientId);
+
+        await vi.advanceTimersByTimeAsync(backoff);
+        timeAdvanced += backoff;
+
+        if (
+          timeAdvanced > testingClientSessionOptions.sessionDisconnectGraceMs
+        ) {
+          // ok we should have hit session disconnect grace by now
+          break;
+        }
+
+        // wait for the conn attempt to reach the server
         await waitFor(() => {
-          expect(serverConnStart).toHaveBeenCalledTimes(i + 2);
+          expect(connsReachedServer).toBe(i + 1);
+          expect(attemptNumber).toBe(i + 1);
         });
-        await waitFor(() => {
-          expect(numberOfConnections(clientTransport)).toBe(1);
-          expect(numberOfConnections(serverTransport)).toBe(1);
-        });
+
+        // wait for the artificially long handshake to finish
+        await vi.advanceTimersByTimeAsync(
+          testingClientSessionOptions.handshakeTimeoutMs,
+        );
+        timeAdvanced += testingClientSessionOptions.handshakeTimeoutMs;
       }
 
-      expect(serverConnStart).toHaveBeenCalledTimes(numConnKills + 1);
-      expect(serverSessStart).toHaveBeenCalledTimes(1);
-      expect(serverSessStop).toHaveBeenCalledTimes(0);
-
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-      });
+      expect(attemptNumber).toBeGreaterThan(1);
+      expect(onSessionDisconnect).toHaveBeenCalledTimes(1);
     });
 
     test('messages should not be resent when the client loses all state and reconnects to the server', async () => {
@@ -1515,7 +1475,7 @@ describe.each(testMatrix())(
       });
 
       const get = vi.fn(async () => ({ foo: 'foo' }));
-      const parse = vi.fn(async () => 'REJECTED_BY_CUSTOM_HANDLER');
+      const parse = vi.fn(async () => 'REJECTED_BY_CUSTOM_HANDLER' as const);
       const serverTransport = getServerTransport({
         schema,
         validate: parse,
