@@ -10,13 +10,7 @@ import {
   LoggingLevel,
   createLogProxy,
 } from '../logging/log';
-import {
-  EventDispatcher,
-  EventHandler,
-  EventMap,
-  EventTypes,
-  ProtocolErrorType,
-} from './events';
+import { EventDispatcher, EventHandler, EventMap, EventTypes } from './events';
 import {
   ProvidedTransportOptions,
   TransportOptions,
@@ -153,8 +147,8 @@ export abstract class Transport<ConnType extends Connection> {
    */
   abstract send(to: TransportClientId, msg: PartialTransportMessage): string;
 
-  protected protocolError(type: ProtocolErrorType, message: string) {
-    this.eventDispatcher.dispatchEvent('protocolError', { type, message });
+  protected protocolError(message: EventMap['protocolError']) {
+    this.eventDispatcher.dispatchEvent('protocolError', message);
   }
 
   /**

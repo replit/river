@@ -172,13 +172,17 @@ export abstract class ClientTransport<
           onHandshake: (msg) => {
             this.onHandshakeResponse(handshakingSession, msg);
           },
-          onInvalidHandshake: (reason) => {
+          onInvalidHandshake: (reason, code) => {
             this.log?.error(
               `invalid handshake: ${reason}`,
               handshakingSession.loggingMetadata,
             );
             this.deleteSession(session);
-            this.protocolError(ProtocolError.HandshakeFailed, reason);
+            this.protocolError({
+              type: ProtocolError.HandshakeFailed,
+              code,
+              message: reason,
+            });
           },
           onHandshakeTimeout: () => {
             this.log?.error(
@@ -249,7 +253,11 @@ export abstract class ClientTransport<
         this.tryReconnecting(session.to);
       } else {
         this.deleteSession(session);
-        this.protocolError(ProtocolError.HandshakeFailed, reason);
+        this.protocolError({
+          type: ProtocolError.HandshakeFailed,
+          code: msg.payload.status.code,
+          message: reason,
+        });
       }
 
       return;
@@ -291,7 +299,10 @@ export abstract class ClientTransport<
         onMessage: (msg) => this.handleMsg(msg),
         onInvalidMessage: (reason) => {
           this.deleteSession(connectedSession);
-          this.protocolError(ProtocolError.MessageOrderingViolated, reason);
+          this.protocolError({
+            type: ProtocolError.MessageOrderingViolated,
+            message: reason,
+          });
         },
       });
 
@@ -330,7 +341,10 @@ export abstract class ClientTransport<
       const budgetConsumed = this.retryBudget.getBudgetConsumed();
       const errMsg = `tried to connect to ${to} but retry budget exceeded (more than ${budgetConsumed} attempts in the last ${this.retryBudget.totalBudgetRestoreTime}ms)`;
       this.log?.error(errMsg, session.loggingMetadata);
-      this.protocolError(ProtocolError.RetriesExceeded, errMsg);
+      this.protocolError({
+        type: ProtocolError.RetriesExceeded,
+        message: errMsg,
+      });
       return;
     }
 

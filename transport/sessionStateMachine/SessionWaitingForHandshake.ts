@@ -49,7 +49,10 @@ export class SessionWaitingForHandshake<
   onHandshakeData = (msg: Uint8Array) => {
     const parsedMsg = this.parseMsg(msg);
     if (parsedMsg === null) {
-      this.listeners.onInvalidHandshake('could not parse message');
+      this.listeners.onInvalidHandshake(
+        'could not parse message',
+        'MALFORMED_HANDSHAKE',
+      );
       return;
     }
 

@@ -1,5 +1,6 @@
+import { type Static } from '@sinclair/typebox';
 import { Connection } from './connection';
-import { OpaqueTransportMessage } from './message';
+import { OpaqueTransportMessage, HandshakeErrorResponseCodes } from './message';
 import { Session, SessionState } from './sessionStateMachine';
 import { TransportStatus } from './transport';
 
@@ -24,10 +25,19 @@ export interface EventMap {
     | { state: SessionState.Connecting }
     | { state: SessionState.BackingOff }
     | { state: SessionState.NoConnection };
-  protocolError: {
-    type: ProtocolErrorType;
-    message: string;
-  };
+  protocolError:
+    | {
+        type: (typeof ProtocolError)['HandshakeFailed'];
+        code: Static<typeof HandshakeErrorResponseCodes>;
+        message: string;
+      }
+    | {
+        type: Omit<
+          ProtocolErrorType,
+          (typeof ProtocolError)['HandshakeFailed']
+        >;
+        message: string;
+      };
   transportStatus: {
     status: TransportStatus;
   };

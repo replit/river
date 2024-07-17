@@ -1,5 +1,10 @@
+import { Static } from '@sinclair/typebox';
 import { Connection } from '../connection';
-import { OpaqueTransportMessage, TransportMessage } from '../message';
+import {
+  OpaqueTransportMessage,
+  TransportMessage,
+  HandshakeErrorResponseCodes,
+} from '../message';
 import {
   IdentifiedSessionWithGracePeriod,
   IdentifiedSessionWithGracePeriodListeners,
@@ -12,7 +17,10 @@ export interface SessionHandshakingListeners
   onConnectionErrored: (err: unknown) => void;
   onConnectionClosed: () => void;
   onHandshake: (msg: OpaqueTransportMessage) => void;
-  onInvalidHandshake: (reason: string) => void;
+  onInvalidHandshake: (
+    reason: string,
+    code: Static<typeof HandshakeErrorResponseCodes>,
+  ) => void;
 
   // timeout related
   onHandshakeTimeout: () => void;
@@ -54,7 +62,10 @@ export class SessionHandshaking<
   onHandshakeData = (msg: Uint8Array) => {
     const parsedMsg = this.parseMsg(msg);
     if (parsedMsg === null) {
-      this.listeners.onInvalidHandshake('could not parse message');
+      this.listeners.onInvalidHandshake(
+        'could not parse message',
+        'MALFORMED_HANDSHAKE',
+      );
       return;
     }
 
