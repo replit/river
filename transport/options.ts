@@ -12,6 +12,7 @@ export const defaultTransportOptions: TransportOptions = {
   sessionDisconnectGraceMs: 5_000,
   connectionTimeoutMs: 2_000,
   handshakeTimeoutMs: 1_000,
+  enableTransparentSessionReconnects: true,
   codec: NaiveJsonCodec,
 };
 

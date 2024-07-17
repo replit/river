@@ -76,8 +76,6 @@ export abstract class ClientTransport<
 
   /**
    * Abstract method that creates a new {@link Connection} object.
-   * This should call {@link handleConnection} when the connection is created.
-   * The downstream client implementation needs to implement this.
    *
    * @param to The client ID of the node to connect to.
    * @returns The new connection object.
@@ -86,7 +84,12 @@ export abstract class ClientTransport<
     to: TransportClientId,
   ): Promise<ConnType>;
 
-  private tryReconnecting(to: string) {
+  private tryReconnecting(to: TransportClientId) {
+    const oldSession = this.sessions.get(to);
+    if (!this.options.enableTransparentSessionReconnects && oldSession) {
+      this.deleteSession(oldSession);
+    }
+
     if (this.reconnectOnConnectionDrop && this.getStatus() === 'open') {
       this.connect(to);
     }

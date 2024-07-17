@@ -129,7 +129,10 @@ export class SessionConnected<
 
   onMessageData = (msg: Uint8Array) => {
     const parsedMsg = this.parseMsg(msg);
-    if (parsedMsg === null) return;
+    if (parsedMsg === null) {
+      this.listeners.onInvalidMessage('could not parse message');
+      return;
+    }
 
     // check message ordering here
     if (parsedMsg.seq !== this.ack) {

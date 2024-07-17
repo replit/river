@@ -588,8 +588,7 @@ describe.each(testMatrix())(
   async ({ transport, codec }) => {
     const opts: ProvidedTransportOptions = {
       codec: codec.codec,
-      // set the session disconnect grace to 0 to force a hard reconnect
-      sessionDisconnectGraceMs: 0,
+      enableTransparentSessionReconnects: false,
     };
 
     let testHelpers: TestSetupHelpers;

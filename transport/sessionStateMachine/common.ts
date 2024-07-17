@@ -107,9 +107,14 @@ export interface SessionOptions {
    */
   heartbeatsUntilDead: number;
   /**
-   * Duration to wait between connection disconnect and actual session disconnect
+   * Max duration that a session can be without a connection before we consider
+   * it dead.
    */
   sessionDisconnectGraceMs: number;
+  /**
+   * Whether to enable transparent session reconnects
+   */
+  enableTransparentSessionReconnects: boolean;
   /**
    * Connection timeout in milliseconds
    */

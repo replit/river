@@ -301,7 +301,11 @@ export abstract class ServerTransport<
       msg.payload.expectedSessionState.nextExpectedSeq;
     const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq ?? 0;
 
-    if (oldSession && oldSession.id === msg.payload.sessionId) {
+    if (
+      this.options.enableTransparentSessionReconnects &&
+      oldSession &&
+      oldSession.id === msg.payload.sessionId
+    ) {
       connectCase = 'transparent reconnection';
 
       // invariant: ordering must be correct
@@ -382,10 +386,15 @@ export abstract class ServerTransport<
       // we don't have a session, but the client is trying to reconnect
       // to an old session. we can't do anything about this, so we reject
       connectCase = 'unknown session';
+
+      const rejectionMessage = this.options.enableTransparentSessionReconnects
+        ? `client is trying to reconnect to a session the server don't know about: ${msg.payload.sessionId}`
+        : `client is attempting a transparent reconnect to a session but the server does not support it: ${msg.payload.sessionId}`;
+
       this.rejectHandshakeRequest(
         session,
         msg.from,
-        `client is trying to reconnect to a session the server don't know about: ${msg.payload.sessionId}`,
+        rejectionMessage,
         'SESSION_STATE_MISMATCH',
         {
           ...session.loggingMetadata,
