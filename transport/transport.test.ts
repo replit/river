@@ -28,7 +28,6 @@ import {
   ProvidedClientTransportOptions,
   ProvidedTransportOptions,
 } from './options';
-import { coloredStringLogger } from '../logging';
 import { ParsedMetadata } from '../router';
 
 describe.each(testMatrix())(
