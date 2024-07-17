@@ -13,7 +13,10 @@ import {
   SessionOptions,
 } from './common';
 import { PropagationContext, createSessionTelemetryInfo } from '../../tracing';
-import { SessionWaitingForHandshake } from './SessionWaitingForHandshake';
+import {
+  SessionWaitingForHandshake,
+  SessionWaitingForHandshakeListeners,
+} from './SessionWaitingForHandshake';
 import {
   SessionHandshaking,
   SessionHandshakingListeners,
@@ -66,6 +69,7 @@ export const SessionStateGraph = {
         to,
         seq: 0,
         ack: 0,
+        graceExpiryTime: Date.now() + options.sessionDisconnectGraceMs,
         sendBuffer,
         telemetry,
         options,
@@ -82,7 +86,7 @@ export const SessionStateGraph = {
     WaitingForHandshake: <ConnType extends Connection>(
       from: TransportClientId,
       conn: ConnType,
-      listeners: SessionHandshakingListeners,
+      listeners: SessionWaitingForHandshakeListeners,
       options: SessionOptions,
       log?: Logger,
     ): SessionWaitingForHandshake<ConnType> => {
@@ -112,11 +116,13 @@ export const SessionStateGraph = {
       listeners: SessionBackingOffListeners,
     ): SessionBackingOff => {
       const carriedState = inheritSharedSession(oldSession);
+      const graceExpiryTime = oldSession.graceExpiryTime;
       oldSession._handleStateExit();
 
       const session = new SessionBackingOff({
         backoffMs,
         listeners,
+        graceExpiryTime,
         ...carriedState,
       });
 
@@ -135,11 +141,13 @@ export const SessionStateGraph = {
       listeners: SessionConnectingListeners,
     ): SessionConnecting<ConnType> => {
       const carriedState = inheritSharedSession(oldSession);
+      const graceExpiryTime = oldSession.graceExpiryTime;
       oldSession._handleStateExit();
 
       const session = new SessionConnecting({
         connPromise,
         listeners,
+        graceExpiryTime,
         ...carriedState,
       });
 
@@ -158,11 +166,13 @@ export const SessionStateGraph = {
       listeners: SessionHandshakingListeners,
     ): SessionHandshaking<ConnType> => {
       const carriedState = inheritSharedSession(oldSession);
+      const graceExpiryTime = oldSession.graceExpiryTime;
       oldSession._handleStateExit();
 
       const session = new SessionHandshaking({
         conn,
         listeners,
+        graceExpiryTime,
         ...carriedState,
       });
 
@@ -255,9 +265,14 @@ export const SessionStateGraph = {
       listeners: SessionNoConnectionListeners,
     ): SessionNoConnection => {
       const carriedState = inheritSharedSession(oldSession);
+      const graceExpiryTime = oldSession.graceExpiryTime;
       oldSession._handleStateExit();
 
-      const session = new SessionNoConnection({ listeners, ...carriedState });
+      const session = new SessionNoConnection({
+        listeners,
+        graceExpiryTime,
+        ...carriedState,
+      });
       session.log?.info(
         `session ${session.id} transition from BackingOff to NoConnection`,
         {
@@ -273,10 +288,15 @@ export const SessionStateGraph = {
       listeners: SessionNoConnectionListeners,
     ): SessionNoConnection => {
       const carriedState = inheritSharedSession(oldSession);
+      const graceExpiryTime = oldSession.graceExpiryTime;
       oldSession.bestEffortClose();
       oldSession._handleStateExit();
 
-      const session = new SessionNoConnection({ listeners, ...carriedState });
+      const session = new SessionNoConnection({
+        listeners,
+        graceExpiryTime,
+        ...carriedState,
+      });
       session.log?.info(
         `session ${session.id} transition from Connecting to NoConnection`,
         {
@@ -292,10 +312,15 @@ export const SessionStateGraph = {
       listeners: SessionNoConnectionListeners,
     ): SessionNoConnection => {
       const carriedState = inheritSharedSession(oldSession);
+      const graceExpiryTime = oldSession.graceExpiryTime;
       oldSession.conn.close();
       oldSession._handleStateExit();
 
-      const session = new SessionNoConnection({ listeners, ...carriedState });
+      const session = new SessionNoConnection({
+        listeners,
+        graceExpiryTime,
+        ...carriedState,
+      });
       session.log?.info(
         `session ${session.id} transition from Handshaking to NoConnection`,
         {
@@ -311,10 +336,16 @@ export const SessionStateGraph = {
       listeners: SessionNoConnectionListeners,
     ): SessionNoConnection => {
       const carriedState = inheritSharedSession(oldSession);
+      const graceExpiryTime =
+        Date.now() + oldSession.options.sessionDisconnectGraceMs;
       oldSession.conn.close();
       oldSession._handleStateExit();
 
-      const session = new SessionNoConnection({ listeners, ...carriedState });
+      const session = new SessionNoConnection({
+        listeners,
+        graceExpiryTime,
+        ...carriedState,
+      });
       session.log?.info(
         `session ${session.id} transition from Connected to NoConnection`,
         {

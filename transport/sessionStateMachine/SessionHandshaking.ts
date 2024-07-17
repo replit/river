@@ -1,12 +1,14 @@
 import { Connection } from '../connection';
 import { OpaqueTransportMessage, TransportMessage } from '../message';
 import {
-  IdentifiedSession,
-  IdentifiedSessionProps,
+  IdentifiedSessionWithGracePeriod,
+  IdentifiedSessionWithGracePeriodListeners,
+  IdentifiedSessionWithGracePeriodProps,
   SessionState,
 } from './common';
 
-export interface SessionHandshakingListeners {
+export interface SessionHandshakingListeners
+  extends IdentifiedSessionWithGracePeriodListeners {
   onConnectionErrored: (err: unknown) => void;
   onConnectionClosed: () => void;
   onHandshake: (msg: OpaqueTransportMessage) => void;
@@ -17,7 +19,7 @@ export interface SessionHandshakingListeners {
 }
 
 export interface SessionHandshakingProps<ConnType extends Connection>
-  extends IdentifiedSessionProps {
+  extends IdentifiedSessionWithGracePeriodProps {
   conn: ConnType;
   listeners: SessionHandshakingListeners;
 }
@@ -28,12 +30,12 @@ export interface SessionHandshakingProps<ConnType extends Connection>
  */
 export class SessionHandshaking<
   ConnType extends Connection,
-> extends IdentifiedSession {
+> extends IdentifiedSessionWithGracePeriod {
   readonly state = SessionState.Handshaking as const;
   conn: ConnType;
   listeners: SessionHandshakingListeners;
 
-  handshakeTimeout: ReturnType<typeof setTimeout>;
+  handshakeTimeout?: ReturnType<typeof setTimeout>;
 
   constructor(props: SessionHandshakingProps<ConnType>) {
     super(props);
@@ -68,7 +70,11 @@ export class SessionHandshaking<
     this.conn.removeDataListener(this.onHandshakeData);
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
-    clearTimeout(this.handshakeTimeout);
+
+    if (this.handshakeTimeout) {
+      clearTimeout(this.handshakeTimeout);
+      this.handshakeTimeout = undefined;
+    }
   }
 
   _handleClose(): void {

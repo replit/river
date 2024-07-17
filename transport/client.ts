@@ -187,6 +187,9 @@ export abstract class ClientTransport<
             );
             this.onConnClosed(handshakingSession);
           },
+          onSessionGracePeriodElapsed: () => {
+            this.onSessionGracePeriodElapsed(handshakingSession);
+          },
         },
       );
 
@@ -365,6 +368,9 @@ export abstract class ClientTransport<
 
             this.onBackoffFinished(backingOffSession, reconnectPromise);
           },
+          onSessionGracePeriodElapsed: () => {
+            this.onSessionGracePeriodElapsed(backingOffSession);
+          },
         },
       );
 
@@ -405,6 +411,9 @@ export abstract class ClientTransport<
               connectingSession.loggingMetadata,
             );
             this.onConnectingFailed(connectingSession);
+          },
+          onSessionGracePeriodElapsed: () => {
+            this.onSessionGracePeriodElapsed(connectingSession);
           },
         },
       );

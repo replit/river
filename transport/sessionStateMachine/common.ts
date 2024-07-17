@@ -267,3 +267,43 @@ export abstract class IdentifiedSession extends CommonSession {
     this.telemetry.span.end();
   }
 }
+
+export interface IdentifiedSessionWithGracePeriodListeners {
+  onSessionGracePeriodElapsed: () => void;
+}
+
+export interface IdentifiedSessionWithGracePeriodProps
+  extends IdentifiedSessionProps {
+  graceExpiryTime: number;
+  listeners: IdentifiedSessionWithGracePeriodListeners;
+}
+
+export abstract class IdentifiedSessionWithGracePeriod extends IdentifiedSession {
+  graceExpiryTime: number;
+  protected gracePeriodTimeout?: ReturnType<typeof setTimeout>;
+
+  listeners: IdentifiedSessionWithGracePeriodListeners;
+
+  constructor(props: IdentifiedSessionWithGracePeriodProps) {
+    super(props);
+    this.listeners = props.listeners;
+
+    this.graceExpiryTime = props.graceExpiryTime;
+    this.gracePeriodTimeout = setTimeout(() => {
+      this.listeners.onSessionGracePeriodElapsed();
+    }, this.graceExpiryTime - Date.now());
+  }
+
+  _handleStateExit(): void {
+    super._handleStateExit();
+
+    if (this.gracePeriodTimeout) {
+      clearTimeout(this.gracePeriodTimeout);
+      this.gracePeriodTimeout = undefined;
+    }
+  }
+
+  _handleClose(): void {
+    super._handleClose();
+  }
+}
