@@ -76,8 +76,6 @@ export abstract class ClientTransport<
 
   /**
    * Abstract method that creates a new {@link Connection} object.
-   * This should call {@link handleConnection} when the connection is created.
-   * The downstream client implementation needs to implement this.
    *
    * @param to The client ID of the node to connect to.
    * @returns The new connection object.
@@ -86,7 +84,12 @@ export abstract class ClientTransport<
     to: TransportClientId,
   ): Promise<ConnType>;
 
-  private tryReconnecting(to: string) {
+  private tryReconnecting(to: TransportClientId) {
+    const oldSession = this.sessions.get(to);
+    if (!this.options.enableTransparentSessionReconnects && oldSession) {
+      this.deleteSession(oldSession);
+    }
+
     if (this.reconnectOnConnectionDrop && this.getStatus() === 'open') {
       this.connect(to);
     }
@@ -190,6 +193,9 @@ export abstract class ClientTransport<
               handshakingSession.loggingMetadata,
             );
             this.onConnClosed(handshakingSession);
+          },
+          onSessionGracePeriodElapsed: () => {
+            this.onSessionGracePeriodElapsed(handshakingSession);
           },
         },
       );
@@ -379,6 +385,9 @@ export abstract class ClientTransport<
 
             this.onBackoffFinished(backingOffSession, reconnectPromise);
           },
+          onSessionGracePeriodElapsed: () => {
+            this.onSessionGracePeriodElapsed(backingOffSession);
+          },
         },
       );
 
@@ -419,6 +428,9 @@ export abstract class ClientTransport<
               connectingSession.loggingMetadata,
             );
             this.onConnectingFailed(connectingSession);
+          },
+          onSessionGracePeriodElapsed: () => {
+            this.onSessionGracePeriodElapsed(connectingSession);
           },
         },
       );

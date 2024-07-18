@@ -1,14 +1,17 @@
 import {
-  IdentifiedSession,
-  IdentifiedSessionProps,
+  IdentifiedSessionWithGracePeriod,
+  IdentifiedSessionWithGracePeriodListeners,
+  IdentifiedSessionWithGracePeriodProps,
   SessionState,
 } from './common';
 
-export interface SessionBackingOffListeners {
+export interface SessionBackingOffListeners
+  extends IdentifiedSessionWithGracePeriodListeners {
   onBackoffFinished: () => void;
 }
 
-export interface SessionBackingOffProps extends IdentifiedSessionProps {
+export interface SessionBackingOffProps
+  extends IdentifiedSessionWithGracePeriodProps {
   backoffMs: number;
   listeners: SessionBackingOffListeners;
 }
@@ -17,7 +20,7 @@ export interface SessionBackingOffProps extends IdentifiedSessionProps {
  * A session that is backing off before attempting to connect.
  * See transitions.ts for valid transitions.
  */
-export class SessionBackingOff extends IdentifiedSession {
+export class SessionBackingOff extends IdentifiedSessionWithGracePeriod {
   readonly state = SessionState.BackingOff as const;
   listeners: SessionBackingOffListeners;
 

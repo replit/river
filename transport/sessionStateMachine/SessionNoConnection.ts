@@ -1,35 +1,21 @@
 import {
-  IdentifiedSession,
-  IdentifiedSessionProps,
+  IdentifiedSessionWithGracePeriod,
+  IdentifiedSessionWithGracePeriodListeners,
+  IdentifiedSessionWithGracePeriodProps,
   SessionState,
 } from './common';
 
-export interface SessionNoConnectionListeners {
-  // timeout related
-  onSessionGracePeriodElapsed: () => void;
-}
+export type SessionNoConnectionListeners =
+  IdentifiedSessionWithGracePeriodListeners;
 
-export interface SessionNoConnectionProps extends IdentifiedSessionProps {
-  listeners: SessionNoConnectionListeners;
-}
+export type SessionNoConnectionProps = IdentifiedSessionWithGracePeriodProps;
 
 /*
  * A session that is not connected and cannot send or receive messages.
  * See transitions.ts for valid transitions.
  */
-export class SessionNoConnection extends IdentifiedSession {
+export class SessionNoConnection extends IdentifiedSessionWithGracePeriod {
   readonly state = SessionState.NoConnection as const;
-  listeners: SessionNoConnectionListeners;
-
-  gracePeriodTimeout?: ReturnType<typeof setTimeout>;
-
-  constructor(props: SessionNoConnectionProps) {
-    super(props);
-    this.listeners = props.listeners;
-    this.gracePeriodTimeout = setTimeout(() => {
-      this.listeners.onSessionGracePeriodElapsed();
-    }, this.options.sessionDisconnectGraceMs);
-  }
 
   _handleClose(): void {
     super._handleClose();
@@ -37,10 +23,5 @@ export class SessionNoConnection extends IdentifiedSession {
 
   _handleStateExit(): void {
     super._handleStateExit();
-
-    if (this.gracePeriodTimeout) {
-      clearTimeout(this.gracePeriodTimeout);
-      this.gracePeriodTimeout = undefined;
-    }
   }
 }

@@ -1,13 +1,30 @@
+import { Static } from '@sinclair/typebox';
 import { MessageMetadata } from '../../logging';
 import { Connection } from '../connection';
-import { TransportMessage } from '../message';
-import { SessionHandshakingListeners } from './SessionHandshaking';
+import {
+  HandshakeErrorResponseCodes,
+  OpaqueTransportMessage,
+  TransportMessage,
+} from '../message';
 import { CommonSession, CommonSessionProps, SessionState } from './common';
+
+export interface SessionWaitingForHandshakeListeners {
+  onConnectionErrored: (err: unknown) => void;
+  onConnectionClosed: () => void;
+  onHandshake: (msg: OpaqueTransportMessage) => void;
+  onInvalidHandshake: (
+    reason: string,
+    code: Static<typeof HandshakeErrorResponseCodes>,
+  ) => void;
+
+  // timeout related
+  onHandshakeTimeout: () => void;
+}
 
 export interface SessionWaitingForHandshakeProps<ConnType extends Connection>
   extends CommonSessionProps {
   conn: ConnType;
-  listeners: SessionHandshakingListeners;
+  listeners: SessionWaitingForHandshakeListeners;
 }
 
 /*
@@ -19,7 +36,7 @@ export class SessionWaitingForHandshake<
 > extends CommonSession {
   readonly state = SessionState.WaitingForHandshake as const;
   conn: ConnType;
-  listeners: SessionHandshakingListeners;
+  listeners: SessionWaitingForHandshakeListeners;
 
   handshakeTimeout?: ReturnType<typeof setTimeout>;
 

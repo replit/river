@@ -1,11 +1,13 @@
 import { Connection } from '../connection';
 import {
-  IdentifiedSession,
-  IdentifiedSessionProps,
+  IdentifiedSessionWithGracePeriod,
+  IdentifiedSessionWithGracePeriodListeners,
+  IdentifiedSessionWithGracePeriodProps,
   SessionState,
 } from './common';
 
-export interface SessionConnectingListeners {
+export interface SessionConnectingListeners
+  extends IdentifiedSessionWithGracePeriodListeners {
   onConnectionEstablished: (conn: Connection) => void;
   onConnectionFailed: (err: unknown) => void;
 
@@ -14,7 +16,7 @@ export interface SessionConnectingListeners {
 }
 
 export interface SessionConnectingProps<ConnType extends Connection>
-  extends IdentifiedSessionProps {
+  extends IdentifiedSessionWithGracePeriodProps {
   connPromise: Promise<ConnType>;
   listeners: SessionConnectingListeners;
 }
@@ -25,7 +27,7 @@ export interface SessionConnectingProps<ConnType extends Connection>
  */
 export class SessionConnecting<
   ConnType extends Connection,
-> extends IdentifiedSession {
+> extends IdentifiedSessionWithGracePeriod {
   readonly state = SessionState.Connecting as const;
   connPromise: Promise<ConnType>;
   listeners: SessionConnectingListeners;
@@ -65,8 +67,11 @@ export class SessionConnecting<
 
   _handleStateExit(): void {
     super._handleStateExit();
-    clearTimeout(this.connectionTimeout);
-    this.connectionTimeout = undefined;
+
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = undefined;
+    }
   }
 
   _handleClose(): void {
