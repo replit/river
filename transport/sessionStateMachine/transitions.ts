@@ -10,6 +10,8 @@ import {
 import {
   IdentifiedSession,
   IdentifiedSessionProps,
+  IdentifiedSessionWithGracePeriod,
+  IdentifiedSessionWithGracePeriodProps,
   SessionOptions,
 } from './common';
 import { PropagationContext, createSessionTelemetryInfo } from '../../tracing';
@@ -46,6 +48,15 @@ function inheritSharedSession(
     telemetry: session.telemetry,
     options: session.options,
     log: session.log,
+  };
+}
+
+function inheritSharedSessionWithGrace(
+  session: IdentifiedSessionWithGracePeriod,
+): Omit<IdentifiedSessionWithGracePeriodProps, 'listeners'> {
+  return {
+    ...inheritSharedSession(session),
+    graceExpiryTime: session.graceExpiryTime,
   };
 }
 
@@ -115,14 +126,12 @@ export const SessionStateGraph = {
       backoffMs: number,
       listeners: SessionBackingOffListeners,
     ): SessionBackingOff => {
-      const carriedState = inheritSharedSession(oldSession);
-      const graceExpiryTime = oldSession.graceExpiryTime;
+      const carriedState = inheritSharedSessionWithGrace(oldSession);
       oldSession._handleStateExit();
 
       const session = new SessionBackingOff({
         backoffMs,
         listeners,
-        graceExpiryTime,
         ...carriedState,
       });
 
@@ -140,14 +149,12 @@ export const SessionStateGraph = {
       connPromise: Promise<ConnType>,
       listeners: SessionConnectingListeners,
     ): SessionConnecting<ConnType> => {
-      const carriedState = inheritSharedSession(oldSession);
-      const graceExpiryTime = oldSession.graceExpiryTime;
+      const carriedState = inheritSharedSessionWithGrace(oldSession);
       oldSession._handleStateExit();
 
       const session = new SessionConnecting({
         connPromise,
         listeners,
-        graceExpiryTime,
         ...carriedState,
       });
 
@@ -165,14 +172,12 @@ export const SessionStateGraph = {
       conn: ConnType,
       listeners: SessionHandshakingListeners,
     ): SessionHandshaking<ConnType> => {
-      const carriedState = inheritSharedSession(oldSession);
-      const graceExpiryTime = oldSession.graceExpiryTime;
+      const carriedState = inheritSharedSessionWithGrace(oldSession);
       oldSession._handleStateExit();
 
       const session = new SessionHandshaking({
         conn,
         listeners,
-        graceExpiryTime,
         ...carriedState,
       });
 
@@ -264,13 +269,11 @@ export const SessionStateGraph = {
       oldSession: SessionBackingOff,
       listeners: SessionNoConnectionListeners,
     ): SessionNoConnection => {
-      const carriedState = inheritSharedSession(oldSession);
-      const graceExpiryTime = oldSession.graceExpiryTime;
+      const carriedState = inheritSharedSessionWithGrace(oldSession);
       oldSession._handleStateExit();
 
       const session = new SessionNoConnection({
         listeners,
-        graceExpiryTime,
         ...carriedState,
       });
       session.log?.info(
@@ -287,14 +290,12 @@ export const SessionStateGraph = {
       oldSession: SessionConnecting<ConnType>,
       listeners: SessionNoConnectionListeners,
     ): SessionNoConnection => {
-      const carriedState = inheritSharedSession(oldSession);
-      const graceExpiryTime = oldSession.graceExpiryTime;
+      const carriedState = inheritSharedSessionWithGrace(oldSession);
       oldSession.bestEffortClose();
       oldSession._handleStateExit();
 
       const session = new SessionNoConnection({
         listeners,
-        graceExpiryTime,
         ...carriedState,
       });
       session.log?.info(
@@ -311,14 +312,12 @@ export const SessionStateGraph = {
       oldSession: SessionHandshaking<ConnType>,
       listeners: SessionNoConnectionListeners,
     ): SessionNoConnection => {
-      const carriedState = inheritSharedSession(oldSession);
-      const graceExpiryTime = oldSession.graceExpiryTime;
+      const carriedState = inheritSharedSessionWithGrace(oldSession);
       oldSession.conn.close();
       oldSession._handleStateExit();
 
       const session = new SessionNoConnection({
         listeners,
-        graceExpiryTime,
         ...carriedState,
       });
       session.log?.info(
@@ -361,38 +360,35 @@ export const SessionStateGraph = {
 
 const transitions = SessionStateGraph.transition;
 
-/*
- * 0. SessionNoConnection         ◄──┐
- * │  reconnect / connect attempt    │
- * ▼                                 │
- * 1. SessionBackingOff              │
- * │                              ───┤ explicit close
- * ▼                                 │
- * 2. SessionConnecting              │
- * │  connect success  ──────────────┤ connect failure
- * ▼                                 │
- * 3. SessionHandshaking             │
- * │  handshake success       ┌──────┤ connection drop
- * │  handshake failure  ─────┤      │
- * ▼                          │      │ connection drop
- * 4. SessionConnected        │      │ heartbeat misses
- * │  invalid message  ───────┼──────┘
- * ▼                          │
- * x. Destroy Session   ◄─────┘
- */
 export const ClientSessionStateGraph = {
   entrypoint: SessionStateGraph.entrypoints.NoConnection,
   transition: {
     // happy paths
+    // NoConnection -> BackingOff: attempt to connect
     NoConnectionToBackingOff: transitions.NoConnectionToBackingOff,
+    // BackingOff -> Connecting: backoff period elapsed, start connection
     BackingOffToConnecting: transitions.BackingOffToConnecting,
+    // Connecting -> Handshaking: connection established, start handshake
     ConnectingToHandshaking: transitions.ConnectingToHandshaking,
+    // Handshaking -> Connected: handshake complete, session ready
     HandshakingToConnected: transitions.HandshakingToConnected,
+
     // disconnect paths
+    // BackingOff -> NoConnection: unused
     BackingOffToNoConnection: transitions.BackingOffToNoConnection,
+    // Connecting -> NoConnection: connection failed or connection timeout
     ConnectingToNoConnection: transitions.ConnectingToNoConnection,
+    // Handshaking -> NoConnection: connection closed or handshake timeout
     HandshakingToNoConnection: transitions.HandshakingToNoConnection,
+    // Connected -> NoConnection: connection closed
     ConnectedToNoConnection: transitions.ConnectedToNoConnection,
+
+    // destroy/close paths
+    // NoConnection -> x: grace period elapsed
+    // BackingOff -> x: grace period elapsed
+    // Connecting -> x: grace period elapsed
+    // Handshaking -> x: grace period elapsed or invalid handshake message or handshake rejection
+    // Connected -> x: grace period elapsed or invalid message
   },
 };
 
@@ -403,26 +399,19 @@ export type ClientSession<ConnType extends Connection> =
   | SessionHandshaking<ConnType>
   | SessionConnected<ConnType>;
 
-/*
- * 0. SessionNoConnection         ◄──┐
- * │  reconnect / connect attempt    │
- * ▼                                 │
- * 1. WaitingForHandshake            │
- * │  handshake success       ┌──────┤ connection drop
- * │  handshake failure  ─────┤      │
- * ▼                          │      │ connection drop
- * 2. SessionConnected        │      │ heartbeat misses
- * │  invalid message  ───────┼──────┘
- * ▼                          │
- * x. Destroy Session   ◄─────┘
- */
 export const ServerSessionStateGraph = {
   entrypoint: SessionStateGraph.entrypoints.WaitingForHandshake,
   transition: {
     // happy paths
+    // WaitingForHandshake -> Connected: handshake complete, session ready
     WaitingForHandshakeToConnected: transitions.WaitingForHandshakeToConnected,
+
     // disconnect paths
+    // Connected -> NoConnection: connection closed
     ConnectedToNoConnection: transitions.ConnectedToNoConnection,
+
+    // destroy/close paths
+    // WaitingForHandshake -> x: handshake timeout elapsed or invalid handshake message or handshake rejection or connection closed
   },
 };
 

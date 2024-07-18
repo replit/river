@@ -108,13 +108,12 @@ export interface SessionOptions {
   heartbeatsUntilDead: number;
   /**
    * Max duration that a session can be without a connection before we consider
-   * it dead.
+   * it dead. This deadline is carried between states and is used to determine
+   * when to consider the session a lost cause and delete it entirely.
+   * Generally, this should be strictly greater than the sum of
+   * {@link connectionTimeoutMs} and {@link handshakeTimeoutMs}.
    */
   sessionDisconnectGraceMs: number;
-  /**
-   * Whether to enable transparent session reconnects
-   */
-  enableTransparentSessionReconnects: boolean;
   /**
    * Connection timeout in milliseconds
    */
@@ -123,6 +122,10 @@ export interface SessionOptions {
    * Handshake timeout in milliseconds
    */
   handshakeTimeoutMs: number;
+  /**
+   * Whether to enable transparent session reconnects
+   */
+  enableTransparentSessionReconnects: boolean;
   /**
    * The codec to use for encoding/decoding messages over the wire
    */
