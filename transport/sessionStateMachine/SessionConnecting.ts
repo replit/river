@@ -59,7 +59,17 @@ export class SessionConnecting<
   // ends up rejected anyways
   bestEffortClose() {
     void this.connPromise
-      .then((conn) => conn.close())
+      .then((conn) => {
+        this.log?.info(
+          'connection eventually resolved but session has transitioned, closing connection',
+          {
+            ...this.loggingMetadata,
+            ...conn.loggingMetadata,
+          },
+        );
+
+        conn.close();
+      })
       .catch(() => {
         // ignore errors
       });

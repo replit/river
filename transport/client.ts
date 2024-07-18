@@ -255,7 +255,6 @@ export abstract class ClientTransport<
       if (retriable) {
         this.tryReconnecting(session.to);
       } else {
-        this.deleteSession(session);
         this.protocolError({
           type: ProtocolError.HandshakeFailed,
           code: msg.payload.status.code,

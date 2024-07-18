@@ -59,6 +59,13 @@ export class SessionHandshaking<
     this.conn.addCloseListener(this.listeners.onConnectionClosed);
   }
 
+  get loggingMetadata() {
+    return {
+      ...super.loggingMetadata,
+      ...this.conn.loggingMetadata,
+    };
+  }
+
   onHandshakeData = (msg: Uint8Array) => {
     const parsedMsg = this.parseMsg(msg);
     if (parsedMsg === null) {
