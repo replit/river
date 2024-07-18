@@ -1,5 +1,4 @@
 import { Static } from '@sinclair/typebox';
-import { MessageMetadata } from '../../logging';
 import { Connection } from '../connection';
 import {
   HandshakeErrorResponseCodes,

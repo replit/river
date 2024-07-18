@@ -247,13 +247,14 @@ export abstract class ClientTransport<
         : false;
 
       const reason = `handshake failed: ${msg.payload.status.reason}`;
+      const to = session.to;
       this.rejectHandshakeResponse(session, reason, {
         ...session.loggingMetadata,
         transportMessage: msg,
       });
 
       if (retriable) {
-        this.tryReconnecting(session.to);
+        this.tryReconnecting(to);
       } else {
         this.protocolError({
           type: ProtocolError.HandshakeFailed,

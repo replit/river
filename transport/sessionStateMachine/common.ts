@@ -70,6 +70,8 @@ abstract class StateMachineState {
         // modify _handleClose
         if (prop === '_handleClose') {
           return () => {
+            // target is the non-proxied object, we need to set _isConsumed again
+            target._isConsumed = true;
             target._handleStateExit();
             target._handleClose();
           };

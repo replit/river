@@ -60,15 +60,14 @@ export class SessionConnecting<
   bestEffortClose() {
     void this.connPromise
       .then((conn) => {
+        conn.close();
         this.log?.info(
-          'connection eventually resolved but session has transitioned, closing connection',
+          'connection eventually resolved but session has transitioned, closed connection',
           {
             ...this.loggingMetadata,
             ...conn.loggingMetadata,
           },
         );
-
-        conn.close();
       })
       .catch(() => {
         // ignore errors
