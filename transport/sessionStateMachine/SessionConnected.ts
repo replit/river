@@ -112,6 +112,13 @@ export class SessionConnected<
     }, this.options.heartbeatIntervalMs);
   }
 
+  get loggingMetadata() {
+    return {
+      ...super.loggingMetadata,
+      ...this.conn.loggingMetadata,
+    };
+  }
+
   startActiveHeartbeat() {
     this.isActivelyHeartbeating = true;
   }

@@ -11,6 +11,7 @@ import { generateId } from './id';
 export abstract class Connection {
   id: string;
   telemetry?: TelemetryInfo;
+
   constructor() {
     this.id = `conn-${generateId()}`; // for debugging, no collision safety needed
   }

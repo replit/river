@@ -271,15 +271,69 @@ export abstract class ServerTransport<
     let oldSession = this.sessions.get(msg.from);
 
     // invariant: must pass custom validation if defined
-    const parsedMetadata = await this.validateHandshakeMetadata(
-      session,
-      oldSession,
-      msg.payload.metadata,
-      msg.from,
-    );
+    let parsedMetadata: ParsedMetadata = {};
+    if (this.handshakeExtensions) {
+      if (!Value.Check(this.handshakeExtensions.schema, msg.payload.metadata)) {
+        this.rejectHandshakeRequest(
+          session,
+          msg.from,
+          'received malformed handshake metadata',
+          'MALFORMED_HANDSHAKE_META',
+          {
+            ...session.loggingMetadata,
+            connectedTo: msg.from,
+            validationErrors: [
+              ...Value.Errors(
+                this.handshakeExtensions.schema,
+                msg.payload.metadata,
+              ),
+            ],
+          },
+        );
 
-    if (parsedMetadata === false) {
-      return;
+        return;
+      }
+
+      const previousParsedMetadata = oldSession
+        ? this.sessionHandshakeMetadata.get(oldSession.to)
+        : undefined;
+
+      const parsedMetadataOrFailureCode =
+        await this.handshakeExtensions.validate(
+          msg.payload.metadata,
+          previousParsedMetadata,
+        );
+
+      // double-check to make sure we haven't transitioned the session yet
+      if (session._isConsumed) {
+        // bail out, don't need to do anything
+        return;
+      }
+
+      // handler rejected the connection
+      if (
+        Value.Check(
+          HandshakeErrorCustomHandlerFatalResponseCodes,
+          parsedMetadataOrFailureCode,
+        )
+      ) {
+        this.rejectHandshakeRequest(
+          session,
+          msg.from,
+          'rejected by handshake handler',
+          parsedMetadataOrFailureCode,
+          {
+            ...session.loggingMetadata,
+            connectedTo: msg.from,
+            clientId: this.clientId,
+          },
+        );
+
+        return;
+      }
+
+      // success!
+      parsedMetadata = parsedMetadataOrFailureCode;
     }
 
     // 4 connect cases
@@ -414,6 +468,7 @@ export abstract class ServerTransport<
         connectedTo: msg.from,
       },
     );
+
     const responseMsg = handshakeResponseMessage({
       from: this.clientId,
       to: msg.from,
@@ -422,6 +477,7 @@ export abstract class ServerTransport<
         sessionId,
       },
     });
+
     session.sendHandshake(responseMsg);
 
     // transition
@@ -464,70 +520,5 @@ export abstract class ServerTransport<
     this.updateSession(connectedSession);
     this.pendingSessions.delete(session);
     connectedSession.startActiveHeartbeat();
-  }
-
-  private async validateHandshakeMetadata(
-    handshakingSession: SessionWaitingForHandshake<ConnType>,
-    existingSession: ServerSession<ConnType> | undefined,
-    rawMetadata: Static<
-      typeof ControlMessageHandshakeRequestSchema
-    >['metadata'],
-    from: TransportClientId,
-  ): Promise<ParsedMetadata | false> {
-    if (!this.handshakeExtensions) {
-      return {};
-    }
-
-    // check that the metadata that was sent is the correct shape
-    if (!Value.Check(this.handshakeExtensions.schema, rawMetadata)) {
-      this.rejectHandshakeRequest(
-        handshakingSession,
-        from,
-        'received malformed handshake metadata',
-        'MALFORMED_HANDSHAKE_META',
-        {
-          ...handshakingSession.loggingMetadata,
-          connectedTo: from,
-          validationErrors: [
-            ...Value.Errors(this.handshakeExtensions.schema, rawMetadata),
-          ],
-        },
-      );
-
-      return false;
-    }
-
-    const previousParsedMetadata = existingSession
-      ? this.sessionHandshakeMetadata.get(existingSession.to)
-      : undefined;
-
-    const parsedMetadataOrFailureCode = await this.handshakeExtensions.validate(
-      rawMetadata,
-      previousParsedMetadata,
-    );
-
-    // handler rejected the connection
-    if (
-      Value.Check(
-        HandshakeErrorCustomHandlerFatalResponseCodes,
-        parsedMetadataOrFailureCode,
-      )
-    ) {
-      this.rejectHandshakeRequest(
-        handshakingSession,
-        from,
-        'rejected by handshake handler',
-        parsedMetadataOrFailureCode,
-        {
-          ...handshakingSession.loggingMetadata,
-          connectedTo: from,
-          clientId: this.clientId,
-        },
-      );
-
-      return false;
-    }
-
-    return parsedMetadataOrFailureCode;
   }
 }

@@ -1,5 +1,4 @@
 import { Static } from '@sinclair/typebox';
-import { MessageMetadata } from '../../logging';
 import { Connection } from '../connection';
 import {
   HandshakeErrorResponseCodes,
@@ -54,6 +53,14 @@ export class SessionWaitingForHandshake<
     this.conn.addCloseListener(this.listeners.onConnectionClosed);
   }
 
+  get loggingMetadata() {
+    return {
+      clientId: this.from,
+      connId: this.conn.id,
+      ...this.conn.loggingMetadata,
+    };
+  }
+
   onHandshakeData = (msg: Uint8Array) => {
     const parsedMsg = this.parseMsg(msg);
     if (parsedMsg === null) {
@@ -68,13 +75,6 @@ export class SessionWaitingForHandshake<
     // and thus removing the handshake timeout
     this.listeners.onHandshake(parsedMsg);
   };
-
-  get loggingMetadata(): MessageMetadata {
-    return {
-      clientId: this.from,
-      connId: this.conn.id,
-    };
-  }
 
   sendHandshake(msg: TransportMessage): boolean {
     return this.conn.send(this.options.codec.toBuffer(msg));

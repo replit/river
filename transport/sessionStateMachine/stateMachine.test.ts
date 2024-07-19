@@ -1385,9 +1385,11 @@ describe('session state machine', () => {
 
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
-      expect(session.sendBuffer.length).toBe(2);
+      const sendBuffer = session.sendBuffer;
+      expect(sendBuffer.length).toBe(2);
       session.close();
-      expect(session.sendBuffer.length).toBe(0);
+      expect(sendBuffer.length).toBe(0);
+      expect(session._isConsumed).toBe(true);
     });
 
     test('backing off', async () => {
@@ -1397,9 +1399,11 @@ describe('session state machine', () => {
 
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
-      expect(session.sendBuffer.length).toBe(2);
+      const sendBuffer = session.sendBuffer;
+      expect(sendBuffer.length).toBe(2);
       session.close();
-      expect(session.sendBuffer.length).toBe(0);
+      expect(sendBuffer.length).toBe(0);
+      expect(session._isConsumed).toBe(true);
     });
 
     test('connecting', async () => {
@@ -1409,12 +1413,31 @@ describe('session state machine', () => {
 
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
-      expect(session.sendBuffer.length).toBe(2);
+      const conn = session.connPromise;
+      const sendBuffer = session.sendBuffer;
+      expect(sendBuffer.length).toBe(2);
       connect();
       session.close();
-      expect(session.sendBuffer.length).toBe(0);
-      const conn = await session.connPromise;
-      expect(conn.status).toBe('closed');
+      expect(sendBuffer.length).toBe(0);
+      expect((await conn).status).toBe('closed');
+      expect(session._isConsumed).toBe(true);
+    });
+
+    test('connecting finish after close', async () => {
+      const sessionHandle = createSessionConnecting();
+      const session = sessionHandle.session;
+      const { connect, onConnectionEstablished } = sessionHandle;
+
+      session.send(payloadToTransportMessage('hello'));
+      session.send(payloadToTransportMessage('world'));
+      const conn = session.connPromise;
+      const sendBuffer = session.sendBuffer;
+      expect(sendBuffer.length).toBe(2);
+      session.close();
+      connect();
+
+      expect((await conn).status).toBe('closed');
+      expect(onConnectionEstablished).not.toHaveBeenCalled();
     });
 
     test('handshaking', async () => {
@@ -1423,11 +1446,14 @@ describe('session state machine', () => {
 
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
-      expect(session.sendBuffer.length).toBe(2);
-      session.close();
-      expect(session.sendBuffer.length).toBe(0);
       const conn = session.conn;
+      const sendBuffer = session.sendBuffer;
+      expect(sendBuffer.length).toBe(2);
+      session.close();
+
+      expect(sendBuffer.length).toBe(0);
       expect(conn.status).toBe('closed');
+      expect(session._isConsumed).toBe(true);
     });
 
     test('connected', async () => {
@@ -1436,20 +1462,25 @@ describe('session state machine', () => {
 
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
-      expect(session.sendBuffer.length).toBe(2);
-      session.close();
-      expect(session.sendBuffer.length).toBe(0);
       const conn = session.conn;
+      const sendBuffer = session.sendBuffer;
+      expect(sendBuffer.length).toBe(2);
+      session.close();
+
+      expect(sendBuffer.length).toBe(0);
       expect(conn.status).toBe('closed');
+      expect(session._isConsumed).toBe(true);
     });
 
     test('pending identification', async () => {
       const sessionHandle = createSessionWaitingForHandshake();
       const session = sessionHandle.session;
 
-      session.close();
       const conn = session.conn;
+      session.close();
+
       expect(conn.status).toBe('closed');
+      expect(session._isConsumed).toBe(true);
     });
   });
 

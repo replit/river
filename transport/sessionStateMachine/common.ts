@@ -70,6 +70,8 @@ abstract class StateMachineState {
         // modify _handleClose
         if (prop === '_handleClose') {
           return () => {
+            // target is the non-proxied object, we need to set _isConsumed again
+            target._isConsumed = true;
             target._handleStateExit();
             target._handleClose();
           };
@@ -228,15 +230,20 @@ export abstract class IdentifiedSession extends CommonSession {
   get loggingMetadata(): MessageMetadata {
     const spanContext = this.telemetry.span.spanContext();
 
-    return {
+    const metadata: MessageMetadata = {
       clientId: this.from,
       connectedTo: this.to,
       sessionId: this.id,
-      telemetry: {
+    };
+
+    if (this.telemetry.span.isRecording()) {
+      metadata.telemetry = {
         traceId: spanContext.traceId,
         spanId: spanContext.spanId,
-      },
-    };
+      };
+    }
+
+    return metadata;
   }
 
   constructMsg<Payload>(

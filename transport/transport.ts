@@ -209,8 +209,9 @@ export abstract class Transport<ConnType extends Connection> {
       session: session,
     });
 
+    const to = session.to;
     session.close();
-    this.sessions.delete(session.to);
+    this.sessions.delete(to);
   }
 
   // common listeners

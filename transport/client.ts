@@ -247,15 +247,15 @@ export abstract class ClientTransport<
         : false;
 
       const reason = `handshake failed: ${msg.payload.status.reason}`;
+      const to = session.to;
       this.rejectHandshakeResponse(session, reason, {
         ...session.loggingMetadata,
         transportMessage: msg,
       });
 
       if (retriable) {
-        this.tryReconnecting(session.to);
+        this.tryReconnecting(to);
       } else {
-        this.deleteSession(session);
         this.protocolError({
           type: ProtocolError.HandshakeFailed,
           code: msg.payload.status.code,
@@ -318,6 +318,13 @@ export abstract class ClientTransport<
    * @param to The client ID of the node to connect to.
    */
   connect(to: TransportClientId) {
+    if (this.getStatus() !== 'open') {
+      this.log?.info(
+        `transport state is no longer open, cancelling attempt to connect to ${to}`,
+      );
+      return;
+    }
+
     // create a new session if one does not exist
     let session = this.sessions.get(to);
     session ??= this.createUnconnectedSession(to);
@@ -326,14 +333,6 @@ export abstract class ClientTransport<
       // already trying to connect
       this.log?.debug(
         `session to ${to} has state ${session.state}, skipping connect attempt`,
-        session.loggingMetadata,
-      );
-      return;
-    }
-
-    if (this.getStatus() !== 'open') {
-      this.log?.info(
-        `transport state is no longer open, cancelling attempt to connect to ${to}`,
         session.loggingMetadata,
       );
       return;
