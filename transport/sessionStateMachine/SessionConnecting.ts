@@ -39,10 +39,6 @@ export class SessionConnecting<
     this.connPromise = props.connPromise;
     this.listeners = props.listeners;
 
-    this.connectionTimeout = setTimeout(() => {
-      this.listeners.onConnectionTimeout();
-    }, this.options.connectionTimeoutMs);
-
     this.connPromise.then(
       (conn) => {
         if (this._isConsumed) return;
@@ -53,18 +49,29 @@ export class SessionConnecting<
         this.listeners.onConnectionFailed(err);
       },
     );
+
+    this.connectionTimeout = setTimeout(() => {
+      this.listeners.onConnectionTimeout();
+    }, this.options.connectionTimeoutMs);
   }
 
   // close a pending connection if it resolves, ignore errors if the promise
   // ends up rejected anyways
   bestEffortClose() {
-    void this.connPromise
+    // these can technically be stale if the connPromise resolves after the
+    // state has transitioned, but that's fine, this is best effort anyways
+    // we pull these out so even if the state has transitioned, we can still log
+    // without erroring out
+    const logger = this.log;
+    const metadata = this.loggingMetadata;
+
+    this.connPromise
       .then((conn) => {
         conn.close();
-        this.log?.info(
+        logger?.info(
           'connection eventually resolved but session has transitioned, closed connection',
           {
-            ...this.loggingMetadata,
+            ...metadata,
             ...conn.loggingMetadata,
           },
         );
