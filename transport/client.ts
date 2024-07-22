@@ -364,25 +364,7 @@ export abstract class ClientTransport<
         backoffMs,
         {
           onBackoffFinished: () => {
-            const reconnectPromise = tracer.startActiveSpan(
-              'connect',
-              async (span) => {
-                try {
-                  return await this.createNewOutgoingConnection(to);
-                } catch (err) {
-                  // rethrow the error so that the promise is rejected
-                  // as it was before we wrapped it in a span
-                  const errStr = coerceErrorString(err);
-                  span.recordException(errStr);
-                  span.setStatus({ code: SpanStatusCode.ERROR });
-                  throw err;
-                } finally {
-                  span.end();
-                }
-              },
-            );
-
-            this.onBackoffFinished(backingOffSession, reconnectPromise);
+            this.onBackoffFinished(backingOffSession);
           },
           onSessionGracePeriodElapsed: () => {
             this.onSessionGracePeriodElapsed(backingOffSession);
@@ -393,10 +375,22 @@ export abstract class ClientTransport<
     this.updateSession(backingOffSession);
   }
 
-  protected onBackoffFinished(
-    session: SessionBackingOff,
-    connPromise: Promise<ConnType>,
-  ) {
+  protected onBackoffFinished(session: SessionBackingOff) {
+    const connPromise = tracer.startActiveSpan('connect', async (span) => {
+      try {
+        return await this.createNewOutgoingConnection(session.to);
+      } catch (err) {
+        // rethrow the error so that the promise is rejected
+        // as it was before we wrapped it in a span
+        const errStr = coerceErrorString(err);
+        span.recordException(errStr);
+        span.setStatus({ code: SpanStatusCode.ERROR });
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
+
     // transition to connecting
     const connectingSession =
       ClientSessionStateGraph.transition.BackingOffToConnecting(
@@ -406,7 +400,10 @@ export abstract class ClientTransport<
           onConnectionEstablished: (conn) => {
             this.log?.debug(
               `connection to ${connectingSession.to} established`,
-              connectingSession.loggingMetadata,
+              {
+                ...conn.loggingMetadata,
+                ...connectingSession.loggingMetadata,
+              },
             );
 
             // cast here because conn can't be narrowed to ConnType

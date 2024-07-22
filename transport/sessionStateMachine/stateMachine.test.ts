@@ -1535,13 +1535,13 @@ describe('session state machine', () => {
 
       connect();
 
-      await waitFor(async () => {
-        expect(connectionEstablished).toHaveBeenCalled();
-        expect(connectionEstablished).toHaveBeenCalledWith(
-          await session.connPromise,
-        );
-        expect(connectionFailed).not.toHaveBeenCalled();
-      });
+      // wait for one tick
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(connectionEstablished).toHaveBeenCalled();
+      expect(connectionEstablished).toHaveBeenCalledWith(
+        await session.connPromise,
+      );
+      expect(connectionFailed).not.toHaveBeenCalled();
 
       // should not have transitioned to the next state
       expect(session.state).toBe(SessionState.Connecting);
@@ -1558,13 +1558,10 @@ describe('session state machine', () => {
 
       error(new Error('test error'));
 
-      await waitFor(async () => {
-        expect(onConnectionFailed).toHaveBeenCalled();
-        expect(onConnectionFailed).toHaveBeenCalledWith(
-          new Error('test error'),
-        );
-        expect(onConnectionEstablished).not.toHaveBeenCalled();
-      });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(onConnectionFailed).toHaveBeenCalled();
+      expect(onConnectionFailed).toHaveBeenCalledWith(new Error('test error'));
+      expect(onConnectionEstablished).not.toHaveBeenCalled();
 
       // should not have transitioned to the next state
       expect(session.state).toBe(SessionState.Connecting);
