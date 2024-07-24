@@ -353,7 +353,7 @@ export abstract class ServerTransport<
       | 'hard reconnection' = 'new session';
     const clientNextExpectedSeq =
       msg.payload.expectedSessionState.nextExpectedSeq;
-    const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq ?? 0;
+    const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq;
 
     if (
       this.options.enableTransparentSessionReconnects &&

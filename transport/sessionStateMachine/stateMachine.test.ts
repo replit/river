@@ -1664,6 +1664,7 @@ describe('session state machine', () => {
             sessionId: 'clientSessionId',
             expectedSessionState: {
               nextExpectedSeq: 0,
+              nextSentSeq: 0,
             },
           }),
         ),
@@ -1784,6 +1785,7 @@ describe('session state machine', () => {
             sessionId: 'clientSessionId',
             expectedSessionState: {
               nextExpectedSeq: 0,
+              nextSentSeq: 0,
             },
           }),
         ),

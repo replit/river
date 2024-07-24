@@ -63,6 +63,7 @@ describe('message helpers', () => {
       to: 'b',
       expectedSessionState: {
         nextExpectedSeq: 0,
+        nextSentSeq: 0,
       },
       sessionId: 'sess',
     });
@@ -91,6 +92,7 @@ describe('message helpers', () => {
       status: {
         ok: false,
         reason: 'bad',
+        code: 'SESSION_STATE_MISMATCH',
       },
     });
 
