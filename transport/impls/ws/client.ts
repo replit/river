@@ -64,9 +64,10 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
     });
 
     const conn = new WebSocketConnection(ws);
-    this.log?.info(`raw websocket to ${to} ok, starting handshake`, {
+    this.log?.info(`raw websocket to ${to} ok`, {
       clientId: this.clientId,
       connectedTo: to,
+      ...conn.loggingMetadata,
     });
 
     return conn;

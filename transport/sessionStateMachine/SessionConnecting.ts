@@ -1,11 +1,13 @@
 import { Connection } from '../connection';
 import {
-  IdentifiedSession,
-  IdentifiedSessionProps,
+  IdentifiedSessionWithGracePeriod,
+  IdentifiedSessionWithGracePeriodListeners,
+  IdentifiedSessionWithGracePeriodProps,
   SessionState,
 } from './common';
 
-export interface SessionConnectingListeners {
+export interface SessionConnectingListeners
+  extends IdentifiedSessionWithGracePeriodListeners {
   onConnectionEstablished: (conn: Connection) => void;
   onConnectionFailed: (err: unknown) => void;
 
@@ -14,7 +16,7 @@ export interface SessionConnectingListeners {
 }
 
 export interface SessionConnectingProps<ConnType extends Connection>
-  extends IdentifiedSessionProps {
+  extends IdentifiedSessionWithGracePeriodProps {
   connPromise: Promise<ConnType>;
   listeners: SessionConnectingListeners;
 }
@@ -25,7 +27,7 @@ export interface SessionConnectingProps<ConnType extends Connection>
  */
 export class SessionConnecting<
   ConnType extends Connection,
-> extends IdentifiedSession {
+> extends IdentifiedSessionWithGracePeriod {
   readonly state = SessionState.Connecting as const;
   connPromise: Promise<ConnType>;
   listeners: SessionConnectingListeners;
@@ -37,10 +39,6 @@ export class SessionConnecting<
     this.connPromise = props.connPromise;
     this.listeners = props.listeners;
 
-    this.connectionTimeout = setTimeout(() => {
-      this.listeners.onConnectionTimeout();
-    }, this.options.connectionTimeoutMs);
-
     this.connPromise.then(
       (conn) => {
         if (this._isConsumed) return;
@@ -51,13 +49,33 @@ export class SessionConnecting<
         this.listeners.onConnectionFailed(err);
       },
     );
+
+    this.connectionTimeout = setTimeout(() => {
+      this.listeners.onConnectionTimeout();
+    }, this.options.connectionTimeoutMs);
   }
 
   // close a pending connection if it resolves, ignore errors if the promise
   // ends up rejected anyways
   bestEffortClose() {
-    void this.connPromise
-      .then((conn) => conn.close())
+    // these can technically be stale if the connPromise resolves after the
+    // state has transitioned, but that's fine, this is best effort anyways
+    // we pull these out so even if the state has transitioned, we can still log
+    // without erroring out
+    const logger = this.log;
+    const metadata = this.loggingMetadata;
+
+    this.connPromise
+      .then((conn) => {
+        conn.close();
+        logger?.info(
+          'connection eventually resolved but session has transitioned, closed connection',
+          {
+            ...metadata,
+            ...conn.loggingMetadata,
+          },
+        );
+      })
       .catch(() => {
         // ignore errors
       });
@@ -65,8 +83,11 @@ export class SessionConnecting<
 
   _handleStateExit(): void {
     super._handleStateExit();
-    clearTimeout(this.connectionTimeout);
-    this.connectionTimeout = undefined;
+
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = undefined;
+    }
   }
 
   _handleClose(): void {

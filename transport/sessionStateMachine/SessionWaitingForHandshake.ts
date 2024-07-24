@@ -1,13 +1,29 @@
-import { MessageMetadata } from '../../logging';
+import { Static } from '@sinclair/typebox';
 import { Connection } from '../connection';
-import { TransportMessage } from '../message';
-import { SessionHandshakingListeners } from './SessionHandshaking';
+import {
+  HandshakeErrorResponseCodes,
+  OpaqueTransportMessage,
+  TransportMessage,
+} from '../message';
 import { CommonSession, CommonSessionProps, SessionState } from './common';
+
+export interface SessionWaitingForHandshakeListeners {
+  onConnectionErrored: (err: unknown) => void;
+  onConnectionClosed: () => void;
+  onHandshake: (msg: OpaqueTransportMessage) => void;
+  onInvalidHandshake: (
+    reason: string,
+    code: Static<typeof HandshakeErrorResponseCodes>,
+  ) => void;
+
+  // timeout related
+  onHandshakeTimeout: () => void;
+}
 
 export interface SessionWaitingForHandshakeProps<ConnType extends Connection>
   extends CommonSessionProps {
   conn: ConnType;
-  listeners: SessionHandshakingListeners;
+  listeners: SessionWaitingForHandshakeListeners;
 }
 
 /*
@@ -19,7 +35,7 @@ export class SessionWaitingForHandshake<
 > extends CommonSession {
   readonly state = SessionState.WaitingForHandshake as const;
   conn: ConnType;
-  listeners: SessionHandshakingListeners;
+  listeners: SessionWaitingForHandshakeListeners;
 
   handshakeTimeout?: ReturnType<typeof setTimeout>;
 
@@ -37,10 +53,21 @@ export class SessionWaitingForHandshake<
     this.conn.addCloseListener(this.listeners.onConnectionClosed);
   }
 
+  get loggingMetadata() {
+    return {
+      clientId: this.from,
+      connId: this.conn.id,
+      ...this.conn.loggingMetadata,
+    };
+  }
+
   onHandshakeData = (msg: Uint8Array) => {
     const parsedMsg = this.parseMsg(msg);
     if (parsedMsg === null) {
-      this.listeners.onInvalidHandshake('could not parse message');
+      this.listeners.onInvalidHandshake(
+        'could not parse message',
+        'MALFORMED_HANDSHAKE',
+      );
       return;
     }
 
@@ -48,13 +75,6 @@ export class SessionWaitingForHandshake<
     // and thus removing the handshake timeout
     this.listeners.onHandshake(parsedMsg);
   };
-
-  get loggingMetadata(): MessageMetadata {
-    return {
-      clientId: this.from,
-      connId: this.conn.id,
-    };
-  }
 
   sendHandshake(msg: TransportMessage): boolean {
     return this.conn.send(this.options.codec.toBuffer(msg));

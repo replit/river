@@ -1,5 +1,6 @@
 import { Static, TSchema } from '@sinclair/typebox';
 import { ParsedMetadata } from './context';
+import { HandshakeErrorCustomHandlerFatalResponseCodes } from '../transport/message';
 
 type ConstructHandshake<T extends TSchema> = () =>
   | Static<T>
@@ -8,7 +9,13 @@ type ConstructHandshake<T extends TSchema> = () =>
 type ValidateHandshake<T extends TSchema> = (
   metadata: Static<T>,
   previousParsedMetadata?: ParsedMetadata,
-) => false | ParsedMetadata | Promise<false | ParsedMetadata>;
+) =>
+  | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
+  | ParsedMetadata
+  | Promise<
+      | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
+      | ParsedMetadata
+    >;
 
 export interface ClientHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,

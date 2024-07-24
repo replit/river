@@ -39,7 +39,7 @@ export interface ServiceContext {}
  * ```
  */
 /* eslint-disable-next-line @typescript-eslint/no-empty-interface */
-export interface ParsedMetadata {}
+export interface ParsedMetadata extends Record<string, unknown> {}
 
 /**
  * This is passed to every procedure handler and contains various context-level

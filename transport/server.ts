@@ -3,6 +3,7 @@ import { ParsedMetadata } from '../router/context';
 import { ServerHandshakeOptions } from '../router/handshake';
 import {
   ControlMessageHandshakeRequestSchema,
+  HandshakeErrorCustomHandlerFatalResponseCodes,
   HandshakeErrorResponseCodes,
   OpaqueTransportMessage,
   acceptedProtocolVersions,
@@ -172,13 +173,17 @@ export abstract class ServerTransport<
           receivedHandshake = true;
           void this.onHandshakeRequest(pendingSession, msg);
         },
-        onInvalidHandshake: (reason) => {
+        onInvalidHandshake: (reason, code) => {
           this.log?.error(
             `invalid handshake: ${reason}`,
             pendingSession.loggingMetadata,
           );
           this.deletePendingSession(pendingSession);
-          this.protocolError(ProtocolError.HandshakeFailed, reason);
+          this.protocolError({
+            type: ProtocolError.HandshakeFailed,
+            code,
+            message: reason,
+          });
         },
       },
       this.options,
@@ -214,7 +219,11 @@ export abstract class ServerTransport<
       }),
     );
 
-    this.protocolError(ProtocolError.HandshakeFailed, reason);
+    this.protocolError({
+      type: ProtocolError.HandshakeFailed,
+      code,
+      message: reason,
+    });
     this.deletePendingSession(session);
   }
 
@@ -263,15 +272,69 @@ export abstract class ServerTransport<
     let oldSession = this.sessions.get(msg.from);
 
     // invariant: must pass custom validation if defined
-    const parsedMetadata = await this.validateHandshakeMetadata(
-      session,
-      oldSession,
-      msg.payload.metadata,
-      msg.from,
-    );
+    let parsedMetadata: ParsedMetadata = {};
+    if (this.handshakeExtensions) {
+      if (!Value.Check(this.handshakeExtensions.schema, msg.payload.metadata)) {
+        this.rejectHandshakeRequest(
+          session,
+          msg.from,
+          'received malformed handshake metadata',
+          'MALFORMED_HANDSHAKE_META',
+          {
+            ...session.loggingMetadata,
+            connectedTo: msg.from,
+            validationErrors: [
+              ...Value.Errors(
+                this.handshakeExtensions.schema,
+                msg.payload.metadata,
+              ),
+            ],
+          },
+        );
 
-    if (parsedMetadata === false) {
-      return;
+        return;
+      }
+
+      const previousParsedMetadata = oldSession
+        ? this.sessionHandshakeMetadata.get(oldSession.to)
+        : undefined;
+
+      const parsedMetadataOrFailureCode =
+        await this.handshakeExtensions.validate(
+          msg.payload.metadata,
+          previousParsedMetadata,
+        );
+
+      // double-check to make sure we haven't transitioned the session yet
+      if (session._isConsumed) {
+        // bail out, don't need to do anything
+        return;
+      }
+
+      // handler rejected the connection
+      if (
+        Value.Check(
+          HandshakeErrorCustomHandlerFatalResponseCodes,
+          parsedMetadataOrFailureCode,
+        )
+      ) {
+        this.rejectHandshakeRequest(
+          session,
+          msg.from,
+          'rejected by handshake handler',
+          parsedMetadataOrFailureCode,
+          {
+            ...session.loggingMetadata,
+            connectedTo: msg.from,
+            clientId: this.clientId,
+          },
+        );
+
+        return;
+      }
+
+      // success!
+      parsedMetadata = parsedMetadataOrFailureCode;
     }
 
     // 4 connect cases
@@ -293,7 +356,11 @@ export abstract class ServerTransport<
       msg.payload.expectedSessionState.nextExpectedSeq;
     const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq ?? 0;
 
-    if (oldSession && oldSession.id === msg.payload.sessionId) {
+    if (
+      this.options.enableTransparentSessionReconnects &&
+      oldSession &&
+      oldSession.id === msg.payload.sessionId
+    ) {
       connectCase = 'transparent reconnection';
 
       // invariant: ordering must be correct
@@ -374,10 +441,15 @@ export abstract class ServerTransport<
       // we don't have a session, but the client is trying to reconnect
       // to an old session. we can't do anything about this, so we reject
       connectCase = 'unknown session';
+
+      const rejectionMessage = this.options.enableTransparentSessionReconnects
+        ? `client is trying to reconnect to a session the server don't know about: ${msg.payload.sessionId}`
+        : `client is attempting a transparent reconnect to a session but the server does not support it: ${msg.payload.sessionId}`;
+
       this.rejectHandshakeRequest(
         session,
         msg.from,
-        `client is trying to reconnect to a session the server don't know about: ${msg.payload.sessionId}`,
+        rejectionMessage,
         'SESSION_STATE_MISMATCH',
         {
           ...session.loggingMetadata,
@@ -397,6 +469,7 @@ export abstract class ServerTransport<
         connectedTo: msg.from,
       },
     );
+
     const responseMsg = handshakeResponseMessage({
       from: this.clientId,
       to: msg.from,
@@ -405,6 +478,7 @@ export abstract class ServerTransport<
         sessionId,
       },
     });
+
     session.sendHandshake(responseMsg);
 
     // transition
@@ -434,7 +508,10 @@ export abstract class ServerTransport<
           },
           onMessage: (msg) => this.handleMsg(msg),
           onInvalidMessage: (reason) => {
-            this.protocolError(ProtocolError.MessageOrderingViolated, reason);
+            this.protocolError({
+              type: ProtocolError.MessageOrderingViolated,
+              message: reason,
+            });
             this.deleteSession(connectedSession);
           },
         },
@@ -445,64 +522,5 @@ export abstract class ServerTransport<
     this.updateSession(connectedSession);
     this.pendingSessions.delete(session);
     connectedSession.startActiveHeartbeat();
-  }
-
-  private async validateHandshakeMetadata(
-    handshakingSession: SessionWaitingForHandshake<ConnType>,
-    existingSession: ServerSession<ConnType> | undefined,
-    rawMetadata: Static<
-      typeof ControlMessageHandshakeRequestSchema
-    >['metadata'],
-    from: TransportClientId,
-  ): Promise<ParsedMetadata | false> {
-    let parsedMetadata: ParsedMetadata = {};
-    if (this.handshakeExtensions) {
-      // check that the metadata that was sent is the correct shape
-      if (!Value.Check(this.handshakeExtensions.schema, rawMetadata)) {
-        this.rejectHandshakeRequest(
-          handshakingSession,
-          from,
-          'received malformed handshake metadata',
-          'MALFORMED_HANDSHAKE_META',
-          {
-            ...handshakingSession.loggingMetadata,
-            connectedTo: from,
-            validationErrors: [
-              ...Value.Errors(this.handshakeExtensions.schema, rawMetadata),
-            ],
-          },
-        );
-
-        return false;
-      }
-
-      const previousParsedMetadata = existingSession
-        ? this.sessionHandshakeMetadata.get(existingSession.to)
-        : undefined;
-
-      parsedMetadata = await this.handshakeExtensions.validate(
-        rawMetadata,
-        previousParsedMetadata,
-      );
-
-      // handler rejected the connection
-      if (parsedMetadata === false) {
-        this.rejectHandshakeRequest(
-          handshakingSession,
-          from,
-          'rejected by handshake handler',
-          'REJECTED_BY_CUSTOM_HANDLER',
-          {
-            ...handshakingSession.loggingMetadata,
-            connectedTo: from,
-            clientId: this.clientId,
-          },
-        );
-
-        return false;
-      }
-    }
-
-    return parsedMetadata;
   }
 }

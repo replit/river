@@ -103,6 +103,7 @@ function createSessionNoConnectionListeners(): SessionNoConnectionListeners {
 function createSessionBackingOffListeners(): SessionBackingOffListeners {
   return {
     onBackoffFinished: vi.fn(),
+    onSessionGracePeriodElapsed: vi.fn(),
   };
 }
 
@@ -111,6 +112,7 @@ function createSessionConnectingListeners(): SessionConnectingListeners {
     onConnectionEstablished: vi.fn(),
     onConnectionFailed: vi.fn(),
     onConnectionTimeout: vi.fn(),
+    onSessionGracePeriodElapsed: vi.fn(),
   };
 }
 
@@ -121,6 +123,7 @@ function createSessionHandshakingListeners(): SessionHandshakingListeners {
     onConnectionClosed: vi.fn(),
     onConnectionErrored: vi.fn(),
     onHandshakeTimeout: vi.fn(),
+    onSessionGracePeriodElapsed: vi.fn(),
   };
 }
 
@@ -853,6 +856,374 @@ describe('session state machine', () => {
     });
   });
 
+  describe('state transitions deal with session grace period appropriately', async () => {
+    test('no connection -> backing off: partially consumed grace period', async () => {
+      const sessionHandle = createSessionNoConnection();
+      let session: SessionNoConnection | SessionBackingOff =
+        sessionHandle.session;
+      const { onSessionGracePeriodElapsed } = sessionHandle;
+
+      // consume half the grace period before the transition
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 2),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+
+      const listeners = createSessionBackingOffListeners();
+      session = SessionStateGraph.transition.NoConnectionToBackingOff(
+        session,
+        5000,
+        listeners,
+      );
+
+      // use the rest of the grace period after the transition and expect it to be called
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 2),
+      );
+
+      // only the new listeners should have been called
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+      expect(listeners.onSessionGracePeriodElapsed).toHaveBeenCalled();
+    });
+
+    test('no connection -> backing off -> connecting: partially consumed grace period', async () => {
+      const sessionHandle = createSessionNoConnection();
+      let session:
+        | SessionNoConnection
+        | SessionBackingOff
+        | SessionConnecting<MockConnection> = sessionHandle.session;
+      const { onSessionGracePeriodElapsed } = sessionHandle;
+
+      // consume a third of the grace period before the transition
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 3),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+
+      const backingOffListeners = createSessionBackingOffListeners();
+      const { pendingConn } = getPendingMockConnection();
+      session = SessionStateGraph.transition.NoConnectionToBackingOff(
+        session,
+        5000, // arbitrary backoff
+        backingOffListeners,
+      );
+
+      // consume another third of the grace period before the transition
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 3),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+      expect(
+        backingOffListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+
+      const connectingListeners = createSessionConnectingListeners();
+      session = SessionStateGraph.transition.BackingOffToConnecting(
+        session,
+        pendingConn,
+        connectingListeners,
+      );
+
+      // use the rest of the grace period after the transition and expect it to be called
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 3),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+      expect(
+        backingOffListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+      expect(
+        connectingListeners.onSessionGracePeriodElapsed,
+      ).toHaveBeenCalled();
+    });
+
+    test('no connection -> backing off -> connecting -> handshaking: partially consumed grace period', async () => {
+      const sessionHandle = createSessionNoConnection();
+      let session:
+        | SessionNoConnection
+        | SessionBackingOff
+        | SessionConnecting<MockConnection>
+        | SessionHandshaking<MockConnection> = sessionHandle.session;
+      const { onSessionGracePeriodElapsed } = sessionHandle;
+
+      // consume a quarter of the grace period before the transition
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 4),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+
+      const backingOffListeners = createSessionBackingOffListeners();
+      session = SessionStateGraph.transition.NoConnectionToBackingOff(
+        session,
+        5000, // arbitrary backoff
+        backingOffListeners,
+      );
+
+      // consume another quarter of the grace period before the transition
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 4),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+      expect(
+        backingOffListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+
+      const { pendingConn, connect } = getPendingMockConnection();
+      const connectingListeners = createSessionConnectingListeners();
+      session = SessionStateGraph.transition.BackingOffToConnecting(
+        session,
+        pendingConn,
+        connectingListeners,
+      );
+
+      // consume another quarter of the grace period before the transition
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 4),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+      expect(
+        backingOffListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+      expect(
+        connectingListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+
+      connect();
+      const conn = await session.connPromise;
+      const handshakingListeners = createSessionHandshakingListeners();
+      session = SessionStateGraph.transition.ConnectingToHandshaking(
+        session,
+        conn,
+        handshakingListeners,
+      );
+
+      // use the rest of the grace period after the transition and expect it to be called
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 4),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+      expect(
+        backingOffListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+      expect(
+        connectingListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+      expect(
+        handshakingListeners.onSessionGracePeriodElapsed,
+      ).toHaveBeenCalled();
+    });
+
+    test('no connection -> backing off -> connecting -> handshaking -> connected: partially consumed grace period', async () => {
+      const sessionHandle = createSessionNoConnection();
+      let session:
+        | SessionNoConnection
+        | SessionBackingOff
+        | SessionConnecting<MockConnection>
+        | SessionHandshaking<MockConnection>
+        | SessionConnected<MockConnection> = sessionHandle.session;
+      const { onSessionGracePeriodElapsed } = sessionHandle;
+
+      // consume a fifth of the grace period before the transition
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 5),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+
+      const backingOffListeners = createSessionBackingOffListeners();
+      session = SessionStateGraph.transition.NoConnectionToBackingOff(
+        session,
+        5000, // arbitrary backoff
+        backingOffListeners,
+      );
+
+      // consume another fifth of the grace period before the transition
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 5),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+      expect(
+        backingOffListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+
+      const { pendingConn, connect } = getPendingMockConnection();
+      const connectingListeners = createSessionConnectingListeners();
+      session = SessionStateGraph.transition.BackingOffToConnecting(
+        session,
+        pendingConn,
+        connectingListeners,
+      );
+
+      // consume another fifth of the grace period before the transition
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 5),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+      expect(
+        backingOffListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+      expect(
+        connectingListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+
+      connect();
+      const conn = await session.connPromise;
+      const handshakingListeners = createSessionHandshakingListeners();
+      session = SessionStateGraph.transition.ConnectingToHandshaking(
+        session,
+        conn,
+        handshakingListeners,
+      );
+
+      // consume another fifth of the grace period before the transition
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 5),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+      expect(
+        backingOffListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+      expect(
+        connectingListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+      expect(
+        handshakingListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+
+      // finally transition to connected
+      const connectedListeners = createSessionConnectedListeners();
+      session = SessionStateGraph.transition.HandshakingToConnected(
+        session,
+        connectedListeners,
+      );
+
+      // use the rest of the grace period after the transition, ensure nothing gets called still
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 5),
+      );
+
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+      expect(
+        backingOffListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+      expect(
+        connectingListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+      expect(
+        handshakingListeners.onSessionGracePeriodElapsed,
+      ).not.toHaveBeenCalled();
+    });
+
+    test('backing off -> no connection: partially consumed grace period', async () => {
+      const sessionHandle = createSessionBackingOff();
+      let session: SessionBackingOff | SessionNoConnection =
+        sessionHandle.session;
+      const { onSessionGracePeriodElapsed } = sessionHandle;
+
+      // consume half the grace period before the transition
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 2),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+
+      const listeners = createSessionNoConnectionListeners();
+      session = SessionStateGraph.transition.BackingOffToNoConnection(
+        session,
+        listeners,
+      );
+
+      // use the rest of the grace period after the transition and expect it to be called
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 2),
+      );
+
+      // only the new listeners should have been called
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+      expect(listeners.onSessionGracePeriodElapsed).toHaveBeenCalled();
+    });
+
+    test('connecting -> no connection: partially consumed grace period', async () => {
+      const sessionHandle = createSessionConnecting();
+      let session: SessionConnecting<MockConnection> | SessionNoConnection =
+        sessionHandle.session;
+      const { onSessionGracePeriodElapsed } = sessionHandle;
+
+      // consume half of the grace period before the transition
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 2),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+
+      const listeners = createSessionNoConnectionListeners();
+      session = SessionStateGraph.transition.ConnectingToNoConnection(
+        session,
+        listeners,
+      );
+
+      // use the rest of the grace period after the transition and expect it to be called
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 2),
+      );
+
+      // only the new listeners should have been called
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+      expect(listeners.onSessionGracePeriodElapsed).toHaveBeenCalled();
+    });
+
+    test('handshaking -> no connection: partially consumed grace period', async () => {
+      const sessionHandle = await createSessionHandshaking();
+      let session: SessionHandshaking<MockConnection> | SessionNoConnection =
+        sessionHandle.session;
+      const { onSessionGracePeriodElapsed } = sessionHandle;
+
+      // consume half the grace period before the transition
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 2),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+
+      const listeners = createSessionNoConnectionListeners();
+      session = SessionStateGraph.transition.HandshakingToNoConnection(
+        session,
+        listeners,
+      );
+
+      // use the rest of the grace period after the transition and expect it to be called
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 2),
+      );
+
+      // only the new listeners should have been called
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+      expect(listeners.onSessionGracePeriodElapsed).toHaveBeenCalled();
+    });
+
+    test('handshaking -> connected: connected should clear grace timer', async () => {
+      const sessionHandle = await createSessionHandshaking();
+      let session:
+        | SessionHandshaking<MockConnection>
+        | SessionConnected<MockConnection> = sessionHandle.session;
+      const { onSessionGracePeriodElapsed } = sessionHandle;
+
+      // consume half the grace period before the transition
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 2),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+
+      const listeners = createSessionConnectedListeners();
+      session = SessionStateGraph.transition.HandshakingToConnected(
+        session,
+        listeners,
+      );
+
+      // advance time and make sure timer doesn't go off
+      vi.advanceTimersByTime(
+        Math.ceil(session.options.sessionDisconnectGraceMs / 2),
+      );
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+    });
+  });
+
   describe('stale handles post-transition', () => {
     test('no connection -> backing off: stale handle', async () => {
       const sessionHandle = createSessionNoConnection();
@@ -1019,9 +1390,11 @@ describe('session state machine', () => {
 
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
-      expect(session.sendBuffer.length).toBe(2);
+      const sendBuffer = session.sendBuffer;
+      expect(sendBuffer.length).toBe(2);
       session.close();
-      expect(session.sendBuffer.length).toBe(0);
+      expect(sendBuffer.length).toBe(0);
+      expect(session._isConsumed).toBe(true);
     });
 
     test('backing off', async () => {
@@ -1031,9 +1404,11 @@ describe('session state machine', () => {
 
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
-      expect(session.sendBuffer.length).toBe(2);
+      const sendBuffer = session.sendBuffer;
+      expect(sendBuffer.length).toBe(2);
       session.close();
-      expect(session.sendBuffer.length).toBe(0);
+      expect(sendBuffer.length).toBe(0);
+      expect(session._isConsumed).toBe(true);
     });
 
     test('connecting', async () => {
@@ -1043,12 +1418,31 @@ describe('session state machine', () => {
 
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
-      expect(session.sendBuffer.length).toBe(2);
+      const conn = session.connPromise;
+      const sendBuffer = session.sendBuffer;
+      expect(sendBuffer.length).toBe(2);
       connect();
       session.close();
-      expect(session.sendBuffer.length).toBe(0);
-      const conn = await session.connPromise;
-      expect(conn.status).toBe('closed');
+      expect(sendBuffer.length).toBe(0);
+      expect((await conn).status).toBe('closed');
+      expect(session._isConsumed).toBe(true);
+    });
+
+    test('connecting finish after close', async () => {
+      const sessionHandle = createSessionConnecting();
+      const session = sessionHandle.session;
+      const { connect, onConnectionEstablished } = sessionHandle;
+
+      session.send(payloadToTransportMessage('hello'));
+      session.send(payloadToTransportMessage('world'));
+      const conn = session.connPromise;
+      const sendBuffer = session.sendBuffer;
+      expect(sendBuffer.length).toBe(2);
+      session.close();
+      connect();
+
+      expect((await conn).status).toBe('closed');
+      expect(onConnectionEstablished).not.toHaveBeenCalled();
     });
 
     test('handshaking', async () => {
@@ -1057,11 +1451,14 @@ describe('session state machine', () => {
 
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
-      expect(session.sendBuffer.length).toBe(2);
-      session.close();
-      expect(session.sendBuffer.length).toBe(0);
       const conn = session.conn;
+      const sendBuffer = session.sendBuffer;
+      expect(sendBuffer.length).toBe(2);
+      session.close();
+
+      expect(sendBuffer.length).toBe(0);
       expect(conn.status).toBe('closed');
+      expect(session._isConsumed).toBe(true);
     });
 
     test('connected', async () => {
@@ -1070,20 +1467,25 @@ describe('session state machine', () => {
 
       session.send(payloadToTransportMessage('hello'));
       session.send(payloadToTransportMessage('world'));
-      expect(session.sendBuffer.length).toBe(2);
-      session.close();
-      expect(session.sendBuffer.length).toBe(0);
       const conn = session.conn;
+      const sendBuffer = session.sendBuffer;
+      expect(sendBuffer.length).toBe(2);
+      session.close();
+
+      expect(sendBuffer.length).toBe(0);
       expect(conn.status).toBe('closed');
+      expect(session._isConsumed).toBe(true);
     });
 
     test('pending identification', async () => {
       const sessionHandle = createSessionWaitingForHandshake();
       const session = sessionHandle.session;
 
-      session.close();
       const conn = session.conn;
+      session.close();
+
       expect(conn.status).toBe('closed');
+      expect(session._isConsumed).toBe(true);
     });
   });
 
@@ -1112,6 +1514,18 @@ describe('session state machine', () => {
       expect(onBackoffFinished).toHaveBeenCalled();
     });
 
+    test('backing off event listeners: onSessionGracePeriodElapsed', async () => {
+      const backoffMs = 500;
+      const sessionHandle = createSessionBackingOff(backoffMs);
+      const session = sessionHandle.session;
+      const { onSessionGracePeriodElapsed } = sessionHandle;
+      expect(session.state).toBe(SessionState.BackingOff);
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(testingSessionOptions.sessionDisconnectGraceMs);
+      expect(onSessionGracePeriodElapsed).toHaveBeenCalled;
+    });
+
     test('connecting event listeners: connectionEstablished', async () => {
       const sessionHandle = createSessionConnecting();
       const session = sessionHandle.session;
@@ -1126,13 +1540,13 @@ describe('session state machine', () => {
 
       connect();
 
-      await waitFor(async () => {
-        expect(connectionEstablished).toHaveBeenCalled();
-        expect(connectionEstablished).toHaveBeenCalledWith(
-          await session.connPromise,
-        );
-        expect(connectionFailed).not.toHaveBeenCalled();
-      });
+      // wait for one tick
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(connectionEstablished).toHaveBeenCalled();
+      expect(connectionEstablished).toHaveBeenCalledWith(
+        await session.connPromise,
+      );
+      expect(connectionFailed).not.toHaveBeenCalled();
 
       // should not have transitioned to the next state
       expect(session.state).toBe(SessionState.Connecting);
@@ -1149,13 +1563,10 @@ describe('session state machine', () => {
 
       error(new Error('test error'));
 
-      await waitFor(async () => {
-        expect(onConnectionFailed).toHaveBeenCalled();
-        expect(onConnectionFailed).toHaveBeenCalledWith(
-          new Error('test error'),
-        );
-        expect(onConnectionEstablished).not.toHaveBeenCalled();
-      });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(onConnectionFailed).toHaveBeenCalled();
+      expect(onConnectionFailed).toHaveBeenCalledWith(new Error('test error'));
+      expect(onConnectionEstablished).not.toHaveBeenCalled();
 
       // should not have transitioned to the next state
       expect(session.state).toBe(SessionState.Connecting);
@@ -1178,6 +1589,17 @@ describe('session state machine', () => {
       expect(onConnectionTimeout).toHaveBeenCalled();
       expect(onConnectionEstablished).not.toHaveBeenCalled();
       expect(onConnectionFailed).not.toHaveBeenCalled();
+    });
+
+    test('connecting event listeners: sessionGracePeriodElapsed', async () => {
+      const sessionHandle = createSessionConnecting();
+      const session = sessionHandle.session;
+      const { onSessionGracePeriodElapsed } = sessionHandle;
+      expect(session.state).toBe(SessionState.Connecting);
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(testingSessionOptions.sessionDisconnectGraceMs);
+      expect(onSessionGracePeriodElapsed).toHaveBeenCalled();
     });
 
     test('handshaking event listeners: connectionErrored', async () => {
@@ -1284,6 +1706,17 @@ describe('session state machine', () => {
         expect(onConnectionErrored).not.toHaveBeenCalled();
         expect(onHandshakeTimeout).toHaveBeenCalledTimes(1);
       });
+    });
+
+    test('handshaking event listeners: sessionGracePeriodElapsed', async () => {
+      const sessionHandle = await createSessionHandshaking();
+      const session = sessionHandle.session;
+      const { onSessionGracePeriodElapsed } = sessionHandle;
+      expect(session.state).toBe(SessionState.Handshaking);
+      expect(onSessionGracePeriodElapsed).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(testingSessionOptions.sessionDisconnectGraceMs);
+      expect(onSessionGracePeriodElapsed).toHaveBeenCalled();
     });
 
     test('pending identification event listeners: connectionErrored', async () => {

@@ -70,6 +70,8 @@ abstract class StateMachineState {
         // modify _handleClose
         if (prop === '_handleClose') {
           return () => {
+            // target is the non-proxied object, we need to set _isConsumed again
+            target._isConsumed = true;
             target._handleStateExit();
             target._handleClose();
           };
@@ -107,7 +109,11 @@ export interface SessionOptions {
    */
   heartbeatsUntilDead: number;
   /**
-   * Duration to wait between connection disconnect and actual session disconnect
+   * Max duration that a session can be without a connection before we consider
+   * it dead. This deadline is carried between states and is used to determine
+   * when to consider the session a lost cause and delete it entirely.
+   * Generally, this should be strictly greater than the sum of
+   * {@link connectionTimeoutMs} and {@link handshakeTimeoutMs}.
    */
   sessionDisconnectGraceMs: number;
   /**
@@ -118,6 +124,10 @@ export interface SessionOptions {
    * Handshake timeout in milliseconds
    */
   handshakeTimeoutMs: number;
+  /**
+   * Whether to enable transparent session reconnects
+   */
+  enableTransparentSessionReconnects: boolean;
   /**
    * The codec to use for encoding/decoding messages over the wire
    */
@@ -224,15 +234,20 @@ export abstract class IdentifiedSession extends CommonSession {
   get loggingMetadata(): MessageMetadata {
     const spanContext = this.telemetry.span.spanContext();
 
-    return {
+    const metadata: MessageMetadata = {
       clientId: this.from,
       connectedTo: this.to,
       sessionId: this.id,
-      telemetry: {
+    };
+
+    if (this.telemetry.span.isRecording()) {
+      metadata.telemetry = {
         traceId: spanContext.traceId,
         spanId: spanContext.spanId,
-      },
-    };
+      };
+    }
+
+    return metadata;
   }
 
   constructMsg<Payload>(
@@ -269,5 +284,45 @@ export abstract class IdentifiedSession extends CommonSession {
     // zero out the buffer
     this.sendBuffer.length = 0;
     this.telemetry.span.end();
+  }
+}
+
+export interface IdentifiedSessionWithGracePeriodListeners {
+  onSessionGracePeriodElapsed: () => void;
+}
+
+export interface IdentifiedSessionWithGracePeriodProps
+  extends IdentifiedSessionProps {
+  graceExpiryTime: number;
+  listeners: IdentifiedSessionWithGracePeriodListeners;
+}
+
+export abstract class IdentifiedSessionWithGracePeriod extends IdentifiedSession {
+  graceExpiryTime: number;
+  protected gracePeriodTimeout?: ReturnType<typeof setTimeout>;
+
+  listeners: IdentifiedSessionWithGracePeriodListeners;
+
+  constructor(props: IdentifiedSessionWithGracePeriodProps) {
+    super(props);
+    this.listeners = props.listeners;
+
+    this.graceExpiryTime = props.graceExpiryTime;
+    this.gracePeriodTimeout = setTimeout(() => {
+      this.listeners.onSessionGracePeriodElapsed();
+    }, this.graceExpiryTime - Date.now());
+  }
+
+  _handleStateExit(): void {
+    super._handleStateExit();
+
+    if (this.gracePeriodTimeout) {
+      clearTimeout(this.gracePeriodTimeout);
+      this.gracePeriodTimeout = undefined;
+    }
+  }
+
+  _handleClose(): void {
+    super._handleClose();
   }
 }
