@@ -66,8 +66,10 @@ export class SessionConnected<
 
     // send any buffered messages
     if (this.sendBuffer.length > 0) {
-      this.log?.debug(
-        `sending ${this.sendBuffer.length} buffered messages`,
+      this.log?.info(
+        `sending ${
+          this.sendBuffer.length
+        } buffered messages, starting at seq ${this.nextSeq()}`,
         this.loggingMetadata,
       );
 
