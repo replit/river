@@ -357,10 +357,10 @@ export function asClientUpload<
   reqInit?: Static<Init>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
-): [
-  WriteStream<Static<Input>>,
-  () => Promise<Result<Static<Output>, Static<Err>>>,
-] {
+): {
+  reqWriter: WriteStream<Static<Input>>;
+  finalize: () => Promise<Result<Static<Output>, Static<Err>>>;
+} {
   const requestPipe = createRequestPipe<Input>();
   const result = proc
     .handler({
@@ -370,7 +370,7 @@ export function asClientUpload<
     })
     .catch(catchProcError);
 
-  return [requestPipe.writer, () => result];
+  return { reqWriter: requestPipe.writer, finalize: () => result };
 }
 
 export function getTransportConnections<ConnType extends Connection>(

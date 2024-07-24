@@ -172,7 +172,7 @@ describe('server-side test', () => {
 
   test('uploads', async () => {
     const service = UploadableServiceSchema.instantiate({});
-    const [reqWriter, getAddResult] = asClientUpload(
+    const { reqWriter, finalize } = asClientUpload(
       {},
       service.procedures.addMultiple,
     );
@@ -180,7 +180,7 @@ describe('server-side test', () => {
     reqWriter.write({ n: 1 });
     reqWriter.write({ n: 2 });
     reqWriter.close();
-    expect(await getAddResult()).toStrictEqual({
+    expect(await finalize()).toStrictEqual({
       ok: true,
       payload: { result: 3 },
     });
@@ -188,7 +188,7 @@ describe('server-side test', () => {
 
   test('uploads empty', async () => {
     const service = UploadableServiceSchema.instantiate({});
-    const [reqWriter, finalize] = asClientUpload(
+    const { reqWriter, finalize } = asClientUpload(
       {},
       service.procedures.addMultiple,
     );
@@ -201,7 +201,7 @@ describe('server-side test', () => {
 
   test('uploads with initialization', async () => {
     const service = UploadableServiceSchema.instantiate({});
-    const [reqWriter, getAddResult] = asClientUpload(
+    const { reqWriter, finalize } = asClientUpload(
       {},
       service.procedures.addMultipleWithPrefix,
       { prefix: 'test' },
@@ -210,7 +210,7 @@ describe('server-side test', () => {
     reqWriter.write({ n: 1 });
     reqWriter.write({ n: 2 });
     reqWriter.close();
-    expect(await getAddResult()).toStrictEqual({
+    expect(await finalize()).toStrictEqual({
       ok: true,
       payload: { result: 'test 3' },
     });
