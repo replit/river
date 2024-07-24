@@ -196,9 +196,10 @@ describe.each(testMatrix())(
       expect(oldServerSessionId).not.toBeUndefined();
 
       await advanceFakeTimersBySessionGrace();
-
-      expect(numberOfConnections(serverTransport)).toBe(1);
-      expect(numberOfConnections(clientTransport)).toBe(1);
+      await waitFor(() => {
+        expect(numberOfConnections(serverTransport)).toBe(1);
+        expect(numberOfConnections(clientTransport)).toBe(1);
+      });
       const newClientSessionId = serverTransport.sessions.get('client')?.id;
       const newServerSessionId = clientTransport.sessions.get('SERVER')?.id;
       expect(newClientSessionId).toBe(oldClientSessionId);

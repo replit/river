@@ -238,13 +238,10 @@ export abstract class ClientTransport<
 
     // invariant: handshake response should be ok
     if (!msg.payload.status.ok) {
-      // TODO: remove conditional check after we know code is always present
-      const retriable = msg.payload.status.code
-        ? Value.Check(
-            HandshakeErrorRetriableResponseCodes,
-            msg.payload.status.code,
-          )
-        : false;
+      const retriable = Value.Check(
+        HandshakeErrorRetriableResponseCodes,
+        msg.payload.status.code,
+      );
 
       const reason = `handshake failed: ${msg.payload.status.reason}`;
       const to = session.to;

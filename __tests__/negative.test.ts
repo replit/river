@@ -194,6 +194,7 @@ describe('should handle incompatabilities', async () => {
       to: 'SERVER',
       expectedSessionState: {
         nextExpectedSeq: 0,
+        nextSentSeq: 0,
       },
       sessionId: 'sessionId',
     });
@@ -264,6 +265,7 @@ describe('should handle incompatabilities', async () => {
         sessionId: 'sessionId',
         expectedSessionState: {
           nextExpectedSeq: 0,
+          nextSentSeq: 0,
         },
       } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
     };

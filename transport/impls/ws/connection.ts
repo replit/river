@@ -44,6 +44,7 @@ export class WebSocketConnection extends Connection {
     if (this.ws.readyState !== this.ws.OPEN) {
       return false;
     }
+
     this.ws.send(payload);
     return true;
   }
