@@ -652,6 +652,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     initMessage: OpaqueTransportMessage,
   ): null | NewProcStreamInput {
     const session = this.transport.sessions.get(initMessage.from);
+
     if (!session) {
       const errMessage = `couldn't find a session for ${initMessage.from}`;
       this.log?.error(`couldn't find session for ${initMessage.from}`, {

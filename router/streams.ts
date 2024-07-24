@@ -12,6 +12,23 @@ type ReadStreamResult<T, E extends Static<BaseErrorSchemaType>> = Result<
 >;
 
 /**
+ * Using simple iterator here to lock down the iteration and disallow
+ * `return` and `throw` to be called from the outside.
+ */
+export interface SimpleIterator<T> {
+  next(): Promise<
+    | {
+        done: false;
+        value: T;
+      }
+    | {
+        done: true;
+        value: undefined;
+      }
+  >;
+}
+
+/**
  * A `ReadStream` represents a stream of data.
  *
  * This stream is not closable by the reader, the reader must wait for
@@ -23,20 +40,18 @@ type ReadStreamResult<T, E extends Static<BaseErrorSchemaType>> = Result<
 export interface ReadStream<T, E extends Static<BaseErrorSchemaType>> {
   /**
    * Stream implements AsyncIterator API and can be consumed via
-   * for-await-of loops.
+   * for-await-of loops. Iteration locks the stream
    *
    */
-  [Symbol.asyncIterator](): {
-    next(): Promise<
-      | {
-          done: false;
-          value: ReadStreamResult<T, E>;
-        }
-      | {
-          done: true;
-          value: undefined;
-        }
-    >;
+  [Symbol.asyncIterator](): SimpleIterator<ReadStreamResult<T, E>>;
+  /**
+   * `unwrappedIter` returns an AsyncIterator that will unwrap the results coming
+   * into the stream, yielding the payload if successful, otherwise throwing.
+   * We generally recommend using the normal iterator instead of this method,
+   * and handling errors explicitly.
+   */
+  unwrappedIter(): {
+    [Symbol.asyncIterator](): SimpleIterator<T>;
   };
   /**
    * `asArray` locks the stream and returns a promise that resolves
@@ -153,7 +168,7 @@ export class ReadStreamImpl<T, E extends Static<BaseErrorSchemaType>>
   /**
    * This flag allows us to avoid cases where drain was called,
    * but the stream is fully consumed and closed. We don't need
-   * to signal that drain was closed.
+   * to signal that drain was called.
    */
   private didDrainDisposeValues = false;
   /**
@@ -229,9 +244,45 @@ export class ReadStreamImpl<T, E extends Static<BaseErrorSchemaType>>
 
         return { done: false, value } as const;
       },
-      return: async () => {
+      return: () => {
         this.drain();
         return { done: true, value: undefined } as const;
+      },
+    };
+  }
+
+  public unwrappedIter() {
+    const iterator = this[Symbol.asyncIterator]();
+
+    let unwrappedLock = false;
+    return {
+      [Symbol.asyncIterator]() {
+        if (unwrappedLock) {
+          throw new TypeError('ReadStream is already locked');
+        }
+
+        unwrappedLock = true;
+
+        return {
+          next: async (): ReturnType<SimpleIterator<T>['next']> => {
+            const next = await iterator.next();
+
+            if (next.done) {
+              return next;
+            }
+
+            if (next.value.ok) {
+              return { done: false, value: next.value.payload };
+            }
+
+            iterator.return();
+
+            throw new Error(
+              `Got err result in unwrappedIter: ${next.value.payload.code} - ${next.value.payload.message}`,
+            );
+          },
+          return: () => iterator.return(),
+        };
       },
     };
   }

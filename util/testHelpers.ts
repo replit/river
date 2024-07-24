@@ -1,18 +1,14 @@
 import NodeWs, { WebSocketServer } from 'ws';
 import http from 'node:http';
+import { Err, Ok, Result, BaseErrorSchemaType } from '../router/result';
 import {
-  Err,
-  Ok,
-  PayloadType,
-  Procedure,
-  Result,
   ProcedureErrorSchemaType,
   RequestReaderErrorSchema,
   ResponseReaderErrorSchema,
-  ServiceContext,
-  ProcedureHandlerContext,
   UNCAUGHT_ERROR_CODE,
-} from '../router';
+  PayloadType,
+  Procedure,
+} from '../router/procedures';
 import { Static } from '@sinclair/typebox';
 import {
   OpaqueTransportMessage,
@@ -23,16 +19,16 @@ import { coerceErrorString } from './stringify';
 import { Transport } from '../transport/transport';
 import {
   ReadStream,
-  ReadStreamImpl,
   WriteStream,
+  ReadStreamImpl,
   WriteStreamImpl,
 } from '../router/streams';
+import { ServiceContext, ProcedureHandlerContext } from '../router/context';
 import { WsLike } from '../transport/impls/ws/wslike';
 import {
   defaultClientTransportOptions,
   defaultTransportOptions,
 } from '../transport/options';
-import { BaseErrorSchemaType } from '../router/result';
 import { Connection } from '../transport/connection';
 import { SessionState } from '../transport/sessionStateMachine/common';
 import {

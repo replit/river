@@ -39,7 +39,7 @@ export type PayloadType = TSchema;
  * this means that some invariants expected by the river server implementation have
  * been violated. When encountering this error please report this to river maintainers.
  */
-export const INTERNAL_RIVER_ERROR_CODE = 'INTERNAL_RIVER_ERROR';
+export const INTERNAL_RIVER_ERROR_CODE = 'INTERNAL_RIVER_ERROR' as const;
 /**
  * UNCAUGHT_ERROR_CODE is the code that is used when an error is thrown
  * inside a procedure handler that's not required.

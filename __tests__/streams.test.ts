@@ -39,6 +39,14 @@ describe('ReadStream unit', () => {
     stream.triggerClose();
   });
 
+  it('should synchronously lock the stream when unwrappedIter() is called', () => {
+    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    void stream.unwrappedIter();
+    expect(stream.isLocked()).toEqual(true);
+    expect(() => stream[Symbol.asyncIterator]()).toThrowError(TypeError);
+    stream.triggerClose();
+  });
+
   it('should synchronously lock the stream when drain() is called', () => {
     const stream = new ReadStreamImpl<number, SomeError>(noopCb);
     stream.drain();
@@ -270,6 +278,23 @@ describe('ReadStream unit', () => {
     expect(stream.hasValuesInQueue()).toBeFalsy();
   });
 
+  it('should support for-await-of using unwrappedIter with break', async () => {
+    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+
+    stream.pushValue(Ok(1));
+    stream.pushValue(Ok(2));
+
+    expect(stream.hasValuesInQueue()).toBeTruthy();
+
+    for await (const value of stream.unwrappedIter()) {
+      expect(value).toEqual(1);
+      expect(stream.hasValuesInQueue()).toBeTruthy();
+      break;
+    }
+
+    expect(stream.hasValuesInQueue()).toBeFalsy();
+  });
+
   it('should emit error results as part of iteration', async () => {
     const stream = new ReadStreamImpl<number, SomeError>(noopCb);
 
@@ -294,6 +319,72 @@ describe('ReadStream unit', () => {
     }
 
     expect(i).toEqual(3);
+  });
+
+  it('should unwrap ok results', async () => {
+    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+
+    stream.pushValue(Ok(1));
+    stream.pushValue(Ok(2));
+    stream.pushValue(Ok(3));
+    stream.triggerClose();
+
+    const iterator = stream.unwrappedIter()[Symbol.asyncIterator]();
+
+    expect((await iterator.next()).value).toEqual(1);
+    expect((await iterator.next()).value).toEqual(2);
+    expect((await iterator.next()).value).toEqual(3);
+    expect((await iterator.next()).done).toEqual(true);
+
+    const stream2 = new ReadStreamImpl<number, SomeError>(noopCb);
+    stream2.pushValue(Ok(1));
+    stream2.pushValue(Ok(2));
+    stream2.pushValue(Ok(3));
+    stream2.triggerClose();
+
+    let i = 0;
+
+    for await (const value of stream2.unwrappedIter()) {
+      if (i === 0) {
+        expect(value).toEqual(1);
+      } else if (i === 1) {
+        expect(value).toEqual(2);
+      } else if (i === 2) {
+        expect(value).toEqual(3);
+      }
+
+      i++;
+    }
+  });
+
+  it('should throw when unwrapping an error', async () => {
+    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+
+    stream.pushValue(Ok(1));
+    stream.pushValue(Err({ code: 'SOME_ERROR', message: 'some error' }));
+    stream.triggerClose();
+
+    const iterator = stream.unwrappedIter()[Symbol.asyncIterator]();
+
+    expect((await iterator.next()).value).toEqual(1);
+    await expect(async () => (await iterator.next()).value).rejects.toThrow(
+      'SOME_ERROR',
+    );
+    expect((await iterator.next()).done).toEqual(true);
+
+    const stream2 = new ReadStreamImpl<number, SomeError>(noopCb);
+
+    stream2.pushValue(Ok(1));
+    stream2.pushValue(Err({ code: 'SOME_ERROR', message: 'some error' }));
+    stream2.triggerClose();
+
+    async function iterate() {
+      for await (const value of stream2.unwrappedIter()) {
+        expect(value).toEqual(1);
+      }
+    }
+
+    await expect(iterate).rejects.toThrow('SOME_ERROR');
   });
 
   describe('drain', () => {

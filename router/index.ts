@@ -25,12 +25,14 @@ export type {
   StreamProcedure,
   ProcedureErrorSchemaType,
 } from './procedures';
-export { WriteStream, ReadStream } from './streams';
+export type { WriteStream, ReadStream } from './streams';
 export {
   Procedure,
+  INTERNAL_RIVER_ERROR_CODE,
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
   INVALID_REQUEST_CODE,
+  ABORT_CODE,
   ResponseReaderErrorSchema,
   RequestReaderErrorSchema,
 } from './procedures';
@@ -51,6 +53,7 @@ export type {
   ResultUnwrapOk,
   ResultUnwrapErr,
   Output,
+  BaseErrorSchemaType,
 } from './result';
 export {
   createClientHandshakeOptions,
