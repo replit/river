@@ -300,7 +300,7 @@ export abstract class ClientTransport<
         onInvalidMessage: (reason) => {
           this.deleteSession(connectedSession);
           this.protocolError({
-            type: ProtocolError.MessageOrderingViolated,
+            type: ProtocolError.InvalidMessage,
             message: reason,
           });
         },
@@ -436,6 +436,12 @@ export abstract class ClientTransport<
 
     if (this.handshakeExtensions) {
       metadata = await this.handshakeExtensions.construct();
+    }
+
+    // double-check to make sure we haven't transitioned the session yet
+    if (session._isConsumed) {
+      // bail out, don't need to do anything
+      return;
     }
 
     const requestMsg = handshakeRequestMessage({

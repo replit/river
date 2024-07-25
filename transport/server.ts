@@ -508,7 +508,7 @@ export abstract class ServerTransport<
           onMessage: (msg) => this.handleMsg(msg),
           onInvalidMessage: (reason) => {
             this.protocolError({
-              type: ProtocolError.MessageOrderingViolated,
+              type: ProtocolError.InvalidMessage,
               message: reason,
             });
             this.deleteSession(connectedSession);

@@ -136,6 +136,13 @@ export class SessionConnected<
     });
   }
 
+  closeConnection() {
+    this.conn.removeDataListener(this.onMessageData);
+    this.conn.removeCloseListener(this.listeners.onConnectionClosed);
+    this.conn.removeErrorListener(this.listeners.onConnectionErrored);
+    this.conn.close();
+  }
+
   onMessageData = (msg: Uint8Array) => {
     const parsedMsg = this.parseMsg(msg);
     if (parsedMsg === null) {
@@ -154,18 +161,21 @@ export class SessionConnected<
           },
         );
       } else {
-        const reason = `received out-of-order msg (got seq: ${parsedMsg.seq}, wanted seq: ${this.ack})`;
-        this.log?.error(reason, {
+        const reason = `received out-of-order msg, closing connection (got seq: ${parsedMsg.seq}, wanted seq: ${this.ack})`;
+        this.log?.warn(reason, {
           ...this.loggingMetadata,
           transportMessage: parsedMsg,
           tags: ['invariant-violation'],
         });
+
         this.telemetry.span.setStatus({
           code: SpanStatusCode.ERROR,
           message: reason,
         });
 
-        this.listeners.onInvalidMessage(reason);
+        // try to recover by closing the connection and re-handshaking
+        // with the session intact
+        this.closeConnection();
       }
 
       return;
@@ -203,8 +213,11 @@ export class SessionConnected<
     this.conn.removeDataListener(this.onMessageData);
     this.conn.removeCloseListener(this.listeners.onConnectionClosed);
     this.conn.removeErrorListener(this.listeners.onConnectionErrored);
-    clearInterval(this.heartbeatHandle);
-    this.heartbeatHandle = undefined;
+
+    if (this.heartbeatHandle) {
+      clearInterval(this.heartbeatHandle);
+      this.heartbeatHandle = undefined;
+    }
   }
 
   _handleClose(): void {
