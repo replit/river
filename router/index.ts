@@ -11,10 +11,13 @@ export type {
 export {
   ServiceSchema,
   serializeSchema,
-  serializeSchemaBackwardsCompatible,
   SerializedServerSchema,
   SerializedServiceSchema,
   SerializedProcedureSchema,
+  serializeSchemaV1Compat,
+  SerializedServerSchemaProtocolv1,
+  SerializedServiceSchemaProtocolv1,
+  SerializedProcedureSchemaProtocolv1,
 } from './services';
 export type {
   ValidProcType,

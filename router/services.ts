@@ -157,14 +157,14 @@ export interface SerializedServerSchemaProtocolv1 {
  * protocolv1. This is useful to be able to continue to generate schemas for older
  * clients as they are still supported.
  */
-export function serializeSchemaBackwardsCompatible(
+export function serializeSchemaV1Compat(
   services: AnyServiceSchemaMap,
   handshakeSchema?: TSchema,
 ): SerializedServerSchemaProtocolv1 {
   const serializedServiceObject = Object.entries(services).reduce<
     Record<string, SerializedServiceSchemaProtocolv1>
   >((acc, [name, value]) => {
-    acc[name] = value.serializeBackwardsCompatible();
+    acc[name] = value.serializeV1Compat();
     return acc;
   }, {});
 
@@ -459,7 +459,7 @@ export class ServiceSchema<
    * protocol v1. This is useful to be able to continue to generate schemas for older
    * clients as they are still supported.
    */
-  serializeBackwardsCompatible(): SerializedServiceSchemaProtocolv1 {
+  serializeV1Compat(): SerializedServiceSchemaProtocolv1 {
     return {
       procedures: Object.fromEntries(
         Object.entries(this.procedures).map(

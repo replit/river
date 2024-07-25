@@ -594,7 +594,7 @@ describe('serialize service to jsonschema', () => {
   });
 
   test('serialize backwards compatible with v1', () => {
-    expect(TestServiceSchema.serializeBackwardsCompatible()).toStrictEqual({
+    expect(TestServiceSchema.serializeV1Compat()).toStrictEqual({
       procedures: {
         add: {
           input: {
