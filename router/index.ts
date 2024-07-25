@@ -11,6 +11,7 @@ export type {
 export {
   ServiceSchema,
   serializeSchema,
+  serializeSchemaBackwardsCompatible,
   SerializedServerSchema,
   SerializedServiceSchema,
   SerializedProcedureSchema,
