@@ -201,8 +201,11 @@ export abstract class Transport<ConnType extends Connection> {
   }
 
   // state transitions
-  protected deleteSession(session: Session<ConnType>) {
-    session.log?.info(`closing session ${session.id}`, session.loggingMetadata);
+  protected deleteSession(session: Session<ConnType>, unhealthy = false) {
+    session.log?.info(`closing session ${session.id}`, {
+      ...session.loggingMetadata,
+      tags: unhealthy ? ['unhealthy-session'] : [],
+    });
 
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'disconnect',

@@ -108,9 +108,12 @@ export abstract class ServerTransport<
     this.pendingSessions.delete(pendingSession);
   }
 
-  protected deleteSession(session: ServerSession<ConnType>): void {
+  protected deleteSession(
+    session: ServerSession<ConnType>,
+    unhealthy = false,
+  ): void {
     this.sessionHandshakeMetadata.delete(session.to);
-    super.deleteSession(session);
+    super.deleteSession(session, unhealthy);
   }
 
   protected handleConnection(conn: ConnType) {
@@ -511,7 +514,7 @@ export abstract class ServerTransport<
               type: ProtocolError.InvalidMessage,
               message: reason,
             });
-            this.deleteSession(connectedSession);
+            this.deleteSession(connectedSession, true);
           },
         },
       );
