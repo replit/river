@@ -5,6 +5,8 @@ interface ConnectionInfoExtras {
   headers: Record<string, string>;
 }
 
+const WS_HEALTHY_CLOSE_CODE = 1000;
+
 export class WebSocketConnection extends Connection {
   ws: WsLike;
   extras?: ConnectionInfoExtras;
@@ -65,10 +67,9 @@ export class WebSocketConnection extends Connection {
   }
 
   close() {
-    // 1001 is going away, this is a 'healthy' close
-    // even if its not really healthy at an application level
+    // we close with 1000 normal even if its not really healthy at the river level
     // if we don't specify this, it defaults to 1005 which
     // some proxies/loggers detect as an error
-    this.ws.close(1001);
+    this.ws.close(WS_HEALTHY_CLOSE_CODE);
   }
 }
