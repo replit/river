@@ -65,6 +65,10 @@ export class WebSocketConnection extends Connection {
   }
 
   close() {
-    this.ws.close();
+    // 1001 is going away, this is a 'healthy' close
+    // even if its not really healthy at an application level
+    // if we don't specify this, it defaults to 1005 which
+    // some proxies/loggers detect as an error
+    this.ws.close(1001);
   }
 }
