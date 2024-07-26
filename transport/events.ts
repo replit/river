@@ -8,6 +8,7 @@ export const ProtocolError = {
   RetriesExceeded: 'conn_retry_exceeded',
   HandshakeFailed: 'handshake_failed',
   MessageOrderingViolated: 'message_ordering_violated',
+  InvalidMessage: 'invalid_message',
 } as const;
 
 export type ProtocolErrorType =
