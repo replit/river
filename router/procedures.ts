@@ -88,12 +88,25 @@ export const RequestReaderErrorSchema = Type.Object({
   message: Type.String(),
 });
 
+// Allow specific levels of nesting, otherwise typescript shits itself due to recursion
+type ProcedureErrorUnionSchema0 = TUnion<Array<BaseErrorSchemaType>>;
+type ProcedureErrorUnionSchema1 = TUnion<
+  Array<ProcedureErrorUnionSchema0 | BaseErrorSchemaType>
+>;
+type ProcedureErrorUnionSchema2 = TUnion<
+  Array<
+    | ProcedureErrorUnionSchema1
+    | ProcedureErrorUnionSchema0
+    | BaseErrorSchemaType
+  >
+>;
+
 /**
  * Represents an acceptable schema to pass to a procedure.
  * Just a type of a schema, not an actual schema.
  */
 export type ProcedureErrorSchemaType =
-  | TUnion<Array<BaseErrorSchemaType>>
+  | ProcedureErrorUnionSchema2
   | BaseErrorSchemaType
   | TNever;
 
