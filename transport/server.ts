@@ -16,7 +16,7 @@ import {
   ServerTransportOptions,
   defaultServerTransportOptions,
 } from './options';
-import { Transport } from './transport';
+import { DeleteSessionOptions, Transport } from './transport';
 import { coerceErrorString } from '../util/stringify';
 import { Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
@@ -110,10 +110,10 @@ export abstract class ServerTransport<
 
   protected deleteSession(
     session: ServerSession<ConnType>,
-    unhealthy = false,
+    options?: DeleteSessionOptions,
   ): void {
     this.sessionHandshakeMetadata.delete(session.to);
-    super.deleteSession(session, unhealthy);
+    super.deleteSession(session, options);
   }
 
   protected handleConnection(conn: ConnType) {
@@ -514,7 +514,7 @@ export abstract class ServerTransport<
               type: ProtocolError.InvalidMessage,
               message: reason,
             });
-            this.deleteSession(connectedSession, true);
+            this.deleteSession(connectedSession, { unhealthy: true });
           },
         },
       );

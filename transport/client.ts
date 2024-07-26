@@ -180,7 +180,7 @@ export abstract class ClientTransport<
               `invalid handshake: ${reason}`,
               handshakingSession.loggingMetadata,
             );
-            this.deleteSession(session, true);
+            this.deleteSession(session, { unhealthy: true });
             this.protocolError({
               type: ProtocolError.HandshakeFailed,
               code,
@@ -216,7 +216,7 @@ export abstract class ClientTransport<
     });
 
     this.log?.warn(reason, metadata);
-    this.deleteSession(session, true);
+    this.deleteSession(session, { unhealthy: true });
   }
 
   protected onHandshakeResponse(
@@ -298,7 +298,7 @@ export abstract class ClientTransport<
         },
         onMessage: (msg) => this.handleMsg(msg),
         onInvalidMessage: (reason) => {
-          this.deleteSession(connectedSession, true);
+          this.deleteSession(connectedSession, { unhealthy: true });
           this.protocolError({
             type: ProtocolError.InvalidMessage,
             message: reason,
