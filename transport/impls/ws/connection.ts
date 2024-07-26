@@ -1,12 +1,27 @@
 import { Connection } from '../../connection';
 import { WsLike } from './wslike';
 
+interface ConnectionInfoExtras {
+  headers: Record<string, string>;
+}
+
 export class WebSocketConnection extends Connection {
   ws: WsLike;
+  extras?: ConnectionInfoExtras;
 
-  constructor(ws: WsLike) {
+  get loggingMetadata() {
+    const metadata = super.loggingMetadata;
+    if (this.extras) {
+      metadata.extras = this.extras;
+    }
+
+    return metadata;
+  }
+
+  constructor(ws: WsLike, extras?: ConnectionInfoExtras) {
     super();
     this.ws = ws;
+    this.extras = extras;
     this.ws.binaryType = 'arraybuffer';
 
     // Websockets are kinda shitty, they emit error events with no

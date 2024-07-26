@@ -51,6 +51,7 @@ export type MessageMetadata = Partial<{
     traceId: string;
     spanId: string;
   };
+  extras: unknown;
 }>;
 
 export class BaseLogger implements Logger {
