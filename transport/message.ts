@@ -91,10 +91,7 @@ export const ControlMessageHandshakeRequestSchema = Type.Object({
   expectedSessionState: Type.Object({
     // what the client expects the server to send next
     nextExpectedSeq: Type.Integer(),
-    // TODO: remove optional once we know all servers
-    // are nextSentSeq here
-    // what the server expects the client to send next
-    nextSentSeq: Type.Optional(Type.Integer()),
+    nextSentSeq: Type.Integer(),
   }),
 
   metadata: Type.Optional(Type.Unknown()),
@@ -136,9 +133,7 @@ export const ControlMessageHandshakeResponseSchema = Type.Object({
     Type.Object({
       ok: Type.Literal(false),
       reason: Type.String(),
-      // TODO: remove optional once we know all servers
-      // are sending code here
-      code: Type.Optional(HandshakeErrorResponseCodes),
+      code: HandshakeErrorResponseCodes,
     }),
   ]),
 });

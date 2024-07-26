@@ -182,7 +182,7 @@ export abstract class ClientTransport<
               `invalid handshake: ${reason}`,
               handshakingSession.loggingMetadata,
             );
-            this.deleteSession(session);
+            this.deleteSession(session, { unhealthy: true });
             this.protocolError({
               type: ProtocolError.HandshakeFailed,
               code,
@@ -218,7 +218,7 @@ export abstract class ClientTransport<
     });
 
     this.log?.warn(reason, metadata);
-    this.deleteSession(session);
+    this.deleteSession(session, { unhealthy: true });
   }
 
   protected onHandshakeResponse(
@@ -240,13 +240,10 @@ export abstract class ClientTransport<
 
     // invariant: handshake response should be ok
     if (!msg.payload.status.ok) {
-      // TODO: remove conditional check after we know code is always present
-      const retriable = msg.payload.status.code
-        ? Value.Check(
-            HandshakeErrorRetriableResponseCodes,
-            msg.payload.status.code,
-          )
-        : false;
+      const retriable = Value.Check(
+        HandshakeErrorRetriableResponseCodes,
+        msg.payload.status.code,
+      );
 
       const reason = `handshake failed: ${msg.payload.status.reason}`;
       const to = session.to;
@@ -303,9 +300,9 @@ export abstract class ClientTransport<
         },
         onMessage: (msg) => this.handleMsg(msg),
         onInvalidMessage: (reason) => {
-          this.deleteSession(connectedSession);
+          this.deleteSession(connectedSession, { unhealthy: true });
           this.protocolError({
-            type: ProtocolError.MessageOrderingViolated,
+            type: ProtocolError.InvalidMessage,
             message: reason,
           });
         },
@@ -441,6 +438,12 @@ export abstract class ClientTransport<
 
     if (this.handshakeExtensions) {
       metadata = await this.handshakeExtensions.construct();
+    }
+
+    // double-check to make sure we haven't transitioned the session yet
+    if (session._isConsumed) {
+      // bail out, don't need to do anything
+      return;
     }
 
     const requestMsg = handshakeRequestMessage({

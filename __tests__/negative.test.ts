@@ -173,7 +173,7 @@ describe('should handle incompatabilities', async () => {
     });
   });
 
-  test('seq number in the future should raise protocol error', async () => {
+  test('seq number in the future should close connection', async () => {
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
 
     // add listeners
@@ -194,6 +194,7 @@ describe('should handle incompatabilities', async () => {
       to: 'SERVER',
       expectedSessionState: {
         nextExpectedSeq: 0,
+        nextSentSeq: 0,
       },
       sessionId: 'sessionId',
     });
@@ -221,12 +222,8 @@ describe('should handle incompatabilities', async () => {
     };
     ws.send(NaiveJsonCodec.toBuffer(msg));
 
-    await waitFor(() => expect(errMock).toHaveBeenCalledTimes(1));
-    expect(errMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: ProtocolError.MessageOrderingViolated,
-      }),
-    );
+    await waitFor(() => ws.readyState === ws.CLOSED);
+    expect(serverTransport.sessions.size).toBe(1);
 
     await testFinishesCleanly({
       clientTransports: [],
@@ -264,6 +261,7 @@ describe('should handle incompatabilities', async () => {
         sessionId: 'sessionId',
         expectedSessionState: {
           nextExpectedSeq: 0,
+          nextSentSeq: 0,
         },
       } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
     };

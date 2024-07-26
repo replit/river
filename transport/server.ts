@@ -17,7 +17,7 @@ import {
   ServerTransportOptions,
   defaultServerTransportOptions,
 } from './options';
-import { Transport } from './transport';
+import { DeleteSessionOptions, Transport } from './transport';
 import { coerceErrorString } from '../util/stringify';
 import { Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
@@ -109,9 +109,12 @@ export abstract class ServerTransport<
     this.pendingSessions.delete(pendingSession);
   }
 
-  protected deleteSession(session: ServerSession<ConnType>): void {
+  protected deleteSession(
+    session: ServerSession<ConnType>,
+    options?: DeleteSessionOptions,
+  ): void {
     this.sessionHandshakeMetadata.delete(session.to);
-    super.deleteSession(session);
+    super.deleteSession(session, options);
   }
 
   protected handleConnection(conn: ConnType) {
@@ -354,7 +357,7 @@ export abstract class ServerTransport<
       | 'hard reconnection' = 'new session';
     const clientNextExpectedSeq =
       msg.payload.expectedSessionState.nextExpectedSeq;
-    const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq ?? 0;
+    const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq;
 
     if (
       this.options.enableTransparentSessionReconnects &&
@@ -509,10 +512,10 @@ export abstract class ServerTransport<
           onMessage: (msg) => this.handleMsg(msg),
           onInvalidMessage: (reason) => {
             this.protocolError({
-              type: ProtocolError.MessageOrderingViolated,
+              type: ProtocolError.InvalidMessage,
               message: reason,
             });
-            this.deleteSession(connectedSession);
+            this.deleteSession(connectedSession, { unhealthy: true });
           },
         },
         gotVersion,
