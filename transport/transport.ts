@@ -33,6 +33,10 @@ import { Session, SessionStateGraph } from './sessionStateMachine/transitions';
  */
 export type TransportStatus = 'open' | 'closed';
 
+export interface DeleteSessionOptions {
+  unhealthy: boolean;
+}
+
 /**
  * Transports manage the lifecycle (creation/deletion) of sessions
  *
@@ -201,9 +205,16 @@ export abstract class Transport<ConnType extends Connection> {
   }
 
   // state transitions
-  protected deleteSession(session: Session<ConnType>) {
-    session.log?.info(`closing session ${session.id}`, session.loggingMetadata);
+  protected deleteSession(
+    session: Session<ConnType>,
+    options?: DeleteSessionOptions,
+  ) {
+    const loggingMetadata = session.loggingMetadata;
+    if (loggingMetadata.tags && options?.unhealthy) {
+      loggingMetadata.tags.push('unhealthy-session');
+    }
 
+    session.log?.info(`closing session ${session.id}`, loggingMetadata);
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'disconnect',
       session: session,
