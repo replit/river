@@ -1,12 +1,29 @@
 import { Connection } from '../../connection';
 import { WsLike } from './wslike';
 
+interface ConnectionInfoExtras {
+  headers: Record<string, string>;
+}
+
+const WS_HEALTHY_CLOSE_CODE = 1000;
+
 export class WebSocketConnection extends Connection {
   ws: WsLike;
+  extras?: ConnectionInfoExtras;
 
-  constructor(ws: WsLike) {
+  get loggingMetadata() {
+    const metadata = super.loggingMetadata;
+    if (this.extras) {
+      metadata.extras = this.extras;
+    }
+
+    return metadata;
+  }
+
+  constructor(ws: WsLike, extras?: ConnectionInfoExtras) {
     super();
     this.ws = ws;
+    this.extras = extras;
     this.ws.binaryType = 'arraybuffer';
 
     // Websockets are kinda shitty, they emit error events with no
@@ -50,6 +67,9 @@ export class WebSocketConnection extends Connection {
   }
 
   close() {
-    this.ws.close();
+    // we close with 1000 normal even if its not really healthy at the river level
+    // if we don't specify this, it defaults to 1005 which
+    // some proxies/loggers detect as an error
+    this.ws.close(WS_HEALTHY_CLOSE_CODE);
   }
 }
