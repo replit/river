@@ -215,7 +215,6 @@ describe.each(testMatrix())(
       // ensure we only have one stream despite pushing multiple messages.
       reqWriter.close();
       await waitFor(() => expect(server.openStreams.size).toEqual(1));
-      await resReader.requestClose();
       // ensure we no longer have any open streams since the input was closed.
       await waitFor(() => expect(server.openStreams.size).toEqual(0));
 
@@ -271,8 +270,11 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-
-      const { resReader } = client.subscribable.value.subscribe({});
+      const abortController = new AbortController();
+      const { resReader } = client.subscribable.value.subscribe(
+        {},
+        { signal: abortController.signal },
+      );
       const outputIterator = getIteratorFromStream(resReader);
       let result = await iterNext(outputIterator);
       expect(result).toStrictEqual({
@@ -288,16 +290,18 @@ describe.each(testMatrix())(
         payload: { result: 1 },
       });
 
-      await resReader.requestClose();
+      abortController.abort();
       // end procedure
 
       // number of message handlers shouldn't increase after subscription ends
-      expect(
-        serverTransport.eventDispatcher.numberOfListeners('message'),
-      ).toEqual(serverListeners);
-      expect(
-        clientTransport.eventDispatcher.numberOfListeners('message'),
-      ).toEqual(clientListeners);
+      await waitFor(() => {
+        expect(
+          serverTransport.eventDispatcher.numberOfListeners('message'),
+        ).toEqual(serverListeners);
+        expect(
+          clientTransport.eventDispatcher.numberOfListeners('message'),
+        ).toEqual(clientListeners);
+      });
 
       // check number of connections
       expect(numberOfConnections(clientTransport)).toEqual(1);

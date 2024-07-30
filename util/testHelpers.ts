@@ -232,13 +232,7 @@ function createResponsePipe<
   const reader = new ReadStreamImpl<
     Static<Output>,
     Static<Err> | Static<typeof ResponseReaderErrorSchema>
-  >(() => {
-    // Make it async to simulate request going over the wire
-    // using promises so that we don't get affected by fake timers.
-    void Promise.resolve().then(() => {
-      writer.triggerCloseRequest();
-    });
-  });
+  >();
   const writer = new WriteStreamImpl<Result<Static<Output>, Static<Err>>>(
     (v) => {
       reader.pushValue(v);
@@ -262,13 +256,7 @@ function createRequestPipe<Input extends PayloadType>(): {
   const reader = new ReadStreamImpl<
     Static<Input>,
     Static<typeof RequestReaderErrorSchema>
-  >(() => {
-    // Make it async to simulate request going over the wire
-    // using promises so that we don't get affected by fake timers.
-    void Promise.resolve().then(() => {
-      writer.triggerCloseRequest();
-    });
-  });
+  >();
   const writer = new WriteStreamImpl<Static<Input>>((v) => {
     reader.pushValue(Ok(v));
   });

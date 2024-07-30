@@ -14,10 +14,8 @@ import {
   TransportClientId,
   isStreamClose,
   ControlMessageCloseSchema,
-  isStreamCloseRequest,
   isStreamAbort,
   closeStreamMessage,
-  requestCloseStreamMessage,
   abortMessage,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
@@ -328,9 +326,7 @@ function handleProc(
   const resReader = new ReadStreamImpl<
     Static<PayloadType>,
     Static<BaseErrorSchemaType>
-  >(() => {
-    transport.send(serverId, requestCloseStreamMessage(streamId));
-  });
+  >();
   resReader.onClose(() => {
     span.addEvent('resReader closed');
 
@@ -387,10 +383,6 @@ function handleProc(
       });
 
       return;
-    }
-
-    if (isStreamCloseRequest(msg.controlFlags)) {
-      reqWriter.triggerCloseRequest();
     }
 
     if (isStreamAbort(msg.controlFlags)) {

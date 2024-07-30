@@ -167,8 +167,12 @@ describe.each(testMatrix())(
 
       // start procedure
       // client1 and client2 both subscribe
+      const abortController1 = new AbortController();
       const { resReader: responseReader1 } =
-        client1.subscribable.value.subscribe({});
+        client1.subscribable.value.subscribe(
+          {},
+          { signal: abortController1.signal },
+        );
       const outputIterator1 = getIteratorFromStream(responseReader1);
       let result = await iterNext(outputIterator1);
       expect(result).toStrictEqual({
@@ -239,7 +243,7 @@ describe.each(testMatrix())(
       });
 
       expect(responseReader2.isClosed()).toBe(true);
-      await responseReader1.requestClose();
+      abortController1.abort();
 
       await testFinishesCleanly({
         clientTransports: [client1Transport, client2Transport],

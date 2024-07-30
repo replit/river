@@ -15,7 +15,7 @@ interface SomeError {
 
 describe('ReadStream unit', () => {
   it('should close the stream', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
     stream.triggerClose();
     expect(stream.isClosed()).toEqual(true);
 
@@ -24,7 +24,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should synchronously lock the stream when Symbol.asyncIterable is called', () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
     stream[Symbol.asyncIterator]();
     expect(stream.isLocked()).toEqual(true);
     expect(() => stream[Symbol.asyncIterator]()).toThrowError(TypeError);
@@ -32,7 +32,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should synchronously lock the stream when asArray() is called', () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
     void stream.asArray();
     expect(stream.isLocked()).toEqual(true);
     expect(() => stream[Symbol.asyncIterator]()).toThrowError(TypeError);
@@ -40,7 +40,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should synchronously lock the stream when unwrappedIter() is called', () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
     void stream.unwrappedIter();
     expect(stream.isLocked()).toEqual(true);
     expect(() => stream[Symbol.asyncIterator]()).toThrowError(TypeError);
@@ -48,7 +48,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should synchronously lock the stream when drain() is called', () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
     stream.drain();
     expect(stream.isLocked()).toEqual(true);
     expect(() => stream[Symbol.asyncIterator]()).toThrowError(TypeError);
@@ -56,7 +56,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should iterate over the values pushed to the stream', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
     const iterator = stream[Symbol.asyncIterator]();
 
     stream.pushValue(Ok(1));
@@ -70,7 +70,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should iterate over the values push to the stream after close', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
     const iterator = stream[Symbol.asyncIterator]();
 
     stream.pushValue(Ok(1));
@@ -84,7 +84,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should handle eager iterations gracefully', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
     const iterator = stream[Symbol.asyncIterator]();
 
     const next1 = iterator.next();
@@ -102,7 +102,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should not resolve iterator until value is pushed or stream is closed', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
 
     const iterator = stream[Symbol.asyncIterator]();
 
@@ -140,7 +140,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should return an array of the stream values when asArray is called after close', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
     stream.pushValue(Ok(1));
     stream.pushValue(Ok(2));
     stream.pushValue(Ok(3));
@@ -151,7 +151,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should not resolve asArray until the stream is closed', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
     stream.pushValue(Ok(1));
 
     const arrayP = stream.asArray();
@@ -176,32 +176,8 @@ describe('ReadStream unit', () => {
     ).toEqual([1, 2, 3, 4].map(Ok));
   });
 
-  it('should request to close the stream when requestClose is called', () => {
-    const requestCloseCb = vi.fn();
-    const stream = new ReadStreamImpl<number, SomeError>(requestCloseCb);
-    void stream.requestClose();
-    expect(requestCloseCb).toHaveBeenCalled();
-    expect(stream.isCloseRequested()).toEqual(true);
-    stream.triggerClose();
-  });
-
-  it('should request to close once the stream when requestClose is called', () => {
-    const requestCloseCb = vi.fn();
-    const stream = new ReadStreamImpl<number, SomeError>(requestCloseCb);
-    void stream.requestClose();
-    void stream.requestClose();
-    expect(requestCloseCb).toHaveBeenCalledTimes(1);
-    stream.triggerClose();
-  });
-
-  it('should throw when requesting to close after closing', () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
-    stream.triggerClose();
-    expect(() => stream.requestClose()).toThrowError(Error);
-  });
-
   it('should call onClose callback until after close', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
 
     const waitP = new Promise<void>((resolve) => stream.onClose(resolve));
 
@@ -222,25 +198,25 @@ describe('ReadStream unit', () => {
   });
 
   it('should error when onClose called after closing', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
     stream.triggerClose();
     expect(() => stream.onClose(noopCb)).toThrowError(Error);
   });
 
   it('should throw when pushing to a closed stream', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
     stream.triggerClose();
     expect(() => stream.pushValue(Ok(1))).toThrowError(Error);
   });
 
   it('shouild throw when closing multiple times', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
     stream.triggerClose();
     expect(() => stream.triggerClose()).toThrowError(Error);
   });
 
   it('should support for-await-of', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
 
     stream.pushValue(Ok(1));
     let i = 0;
@@ -262,7 +238,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should support for-await-of with break', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
 
     stream.pushValue(Ok(1));
     stream.pushValue(Ok(2));
@@ -279,7 +255,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should support for-await-of using unwrappedIter with break', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
 
     stream.pushValue(Ok(1));
     stream.pushValue(Ok(2));
@@ -296,7 +272,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should emit error results as part of iteration', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
 
     stream.pushValue(Ok(1));
     stream.pushValue(Ok(2));
@@ -322,7 +298,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should unwrap ok results', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
 
     stream.pushValue(Ok(1));
     stream.pushValue(Ok(2));
@@ -336,7 +312,7 @@ describe('ReadStream unit', () => {
     expect((await iterator.next()).value).toEqual(3);
     expect((await iterator.next()).done).toEqual(true);
 
-    const stream2 = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream2 = new ReadStreamImpl<number, SomeError>();
     stream2.pushValue(Ok(1));
     stream2.pushValue(Ok(2));
     stream2.pushValue(Ok(3));
@@ -358,7 +334,7 @@ describe('ReadStream unit', () => {
   });
 
   it('should throw when unwrapping an error', async () => {
-    const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream = new ReadStreamImpl<number, SomeError>();
 
     stream.pushValue(Ok(1));
     stream.pushValue(Err({ code: 'SOME_ERROR', message: 'some error' }));
@@ -372,7 +348,7 @@ describe('ReadStream unit', () => {
     );
     expect((await iterator.next()).done).toEqual(true);
 
-    const stream2 = new ReadStreamImpl<number, SomeError>(noopCb);
+    const stream2 = new ReadStreamImpl<number, SomeError>();
 
     stream2.pushValue(Ok(1));
     stream2.pushValue(Err({ code: 'SOME_ERROR', message: 'some error' }));
@@ -389,14 +365,14 @@ describe('ReadStream unit', () => {
 
   describe('drain', () => {
     it('should signal the next stream iteration', async () => {
-      const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+      const stream = new ReadStreamImpl<number, SomeError>();
       const iterator = stream[Symbol.asyncIterator]();
       stream.drain();
       expect((await iterator.next()).value).toEqual(Err(StreamDrainedError));
       stream.triggerClose();
     });
     it('should signal the pending stream iteration', async () => {
-      const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+      const stream = new ReadStreamImpl<number, SomeError>();
       const iterator = stream[Symbol.asyncIterator]();
       const pending = iterator.next();
       stream.drain();
@@ -404,7 +380,7 @@ describe('ReadStream unit', () => {
       stream.triggerClose();
     });
     it('should signal the next stream iteration wtih a queued up value', async () => {
-      const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+      const stream = new ReadStreamImpl<number, SomeError>();
       const iterator = stream[Symbol.asyncIterator]();
       stream.pushValue(Ok(1));
       expect(stream.hasValuesInQueue()).toBeTruthy();
@@ -414,7 +390,7 @@ describe('ReadStream unit', () => {
       stream.triggerClose();
     });
     it('should signal the next stream iteration with a queued up value after stream is closed', async () => {
-      const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+      const stream = new ReadStreamImpl<number, SomeError>();
       const iterator = stream[Symbol.asyncIterator]();
       stream.pushValue(Ok(1));
       stream.triggerClose();
@@ -422,14 +398,14 @@ describe('ReadStream unit', () => {
       expect((await iterator.next()).value).toEqual(Err(StreamDrainedError));
     });
     it('should not signal the next stream iteration with an empty queue after stream is closed', async () => {
-      const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+      const stream = new ReadStreamImpl<number, SomeError>();
       const iterator = stream[Symbol.asyncIterator]();
       stream.triggerClose();
       stream.drain();
       expect((await iterator.next()).done).toEqual(true);
     });
     it('should end iteration if draining mid-stream', async () => {
-      const stream = new ReadStreamImpl<number, SomeError>(noopCb);
+      const stream = new ReadStreamImpl<number, SomeError>();
       stream.pushValue(Ok(1));
       stream.pushValue(Ok(2));
       stream.pushValue(Ok(3));
@@ -493,48 +469,5 @@ describe('WriteStream unit', () => {
     const stream = new WriteStreamImpl<number>(noopCb);
     stream.close();
     expect(() => stream.write(1)).toThrowError(Error);
-  });
-
-  it('triggering a close request multiple times throws', () => {
-    // since triggering close is an internal API meant for requests coming from the client
-    // we don't expect it to be called multiple times
-    const stream = new WriteStreamImpl<number>(noopCb);
-
-    stream.triggerCloseRequest();
-    expect(() => stream.triggerCloseRequest()).toThrowError(Error);
-  });
-
-  it('should trigger a close requests', () => {
-    const stream = new WriteStreamImpl<number>(noopCb);
-
-    expect(stream.isCloseRequested()).toBeFalsy();
-    stream.triggerCloseRequest();
-    expect(stream.isCloseRequested()).toBeTruthy();
-  });
-
-  it('should notify listeners when triggering a close request', () => {
-    const stream = new WriteStreamImpl<number>(noopCb);
-
-    const cb1 = vi.fn();
-    stream.onCloseRequest(cb1);
-    const cb2 = vi.fn();
-    stream.onCloseRequest(cb2);
-
-    stream.triggerCloseRequest();
-
-    expect(cb1).toHaveBeenCalled();
-    expect(cb2).toHaveBeenCalled();
-    expect(cb1.mock.invocationCallOrder[0]).toBeLessThan(
-      cb2.mock.invocationCallOrder[0],
-    );
-  });
-
-  it('triggering a close request multiple times throws', () => {
-    // since triggering close is an internal API meant for requests coming from the client
-    // we don't expect it to be called multiple times
-    const stream = new WriteStreamImpl<number>(noopCb);
-
-    stream.triggerCloseRequest();
-    expect(() => stream.triggerCloseRequest()).toThrowError(Error);
   });
 });

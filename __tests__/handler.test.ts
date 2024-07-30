@@ -110,7 +110,6 @@ describe('server-side test', () => {
       payload: { response: 'test ghi' },
     });
 
-    await resReader.requestClose();
     expect(await outputIterator.next()).toEqual({
       done: true,
       value: undefined,

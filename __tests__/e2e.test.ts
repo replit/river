@@ -27,7 +27,13 @@ import {
 } from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
 import { Type } from '@sinclair/typebox';
-import { Procedure, ServiceSchema, Ok, UNCAUGHT_ERROR_CODE } from '../router';
+import {
+  Procedure,
+  ServiceSchema,
+  Ok,
+  UNCAUGHT_ERROR_CODE,
+  ABORT_CODE,
+} from '../router';
 import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,
@@ -239,7 +245,6 @@ describe.each(testMatrix())(
       );
       reqWriter.write({ msg: 'abc', ignore: false });
       reqWriter.close();
-      // await resReader.requestClose();
 
       const output = getIteratorFromStream(resReader);
       const result1 = await iterNext(output);
@@ -298,7 +303,6 @@ describe.each(testMatrix())(
         payload: { response: 'test ghi' },
       });
 
-      await resReader.requestClose();
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -376,7 +380,11 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { resReader } = client.subscribable.value.subscribe({});
+      const abortController = new AbortController();
+      const { resReader } = client.subscribable.value.subscribe(
+        {},
+        { signal: abortController.signal },
+      );
       const outputIterator = getIteratorFromStream(resReader);
       let result = await iterNext(outputIterator);
       expect(result).toStrictEqual({ ok: true, payload: { result: 0 } });
@@ -393,7 +401,7 @@ describe.each(testMatrix())(
       result = await iterNext(outputIterator);
       expect(result).toStrictEqual({ ok: true, payload: { result: 4 } });
 
-      await resReader.requestClose();
+      abortController.abort();
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -427,14 +435,25 @@ describe.each(testMatrix())(
       const subscription = getIteratorFromStream(resReader);
       const result1 = await iterNext(subscription);
       expect(result1).toStrictEqual({ ok: true, payload: { result: 0 } });
-      await resReader.requestClose();
       abortController.abort();
 
       // Make sure that the handlers have finished.
       await advanceFakeTimersBySessionGrace();
 
       const result2 = await subscription.next();
-      expect(result2).toStrictEqual({ done: true, value: undefined });
+      expect(result2).toStrictEqual({
+        done: false,
+        value: {
+          ok: false,
+          payload: {
+            code: ABORT_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.any(String),
+          },
+        },
+      });
+      const result3 = await subscription.next();
+      expect(result3).toStrictEqual({ done: true, value: undefined });
 
       // "Accidentally" call abort() again, as a joke.
       abortController.abort();
@@ -667,9 +686,8 @@ describe.each(testMatrix())(
 
       // cleanup
       for (let i = 0; i < CONCURRENCY; i++) {
-        const { reqWriter, resReader } = openStreams[i];
+        const { reqWriter } = openStreams[i];
         reqWriter.close();
-        await resReader.requestClose();
       }
 
       await testFinishesCleanly({

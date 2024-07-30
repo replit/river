@@ -22,9 +22,7 @@ import {
   isStreamClose,
   isStreamOpen,
   ControlFlags,
-  isStreamCloseRequest,
   isStreamAbort,
-  requestCloseStreamMessage,
   closeStreamMessage,
   abortMessage,
 } from '../transport/message';
@@ -282,10 +280,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         return;
       }
 
-      if (isStreamCloseRequest(msg.controlFlags)) {
-        resWriter.triggerCloseRequest();
-      }
-
       if (isStreamAbortBackwardsCompat(msg.controlFlags, protocolVersion)) {
         let abortResult: Static<typeof InputErrResultSchema>;
         if (Value.Check(InputErrResultSchema, msg.payload)) {
@@ -399,9 +393,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     const reqReader = new ReadStreamImpl<
       Static<PayloadType>,
       Static<typeof RequestReaderErrorSchema>
-    >(() => {
-      this.transport.send(from, requestCloseStreamMessage(streamId));
-    });
+    >();
     reqReader.onClose(() => {
       // TODO remove once clients migrate to v2
       if (protocolVersion === 'v1.1') {

@@ -83,18 +83,6 @@ export interface ReadStream<T, E extends Static<BaseErrorSchemaType>> {
    * consumed.
    */
   isClosed(): boolean;
-  /**
-   * `requestClose` sends a request to the writer to close the stream,
-   * and resolves the writer closes its end of the stream..
-   *
-   * The stream can still receive more data after the request is sent. If you
-   * no longer wish to use the stream, make sure to call `drain`.
-   */
-  requestClose(): Promise<undefined>;
-  /**
-   * `isCloseRequested` checks if the reader has requested to close the stream.
-   */
-  isCloseRequested(): boolean;
 }
 
 /**
@@ -110,16 +98,6 @@ export interface WriteStream<T> {
    * Calling close multiple times has no effect.
    */
   close(): undefined;
-  /**
-   * `isCloseRequested` checks if the reader has requested to close the stream.
-   */
-  isCloseRequested(): boolean;
-  /**
-   * `onCloseRequest` registers a callback that will be called when the stream's
-   * reader requests a close. Returns a function that can be used to unregister the
-   * listener.
-   */
-  onCloseRequest(cb: () => void): () => void;
   /**
    * `isClosed` returns true if the stream was closed by the writer.
    */
@@ -148,15 +126,7 @@ export class ReadStreamImpl<T, E extends Static<BaseErrorSchemaType>>
   /**
    * A list of listeners that will be called when the stream is closed.
    */
-  private onCloseListeners: Set<() => void>;
-  /**
-   * Whether the user has requested to close the stream.
-   */
-  private closeRequested = false;
-  /**
-   * Used to signal to the outside world that the user has requested to close the stream.
-   */
-  private closeRequestCallback: () => void;
+  private onCloseListeners = new Set<() => void>();
   /**
    * Whether the stream is locked.
    */
@@ -184,11 +154,6 @@ export class ReadStreamImpl<T, E extends Static<BaseErrorSchemaType>>
    * Resolves nextPromise
    */
   private resolveNextPromise: null | (() => void) = null;
-
-  constructor(closeRequestCallback: () => void) {
-    this.closeRequestCallback = closeRequestCallback;
-    this.onCloseListeners = new Set();
-  }
 
   public [Symbol.asyncIterator]() {
     if (this.isLocked()) {
@@ -329,27 +294,6 @@ export class ReadStreamImpl<T, E extends Static<BaseErrorSchemaType>>
     };
   }
 
-  public requestClose(): Promise<undefined> {
-    if (this.isClosed()) {
-      throw new Error('Cannot request close after stream already closed');
-    }
-
-    if (!this.closeRequested) {
-      this.closeRequested = true;
-      this.closeRequestCallback();
-    }
-
-    return new Promise<undefined>((resolve) => {
-      this.onClose(() => {
-        resolve(undefined);
-      });
-    });
-  }
-
-  public isCloseRequested(): boolean {
-    return this.closeRequested;
-  }
-
   /**
    * @internal meant for use within river, not exposed as a public API
    *
@@ -399,13 +343,11 @@ export class ReadStreamImpl<T, E extends Static<BaseErrorSchemaType>>
 /**
  * Internal implementation of a `WriteStream`.
  * This won't be exposed as an interface to river
- * consumers directly, it has internal river methods
- * to trigger a close request, a way to pass on close
- * signals, and a way to push data to the stream.
+ * consumers directly.
  */
 export class WriteStreamImpl<T> implements WriteStream<T> {
   /**
-   * Passed via constructor to pass on write requests
+   * Passed via constructor to pass on writes
    */
   private writeCb: (value: T) => void;
   /**
@@ -416,19 +358,10 @@ export class WriteStreamImpl<T> implements WriteStream<T> {
    * A list of listeners that will be called when the stream is closed.
    */
   private onCloseListeners: Set<() => void>;
-  /**
-   * Whether the reader has requested to close the stream.
-   */
-  private closeRequested = false;
-  /**
-   * A list of listeners that will be called when a close request is triggered.
-   */
-  private onCloseRequestListeners: Set<() => void>;
 
   constructor(writeCb: (value: T) => void) {
     this.writeCb = writeCb;
     this.onCloseListeners = new Set();
-    this.onCloseRequestListeners = new Set();
   }
 
   public write(value: T): undefined {
@@ -465,46 +398,6 @@ export class WriteStreamImpl<T> implements WriteStream<T> {
 
     // cleanup
     this.onCloseListeners.clear();
-    this.onCloseRequestListeners.clear();
     this.writeCb = () => undefined;
-  }
-
-  public isCloseRequested(): boolean {
-    return this.closeRequested;
-  }
-
-  public onCloseRequest(cb: () => void): () => void {
-    if (this.isClosed()) {
-      throw new Error('Stream is already closed');
-    }
-
-    if (this.isCloseRequested()) {
-      cb();
-
-      return () => undefined;
-    }
-
-    this.onCloseRequestListeners.add(cb);
-
-    return () => this.onCloseRequestListeners.delete(cb);
-  }
-
-  /**
-   * @internal meant for use within river, not exposed as a public API
-   *
-   * Triggers a close request.
-   */
-  public triggerCloseRequest(): undefined {
-    if (this.isCloseRequested()) {
-      throw new Error('Cannot trigger close request multiple times');
-    }
-
-    if (this.isClosed()) {
-      throw new Error('Cannot trigger close request on closed stream');
-    }
-
-    this.closeRequested = true;
-    this.onCloseRequestListeners.forEach((cb) => cb());
-    this.onCloseRequestListeners.clear();
   }
 }
