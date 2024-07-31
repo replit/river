@@ -2,7 +2,7 @@
 import { Static, TNever, TSchema, TUnion, Type } from '@sinclair/typebox';
 import { ProcedureHandlerContext } from './context';
 import { BaseErrorSchemaType, Result } from './result';
-import { ReadStream, WriteStream } from './streams';
+import { Readable, Writable } from './streams2';
 
 /**
  * Brands a type to prevent it from being directly constructed.
@@ -111,6 +111,14 @@ export type ProcedureErrorSchemaType =
   | TNever;
 
 /**
+ * Common interface for what's passed to a procedure handler.
+ */
+interface BaseProcedureHandlerParam<State, RequestInit extends PayloadType> {
+  ctx: ProcedureHandlerContext<State>;
+  init: Static<RequestInit>;
+}
+
+/**
  * Procedure for a single message in both directions (1:1).
  *
  * @template State - The context state object.
@@ -129,13 +137,44 @@ export interface RpcProcedure<
   responseData: ResponseData;
   responseError: ResponseErr;
   description?: string;
-  handler({
-    ctx,
-    reqInit,
-  }: {
-    ctx: ProcedureHandlerContext<State>;
-    reqInit: Static<RequestInit>;
-  }): Promise<Result<Static<ResponseData>, Static<ResponseErr>>>;
+  handler(
+    param: BaseProcedureHandlerParam<State, RequestInit>,
+  ): Promise<Result<Static<ResponseData>, Static<ResponseErr>>>;
+}
+
+export class UploadProcedureHandlerParam<
+    State,
+    RequestInit extends PayloadType,
+    RequestData extends PayloadType,
+  >
+  implements
+    BaseProcedureHandlerParam<State, RequestInit>,
+    Readable<Static<RequestData>, Static<typeof RequestReaderErrorSchema>>
+{
+  constructor(
+    public ctx: ProcedureHandlerContext<State>,
+    public init: Static<RequestInit>,
+    private readable: Readable<
+      Static<RequestData>,
+      Static<typeof RequestReaderErrorSchema>
+    >,
+  ) {}
+
+  [Symbol.asyncIterator]() {
+    return this.readable[Symbol.asyncIterator]();
+  }
+
+  collect() {
+    return this.readable.collect();
+  }
+
+  break(): undefined {
+    this.readable.break();
+  }
+
+  isReadable() {
+    return this.readable.isReadable();
+  }
 }
 
 /**
@@ -161,18 +200,40 @@ export interface UploadProcedure<
   responseData: ResponseData;
   responseError: ResponseErr;
   description?: string;
-  handler({
-    ctx,
-    reqInit,
-    reqReader,
-  }: {
-    ctx: ProcedureHandlerContext<State>;
-    reqInit: Static<RequestInit>;
-    reqReader: ReadStream<
-      Static<RequestData>,
-      Static<typeof RequestReaderErrorSchema>
-    >;
-  }): Promise<Result<Static<ResponseData>, Static<ResponseErr>>>;
+  handler(
+    param: UploadProcedureHandlerParam<State, RequestInit, RequestData>,
+  ): Promise<Result<Static<ResponseData>, Static<ResponseErr>>>;
+}
+
+export class SubscriptionProcedureHandlerParam<
+    State,
+    RequestInit extends PayloadType,
+    ResponseData extends PayloadType,
+    ResponseErr extends ProcedureErrorSchemaType,
+  >
+  implements
+    BaseProcedureHandlerParam<State, RequestInit>,
+    Writable<Result<Static<ResponseData>, Static<ResponseErr>>>
+{
+  constructor(
+    public ctx: ProcedureHandlerContext<State>,
+    public init: Static<RequestInit>,
+    private writable: Writable<
+      Result<Static<ResponseData>, Static<ResponseErr>>
+    >,
+  ) {}
+
+  write(v: Parameters<typeof this.writable.write>[0]): undefined {
+    this.writable.write(v);
+  }
+
+  close(): undefined {
+    this.writable.close();
+  }
+
+  isWritable(): boolean {
+    return this.writable.isWritable();
+  }
 }
 
 /**
@@ -194,15 +255,67 @@ export interface SubscriptionProcedure<
   responseData: ResponseData;
   responseError: ResponseErr;
   description?: string;
-  handler({
-    ctx,
-    reqInit,
-    resWriter,
-  }: {
-    ctx: ProcedureHandlerContext<State>;
-    reqInit: Static<RequestInit>;
-    resWriter: WriteStream<Result<Static<ResponseData>, Static<ResponseErr>>>;
-  }): Promise<void | undefined>;
+  handler(
+    param: SubscriptionProcedureHandlerParam<
+      State,
+      RequestInit,
+      ResponseData,
+      ResponseErr
+    >,
+  ): Promise<void | undefined>;
+}
+
+export class StreamProcedureHandlerParam<
+    State,
+    RequestInit extends PayloadType,
+    RequestData extends PayloadType,
+    ResponseData extends PayloadType,
+    ResponseErr extends ProcedureErrorSchemaType,
+  >
+  implements
+    BaseProcedureHandlerParam<State, RequestInit>,
+    Readable<Static<RequestData>, Static<typeof RequestReaderErrorSchema>>,
+    Writable<Result<Static<ResponseData>, Static<ResponseErr>>>
+{
+  constructor(
+    public ctx: ProcedureHandlerContext<State>,
+    public init: Static<RequestInit>,
+    private readable: Readable<
+      Static<RequestData>,
+      Static<typeof RequestReaderErrorSchema>
+    >,
+    private writable: Writable<
+      Result<Static<ResponseData>, Static<ResponseErr>>
+    >,
+  ) {}
+
+  [Symbol.asyncIterator]() {
+    return this.readable[Symbol.asyncIterator]();
+  }
+
+  collect() {
+    return this.readable.collect();
+  }
+
+  break(): undefined {
+    this.readable.break();
+  }
+
+  isReadable() {
+    return this.readable.isReadable();
+  }
+
+  write(v: Parameters<typeof this.writable.write>[0]): undefined {
+    this.writable.write(v);
+  }
+
+  close(): undefined {
+    this.writable.close();
+  }
+
+  isWritable(): boolean {
+    return this.writable.isWritable();
+  }
 }
 
 /**
@@ -228,20 +341,15 @@ export interface StreamProcedure<
   responseData: ResponseData;
   responseError: ResponseErr;
   description?: string;
-  handler({
-    ctx,
-    reqInit,
-    reqReader,
-    resWriter,
-  }: {
-    ctx: ProcedureHandlerContext<State>;
-    reqInit: Static<RequestInit>;
-    reqReader: ReadStream<
-      Static<RequestData>,
-      Static<typeof RequestReaderErrorSchema>
-    >;
-    resWriter: WriteStream<Result<Static<ResponseData>, Static<ResponseErr>>>;
-  }): Promise<void | undefined>;
+  handler(
+    param: StreamProcedureHandlerParam<
+      State,
+      RequestInit,
+      RequestData,
+      ResponseData,
+      ResponseErr
+    >,
+  ): Promise<void | undefined>;
 }
 
 /**

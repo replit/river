@@ -49,6 +49,7 @@ import {
   UNEXPECTED_DISCONNECT_CODE,
   ValidProcType,
 } from './procedures';
+import { Readable, Writable } from './streams2';
 
 const OutputErrResultSchema = ErrResultSchema(ResponseReaderErrorSchema);
 
@@ -72,8 +73,7 @@ type UploadFn<
 > = (
   reqInit: ProcInit<Router, ProcName>,
   options?: CallOptions,
-) => {
-  reqWriter: WriteStream<ProcInput<Router, ProcName>>;
+) => Writable<ProcInput<Router, ProcName>> & {
   finalize: () => Promise<
     Result<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>
   >;
@@ -85,13 +85,8 @@ type StreamFn<
 > = (
   reqInit: ProcInit<Router, ProcName>,
   options?: CallOptions,
-) => {
-  reqWriter: WriteStream<ProcInput<Router, ProcName>>;
-  resReader: ReadStream<
-    ProcOutput<Router, ProcName>,
-    ProcErrors<Router, ProcName>
-  >;
-};
+) => Writable<ProcInput<Router, ProcName>> &
+  Readable<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>;
 
 type SubscriptionFn<
   Router extends AnyService,
@@ -99,12 +94,7 @@ type SubscriptionFn<
 > = (
   reqInit: ProcInit<Router, ProcName>,
   options?: CallOptions,
-) => {
-  resReader: ReadStream<
-    ProcOutput<Router, ProcName>,
-    ProcErrors<Router, ProcName>
-  >;
-};
+) => Readable<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>;
 
 /**
  * A helper type to transform an actual service type into a type
