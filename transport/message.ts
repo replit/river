@@ -24,10 +24,6 @@ export const enum ControlFlags {
    */
   StreamClosedBit = 0b01000,
   /**
-   * Used when readers no longer wish to receive messages.
-   */
-  StreamCloseRequestBit = 0b10000,
-  /**
    * Used when a stream is aborted due to cancellation or errors
    */
   StreamAbortBit = 0b00100,
@@ -264,18 +260,6 @@ export function closeStreamMessage(streamId: string): PartialTransportMessage {
   };
 }
 
-export function requestCloseStreamMessage(
-  streamId: string,
-): PartialTransportMessage {
-  return {
-    streamId,
-    controlFlags: ControlFlags.StreamCloseRequestBit,
-    payload: {
-      type: 'CLOSE' as const,
-    } satisfies Static<typeof ControlMessagePayloadSchema>,
-  };
-}
-
 export function abortMessage(
   streamId: string,
   payload: ErrResult<
@@ -328,19 +312,6 @@ export function isStreamClose(controlFlag: number): boolean {
     /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
     (controlFlag & ControlFlags.StreamClosedBit) ===
     ControlFlags.StreamClosedBit
-  );
-}
-
-/**
- * Checks if the given control flag (usually found in msg.controlFlag) is a stream close request message.
- * @param controlFlag - The control flag to check.
- * @returns True if the control flag contains the StreamCloseBit, false otherwise.
- */
-export function isStreamCloseRequest(controlFlag: number): boolean {
-  return (
-    /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
-    (controlFlag & ControlFlags.StreamCloseRequestBit) ===
-    ControlFlags.StreamCloseRequestBit
   );
 }
 

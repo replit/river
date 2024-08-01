@@ -14,10 +14,8 @@ import {
   TransportClientId,
   isStreamClose,
   ControlMessageCloseSchema,
-  isStreamCloseRequest,
   isStreamAbort,
   closeStreamMessage,
-  requestCloseStreamMessage,
   abortMessage,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
@@ -36,10 +34,11 @@ import { ClientHandshakeOptions } from './handshake';
 import { ClientTransport } from '../transport/client';
 import { generateId } from '../transport/id';
 import {
-  ReadStream,
-  ReadStreamImpl,
-  WriteStream,
-  WriteStreamImpl,
+  ReadWritable,
+  Readable,
+  ReadableImpl,
+  Writable,
+  WritableImpl,
 } from './streams';
 import { Value } from '@sinclair/typebox/value';
 import {
@@ -49,7 +48,6 @@ import {
   UNEXPECTED_DISCONNECT_CODE,
   ValidProcType,
 } from './procedures';
-import { Readable, Writable } from './streams2';
 
 const OutputErrResultSchema = ErrResultSchema(ResponseReaderErrorSchema);
 
@@ -66,6 +64,30 @@ type RpcFn<
 ) => Promise<
   Result<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>
 >;
+
+/**
+ * @TODO expose a simple interface instead of class
+ *
+ * {@link UploadRet} is the returned object from invoking an upload procedure.
+ */
+class UploadRet<TWrite, TResult> implements Writable<TWrite> {
+  constructor(
+    private writable: Writable<TWrite>,
+    public finalize: () => Promise<TResult>,
+  ) {}
+
+  write(v: Parameters<typeof this.writable.write>[0]): undefined {
+    this.writable.write(v);
+  }
+
+  close(): undefined {
+    this.writable.close();
+  }
+
+  isWritable(): boolean {
+    return this.writable.isWritable();
+  }
+}
 
 type UploadFn<
   Router extends AnyService,
@@ -295,39 +317,43 @@ function handleProc(
     streamId,
   );
   let cleanClose = true;
-  const reqWriter = new WriteStreamImpl<Static<PayloadType>>((rawIn) => {
-    transport.send(serverId, {
-      streamId,
-      payload: rawIn,
-      controlFlags: 0,
-      tracing: getPropagationContext(ctx),
-    });
-  });
-  reqWriter.onClose(() => {
-    span.addEvent('reqWriter closed');
+  const reqWritable = new WritableImpl<Static<PayloadType>>(
+    // write callback
+    (rawIn) => {
+      transport.send(serverId, {
+        streamId,
+        payload: rawIn,
+        controlFlags: 0,
+        tracing: getPropagationContext(ctx),
+      });
+    },
+    // close callback
+    () => {
+      span.addEvent('reqWriter closed');
 
-    if (!procClosesWithInit && cleanClose) {
-      transport.send(serverId, closeStreamMessage(streamId));
-    }
+      if (!procClosesWithInit && cleanClose) {
+        transport.send(serverId, closeStreamMessage(streamId));
+      }
 
-    if (resReader.isClosed()) {
-      cleanup();
-    }
-  });
+      if (resReadable.isClosed()) {
+        cleanup();
+      }
+    },
+  );
 
-  const resReader = new ReadStreamImpl<
+  const resReadable = new ReadableImpl<
     Static<PayloadType>,
     Static<BaseErrorSchemaType>
-  >(() => {
-    transport.send(serverId, requestCloseStreamMessage(streamId));
-  });
-  resReader.onClose(() => {
+  >();
+  const closeReadable = () => {
+    resReadable._triggerClose();
+
     span.addEvent('resReader closed');
 
-    if (reqWriter.isClosed()) {
+    if (reqWritable.isClosed()) {
       cleanup();
     }
-  });
+  };
 
   function cleanup() {
     transport.removeEventListener('message', onMessage);
@@ -337,7 +363,7 @@ function handleProc(
   }
 
   function onClientAbort() {
-    if (resReader.isClosed() && reqWriter.isClosed()) {
+    if (resReadable.isClosed() && reqWritable.isClosed()) {
       return;
     }
 
@@ -345,17 +371,17 @@ function handleProc(
 
     cleanClose = false;
 
-    if (!resReader.isClosed()) {
-      resReader.pushValue(
+    if (!resReadable.isClosed()) {
+      resReadable._pushValue(
         Err({
           code: ABORT_CODE,
           message: 'Aborted by client',
         }),
       );
-      resReader.triggerClose();
+      closeReadable();
     }
 
-    reqWriter.close();
+    reqWritable.close();
     transport.send(
       serverId,
       abortMessage(
@@ -377,10 +403,6 @@ function handleProc(
       });
 
       return;
-    }
-
-    if (isStreamCloseRequest(msg.controlFlags)) {
-      reqWriter.triggerCloseRequest();
     }
 
     if (isStreamAbort(msg.controlFlags)) {
@@ -408,17 +430,17 @@ function handleProc(
         );
       }
 
-      if (!resReader.isClosed()) {
-        resReader.pushValue(abortResult);
-        resReader.triggerClose();
+      if (!resReadable.isClosed()) {
+        resReadable._pushValue(abortResult);
+        closeReadable();
       }
 
-      reqWriter.close();
+      reqWritable.close();
 
       return;
     }
 
-    if (resReader.isClosed()) {
+    if (resReadable.isClosed()) {
       span.recordException('Received message after output stream is closed');
 
       transport.log?.error('Received message after output stream is closed', {
@@ -431,7 +453,7 @@ function handleProc(
 
     if (!Value.Check(ControlMessageCloseSchema, msg.payload)) {
       if (Value.Check(AnyResultSchema, msg.payload)) {
-        resReader.pushValue(msg.payload);
+        resReadable._pushValue(msg.payload);
       } else {
         transport.log?.error(
           'Got non-control payload, but was not a valid result',
@@ -447,7 +469,7 @@ function handleProc(
     if (isStreamClose(msg.controlFlags)) {
       span.addEvent('received output close');
 
-      resReader.triggerClose();
+      closeReadable();
     }
   }
 
@@ -461,16 +483,16 @@ function handleProc(
     }
 
     cleanClose = false;
-    if (!resReader.isClosed()) {
-      resReader.pushValue(
+    if (!resReadable.isClosed()) {
+      resReadable._pushValue(
         Err({
           code: UNEXPECTED_DISCONNECT_CODE,
           message: `${serverId} unexpectedly disconnected`,
         }),
       );
     }
-    reqWriter.close();
-    resReader.triggerClose();
+    reqWritable.close();
+    closeReadable();
   }
 
   abortSignal?.addEventListener('abort', onClientAbort);
@@ -489,46 +511,43 @@ function handleProc(
   });
 
   if (procClosesWithInit) {
-    reqWriter.close();
+    reqWritable.close();
   }
 
   if (procType === 'subscription') {
-    return { resReader };
+    return resReadable;
   }
 
   if (procType === 'rpc') {
-    return getSingleMessage(resReader, transport.log);
+    return getSingleMessage(resReadable, transport.log);
   }
 
   if (procType === 'upload') {
     let didFinalize = false;
-    return {
-      reqWriter,
-      async finalize() {
-        if (didFinalize) {
-          throw new Error('upload stream already finalized');
-        }
+    return new UploadRet(reqWritable, () => {
+      if (didFinalize) {
+        throw new Error('upload stream already finalized');
+      }
 
-        didFinalize = true;
+      didFinalize = true;
 
-        if (!reqWriter.isClosed()) {
-          reqWriter.close();
-        }
+      if (!reqWritable.isClosed()) {
+        reqWritable.close();
+      }
 
-        return getSingleMessage(resReader, transport.log);
-      },
-    };
+      return getSingleMessage(resReadable, transport.log);
+    });
   }
 
   // good ol' `stream` procType
-  return { reqWriter, resReader };
+  return new ReadWritable(resReadable, reqWritable);
 }
 
 async function getSingleMessage(
-  resReader: ReadStream<unknown, Static<BaseErrorSchemaType>>,
+  resReadable: Readable<unknown, Static<BaseErrorSchemaType>>,
   log?: Logger,
 ): Promise<Result<unknown, Static<BaseErrorSchemaType>>> {
-  const ret = await resReader.asArray();
+  const ret = await resReadable.collect();
 
   if (ret.length > 1) {
     log?.error('Expected single message from server, got multiple');

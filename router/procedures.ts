@@ -2,7 +2,7 @@
 import { Static, TNever, TSchema, TUnion, Type } from '@sinclair/typebox';
 import { ProcedureHandlerContext } from './context';
 import { BaseErrorSchemaType, Result } from './result';
-import { Readable, Writable } from './streams';
+import { ReadWritable, Readable, Writable } from './streams';
 
 /**
  * Brands a type to prevent it from being directly constructed.
@@ -145,6 +145,7 @@ export interface RpcProcedure<
 }
 
 /**
+ * @TODO expose the interface not the class for easier API readability
  * Passed to {@link UploadProcedure.handler}.
  *
  * Contains context and initial message, and implements {@link Readable} interface
@@ -214,6 +215,7 @@ export interface UploadProcedure<
 }
 
 /**
+ * @TODO expose the interface not the class for easier API readability
  * Passed to {@link SubscriptionProcedure.handler}.
  *
  * Contains context and initial message, and implements {@link Writable} interface
@@ -275,6 +277,7 @@ export interface SubscriptionProcedure<
 }
 
 /**
+ * @TODO expose the interface not the class for easier API readability
  * Passed to {@link StreamProcedure.handler}.
  *
  * Contains context and initial message, and implements both {@link Readable} and
@@ -288,49 +291,23 @@ export class StreamReadWritable<
     ResponseData extends PayloadType,
     ResponseErr extends ProcedureErrorSchemaType,
   >
-  implements
-    BaseHandlerParam<State, RequestInit>,
-    Readable<Static<RequestData>, Static<typeof RequestReaderErrorSchema>>,
-    Writable<Result<Static<ResponseData>, Static<ResponseErr>>>
+  extends ReadWritable<
+    Static<RequestData>,
+    Static<typeof RequestReaderErrorSchema>,
+    Result<Static<ResponseData>, Static<ResponseErr>>
+  >
+  implements BaseHandlerParam<State, RequestInit>
 {
   constructor(
     public ctx: ProcedureHandlerContext<State>,
     public init: Static<RequestInit>,
-    private readable: Readable<
+    readable: Readable<
       Static<RequestData>,
       Static<typeof RequestReaderErrorSchema>
     >,
-    private writable: Writable<
-      Result<Static<ResponseData>, Static<ResponseErr>>
-    >,
-  ) {}
-
-  [Symbol.asyncIterator]() {
-    return this.readable[Symbol.asyncIterator]();
-  }
-
-  collect() {
-    return this.readable.collect();
-  }
-
-  break(): undefined {
-    this.readable.break();
-  }
-
-  isReadable() {
-    return this.readable.isReadable();
-  }
-
-  write(v: Parameters<typeof this.writable.write>[0]): undefined {
-    this.writable.write(v);
-  }
-
-  close(): undefined {
-    this.writable.close();
-  }
-
-  isWritable(): boolean {
-    return this.writable.isWritable();
+    writable: Writable<Result<Static<ResponseData>, Static<ResponseErr>>>,
+  ) {
+    super(readable, writable);
   }
 }
 

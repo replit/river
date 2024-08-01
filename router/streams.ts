@@ -102,7 +102,11 @@ export interface Writable<T> {
    */
   isWritable(): boolean;
 }
-
+/**
+ * @internal
+ *
+ * @see {@link createPromiseWithResolvers}
+ */
 interface PromiseWithResolvers<T> {
   promise: Promise<T>;
   resolve: (value: T) => void;
@@ -110,6 +114,8 @@ interface PromiseWithResolvers<T> {
 }
 
 /**
+ * @internal
+ *
  * Same as https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/withResolvers
  * but we support versions where it doesn't exist
  */
@@ -131,6 +137,8 @@ function createPromiseWithResolvers<T>(): PromiseWithResolvers<T> {
 }
 
 /**
+ * @internal
+ *
  * Internal implementation of a {@link Readable}.
  * This won't be exposed as an interface to river
  * consumers directly.
@@ -310,6 +318,13 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
   public _hasValuesInQueue(): boolean {
     return this.queue.length > 0;
   }
+
+  /**
+   * @internal meant for use within river, not exposed as a public API
+   */
+  public isClosed(): boolean {
+    return this.closed;
+  }
 }
 
 /**
@@ -358,5 +373,62 @@ export class WritableImpl<T> implements Writable<T> {
     this.writeCb = () => undefined;
     this.closeCb();
     this.closeCb = () => undefined;
+  }
+
+  /**
+   * @internal meant for use within river, not exposed as a public API
+   */
+  public isClosed(): boolean {
+    return this.closed;
+  }
+}
+
+/**
+ * @internal don't expose this directly to consumers, instead provide a more distinct interface on the client and server.
+ *
+ * {@link ReadWritable} combines {@link Readable} and {@link Writable} into a single interface, this is used in the case of a `stream`
+ * procedure.
+ *
+ * Write on the server writes responses, while on the client we write requests.
+ * Reading on the server side reads requests, while on the client side we read responses.
+ */
+export class ReadWritable<
+    TReadOk,
+    TReadErr extends Static<BaseErrorSchemaType>,
+    TWrite,
+  >
+  implements Readable<TReadOk, TReadErr>, Writable<TWrite>
+{
+  constructor(
+    private readable: Readable<TReadOk, TReadErr>,
+    private writable: Writable<TWrite>,
+  ) {}
+
+  [Symbol.asyncIterator]() {
+    return this.readable[Symbol.asyncIterator]();
+  }
+
+  collect() {
+    return this.readable.collect();
+  }
+
+  break(): undefined {
+    this.readable.break();
+  }
+
+  isReadable() {
+    return this.readable.isReadable();
+  }
+
+  write(v: Parameters<typeof this.writable.write>[0]): undefined {
+    this.writable.write(v);
+  }
+
+  close(): undefined {
+    this.writable.close();
+  }
+
+  isWritable(): boolean {
+    return this.writable.isWritable();
   }
 }
