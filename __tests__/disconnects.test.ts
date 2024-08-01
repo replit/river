@@ -102,10 +102,10 @@ describe.each(testMatrix())(
       });
 
       // start procedure
-      const { reqWriter, resReader } = client.test.echo.stream({});
+      const { reqWritable, resReadable } = client.test.echo.stream({});
 
-      reqWriter.write({ msg: 'abc', ignore: false });
-      const result = await readNextResult(resReader);
+      reqWritable.write({ msg: 'abc', ignore: false });
+      const result = await readNextResult(resReadable);
       assert(result.ok);
 
       expect(numberOfConnections(clientTransport)).toEqual(1);
@@ -116,7 +116,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
-      const nextResPromise = readNextResult(resReader);
+      const nextResPromise = readNextResult(resReadable);
       // end procedure
 
       // after we've disconnected, hit end of grace period
@@ -167,21 +167,21 @@ describe.each(testMatrix())(
       // start procedure
       // client1 and client2 both subscribe
       const abortController1 = new AbortController();
-      const { resReader: responseReader1 } =
+      const { resReadable: resReadable1 } =
         client1.subscribable.value.subscribe(
           {},
           { signal: abortController1.signal },
         );
 
-      let result = await readNextResult(responseReader1);
+      let result = await readNextResult(resReadable1);
       expect(result).toStrictEqual({
         ok: true,
         payload: { result: 0 },
       });
 
-      const { resReader: responseReader2 } =
+      const { resReadable: resReadable2 } =
         client2.subscribable.value.subscribe({});
-      result = await readNextResult(responseReader2);
+      result = await readNextResult(resReadable2);
       expect(result).toStrictEqual({
         ok: true,
         payload: { result: 0 },
@@ -192,9 +192,9 @@ describe.each(testMatrix())(
       expect(add1).toStrictEqual({ ok: true, payload: { result: 1 } });
 
       // both clients should receive the updated value
-      result = await readNextResult(responseReader1);
+      result = await readNextResult(resReadable1);
       expect(result).toStrictEqual({ ok: true, payload: { result: 1 } });
-      result = await readNextResult(responseReader2);
+      result = await readNextResult(resReadable2);
       expect(result).toStrictEqual({ ok: true, payload: { result: 1 } });
 
       // all clients are connected
@@ -216,11 +216,11 @@ describe.each(testMatrix())(
       // client1 who is still connected can still add values and receive updates
       const add2 = await client1.subscribable.add.rpc({ n: 2 });
       expect(add2).toStrictEqual({ ok: true, payload: { result: 3 } });
-      result = await readNextResult(responseReader1);
+      result = await readNextResult(resReadable1);
       expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
 
       // try receiving a value from client2
-      const nextResPromise = readNextResult(responseReader2);
+      const nextResPromise = readNextResult(resReadable2);
 
       // after we've disconnected, hit end of grace period
       // because this advances the global timer, we need to wait for client1 to reconnect
@@ -240,7 +240,7 @@ describe.each(testMatrix())(
         expect(numberOfConnections(serverTransport)).toEqual(1);
       });
 
-      expect(await isReadableDone(responseReader2)).toEqual(true);
+      expect(await isReadableDone(resReadable2)).toEqual(true);
       abortController1.abort();
 
       await testFinishesCleanly({
@@ -266,9 +266,11 @@ describe.each(testMatrix())(
       });
 
       // start procedure
-      const { reqWriter, finalize } = client.uploadable.addMultiple.upload({});
-      reqWriter.write({ n: 1 });
-      reqWriter.write({ n: 2 });
+      const { reqWritable, finalize } = client.uploadable.addMultiple.upload(
+        {},
+      );
+      reqWritable.write({ n: 1 });
+      reqWritable.write({ n: 2 });
       // end procedure
 
       // need to wait for connection to be established

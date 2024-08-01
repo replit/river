@@ -545,8 +545,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               await procedure.handler({
                 ctx: handlerContext,
                 reqInit: initPayload,
-                reqReader: reqReadable,
-                resWriter: resWritable,
+                reqReadable: reqReadable,
+                resWritable: resWritable,
               });
             } catch (err) {
               onHandlerError(err, span);
@@ -571,7 +571,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               await procedure.handler({
                 ctx: handlerContext,
                 reqInit: initPayload,
-                resWriter: resWritable,
+                resWritable: resWritable,
               });
             } catch (err) {
               onHandlerError(err, span);
@@ -595,7 +595,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               const outputMessage = await procedure.handler({
                 ctx: handlerContext,
                 reqInit: initPayload,
-                reqReader: reqReadable,
+                reqReadable: reqReadable,
               });
 
               if (resWritable.isClosed()) {

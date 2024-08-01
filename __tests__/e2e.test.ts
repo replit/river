@@ -166,25 +166,25 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { reqWriter, resReader } = client.test.echo.stream({});
+      const { reqWritable, resReadable } = client.test.echo.stream({});
 
-      reqWriter.write({ msg: 'abc', ignore: false });
-      reqWriter.write({ msg: 'def', ignore: true });
-      reqWriter.write({ msg: 'ghi', ignore: false });
-      reqWriter.write({ msg: 'end', ignore: false });
-      reqWriter.close();
+      reqWritable.write({ msg: 'abc', ignore: false });
+      reqWritable.write({ msg: 'def', ignore: true });
+      reqWritable.write({ msg: 'ghi', ignore: false });
+      reqWritable.write({ msg: 'end', ignore: false });
+      reqWritable.close();
 
-      const result1 = await readNextResult(resReader);
+      const result1 = await readNextResult(resReadable);
       expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
-      const result2 = await readNextResult(resReader);
+      const result2 = await readNextResult(resReadable);
       expect(result2).toStrictEqual({ ok: true, payload: { response: 'ghi' } });
 
-      const result3 = await readNextResult(resReader);
+      const result3 = await readNextResult(resReadable);
       expect(result3).toStrictEqual({ ok: true, payload: { response: 'end' } });
 
       // after the server stream is ended, the client stream should be ended too
-      expect(await isReadableDone(resReader)).toEqual(true);
+      expect(await isReadableDone(resReadable)).toEqual(true);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -208,10 +208,10 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { reqWriter, resReader } = client.test.echo.stream({});
-      reqWriter.close();
+      const { reqWritable, resReadable } = client.test.echo.stream({});
+      reqWritable.close();
 
-      expect(await isReadableDone(resReader)).toEqual(true);
+      expect(await isReadableDone(resReadable)).toEqual(true);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -236,25 +236,25 @@ describe.each(testMatrix())(
 
       // test
       const abortController = new AbortController();
-      const { reqWriter, resReader } = client.test.echo.stream(
+      const { reqWritable, resReadable } = client.test.echo.stream(
         {},
         { signal: abortController.signal },
       );
-      reqWriter.write({ msg: 'abc', ignore: false });
-      reqWriter.close();
+      reqWritable.write({ msg: 'abc', ignore: false });
+      reqWritable.close();
 
-      expect(await readNextResult(resReader)).toStrictEqual({
+      expect(await readNextResult(resReadable)).toStrictEqual({
         ok: true,
         payload: { response: 'abc' },
       });
       abortController.abort();
-      expect(await isReadableDone(resReader)).toEqual(true);
+      expect(await isReadableDone(resReadable)).toEqual(true);
 
       // Make sure that the handlers have finished.
       await advanceFakeTimersBySessionGrace();
 
       // "Accidentally" close again, as a joke.
-      reqWriter.close();
+      reqWritable.close();
       abortController.abort();
 
       await testFinishesCleanly({
@@ -279,22 +279,22 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { reqWriter, resReader } = client.test.echoWithPrefix.stream({
+      const { reqWritable, resReadable } = client.test.echoWithPrefix.stream({
         prefix: 'test',
       });
 
-      reqWriter.write({ msg: 'abc', ignore: false });
-      reqWriter.write({ msg: 'def', ignore: true });
-      reqWriter.write({ msg: 'ghi', ignore: false });
-      reqWriter.close();
+      reqWritable.write({ msg: 'abc', ignore: false });
+      reqWritable.write({ msg: 'def', ignore: true });
+      reqWritable.write({ msg: 'ghi', ignore: false });
+      reqWritable.close();
 
-      const result1 = await readNextResult(resReader);
+      const result1 = await readNextResult(resReadable);
       expect(result1).toStrictEqual({
         ok: true,
         payload: { response: 'test abc' },
       });
 
-      const result2 = await readNextResult(resReader);
+      const result2 = await readNextResult(resReadable);
       expect(result2).toStrictEqual({
         ok: true,
         payload: { response: 'test ghi' },
@@ -325,25 +325,25 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { reqWriter, resReader } = client.fallible.echo.stream({});
+      const { reqWritable, resReadable } = client.fallible.echo.stream({});
 
-      reqWriter.write({
+      reqWritable.write({
         msg: 'abc',
         throwResult: false,
         throwError: false,
       });
-      const result1 = await readNextResult(resReader);
+      const result1 = await readNextResult(resReadable);
       expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
-      reqWriter.write({ msg: 'def', throwResult: true, throwError: false });
-      const result2 = await readNextResult(resReader);
+      reqWritable.write({ msg: 'def', throwResult: true, throwError: false });
+      const result2 = await readNextResult(resReadable);
       expect(result2).toMatchObject({
         ok: false,
         payload: { code: STREAM_ERROR },
       });
 
-      reqWriter.write({ msg: 'ghi', throwResult: false, throwError: true });
-      const result3 = await readNextResult(resReader);
+      reqWritable.write({ msg: 'ghi', throwResult: false, throwError: true });
+      const result3 = await readNextResult(resReadable);
       expect(result3).toStrictEqual({
         ok: false,
         payload: {
@@ -352,7 +352,7 @@ describe.each(testMatrix())(
         },
       });
 
-      reqWriter.close();
+      reqWritable.close();
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
@@ -378,34 +378,34 @@ describe.each(testMatrix())(
 
       // test
       const abortController = new AbortController();
-      const { resReader } = client.subscribable.value.subscribe(
+      const { resReadable } = client.subscribable.value.subscribe(
         {},
         { signal: abortController.signal },
       );
 
-      let result = await readNextResult(resReader);
+      let result = await readNextResult(resReadable);
       expect(result).toStrictEqual({ ok: true, payload: { result: 0 } });
 
       const add1 = await client.subscribable.add.rpc({ n: 1 });
       expect(add1).toMatchObject({ ok: true });
 
-      result = await readNextResult(resReader);
+      result = await readNextResult(resReadable);
       expect(result).toStrictEqual({ ok: true, payload: { result: 1 } });
 
       const add2 = await client.subscribable.add.rpc({ n: 3 });
       expect(add2).toMatchObject({ ok: true });
 
-      result = await readNextResult(resReader);
+      result = await readNextResult(resReadable);
       expect(result).toStrictEqual({ ok: true, payload: { result: 4 } });
 
       abortController.abort();
-      result = await readNextResult(resReader);
+      result = await readNextResult(resReadable);
       expect(result).toStrictEqual({
         ok: false,
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         payload: expect.objectContaining({ code: ABORT_CODE }),
       });
-      expect(await isReadableDone(resReader)).toEqual(true);
+      expect(await isReadableDone(resReadable)).toEqual(true);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -432,25 +432,25 @@ describe.each(testMatrix())(
 
       // test
       const abortController = new AbortController();
-      const { resReader } = client.subscribable.value.subscribe(
+      const { resReadable } = client.subscribable.value.subscribe(
         {},
         { signal: abortController.signal },
       );
-      const result1 = await readNextResult(resReader);
+      const result1 = await readNextResult(resReadable);
       expect(result1).toStrictEqual({ ok: true, payload: { result: 0 } });
       abortController.abort();
 
       // Make sure that the handlers have finished.
       await advanceFakeTimersBySessionGrace();
 
-      const result2 = await readNextResult(resReader);
+      const result2 = await readNextResult(resReadable);
       expect(result2).toStrictEqual({
         ok: false,
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         payload: expect.objectContaining({ code: ABORT_CODE }),
       });
 
-      expect(await isReadableDone(resReader)).toEqual(true);
+      expect(await isReadableDone(resReadable)).toEqual(true);
 
       // "Accidentally" call abort() again, as a joke.
       abortController.abort();
@@ -479,9 +479,11 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { reqWriter, finalize } = client.uploadable.addMultiple.upload({});
-      reqWriter.write({ n: 1 });
-      reqWriter.write({ n: 2 });
+      const { reqWritable, finalize } = client.uploadable.addMultiple.upload(
+        {},
+      );
+      reqWritable.write({ n: 1 });
+      reqWritable.write({ n: 2 });
 
       const result = await finalize();
       expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
@@ -510,8 +512,10 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { reqWriter, finalize } = client.uploadable.addMultiple.upload({});
-      reqWriter.close();
+      const { reqWritable, finalize } = client.uploadable.addMultiple.upload(
+        {},
+      );
+      reqWritable.close();
       const result = await finalize();
       expect(result).toStrictEqual({ ok: true, payload: { result: 0 } });
 
@@ -539,13 +543,13 @@ describe.each(testMatrix())(
       });
 
       // test
-      const { reqWriter, finalize } =
+      const { reqWritable, finalize } =
         client.uploadable.addMultipleWithPrefix.upload({
           prefix: 'test',
         });
-      reqWriter.write({ n: 1 });
-      reqWriter.write({ n: 2 });
-      reqWriter.close();
+      reqWritable.write({ n: 1 });
+      reqWritable.write({ n: 2 });
+      reqWritable.close();
 
       const result = await finalize();
       expect(result).toStrictEqual({ ok: true, payload: { result: 'test 3' } });
@@ -659,22 +663,22 @@ describe.each(testMatrix())(
       const openStreams = [];
       for (let i = 0; i < CONCURRENCY; i++) {
         const streamHandle = client.test.echo.stream({});
-        const { reqWriter } = streamHandle;
-        reqWriter.write({ msg: `${i}-1`, ignore: false });
-        reqWriter.write({ msg: `${i}-2`, ignore: false });
+        const { reqWritable } = streamHandle;
+        reqWritable.write({ msg: `${i}-1`, ignore: false });
+        reqWritable.write({ msg: `${i}-2`, ignore: false });
         openStreams.push(streamHandle);
       }
 
       for (let i = 0; i < CONCURRENCY; i++) {
-        const { resReader } = openStreams[i];
+        const { resReadable } = openStreams[i];
 
-        const result1 = await readNextResult(resReader);
+        const result1 = await readNextResult(resReadable);
         expect(result1).toStrictEqual({
           ok: true,
           payload: { response: `${i}-1` },
         });
 
-        const result2 = await readNextResult(resReader);
+        const result2 = await readNextResult(resReadable);
         expect(result2).toStrictEqual({
           ok: true,
           payload: { response: `${i}-2` },
@@ -683,8 +687,8 @@ describe.each(testMatrix())(
 
       // cleanup
       for (let i = 0; i < CONCURRENCY; i++) {
-        const { reqWriter } = openStreams[i];
-        reqWriter.close();
+        const { reqWritable } = openStreams[i];
+        reqWritable.close();
       }
 
       await testFinishesCleanly({

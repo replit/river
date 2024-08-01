@@ -139,7 +139,7 @@ describe.each(testMatrix())(
 
         const abortController = new AbortController();
         const signal = abortController.signal;
-        const { reqWriter, finalize } = client.service.upload.upload(
+        const { reqWritable, finalize } = client.service.upload.upload(
           {},
           { signal },
         );
@@ -150,7 +150,7 @@ describe.each(testMatrix())(
 
         abortController.abort();
 
-        expect(reqWriter.isWritable()).toEqual(false);
+        expect(reqWritable.isWritable()).toEqual(false);
         await expect(finalize()).resolves.toEqual({
           ok: false,
           payload: {
@@ -209,7 +209,7 @@ describe.each(testMatrix())(
 
         const abortController = new AbortController();
         const signal = abortController.signal;
-        const { resReader } = client.service.subscribe.subscribe(
+        const { resReadable } = client.service.subscribe.subscribe(
           {},
           { signal },
         );
@@ -220,7 +220,7 @@ describe.each(testMatrix())(
 
         abortController.abort();
 
-        await expect(resReader.collect()).resolves.toEqual([
+        await expect(resReadable.collect()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -281,7 +281,7 @@ describe.each(testMatrix())(
 
         const abortController = new AbortController();
         const signal = abortController.signal;
-        const { reqWriter, resReader } = client.service.stream.stream(
+        const { reqWritable, resReadable } = client.service.stream.stream(
           {},
           { signal },
         );
@@ -292,9 +292,9 @@ describe.each(testMatrix())(
 
         abortController.abort();
 
-        expect(reqWriter.isWritable()).toEqual(false);
+        expect(reqWritable.isWritable()).toEqual(false);
 
-        await expect(resReader.collect()).resolves.toEqual([
+        await expect(resReadable.collect()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -452,7 +452,7 @@ describe.each(testMatrix())(
 
         const clientAbortController = new AbortController();
 
-        const { reqWriter, resReader } = client.service.stream.stream(
+        const { reqWritable, resReadable } = client.service.stream.stream(
           {},
           { signal: clientAbortController.signal },
         );
@@ -461,14 +461,14 @@ describe.each(testMatrix())(
           expect(handler).toHaveBeenCalledTimes(1);
         });
 
-        const [{ ctx, reqReader, resWriter }] = handler.mock.calls[0];
+        const [{ ctx, reqReadable, resWritable }] = handler.mock.calls[0];
         const onClientAbort = vi.fn();
         ctx.clientAbortSignal.onabort = onClientAbort;
 
         clientAbortController.abort();
         // this should be ignored by the client since it already aborted
-        resWriter.write({ ok: true, payload: {} });
-        expect(await resReader.collect()).toEqual([
+        resWritable.write({ ok: true, payload: {} });
+        expect(await resReadable.collect()).toEqual([
           {
             ok: false,
             payload: {
@@ -478,12 +478,12 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(reqWriter.isWritable()).toEqual(false);
+        expect(reqWritable.isWritable()).toEqual(false);
 
         await waitFor(() => {
           expect(onClientAbort).toHaveBeenCalled();
         });
-        expect(await reqReader.collect()).toEqual([
+        expect(await reqReadable.collect()).toEqual([
           {
             ok: false,
             payload: {
@@ -493,7 +493,7 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(resWriter.isWritable()).toEqual(false);
+        expect(resWritable.isWritable()).toEqual(false);
       });
     });
   },
@@ -598,7 +598,7 @@ describe.each(testMatrix())(
         const serverOnMessage = vi.fn<[EventMap['message']]>();
         serverTransport.addEventListener('message', serverOnMessage);
 
-        const { reqWriter, finalize } = client.service.upload.upload({});
+        const { reqWritable, finalize } = client.service.upload.upload({});
 
         await waitFor(() => {
           expect(serverOnMessage).toHaveBeenCalledTimes(1);
@@ -625,7 +625,7 @@ describe.each(testMatrix())(
             message: expect.any(String),
           },
         });
-        expect(reqWriter.isWritable()).toEqual(false);
+        expect(reqWritable.isWritable()).toEqual(false);
       });
 
       test('stream', async () => {
@@ -654,7 +654,7 @@ describe.each(testMatrix())(
         const serverOnMessage = vi.fn<[EventMap['message']]>();
         serverTransport.addEventListener('message', serverOnMessage);
 
-        const { reqWriter, resReader } = client.service.stream.stream({});
+        const { reqWritable, resReadable } = client.service.stream.stream({});
 
         await waitFor(() => {
           expect(serverOnMessage).toHaveBeenCalledTimes(1);
@@ -673,7 +673,7 @@ describe.each(testMatrix())(
           ),
         );
 
-        await expect(resReader.collect()).resolves.toEqual([
+        await expect(resReadable.collect()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -683,7 +683,7 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(reqWriter.isWritable()).toEqual(false);
+        expect(reqWritable.isWritable()).toEqual(false);
       });
 
       test('subscribe', async () => {
@@ -711,7 +711,7 @@ describe.each(testMatrix())(
         const serverOnMessage = vi.fn<[EventMap['message']]>();
         serverTransport.addEventListener('message', serverOnMessage);
 
-        const { resReader } = client.service.subscribe.subscribe({});
+        const { resReadable } = client.service.subscribe.subscribe({});
 
         await waitFor(() => {
           expect(serverOnMessage).toHaveBeenCalledTimes(1);
@@ -730,7 +730,7 @@ describe.each(testMatrix())(
           ),
         );
 
-        await expect(resReader.collect()).resolves.toEqual([
+        await expect(resReadable.collect()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -964,18 +964,18 @@ describe.each(testMatrix())(
           serverTransport.clientId,
         );
 
-        const { reqWriter, resReader } = client.service.stream.stream({});
+        const { reqWritable, resReadable } = client.service.stream.stream({});
 
         await waitFor(() => {
           expect(handler).toHaveBeenCalledTimes(1);
         });
 
-        const [{ ctx, reqReader, resWriter }] = handler.mock.calls[0];
+        const [{ ctx, reqReadable, resWritable }] = handler.mock.calls[0];
 
         ctx.abortController.abort();
         // this should be ignored by the server since it already aborted
-        reqWriter.write({ ok: true, payload: {} });
-        expect(await reqReader.collect()).toEqual([
+        reqWritable.write({ ok: true, payload: {} });
+        expect(await reqReadable.collect()).toEqual([
           {
             ok: false,
             payload: {
@@ -985,9 +985,9 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(resWriter.isWritable()).toEqual(false);
+        expect(resWritable.isWritable()).toEqual(false);
 
-        expect(await resReader.collect()).toEqual([
+        expect(await resReadable.collect()).toEqual([
           {
             ok: false,
             payload: {
@@ -1142,19 +1142,19 @@ describe.each(testMatrix())(
           serverTransport.clientId,
         );
 
-        const { reqWriter, resReader } = client.service.stream.stream({});
+        const { reqWritable, resReadable } = client.service.stream.stream({});
 
         await waitFor(() => {
           expect(handler).toHaveBeenCalledTimes(1);
         });
 
-        const [{ reqReader, resWriter }] = handler.mock.calls[0];
+        const [{ reqReadable, resWritable }] = handler.mock.calls[0];
 
         const errorMessage = Math.random().toString();
         rejectable.reject(new Error(errorMessage));
         // this should be ignored by the server since it already aborted
-        reqWriter.write({ ok: true, payload: {} });
-        expect(await reqReader.collect()).toEqual([
+        reqWritable.write({ ok: true, payload: {} });
+        expect(await reqReadable.collect()).toEqual([
           {
             ok: false,
             payload: {
@@ -1163,9 +1163,9 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(resWriter.isWritable()).toEqual(false);
+        expect(resWritable.isWritable()).toEqual(false);
 
-        expect(await resReader.collect()).toEqual([
+        expect(await resReadable.collect()).toEqual([
           {
             ok: false,
             payload: {
