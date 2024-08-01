@@ -3,8 +3,8 @@ import {
   asClientStream,
   asClientSubscription,
   asClientUpload,
-  getIteratorFromStream,
-  iterNext,
+  isReadableDone,
+  readNextResult,
 } from '../util/testHelpers';
 import { describe, expect, test } from 'vitest';
 import {
@@ -61,17 +61,13 @@ describe('server-side test', () => {
     reqWriter.write({ msg: 'ghi', ignore: false });
     reqWriter.close();
 
-    const outputIterator = getIteratorFromStream(resReader);
-    const result1 = await iterNext(outputIterator);
+    const result1 = await readNextResult(resReader);
     expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
-    const result2 = await iterNext(outputIterator);
+    const result2 = await readNextResult(resReader);
     expect(result2).toStrictEqual({ ok: true, payload: { response: 'ghi' } });
 
-    expect(await outputIterator.next()).toEqual({
-      done: true,
-      value: undefined,
-    });
+    expect(await isReadableDone(resReader)).toEqual(true);
   });
 
   test('stream empty', async () => {
@@ -81,8 +77,7 @@ describe('server-side test', () => {
     );
     reqWriter.close();
 
-    const result = await getIteratorFromStream(resReader).next();
-    expect(result).toStrictEqual({ done: true, value: undefined });
+    expect(await isReadableDone(resReader)).toEqual(true);
   });
 
   test('stream with initialization', async () => {
@@ -97,24 +92,19 @@ describe('server-side test', () => {
     reqWriter.write({ msg: 'ghi', ignore: false });
     reqWriter.close();
 
-    const outputIterator = getIteratorFromStream(resReader);
-    const result1 = await iterNext(outputIterator);
+    const result1 = await readNextResult(resReader);
     expect(result1).toStrictEqual({
       ok: true,
       payload: { response: 'test abc' },
     });
 
-    const result2 = await iterNext(outputIterator);
+    const result2 = await readNextResult(resReader);
     expect(result2).toStrictEqual({
       ok: true,
       payload: { response: 'test ghi' },
     });
 
-    await resReader.requestClose();
-    expect(await outputIterator.next()).toEqual({
-      done: true,
-      value: undefined,
-    });
+    expect(await isReadableDone(resReader)).toEqual(true);
   });
 
   test('fallible stream', async () => {
@@ -125,12 +115,12 @@ describe('server-side test', () => {
     );
 
     reqWriter.write({ msg: 'abc', throwResult: false, throwError: false });
-    const outputIterator = getIteratorFromStream(resReader);
-    const result1 = await iterNext(outputIterator);
+
+    const result1 = await readNextResult(resReader);
     expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
     reqWriter.write({ msg: 'def', throwResult: true, throwError: false });
-    const result2 = await iterNext(outputIterator);
+    const result2 = await readNextResult(resReader);
     expect(result2).toStrictEqual({
       ok: false,
       payload: {
@@ -140,7 +130,7 @@ describe('server-side test', () => {
     });
 
     reqWriter.write({ msg: 'ghi', throwResult: false, throwError: true });
-    const result3 = await iterNext(outputIterator);
+    const result3 = await readNextResult(resReader);
     expect(result3).toStrictEqual({
       ok: false,
       payload: {
@@ -159,14 +149,14 @@ describe('server-side test', () => {
     const subscribe = asClientSubscription(state, service.procedures.value);
 
     const { resReader } = subscribe({});
-    const outputIterator = getIteratorFromStream(resReader);
-    const streamResult1 = await iterNext(outputIterator);
+
+    const streamResult1 = await readNextResult(resReader);
     expect(streamResult1).toStrictEqual({ ok: true, payload: { result: 0 } });
 
     const result = await add({ n: 3 });
     expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
 
-    const streamResult2 = await iterNext(outputIterator);
+    const streamResult2 = await readNextResult(resReader);
     expect(streamResult2).toStrictEqual({ ok: true, payload: { result: 3 } });
   });
 
