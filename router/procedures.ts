@@ -2,7 +2,7 @@
 import { Static, TNever, TSchema, TUnion, Type } from '@sinclair/typebox';
 import { ProcedureHandlerContext } from './context';
 import { BaseErrorSchemaType, Result } from './result';
-import { Readable, Writable } from './streams2';
+import { Readable, Writable } from './streams';
 
 /**
  * Brands a type to prevent it from being directly constructed.
@@ -112,8 +112,10 @@ export type ProcedureErrorSchemaType =
 
 /**
  * Common interface for what's passed to a procedure handler.
+ *
+ * Also passed to the {@link RpcProcedure.handler} as is.
  */
-interface BaseProcedureHandlerParam<State, RequestInit extends PayloadType> {
+interface BaseHandlerParam<State, RequestInit extends PayloadType> {
   ctx: ProcedureHandlerContext<State>;
   init: Static<RequestInit>;
 }
@@ -138,17 +140,23 @@ export interface RpcProcedure<
   responseError: ResponseErr;
   description?: string;
   handler(
-    param: BaseProcedureHandlerParam<State, RequestInit>,
+    param: BaseHandlerParam<State, RequestInit>,
   ): Promise<Result<Static<ResponseData>, Static<ResponseErr>>>;
 }
 
-export class UploadProcedureHandlerParam<
+/**
+ * Passed to {@link UploadProcedure.handler}.
+ *
+ * Contains context and initial message, and implements {@link Readable} interface
+ * to allow the handler to consume requests from the client.
+ */
+export class UploadReadable<
     State,
     RequestInit extends PayloadType,
     RequestData extends PayloadType,
   >
   implements
-    BaseProcedureHandlerParam<State, RequestInit>,
+    BaseHandlerParam<State, RequestInit>,
     Readable<Static<RequestData>, Static<typeof RequestReaderErrorSchema>>
 {
   constructor(
@@ -201,18 +209,24 @@ export interface UploadProcedure<
   responseError: ResponseErr;
   description?: string;
   handler(
-    param: UploadProcedureHandlerParam<State, RequestInit, RequestData>,
+    param: UploadReadable<State, RequestInit, RequestData>,
   ): Promise<Result<Static<ResponseData>, Static<ResponseErr>>>;
 }
 
-export class SubscriptionProcedureHandlerParam<
+/**
+ * Passed to {@link SubscriptionProcedure.handler}.
+ *
+ * Contains context and initial message, and implements {@link Writable} interface
+ * to allow the handler to write responses to the client.
+ */
+export class SubscriptionWritable<
     State,
     RequestInit extends PayloadType,
     ResponseData extends PayloadType,
     ResponseErr extends ProcedureErrorSchemaType,
   >
   implements
-    BaseProcedureHandlerParam<State, RequestInit>,
+    BaseHandlerParam<State, RequestInit>,
     Writable<Result<Static<ResponseData>, Static<ResponseErr>>>
 {
   constructor(
@@ -256,16 +270,18 @@ export interface SubscriptionProcedure<
   responseError: ResponseErr;
   description?: string;
   handler(
-    param: SubscriptionProcedureHandlerParam<
-      State,
-      RequestInit,
-      ResponseData,
-      ResponseErr
-    >,
+    param: SubscriptionWritable<State, RequestInit, ResponseData, ResponseErr>,
   ): Promise<void | undefined>;
 }
 
-export class StreamProcedureHandlerParam<
+/**
+ * Passed to {@link StreamProcedure.handler}.
+ *
+ * Contains context and initial message, and implements both {@link Readable} and
+ * {@link Writable} interface to allow the handler to read requests from the client
+ * and write responses to the client.
+ */
+export class StreamReadWritable<
     State,
     RequestInit extends PayloadType,
     RequestData extends PayloadType,
@@ -273,7 +289,7 @@ export class StreamProcedureHandlerParam<
     ResponseErr extends ProcedureErrorSchemaType,
   >
   implements
-    BaseProcedureHandlerParam<State, RequestInit>,
+    BaseHandlerParam<State, RequestInit>,
     Readable<Static<RequestData>, Static<typeof RequestReaderErrorSchema>>,
     Writable<Result<Static<ResponseData>, Static<ResponseErr>>>
 {
@@ -342,7 +358,7 @@ export interface StreamProcedure<
   responseError: ResponseErr;
   description?: string;
   handler(
-    param: StreamProcedureHandlerParam<
+    param: StreamReadWritable<
       State,
       RequestInit,
       RequestData,
