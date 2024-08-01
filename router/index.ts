@@ -29,7 +29,7 @@ export type {
   StreamProcedure,
   ProcedureErrorSchemaType,
 } from './procedures';
-export type { WriteStream, ReadStream } from './streams';
+export type { Writable, Readable } from './streams';
 export {
   Procedure,
   INTERNAL_RIVER_ERROR_CODE,

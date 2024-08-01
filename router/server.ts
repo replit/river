@@ -10,9 +10,6 @@ import {
   ABORT_CODE,
   INVALID_REQUEST_CODE,
   INTERNAL_RIVER_ERROR_CODE,
-  StreamReadWritable,
-  SubscriptionWritable,
-  UploadReadable,
 } from './procedures';
 import {
   AnyService,
@@ -518,7 +515,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
             try {
               const outputMessage = await procedure.handler({
                 ctx: handlerContext,
-                init: initPayload,
+                reqInit: initPayload,
               });
 
               if (resWritable.isClosed()) {
@@ -545,14 +542,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           tracingCtx,
           async (span): InputHandlerReturn => {
             try {
-              await procedure.handler(
-                new StreamReadWritable(
-                  handlerContext,
-                  initPayload,
-                  reqReadable,
-                  resWritable,
-                ),
-              );
+              await procedure.handler({
+                ctx: handlerContext,
+                reqInit: initPayload,
+                reqReader: reqReadable,
+                resWriter: resWritable,
+              });
             } catch (err) {
               onHandlerError(err, span);
             } finally {
@@ -573,13 +568,11 @@ class RiverServer<Services extends AnyServiceSchemaMap>
             try {
               // TODO handle never resolving after cleanup/full close
               // which would lead to us holding on to the closure forever
-              await procedure.handler(
-                new SubscriptionWritable(
-                  handlerContext,
-                  passInitAsDataForBackwardsCompat ? {} : initPayload,
-                  resWritable,
-                ),
-              );
+              await procedure.handler({
+                ctx: handlerContext,
+                reqInit: initPayload,
+                resWriter: resWritable,
+              });
             } catch (err) {
               onHandlerError(err, span);
             } finally {
@@ -599,13 +592,11 @@ class RiverServer<Services extends AnyServiceSchemaMap>
             try {
               // TODO handle never resolving after cleanup/full close
               // which would lead to us holding on to the closure forever
-              const outputMessage = await procedure.handler(
-                new UploadReadable(
-                  handlerContext,
-                  passInitAsDataForBackwardsCompat ? {} : initPayload,
-                  reqReadable,
-                ),
-              );
+              const outputMessage = await procedure.handler({
+                ctx: handlerContext,
+                reqInit: initPayload,
+                reqReader: reqReadable,
+              });
 
               if (resWritable.isClosed()) {
                 // A disconnect happened

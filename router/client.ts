@@ -33,13 +33,7 @@ import { createProcTelemetryInfo, getPropagationContext } from '../tracing';
 import { ClientHandshakeOptions } from './handshake';
 import { ClientTransport } from '../transport/client';
 import { generateId } from '../transport/id';
-import {
-  ReadWritable,
-  Readable,
-  ReadableImpl,
-  Writable,
-  WritableImpl,
-} from './streams';
+import { Readable, ReadableImpl, Writable, WritableImpl } from './streams';
 import { Value } from '@sinclair/typebox/value';
 import {
   ABORT_CODE,
@@ -65,37 +59,14 @@ type RpcFn<
   Result<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>
 >;
 
-/**
- * @TODO expose a simple interface instead of class
- *
- * {@link UploadRet} is the returned object from invoking an upload procedure.
- */
-class UploadRet<TWrite, TResult> implements Writable<TWrite> {
-  constructor(
-    private writable: Writable<TWrite>,
-    public finalize: () => Promise<TResult>,
-  ) {}
-
-  write(v: Parameters<typeof this.writable.write>[0]): undefined {
-    this.writable.write(v);
-  }
-
-  close(): undefined {
-    this.writable.close();
-  }
-
-  isWritable(): boolean {
-    return this.writable.isWritable();
-  }
-}
-
 type UploadFn<
   Router extends AnyService,
   ProcName extends keyof Router['procedures'],
 > = (
   reqInit: ProcInit<Router, ProcName>,
   options?: CallOptions,
-) => Writable<ProcInput<Router, ProcName>> & {
+) => {
+  reqWriter: Writable<ProcInput<Router, ProcName>>;
   finalize: () => Promise<
     Result<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>
   >;
@@ -107,8 +78,13 @@ type StreamFn<
 > = (
   reqInit: ProcInit<Router, ProcName>,
   options?: CallOptions,
-) => Writable<ProcInput<Router, ProcName>> &
-  Readable<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>;
+) => {
+  reqWriter: Writable<ProcInput<Router, ProcName>>;
+  resReader: Readable<
+    ProcOutput<Router, ProcName>,
+    ProcErrors<Router, ProcName>
+  >;
+};
 
 type SubscriptionFn<
   Router extends AnyService,
@@ -116,7 +92,12 @@ type SubscriptionFn<
 > = (
   reqInit: ProcInit<Router, ProcName>,
   options?: CallOptions,
-) => Readable<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>;
+) => {
+  resReader: Readable<
+    ProcOutput<Router, ProcName>,
+    ProcErrors<Router, ProcName>
+  >;
+};
 
 /**
  * A helper type to transform an actual service type into a type
@@ -285,17 +266,11 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
   }, []) as Client<ServiceSchemaMap>;
 }
 
-type ClientProcReturn<ProcType extends ValidProcType> = ReturnType<
-  ProcType extends 'rpc'
-    ? RpcFn<AnyService, string>
-    : ProcType extends 'upload'
-    ? UploadFn<AnyService, string>
-    : ProcType extends 'stream'
-    ? StreamFn<AnyService, string>
-    : ProcType extends 'subscription'
-    ? SubscriptionFn<AnyService, string>
-    : never
->;
+type AnyProcReturn =
+  | ReturnType<RpcFn<AnyService, string>>
+  | ReturnType<UploadFn<AnyService, string>>
+  | ReturnType<StreamFn<AnyService, string>>
+  | ReturnType<SubscriptionFn<AnyService, string>>;
 
 function handleProc(
   procType: ValidProcType,
@@ -305,7 +280,7 @@ function handleProc(
   serviceName: string,
   procedureName: string,
   abortSignal?: AbortSignal,
-): ClientProcReturn<ValidProcType> {
+): AnyProcReturn {
   const procClosesWithInit = procType === 'rpc' || procType === 'subscription';
 
   const streamId = generateId();
@@ -515,7 +490,9 @@ function handleProc(
   }
 
   if (procType === 'subscription') {
-    return resReadable;
+    return {
+      resReader: resReadable,
+    };
   }
 
   if (procType === 'rpc') {
@@ -524,23 +501,29 @@ function handleProc(
 
   if (procType === 'upload') {
     let didFinalize = false;
-    return new UploadRet(reqWritable, () => {
-      if (didFinalize) {
-        throw new Error('upload stream already finalized');
-      }
+    return {
+      reqWriter: reqWritable,
+      finalize: () => {
+        if (didFinalize) {
+          throw new Error('upload stream already finalized');
+        }
 
-      didFinalize = true;
+        didFinalize = true;
 
-      if (!reqWritable.isClosed()) {
-        reqWritable.close();
-      }
+        if (!reqWritable.isClosed()) {
+          reqWritable.close();
+        }
 
-      return getSingleMessage(resReadable, transport.log);
-    });
+        return getSingleMessage(resReadable, transport.log);
+      },
+    };
   }
 
   // good ol' `stream` procType
-  return new ReadWritable(resReadable, reqWritable);
+  return {
+    resReader: resReadable,
+    reqWriter: reqWritable,
+  };
 }
 
 async function getSingleMessage(

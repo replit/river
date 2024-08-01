@@ -49,10 +49,6 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     requestData: EchoRequest,
     responseData: EchoResponse,
     async handler({ reqReader, resWriter }) {
-      resWriter.onCloseRequest(() => {
-        resWriter.close();
-      });
-
       for await (const input of reqReader) {
         const { ignore, msg } = unwrap(input);
         if (!ignore) {
@@ -68,16 +64,14 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     requestData: EchoRequest,
     responseData: EchoResponse,
     async handler({ reqInit, reqReader, resWriter }) {
-      resWriter.onCloseRequest(() => {
-        resWriter.close();
-      });
-
       for await (const input of reqReader) {
         const { ignore, msg } = unwrap(input);
         if (!ignore) {
           resWriter.write(Ok({ response: `${reqInit.prefix} ${msg}` }));
         }
       }
+
+      resWriter.close();
     },
   }),
 
