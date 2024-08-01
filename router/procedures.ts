@@ -400,19 +400,19 @@ export type Procedure<
         ResponseErr
       >
     : Ty extends 'stream'
-      ? StreamProcedure<
-          State,
-          RequestInit,
-          RequestData,
-          ResponseData,
-          ResponseErr
-        >
-      : never
+    ? StreamProcedure<
+        State,
+        RequestInit,
+        RequestData,
+        ResponseData,
+        ResponseErr
+      >
+    : never
   : Ty extends 'rpc'
-    ? RpcProcedure<State, RequestInit, ResponseData, ResponseErr>
-    : Ty extends 'subscription'
-      ? SubscriptionProcedure<State, RequestInit, ResponseData, ResponseErr>
-      : never);
+  ? RpcProcedure<State, RequestInit, ResponseData, ResponseErr>
+  : Ty extends 'subscription'
+  ? SubscriptionProcedure<State, RequestInit, ResponseData, ResponseErr>
+  : never);
 
 /**
  * Represents any {@link Procedure} type.
