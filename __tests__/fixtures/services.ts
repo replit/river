@@ -49,16 +49,13 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     requestData: EchoRequest,
     responseData: EchoResponse,
     async handler({ reqReader, resWriter }) {
-      resWriter.onCloseRequest(() => {
-        resWriter.close();
-      });
-
       for await (const input of reqReader) {
         const { ignore, msg } = unwrap(input);
         if (!ignore) {
           resWriter.write(Ok({ response: msg }));
         }
       }
+
       resWriter.close();
     },
   }),
@@ -68,16 +65,14 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     requestData: EchoRequest,
     responseData: EchoResponse,
     async handler({ reqInit, reqReader, resWriter }) {
-      resWriter.onCloseRequest(() => {
-        resWriter.close();
-      });
-
       for await (const input of reqReader) {
         const { ignore, msg } = unwrap(input);
         if (!ignore) {
           resWriter.write(Ok({ response: `${reqInit.prefix} ${msg}` }));
         }
       }
+
+      resWriter.close();
     },
   }),
 
@@ -238,17 +233,11 @@ export const SubscribableServiceSchema = ServiceSchema.define(
       requestInit: Type.Object({}),
       responseData: Type.Object({ result: Type.Number() }),
       async handler({ ctx, resWriter }) {
-        const dispose1 = ctx.state.count.observe((count) => {
+        const dispose = ctx.state.count.observe((count) => {
           resWriter.write(Ok({ result: count }));
         });
 
-        ctx.onRequestFinished(dispose1);
-
-        const dispose2 = resWriter.onCloseRequest(() => {
-          resWriter.close();
-        });
-
-        ctx.onRequestFinished(dispose2);
+        ctx.onRequestFinished(dispose);
       },
     }),
   },

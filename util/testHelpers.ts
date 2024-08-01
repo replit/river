@@ -18,13 +18,12 @@ import {
 import { coerceErrorString } from './stringify';
 import { Transport } from '../transport/transport';
 import {
-  ReadStream,
-  WriteStream,
-  ReadStreamImpl,
-  WriteStreamImpl,
   Readable,
+  ReadableImpl,
   ReadableResult,
   ReadableIterator,
+  Writable,
+  WritableImpl,
 } from '../router/streams';
 import { ServiceContext, ProcedureHandlerContext } from '../router/context';
 import { WsLike } from '../transport/impls/ws/wslike';
@@ -257,64 +256,54 @@ function createResponsePipe<
   Output extends PayloadType,
   Err extends ProcedureErrorSchemaType,
 >(): {
-  reader: ReadStream<
+  readable: Readable<
     Static<Output>,
     Static<Err> | Static<typeof ResponseReaderErrorSchema>
   >;
-  writer: WriteStream<Result<Static<Output>, Static<Err>>>;
+  writable: Writable<Result<Static<Output>, Static<Err>>>;
 } {
-  const reader = new ReadStreamImpl<
+  const readable = new ReadableImpl<
     Static<Output>,
     Static<Err> | Static<typeof ResponseReaderErrorSchema>
-  >(() => {
-    // Make it async to simulate request going over the wire
-    // using promises so that we don't get affected by fake timers.
-    void Promise.resolve().then(() => {
-      writer.triggerCloseRequest();
-    });
-  });
-  const writer = new WriteStreamImpl<Result<Static<Output>, Static<Err>>>(
+  >();
+  const writable = new WritableImpl<Result<Static<Output>, Static<Err>>>(
     (v) => {
-      reader.pushValue(v);
+      readable._pushValue(v);
+    },
+    () => {
+      // Make it async to simulate request going over the wire
+      // using promises so that we don't get affected by fake timers.
+      void Promise.resolve().then(() => {
+        readable._triggerClose();
+      });
     },
   );
-  writer.onClose(() => {
-    // Make it async to simulate request going over the wire
-    // using promises so that we don't get affected by fake timers.
-    void Promise.resolve().then(() => {
-      reader.triggerClose();
-    });
-  });
 
-  return { reader, writer };
+  return { readable, writable };
 }
 
 function createRequestPipe<Input extends PayloadType>(): {
-  reader: ReadStream<Static<Input>, Static<typeof RequestReaderErrorSchema>>;
-  writer: WriteStream<Static<Input>>;
+  readable: Readable<Static<Input>, Static<typeof RequestReaderErrorSchema>>;
+  writable: Writable<Static<Input>>;
 } {
-  const reader = new ReadStreamImpl<
+  const readable = new ReadableImpl<
     Static<Input>,
     Static<typeof RequestReaderErrorSchema>
-  >(() => {
-    // Make it async to simulate request going over the wire
-    // using promises so that we don't get affected by fake timers.
-    void Promise.resolve().then(() => {
-      writer.triggerCloseRequest();
-    });
-  });
-  const writer = new WriteStreamImpl<Static<Input>>((v) => {
-    reader.pushValue(Ok(v));
-  });
-  writer.onClose(() => {
-    // Make it async to simulate request going over the wire
-    // using promises so that we don't get affected by fake timers.
-    void Promise.resolve().then(() => {
-      reader.triggerClose();
-    });
-  });
+  >();
+  const writable = new WritableImpl<Static<Input>>(
+    (v) => {
+      readable._pushValue(Ok(v));
+    },
+    () => {
+      // Make it async to simulate request going over the wire
+      // using promises so that we don't get affected by fake timers.
+      void Promise.resolve().then(() => {
+        readable._triggerClose();
+      });
+    },
+  );
 
-  return { reader, writer };
+  return { readable, writable };
 }
 
 export function asClientStream<
@@ -330,8 +319,8 @@ export function asClientStream<
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ): {
-  reqWriter: WriteStream<Static<Input>>;
-  resReader: ReadStream<Static<Output>, Static<Err>>;
+  reqWriter: Writable<Static<Input>>;
+  resReader: Readable<Static<Output>, Static<Err>>;
 } {
   const requestPipe = createRequestPipe<Input>();
   const responsePipe = createResponsePipe<Output, Err>();
@@ -340,14 +329,14 @@ export function asClientStream<
     .handler({
       ctx: dummyCtx(state, session, extendedContext),
       reqInit: reqInit ?? {},
-      reqReader: requestPipe.reader,
-      resWriter: responsePipe.writer,
+      reqReader: requestPipe.readable,
+      resWriter: responsePipe.writable,
     })
-    .catch((err: unknown) => responsePipe.writer.write(catchProcError(err)));
+    .catch((err: unknown) => responsePipe.writable.write(catchProcError(err)));
 
   return {
-    reqWriter: requestPipe.writer,
-    resReader: responsePipe.reader,
+    reqWriter: requestPipe.writable,
+    resReader: responsePipe.readable,
   };
 }
 
@@ -362,7 +351,7 @@ export function asClientSubscription<
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ): (msg: Static<Init>) => {
-  resReader: ReadStream<Static<Output>, Static<Err>>;
+  resReader: Readable<Static<Output>, Static<Err>>;
 } {
   const responsePipe = createResponsePipe<Output, Err>();
 
@@ -371,11 +360,13 @@ export function asClientSubscription<
       .handler({
         ctx: dummyCtx(state, session, extendedContext),
         reqInit: msg,
-        resWriter: responsePipe.writer,
+        resWriter: responsePipe.writable,
       })
-      .catch((err: unknown) => responsePipe.writer.write(catchProcError(err)));
+      .catch((err: unknown) =>
+        responsePipe.writable.write(catchProcError(err)),
+      );
 
-    return { resReader: responsePipe.reader };
+    return { resReader: responsePipe.readable };
   };
 }
 
@@ -392,7 +383,7 @@ export function asClientUpload<
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ): {
-  reqWriter: WriteStream<Static<Input>>;
+  reqWriter: Writable<Static<Input>>;
   finalize: () => Promise<Result<Static<Output>, Static<Err>>>;
 } {
   const requestPipe = createRequestPipe<Input>();
@@ -400,11 +391,11 @@ export function asClientUpload<
     .handler({
       ctx: dummyCtx(state, session, extendedContext),
       reqInit: reqInit ?? {},
-      reqReader: requestPipe.reader,
+      reqReader: requestPipe.readable,
     })
     .catch(catchProcError);
 
-  return { reqWriter: requestPipe.writer, finalize: () => result };
+  return { reqWriter: requestPipe.writable, finalize: () => result };
 }
 
 export function getTransportConnections<ConnType extends Connection>(

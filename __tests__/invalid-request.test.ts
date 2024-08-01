@@ -583,7 +583,7 @@ describe('aborts invalid request', () => {
     const { reqWriter, resReader } = client.service.stream.stream({});
 
     reqWriter.write({ oldField: 'heyyo' });
-    expect(await resReader.asArray()).toEqual([
+    expect(await resReader.collect()).toEqual([
       {
         ok: false,
         payload: {

@@ -14,7 +14,7 @@ import {
   unwrap,
 } from '../router/result';
 import { TestServiceSchema } from './fixtures/services';
-import { getIteratorFromStream, iterNext } from '../util/testHelpers';
+import { readNextResult } from '../util/testHelpers';
 import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,
@@ -272,9 +272,7 @@ describe('Output<> type', () => {
 
     // Then
     const { resReader } = client.test.stream.stream({});
-    void iterNext(getIteratorFromStream(resReader))
-      .then(unwrap)
-      .then(acceptOutput);
+    void readNextResult(resReader).then(unwrap).then(acceptOutput);
     expect(client).toBeTruthy();
   });
 
@@ -288,9 +286,7 @@ describe('Output<> type', () => {
 
     // Then
     const { resReader } = client.test.subscription.subscribe({ n: 1 });
-    void iterNext(getIteratorFromStream(resReader))
-      .then(unwrap)
-      .then(acceptOutput);
+    void readNextResult(resReader).then(unwrap).then(acceptOutput);
 
     expect(client).toBeTruthy();
   });

@@ -1,9 +1,9 @@
 import { assert, beforeEach, describe, expect, test } from 'vitest';
 import {
   closeAllConnections,
-  getIteratorFromStream,
-  iterNext,
+  isReadableDone,
   numberOfConnections,
+  readNextResult,
 } from '../util/testHelpers';
 import {
   SubscribableServiceSchema,
@@ -103,10 +103,9 @@ describe.each(testMatrix())(
 
       // start procedure
       const { reqWriter, resReader } = client.test.echo.stream({});
-      const outputIterator = getIteratorFromStream(resReader);
 
       reqWriter.write({ msg: 'abc', ignore: false });
-      const result = await iterNext(outputIterator);
+      const result = await readNextResult(resReader);
       assert(result.ok);
 
       expect(numberOfConnections(clientTransport)).toEqual(1);
@@ -117,7 +116,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
-      const nextResPromise = iterNext(outputIterator);
+      const nextResPromise = readNextResult(resReader);
       // end procedure
 
       // after we've disconnected, hit end of grace period
@@ -167,10 +166,14 @@ describe.each(testMatrix())(
 
       // start procedure
       // client1 and client2 both subscribe
+      const abortController1 = new AbortController();
       const { resReader: responseReader1 } =
-        client1.subscribable.value.subscribe({});
-      const outputIterator1 = getIteratorFromStream(responseReader1);
-      let result = await iterNext(outputIterator1);
+        client1.subscribable.value.subscribe(
+          {},
+          { signal: abortController1.signal },
+        );
+
+      let result = await readNextResult(responseReader1);
       expect(result).toStrictEqual({
         ok: true,
         payload: { result: 0 },
@@ -178,8 +181,7 @@ describe.each(testMatrix())(
 
       const { resReader: responseReader2 } =
         client2.subscribable.value.subscribe({});
-      const outputIterator2 = getIteratorFromStream(responseReader2);
-      result = await iterNext(outputIterator2);
+      result = await readNextResult(responseReader2);
       expect(result).toStrictEqual({
         ok: true,
         payload: { result: 0 },
@@ -190,9 +192,9 @@ describe.each(testMatrix())(
       expect(add1).toStrictEqual({ ok: true, payload: { result: 1 } });
 
       // both clients should receive the updated value
-      result = await iterNext(outputIterator1);
+      result = await readNextResult(responseReader1);
       expect(result).toStrictEqual({ ok: true, payload: { result: 1 } });
-      result = await iterNext(outputIterator2);
+      result = await readNextResult(responseReader2);
       expect(result).toStrictEqual({ ok: true, payload: { result: 1 } });
 
       // all clients are connected
@@ -214,11 +216,11 @@ describe.each(testMatrix())(
       // client1 who is still connected can still add values and receive updates
       const add2 = await client1.subscribable.add.rpc({ n: 2 });
       expect(add2).toStrictEqual({ ok: true, payload: { result: 3 } });
-      result = await iterNext(outputIterator1);
+      result = await readNextResult(responseReader1);
       expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
 
       // try receiving a value from client2
-      const nextResPromise = iterNext(outputIterator2);
+      const nextResPromise = readNextResult(responseReader2);
 
       // after we've disconnected, hit end of grace period
       // because this advances the global timer, we need to wait for client1 to reconnect
@@ -238,8 +240,8 @@ describe.each(testMatrix())(
         expect(numberOfConnections(serverTransport)).toEqual(1);
       });
 
-      expect(responseReader2.isClosed()).toBe(true);
-      await responseReader1.requestClose();
+      expect(await isReadableDone(responseReader2)).toEqual(true);
+      abortController1.abort();
 
       await testFinishesCleanly({
         clientTransports: [client1Transport, client2Transport],

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   closeAllConnections,
-  getIteratorFromStream,
-  iterNext,
+  readNextResult,
+  isReadableDone,
   numberOfConnections,
 } from '../util/testHelpers';
 import {
@@ -205,8 +205,7 @@ describe.each(testMatrix())(
       reqWriter.write({ msg: '1', ignore: false });
       reqWriter.write({ msg: '2', ignore: false });
 
-      const outputIterator = getIteratorFromStream(resReader);
-      const result1 = await iterNext(outputIterator);
+      const result1 = await readNextResult(resReader);
       expect(result1).toStrictEqual({
         ok: true,
         payload: { response: '1' },
@@ -215,18 +214,16 @@ describe.each(testMatrix())(
       // ensure we only have one stream despite pushing multiple messages.
       reqWriter.close();
       await waitFor(() => expect(server.openStreams.size).toEqual(1));
-      await resReader.requestClose();
       // ensure we no longer have any open streams since the input was closed.
       await waitFor(() => expect(server.openStreams.size).toEqual(0));
 
-      const result2 = await iterNext(outputIterator);
+      const result2 = await readNextResult(resReader);
       expect(result2).toStrictEqual({
         ok: true,
         payload: { response: '2' },
       });
 
-      const result3 = await outputIterator.next();
-      expect(result3.done).toBe(true);
+      expect(await isReadableDone(resReader)).toEqual(true);
       // end procedure
 
       // number of message handlers shouldn't increase after stream ends
@@ -271,10 +268,12 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-
-      const { resReader } = client.subscribable.value.subscribe({});
-      const outputIterator = getIteratorFromStream(resReader);
-      let result = await iterNext(outputIterator);
+      const abortController = new AbortController();
+      const { resReader } = client.subscribable.value.subscribe(
+        {},
+        { signal: abortController.signal },
+      );
+      let result = await readNextResult(resReader);
       expect(result).toStrictEqual({
         ok: true,
         payload: { result: 0 },
@@ -282,22 +281,24 @@ describe.each(testMatrix())(
 
       const add1 = await client.subscribable.add.rpc({ n: 1 });
       expect(add1).toStrictEqual({ ok: true, payload: { result: 1 } });
-      result = await iterNext(outputIterator);
+      result = await readNextResult(resReader);
       expect(result).toStrictEqual({
         ok: true,
         payload: { result: 1 },
       });
 
-      await resReader.requestClose();
+      abortController.abort();
       // end procedure
 
       // number of message handlers shouldn't increase after subscription ends
-      expect(
-        serverTransport.eventDispatcher.numberOfListeners('message'),
-      ).toEqual(serverListeners);
-      expect(
-        clientTransport.eventDispatcher.numberOfListeners('message'),
-      ).toEqual(clientListeners);
+      await waitFor(() => {
+        expect(
+          serverTransport.eventDispatcher.numberOfListeners('message'),
+        ).toEqual(serverListeners);
+        expect(
+          clientTransport.eventDispatcher.numberOfListeners('message'),
+        ).toEqual(clientListeners);
+      });
 
       // check number of connections
       expect(numberOfConnections(clientTransport)).toEqual(1);
@@ -384,8 +385,7 @@ describe.each(testMatrix())(
       const { reqWriter, resReader } = client.test.echo.stream({});
       reqWriter.write({ msg: '1', ignore: false });
 
-      const outputIterator = getIteratorFromStream(resReader);
-      const result1 = await iterNext(outputIterator);
+      const result1 = await readNextResult(resReader);
       expect(result1).toStrictEqual({ ok: true, payload: { response: '1' } });
 
       // wait for session to disconnect
@@ -404,7 +404,7 @@ describe.each(testMatrix())(
       // push on the old stream and make sure its not sent
 
       expect(() => reqWriter.write({ msg: '2', ignore: false })).toThrow();
-      const result2 = await iterNext(outputIterator);
+      const result2 = await readNextResult(resReader);
       expect(result2).toMatchObject({ ok: false });
 
       await testFinishesCleanly({

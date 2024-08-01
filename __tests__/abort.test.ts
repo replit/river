@@ -150,7 +150,7 @@ describe.each(testMatrix())(
 
         abortController.abort();
 
-        expect(reqWriter.isClosed());
+        expect(reqWriter.isWritable()).toEqual(false);
         await expect(finalize()).resolves.toEqual({
           ok: false,
           payload: {
@@ -220,8 +220,7 @@ describe.each(testMatrix())(
 
         abortController.abort();
 
-        expect(resReader.isClosed());
-        await expect(resReader.asArray()).resolves.toEqual([
+        await expect(resReader.collect()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -293,9 +292,9 @@ describe.each(testMatrix())(
 
         abortController.abort();
 
-        expect(resReader.isClosed());
-        expect(reqWriter.isClosed());
-        await expect(resReader.asArray()).resolves.toEqual([
+        expect(reqWriter.isWritable()).toEqual(false);
+
+        await expect(resReader.collect()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -469,7 +468,7 @@ describe.each(testMatrix())(
         clientAbortController.abort();
         // this should be ignored by the client since it already aborted
         resWriter.write({ ok: true, payload: {} });
-        expect(await resReader.asArray()).toEqual([
+        expect(await resReader.collect()).toEqual([
           {
             ok: false,
             payload: {
@@ -479,13 +478,12 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(resReader.isClosed());
-        expect(reqWriter.isClosed());
+        expect(reqWriter.isWritable()).toEqual(false);
 
         await waitFor(() => {
           expect(onClientAbort).toHaveBeenCalled();
         });
-        expect(await reqReader.asArray()).toEqual([
+        expect(await reqReader.collect()).toEqual([
           {
             ok: false,
             payload: {
@@ -495,8 +493,7 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(reqReader.isClosed());
-        expect(resWriter.isClosed());
+        expect(resWriter.isWritable()).toEqual(false);
       });
     });
   },
@@ -628,7 +625,7 @@ describe.each(testMatrix())(
             message: expect.any(String),
           },
         });
-        expect(reqWriter.isClosed());
+        expect(reqWriter.isWritable()).toEqual(false);
       });
 
       test('stream', async () => {
@@ -676,7 +673,7 @@ describe.each(testMatrix())(
           ),
         );
 
-        await expect(resReader.asArray()).resolves.toEqual([
+        await expect(resReader.collect()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -686,7 +683,7 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(reqWriter.isClosed());
+        expect(reqWriter.isWritable()).toEqual(false);
       });
 
       test('subscribe', async () => {
@@ -733,7 +730,7 @@ describe.each(testMatrix())(
           ),
         );
 
-        await expect(resReader.asArray()).resolves.toEqual([
+        await expect(resReader.collect()).resolves.toEqual([
           {
             ok: false,
             payload: {
@@ -978,7 +975,7 @@ describe.each(testMatrix())(
         ctx.abortController.abort();
         // this should be ignored by the server since it already aborted
         reqWriter.write({ ok: true, payload: {} });
-        expect(await reqReader.asArray()).toEqual([
+        expect(await reqReader.collect()).toEqual([
           {
             ok: false,
             payload: {
@@ -988,10 +985,9 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(reqReader.isClosed());
-        expect(resWriter.isClosed());
+        expect(resWriter.isWritable()).toEqual(false);
 
-        expect(await resReader.asArray()).toEqual([
+        expect(await resReader.collect()).toEqual([
           {
             ok: false,
             payload: {
@@ -1001,8 +997,6 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(resReader.isClosed());
-        expect(reqWriter.isClosed());
       });
     });
   },
@@ -1160,7 +1154,7 @@ describe.each(testMatrix())(
         rejectable.reject(new Error(errorMessage));
         // this should be ignored by the server since it already aborted
         reqWriter.write({ ok: true, payload: {} });
-        expect(await reqReader.asArray()).toEqual([
+        expect(await reqReader.collect()).toEqual([
           {
             ok: false,
             payload: {
@@ -1169,10 +1163,9 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(reqReader.isClosed());
-        expect(resWriter.isClosed());
+        expect(resWriter.isWritable()).toEqual(false);
 
-        expect(await resReader.asArray()).toEqual([
+        expect(await resReader.collect()).toEqual([
           {
             ok: false,
             payload: {
@@ -1181,8 +1174,6 @@ describe.each(testMatrix())(
             },
           },
         ]);
-        expect(resReader.isClosed());
-        expect(reqWriter.isClosed());
       });
     });
   },
