@@ -22,6 +22,9 @@ import {
   WriteStream,
   ReadStreamImpl,
   WriteStreamImpl,
+  Readable,
+  ReadableResult,
+  ReadableIterator,
 } from '../router/streams';
 import { ServiceContext, ProcedureHandlerContext } from '../router/context';
 import { WsLike } from '../transport/impls/ws/wslike';
@@ -79,30 +82,61 @@ export function onWsServerReady(server: http.Server): Promise<number> {
   });
 }
 
-export function getIteratorFromStream<T, E extends Static<BaseErrorSchemaType>>(
-  readStream: ReadStream<T, E>,
-) {
-  return readStream[Symbol.asyncIterator]();
+const readableIterators = new WeakMap<
+  Readable<unknown, Static<BaseErrorSchemaType>>,
+  ReadableIterator<unknown, Static<BaseErrorSchemaType>>
+>();
+
+/**
+ * A safe way to access {@link Readble}'s iterator multiple times in test helpers.
+ *
+ * If there are other iteration attempts outside of the test helpers
+ * (this function, {@link readNextResult}, and {@link isReadableDone})
+ * it will throw an error.
+ */
+export function getReadableIterator<T, E extends Static<BaseErrorSchemaType>>(
+  readable: Readable<T, E>,
+): ReadableIterator<T, E> {
+  let iter = readableIterators.get(readable) as
+    | ReadableIterator<T, E>
+    | undefined;
+
+  if (!iter) {
+    iter = readable[Symbol.asyncIterator]();
+    readableIterators.set(readable, iter);
+  }
+
+  return iter;
 }
 
 /**
- * Retrieves the next value from an async iterable iterator.
- * @param iter The async iterable iterator.
- * @returns A promise that resolves to the next value from the iterator.
+ * Retrieves the next value from {@link Readable}, or throws an error if the Readable is done.
+ *
+ * Calling semantics are similar to {@link getReadableIterator}
  */
-export async function iterNext<T>(iter: {
-  next(): Promise<
-    | {
-        done: false;
-        value: T;
-      }
-    | {
-        done: true;
-        value: undefined;
-      }
-  >;
-}) {
-  return await iter.next().then((res) => res.value as T);
+export async function readNextResult<T, E extends Static<BaseErrorSchemaType>>(
+  readable: Readable<T, E>,
+): Promise<ReadableResult<T, E>> {
+  const res = await getReadableIterator(readable).next();
+
+  if (res.done) {
+    throw new Error('readNext from a done Readable');
+  }
+
+  return res.value;
+}
+
+/**
+ * Checks if the readable is done iterating, it consumes an iteration in the process.
+ *
+ * Calling semantics are similar to {@link getReadableIterator}
+ */
+export async function isReadableDone<T, E extends Static<BaseErrorSchemaType>>(
+  readable: Readable<T, E>,
+) {
+  const res = await getReadableIterator(readable).next();
+
+  return res.done;
 }
 
 export function payloadToTransportMessage<Payload>(

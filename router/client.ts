@@ -278,7 +278,7 @@ type ClientProcReturn<ProcType extends ValidProcType> = ReturnType<
 function handleProc(
   procType: ValidProcType,
   transport: ClientTransport<Connection>,
-  serverId: TransportClientId,
+  serverId: TransportClientId,g
   init: Static<PayloadType>,
   serviceName: string,
   procedureName: string,

@@ -1,25 +1,29 @@
 import { Static } from '@sinclair/typebox';
 import { BaseErrorSchemaType, Err, Result } from './result';
 
-export const StreamDrainedError = {
-  code: 'STREAM_DRAINED',
-  message: 'Stream was drained',
+export const ReadableBrokenError: Static<BaseErrorSchemaType> = {
+  code: 'READABLE_BROKEN',
+  message: 'Readable was broken before it is fully consumed',
 } as const;
 
-type ReadStreamResult<T, E extends Static<BaseErrorSchemaType>> = Result<
+/**
+ * Similar to {@link Result} but with an extra error to handle cases where {@link Readable.break} is called
+ */
+export type ReadableResult<T, E extends Static<BaseErrorSchemaType>> = Result<
   T,
-  E | typeof StreamDrainedError
+  E | typeof ReadableBrokenError
 >;
 
 /**
- * Using simple iterator here to lock down the iteration and disallow
- * `return` and `throw` to be called from the outside.
+ * A simple {@link AsyncIterator} used in {@link Readable}
+ * that doesn't have a the extra "return" and "throw" methods, and
+ * the doesn't have a "done value" (TReturn).
  */
-export interface SimpleIterator<T> {
+export interface ReadableIterator<T, E extends Static<BaseErrorSchemaType>> {
   next(): Promise<
     | {
         done: false;
-        value: T;
+        value: ReadableResult<T, E>;
       }
     | {
         done: true;
@@ -29,212 +33,201 @@ export interface SimpleIterator<T> {
 }
 
 /**
- * A `ReadStream` represents a stream of data.
+ * A {@link Readable} is an abstraction from which data is consumed from {@link Writable} source.
  *
- * This stream is not closable by the reader, the reader must wait for
- * the writer to close it.
+ * - On the server the argument passed the procedure handler for `upload` and `stream` implements a {@link Readable} interface
+ *   so you can read client's request data.
+ * - On the client the returned value of `subscription` or `stream` invocation implements a {@link Readable} interface
+ *   so you can read server's response data.
  *
- * The stream can only be locked (aka consumed) once and will remain
- * locked, trying to lock the stream again will throw an TypeError.
+ * A {@link Readable} can only have one consumer (iterator or {@link collect}) for the {@link Readable}'s
+ * lifetime, in essense, reading from a {@link Readable} locks it forever.
  */
-export interface ReadStream<T, E extends Static<BaseErrorSchemaType>> {
+export interface Readable<T, E extends Static<BaseErrorSchemaType>> {
   /**
-   * Stream implements AsyncIterator API and can be consumed via
-   * for-await-of loops. Iteration locks the stream
+   * {@link Readable} implements AsyncIterator API and can be consumed via
+   * for-await-of loops. Iteration locks the Readable. Exiting the loop
+   * will **not** release the lock and it'll be equivalent of calling
+   * {@link break}.
+   */
+  [Symbol.asyncIterator](): ReadableIterator<T, E>;
+  /**
+   * {@link collect} locks the {@link Readable} and returns a promise that resolves
+   * with an array of the content when the {@link Readable} is fully done. This could
+   * be due to the {@link Writable} end of the pipe closing cleanly, the procedure invocation
+   * is aborted, or {@link break} is called.
+   */
+  collect(): Promise<Array<ReadableResult<T, E>>>;
+  /**
+   * {@link break} locks the {@link Readable} and discards any existing or future incoming data.
    *
+   * If there is an existing reader waiting for the next value, {@link break} causes it to
+   * resolve with a {@link ReadableBrokenError} error.
    */
-  [Symbol.asyncIterator](): SimpleIterator<ReadStreamResult<T, E>>;
+  break(): undefined;
   /**
-   * `unwrappedIter` returns an AsyncIterator that will unwrap the results coming
-   * into the stream, yielding the payload if successful, otherwise throwing.
-   * We generally recommend using the normal iterator instead of this method,
-   * and handling errors explicitly.
+   * {@link isReadable} returns true if it's safe to read from the {@link Readable}, either
+   * via iteration or {@link collect}. It returns false if the {@link Readable} is locked
+   * by a consumer (iterator or {@link collect}) or readable was broken via {@link break}.
    */
-  unwrappedIter(): {
-    [Symbol.asyncIterator](): SimpleIterator<T>;
-  };
-  /**
-   * `asArray` locks the stream and returns a promise that resolves
-   * with an array of the stream's content when the stream is closed.
-   *
-   */
-  asArray(): Promise<Array<ReadStreamResult<T, E>>>;
-  /**
-   * `drain` locks the stream and discards any existing or future data.
-   *
-   * If there is an existing Promise waiting for the next value,
-   * `drain` causes it to resolve with a {@link StreamDrainedError} error.
-   */
-  drain(): undefined;
-  /**
-   * `isLocked` returns true if the stream is locked.
-   */
-  isLocked(): boolean;
-  /**
-   * `onClose` registers a callback that will be called when the stream
-   * is closed. Returns a function that can be used to unregister the
-   * listener.
-   */
-  onClose(cb: () => void): () => void;
-  /**
-   * `isClosed` returns true if the stream was closed by the writer.
-   *
-   * Note that the stream can still have queued data and can still be
-   * consumed.
-   */
-  isClosed(): boolean;
-  /**
-   * `requestClose` sends a request to the writer to close the stream,
-   * and resolves the writer closes its end of the stream..
-   *
-   * The stream can still receive more data after the request is sent. If you
-   * no longer wish to use the stream, make sure to call `drain`.
-   */
-  requestClose(): Promise<undefined>;
-  /**
-   * `isCloseRequested` checks if the reader has requested to close the stream.
-   */
-  isCloseRequested(): boolean;
+  isReadable(): boolean;
 }
 
 /**
- * A `WriteStream` is a streams that can be written to.
+ * A {@link Writeable} is a an abstraction for a {@link Readable} destination to which data is written to.
+ *
+ * - On the server the argument passed the procedure handler for `subscription` and `stream` implements a {@link Writeable}
+ *   so you can write server's response data.
+ * - On the client the returned value of `upload` or `stream` invocation implements a {@link Writeable}
+ *   so you can write client's request data.
+ *
+ * Once closed, a {@link Writeable} can't be re-opened.`  `
  */
-export interface WriteStream<T> {
+export interface Writable<T> {
   /**
-   * `write` writes a value to the stream. An error is thrown if writing to a closed stream.
+   * {@link write} writes a value to the pipe. An error is thrown if writing to a closed {@link Writable}.
    */
   write(value: T): undefined;
   /**
-   * `close` signals the closure of the write stream, informing the reader that the stream is complete.
-   * Calling close multiple times has no effect.
+   * {@link close} signals the closure of the {@link Writeable}, informing the {@link Readable} end that
+   * all data has been transmitted and we've cleanly closed.
+   *
+   * Calling {@link close} multiple times is a no-op.
    */
   close(): undefined;
   /**
-   * `isCloseRequested` checks if the reader has requested to close the stream.
+   * {@link isWritable} returns true if it's safe to call {@link write}, which
+   * means that the {@link Writable} hasn't been closed due to {@link close} being called
+   * on this {@link Writable} or the procedure invocation being aborted for any reason.
    */
-  isCloseRequested(): boolean;
-  /**
-   * `onCloseRequest` registers a callback that will be called when the stream's
-   * reader requests a close. Returns a function that can be used to unregister the
-   * listener.
-   */
-  onCloseRequest(cb: () => void): () => void;
-  /**
-   * `isClosed` returns true if the stream was closed by the writer.
-   */
-  isClosed(): boolean;
-  /**
-   * `onClose` registers a callback that will be called when the stream
-   * is closed. Returns a function that can be used to unregister the
-   * listener.
-   */
-  onClose(cb: () => void): () => void;
+  isWritable(): boolean;
+}
+
+interface PromiseWithResolvers<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason: unknown) => void;
 }
 
 /**
- * Internal implementation of a `ReadStream`.
- * This won't be exposed as an interface to river
- * consumers directly, it has internal river methods
- * to pushed data to the stream and close it.
+ * Same as https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/withResolvers
+ * but we support versions where it doesn't exist
  */
-export class ReadStreamImpl<T, E extends Static<BaseErrorSchemaType>>
-  implements ReadStream<T, E>
+function createPromiseWithResolvers<T>(): PromiseWithResolvers<T> {
+  let resolve: (value: T) => void;
+  let reject: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return {
+    promise,
+    // @ts-expect-error promise callbacks are sync
+    resolve,
+    // @ts-expect-error promise callbacks are sync
+    reject,
+  };
+}
+
+/**
+ * Internal implementation of a {@link Readable}.
+ * This won't be exposed as an interface to river
+ * consumers directly.
+ */
+export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
+  implements Readable<T, E>
 {
   /**
-   * Whether the stream is closed.
+   * Whether the {@link Readable} is closed.
+   *
+   * Closed {@link Readable}s are done receiving values, but that doesn't affect
+   * any other aspect of the {@link Readable} such as it's consumability.
    */
   private closed = false;
   /**
-   * A list of listeners that will be called when the stream is closed.
-   */
-  private onCloseListeners: Set<() => void>;
-  /**
-   * Whether the user has requested to close the stream.
-   */
-  private closeRequested = false;
-  /**
-   * Used to signal to the outside world that the user has requested to close the stream.
-   */
-  private closeRequestCallback: () => void;
-  /**
-   * Whether the stream is locked.
+   * Whether the {@link Readable} is locked.
+   *
+   * @see {@link Readable}'s typedoc to understand locking
    */
   private locked = false;
   /**
-   * Whether drain was called.
+   * Whether {@link break} was called.
+   *
+   * @see {@link break} for more information
    */
-  private drained = false;
+  private broken = false;
   /**
-   * This flag allows us to avoid cases where drain was called,
-   * but the stream is fully consumed and closed. We don't need
-   * to signal that drain was called.
+   * This flag allows us to avoid emitting a {@link ReadableBrokenError} after {@link break} was called
+   * in cases where the {@link queue} is fully consumed and {@link ReadableImpl} is {@link closed}. This is just an
+   * ergonomic feature to avoid emitting an error in our iteration when we don't have to.
    */
-  private didDrainDisposeValues = false;
+  private brokenWithValuesLeftToRead = false;
   /**
-   * A list of values that have been pushed to the stream but not yet emitted to the user.
+   * A list of values that have been pushed to the {@link ReadableImpl} but not yet emitted to the user.
    */
-  private queue: Array<ReadStreamResult<T, E>> = [];
+  private queue: Array<ReadableResult<T, E>> = [];
   /**
    * Used by methods in the class to signal to the iterator that it
    * should check for the next value.
    */
-  private nextPromise: Promise<void> | null = null;
-  /**
-   * Resolves nextPromise
-   */
-  private resolveNextPromise: null | (() => void) = null;
-
-  constructor(closeRequestCallback: () => void) {
-    this.closeRequestCallback = closeRequestCallback;
-    this.onCloseListeners = new Set();
-  }
+  private next: PromiseWithResolvers<void> | null = null;
 
   public [Symbol.asyncIterator]() {
-    if (this.isLocked()) {
-      throw new TypeError('ReadStream is already locked');
+    if (this.locked) {
+      throw new TypeError('Readable is already locked');
     }
 
-    // first iteration with drain signals an error, the following one signals end of iteration.
-    let didSignalDrain = false;
     this.locked = true;
+
+    /**
+     * First iteration with {@link break} signals an error, the following one signals end of iteration.
+     * This variable is used to signal the end of iteration.
+     */
+    let didSignalBreak = false;
 
     return {
       next: async () => {
-        if (this.drained && didSignalDrain) {
+        if (didSignalBreak) {
           return {
             done: true,
             value: undefined,
           } as const;
         }
 
-        // Wait until we have something in the queue
+        /**
+         * In a normal iteration case the while loop can be structured as a couple of if statements,
+         * in other words the loop will run at most a couple of times:
+         * - it will run 0 times if we have something in the queue to consume
+         * - it will run 1 time if we have nothing in the queue and then get something in the queue
+         * - it will run 2 times if we have nothing in the queue and then the readable closes or breaks
+         *
+         * However, in a degenerate case where something has the handle to the iterator and is calling `next`
+         * eagerly multiple times this loop will come in handy by queuing them up and looping as needed.
+         */
         while (this.queue.length === 0) {
-          if (this.isClosed() && !this.didDrainDisposeValues) {
+          if (this.closed && !this.brokenWithValuesLeftToRead) {
             return {
               done: true,
               value: undefined,
             } as const;
           }
 
-          if (this.drained) {
-            didSignalDrain = true;
+          if (this.broken) {
+            didSignalBreak = true;
 
             return {
               done: false,
-              value: Err(StreamDrainedError),
+              value: Err(ReadableBrokenError),
             } as const;
           }
 
-          if (!this.nextPromise) {
-            this.nextPromise = new Promise<void>((resolve) => {
-              this.resolveNextPromise = resolve;
-            });
+          if (!this.next) {
+            this.next = createPromiseWithResolvers();
           }
 
-          await this.nextPromise;
-          this.nextPromise = null;
-          this.resolveNextPromise = null;
+          await this.next.promise;
+          this.next = null;
         }
 
         // Unfortunately we have to use non-null assertion here, because T can be undefined
@@ -245,50 +238,14 @@ export class ReadStreamImpl<T, E extends Static<BaseErrorSchemaType>>
         return { done: false, value } as const;
       },
       return: () => {
-        this.drain();
+        this.break();
         return { done: true, value: undefined } as const;
       },
     };
   }
 
-  public unwrappedIter() {
-    const iterator = this[Symbol.asyncIterator]();
-
-    let unwrappedLock = false;
-    return {
-      [Symbol.asyncIterator]() {
-        if (unwrappedLock) {
-          throw new TypeError('ReadStream is already locked');
-        }
-
-        unwrappedLock = true;
-
-        return {
-          next: async (): ReturnType<SimpleIterator<T>['next']> => {
-            const next = await iterator.next();
-
-            if (next.done) {
-              return next;
-            }
-
-            if (next.value.ok) {
-              return { done: false, value: next.value.payload };
-            }
-
-            iterator.return();
-
-            throw new Error(
-              `Got err result in unwrappedIter: ${next.value.payload.code} - ${next.value.payload.message}`,
-            );
-          },
-          return: () => iterator.return(),
-        };
-      },
-    };
-  }
-
-  public async asArray(): Promise<Array<ReadStreamResult<T, E>>> {
-    const array: Array<ReadStreamResult<T, E>> = [];
+  public async collect(): Promise<Array<ReadableResult<T, E>>> {
+    const array: Array<ReadableResult<T, E>> = [];
     for await (const value of this) {
       array.push(value);
     }
@@ -296,215 +253,110 @@ export class ReadStreamImpl<T, E extends Static<BaseErrorSchemaType>>
     return array;
   }
 
-  public drain(): undefined {
-    if (this.drained) {
+  public break(): undefined {
+    if (this.broken) {
       return;
     }
 
     this.locked = true;
-    this.drained = true;
-    this.didDrainDisposeValues = this.queue.length > 0;
+    this.broken = true;
+    this.brokenWithValuesLeftToRead = this.queue.length > 0;
     this.queue.length = 0;
 
-    this.resolveNextPromise?.();
+    // if we have any iterators waiting for the next value,
+    this.next?.resolve();
   }
 
-  public isClosed(): boolean {
-    return this.closed;
-  }
-
-  public isLocked(): boolean {
-    return this.locked;
-  }
-
-  public onClose(cb: () => void): () => void {
-    if (this.isClosed()) {
-      throw new Error('Stream is already closed');
-    }
-
-    this.onCloseListeners.add(cb);
-
-    return () => {
-      this.onCloseListeners.delete(cb);
-    };
-  }
-
-  public requestClose(): Promise<undefined> {
-    if (this.isClosed()) {
-      throw new Error('Cannot request close after stream already closed');
-    }
-
-    if (!this.closeRequested) {
-      this.closeRequested = true;
-      this.closeRequestCallback();
-    }
-
-    return new Promise<undefined>((resolve) => {
-      this.onClose(() => {
-        resolve(undefined);
-      });
-    });
-  }
-
-  public isCloseRequested(): boolean {
-    return this.closeRequested;
+  public isReadable(): boolean {
+    return !this.locked && !this.broken;
   }
 
   /**
    * @internal meant for use within river, not exposed as a public API
    *
-   * Pushes a value to the stream.
+   * Pushes a value to be read.
    */
-  public pushValue(value: Result<T, E>): undefined {
-    if (this.drained) {
+  public _pushValue(value: Result<T, E>): undefined {
+    if (this.broken) {
       return;
     }
 
     if (this.closed) {
-      throw new Error('Cannot push to closed stream');
+      throw new Error('Cannot push to closed Readable');
     }
 
     this.queue.push(value);
-    this.resolveNextPromise?.();
+    this.next?.resolve();
   }
 
   /**
    * @internal meant for use within river, not exposed as a public API
    *
-   * Triggers the close of the stream. Make sure to push all remaining
+   * Triggers the close of the {@link Readable}. Make sure to push all remaining
    * values before calling this method.
    */
-  public triggerClose(): undefined {
-    if (this.isClosed()) {
+  public _triggerClose(): undefined {
+    if (this.closed) {
       throw new Error('Unexpected closing multiple times');
     }
 
     this.closed = true;
-    this.resolveNextPromise?.();
-    this.onCloseListeners.forEach((cb) => cb());
-    this.onCloseListeners.clear();
-
-    // TODO maybe log a warn if after a certain amount of time
-    // the queue was not fully consumed
+    this.next?.resolve();
   }
 
   /**
    * @internal meant for use within river, not exposed as a public API
    */
-  public hasValuesInQueue(): boolean {
+  public _hasValuesInQueue(): boolean {
     return this.queue.length > 0;
   }
 }
 
 /**
- * Internal implementation of a `WriteStream`.
+ * Internal implementation of a {@link Writable}.
  * This won't be exposed as an interface to river
- * consumers directly, it has internal river methods
- * to trigger a close request, a way to pass on close
- * signals, and a way to push data to the stream.
+ * consumers directly.
  */
-export class WriteStreamImpl<T> implements WriteStream<T> {
+export class WritableImpl<T> implements Writable<T> {
   /**
-   * Passed via constructor to pass on write requests
+   * Passed via constructor to pass on calls to {@link write}
    */
   private writeCb: (value: T) => void;
+
   /**
-   * Whether the stream is closed.
+   * Passed via constructor to pass on calls to {@link close}
+   */
+  private closeCb: () => void;
+  /**
+   * Whether {@link close} was called, and {@link Writable} is not writable anymore.
    */
   private closed = false;
-  /**
-   * A list of listeners that will be called when the stream is closed.
-   */
-  private onCloseListeners: Set<() => void>;
-  /**
-   * Whether the reader has requested to close the stream.
-   */
-  private closeRequested = false;
-  /**
-   * A list of listeners that will be called when a close request is triggered.
-   */
-  private onCloseRequestListeners: Set<() => void>;
 
-  constructor(writeCb: (value: T) => void) {
+  constructor(writeCb: (value: T) => void, closeCb: () => void) {
     this.writeCb = writeCb;
-    this.onCloseListeners = new Set();
-    this.onCloseRequestListeners = new Set();
+    this.closeCb = closeCb;
   }
 
   public write(value: T): undefined {
-    if (this.isClosed()) {
-      throw new Error('Cannot write to closed stream');
+    if (this.closed) {
+      throw new Error('Cannot write to closed Writable');
     }
 
     this.writeCb(value);
   }
 
-  public isClosed(): boolean {
-    return this.closed;
-  }
-
-  onClose(cb: () => void): () => void {
-    if (this.isClosed()) {
-      cb();
-
-      return () => undefined;
-    }
-
-    this.onCloseListeners.add(cb);
-
-    return () => this.onCloseListeners.delete(cb);
+  public isWritable(): boolean {
+    return !this.closed;
   }
 
   public close(): undefined {
-    if (this.isClosed()) {
+    if (this.closed) {
       return;
     }
 
     this.closed = true;
-    this.onCloseListeners.forEach((cb) => cb());
-
-    // cleanup
-    this.onCloseListeners.clear();
-    this.onCloseRequestListeners.clear();
     this.writeCb = () => undefined;
-  }
-
-  public isCloseRequested(): boolean {
-    return this.closeRequested;
-  }
-
-  public onCloseRequest(cb: () => void): () => void {
-    if (this.isClosed()) {
-      throw new Error('Stream is already closed');
-    }
-
-    if (this.isCloseRequested()) {
-      cb();
-
-      return () => undefined;
-    }
-
-    this.onCloseRequestListeners.add(cb);
-
-    return () => this.onCloseRequestListeners.delete(cb);
-  }
-
-  /**
-   * @internal meant for use within river, not exposed as a public API
-   *
-   * Triggers a close request.
-   */
-  public triggerCloseRequest(): undefined {
-    if (this.isCloseRequested()) {
-      throw new Error('Cannot trigger close request multiple times');
-    }
-
-    if (this.isClosed()) {
-      throw new Error('Cannot trigger close request on closed stream');
-    }
-
-    this.closeRequested = true;
-    this.onCloseRequestListeners.forEach((cb) => cb());
-    this.onCloseRequestListeners.clear();
+    this.closeCb();
+    this.closeCb = () => undefined;
   }
 }
