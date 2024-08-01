@@ -319,8 +319,8 @@ export function asClientStream<
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ): {
-  reqWriter: Writable<Static<Input>>;
-  resReader: Readable<Static<Output>, Static<Err>>;
+  reqWritable: Writable<Static<Input>>;
+  resReadable: Readable<Static<Output>, Static<Err>>;
 } {
   const requestPipe = createRequestPipe<Input>();
   const responsePipe = createResponsePipe<Output, Err>();
@@ -329,14 +329,14 @@ export function asClientStream<
     .handler({
       ctx: dummyCtx(state, session, extendedContext),
       reqInit: reqInit ?? {},
-      reqReader: requestPipe.readable,
-      resWriter: responsePipe.writable,
+      reqReadable: requestPipe.readable,
+      resWritable: responsePipe.writable,
     })
     .catch((err: unknown) => responsePipe.writable.write(catchProcError(err)));
 
   return {
-    reqWriter: requestPipe.writable,
-    resReader: responsePipe.readable,
+    reqWritable: requestPipe.writable,
+    resReadable: responsePipe.readable,
   };
 }
 
@@ -351,7 +351,7 @@ export function asClientSubscription<
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ): (msg: Static<Init>) => {
-  resReader: Readable<Static<Output>, Static<Err>>;
+  resReadable: Readable<Static<Output>, Static<Err>>;
 } {
   const responsePipe = createResponsePipe<Output, Err>();
 
@@ -360,13 +360,13 @@ export function asClientSubscription<
       .handler({
         ctx: dummyCtx(state, session, extendedContext),
         reqInit: msg,
-        resWriter: responsePipe.writable,
+        resWritable: responsePipe.writable,
       })
       .catch((err: unknown) =>
         responsePipe.writable.write(catchProcError(err)),
       );
 
-    return { resReader: responsePipe.readable };
+    return { resReadable: responsePipe.readable };
   };
 }
 
@@ -383,7 +383,7 @@ export function asClientUpload<
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ): {
-  reqWriter: Writable<Static<Input>>;
+  reqWritable: Writable<Static<Input>>;
   finalize: () => Promise<Result<Static<Output>, Static<Err>>>;
 } {
   const requestPipe = createRequestPipe<Input>();
@@ -391,11 +391,11 @@ export function asClientUpload<
     .handler({
       ctx: dummyCtx(state, session, extendedContext),
       reqInit: reqInit ?? {},
-      reqReader: requestPipe.readable,
+      reqReadable: requestPipe.readable,
     })
     .catch(catchProcError);
 
-  return { reqWriter: requestPipe.writable, finalize: () => result };
+  return { reqWritable: requestPipe.writable, finalize: () => result };
 }
 
 export function getTransportConnections<ConnType extends Connection>(

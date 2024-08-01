@@ -51,76 +51,76 @@ describe('server-side test', () => {
   });
 
   test('stream basic', async () => {
-    const { reqWriter, resReader } = asClientStream(
+    const { reqWritable, resReadable } = asClientStream(
       { count: 0 },
       service.procedures.echo,
     );
 
-    reqWriter.write({ msg: 'abc', ignore: false });
-    reqWriter.write({ msg: 'def', ignore: true });
-    reqWriter.write({ msg: 'ghi', ignore: false });
-    reqWriter.close();
+    reqWritable.write({ msg: 'abc', ignore: false });
+    reqWritable.write({ msg: 'def', ignore: true });
+    reqWritable.write({ msg: 'ghi', ignore: false });
+    reqWritable.close();
 
-    const result1 = await readNextResult(resReader);
+    const result1 = await readNextResult(resReadable);
     expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
-    const result2 = await readNextResult(resReader);
+    const result2 = await readNextResult(resReadable);
     expect(result2).toStrictEqual({ ok: true, payload: { response: 'ghi' } });
 
-    expect(await isReadableDone(resReader)).toEqual(true);
+    expect(await isReadableDone(resReadable)).toEqual(true);
   });
 
   test('stream empty', async () => {
-    const { reqWriter, resReader } = asClientStream(
+    const { reqWritable, resReadable } = asClientStream(
       { count: 0 },
       service.procedures.echo,
     );
-    reqWriter.close();
+    reqWritable.close();
 
-    expect(await isReadableDone(resReader)).toEqual(true);
+    expect(await isReadableDone(resReadable)).toEqual(true);
   });
 
   test('stream with initialization', async () => {
-    const { reqWriter, resReader } = asClientStream(
+    const { reqWritable, resReadable } = asClientStream(
       { count: 0 },
       service.procedures.echoWithPrefix,
       { prefix: 'test' },
     );
 
-    reqWriter.write({ msg: 'abc', ignore: false });
-    reqWriter.write({ msg: 'def', ignore: true });
-    reqWriter.write({ msg: 'ghi', ignore: false });
-    reqWriter.close();
+    reqWritable.write({ msg: 'abc', ignore: false });
+    reqWritable.write({ msg: 'def', ignore: true });
+    reqWritable.write({ msg: 'ghi', ignore: false });
+    reqWritable.close();
 
-    const result1 = await readNextResult(resReader);
+    const result1 = await readNextResult(resReadable);
     expect(result1).toStrictEqual({
       ok: true,
       payload: { response: 'test abc' },
     });
 
-    const result2 = await readNextResult(resReader);
+    const result2 = await readNextResult(resReadable);
     expect(result2).toStrictEqual({
       ok: true,
       payload: { response: 'test ghi' },
     });
 
-    expect(await isReadableDone(resReader)).toEqual(true);
+    expect(await isReadableDone(resReadable)).toEqual(true);
   });
 
   test('fallible stream', async () => {
     const service = FallibleServiceSchema.instantiate({});
-    const { reqWriter, resReader } = asClientStream(
+    const { reqWritable, resReadable } = asClientStream(
       {},
       service.procedures.echo,
     );
 
-    reqWriter.write({ msg: 'abc', throwResult: false, throwError: false });
+    reqWritable.write({ msg: 'abc', throwResult: false, throwError: false });
 
-    const result1 = await readNextResult(resReader);
+    const result1 = await readNextResult(resReadable);
     expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
-    reqWriter.write({ msg: 'def', throwResult: true, throwError: false });
-    const result2 = await readNextResult(resReader);
+    reqWritable.write({ msg: 'def', throwResult: true, throwError: false });
+    const result2 = await readNextResult(resReadable);
     expect(result2).toStrictEqual({
       ok: false,
       payload: {
@@ -129,8 +129,8 @@ describe('server-side test', () => {
       },
     });
 
-    reqWriter.write({ msg: 'ghi', throwResult: false, throwError: true });
-    const result3 = await readNextResult(resReader);
+    reqWritable.write({ msg: 'ghi', throwResult: false, throwError: true });
+    const result3 = await readNextResult(resReadable);
     expect(result3).toStrictEqual({
       ok: false,
       payload: {
@@ -139,7 +139,7 @@ describe('server-side test', () => {
       },
     });
 
-    reqWriter.close();
+    reqWritable.close();
   });
 
   test('subscriptions', async () => {
@@ -148,28 +148,28 @@ describe('server-side test', () => {
     const add = asClientRpc(state, service.procedures.add);
     const subscribe = asClientSubscription(state, service.procedures.value);
 
-    const { resReader } = subscribe({});
+    const { resReadable } = subscribe({});
 
-    const streamResult1 = await readNextResult(resReader);
+    const streamResult1 = await readNextResult(resReadable);
     expect(streamResult1).toStrictEqual({ ok: true, payload: { result: 0 } });
 
     const result = await add({ n: 3 });
     expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
 
-    const streamResult2 = await readNextResult(resReader);
+    const streamResult2 = await readNextResult(resReadable);
     expect(streamResult2).toStrictEqual({ ok: true, payload: { result: 3 } });
   });
 
   test('uploads', async () => {
     const service = UploadableServiceSchema.instantiate({});
-    const { reqWriter, finalize } = asClientUpload(
+    const { reqWritable, finalize } = asClientUpload(
       {},
       service.procedures.addMultiple,
     );
 
-    reqWriter.write({ n: 1 });
-    reqWriter.write({ n: 2 });
-    reqWriter.close();
+    reqWritable.write({ n: 1 });
+    reqWritable.write({ n: 2 });
+    reqWritable.close();
     expect(await finalize()).toStrictEqual({
       ok: true,
       payload: { result: 3 },
@@ -178,11 +178,11 @@ describe('server-side test', () => {
 
   test('uploads empty', async () => {
     const service = UploadableServiceSchema.instantiate({});
-    const { reqWriter, finalize } = asClientUpload(
+    const { reqWritable, finalize } = asClientUpload(
       {},
       service.procedures.addMultiple,
     );
-    reqWriter.close();
+    reqWritable.close();
     expect(await finalize()).toStrictEqual({
       ok: true,
       payload: { result: 0 },
@@ -191,15 +191,15 @@ describe('server-side test', () => {
 
   test('uploads with initialization', async () => {
     const service = UploadableServiceSchema.instantiate({});
-    const { reqWriter, finalize } = asClientUpload(
+    const { reqWritable, finalize } = asClientUpload(
       {},
       service.procedures.addMultipleWithPrefix,
       { prefix: 'test' },
     );
 
-    reqWriter.write({ n: 1 });
-    reqWriter.write({ n: 2 });
-    reqWriter.close();
+    reqWritable.write({ n: 1 });
+    reqWritable.write({ n: 2 });
+    reqWritable.close();
     expect(await finalize()).toStrictEqual({
       ok: true,
       payload: { result: 'test 3' },

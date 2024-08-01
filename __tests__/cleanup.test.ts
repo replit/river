@@ -201,29 +201,29 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const { reqWriter, resReader } = client.test.echo.stream({});
-      reqWriter.write({ msg: '1', ignore: false });
-      reqWriter.write({ msg: '2', ignore: false });
+      const { reqWritable, resReadable } = client.test.echo.stream({});
+      reqWritable.write({ msg: '1', ignore: false });
+      reqWritable.write({ msg: '2', ignore: false });
 
-      const result1 = await readNextResult(resReader);
+      const result1 = await readNextResult(resReadable);
       expect(result1).toStrictEqual({
         ok: true,
         payload: { response: '1' },
       });
 
       // ensure we only have one stream despite pushing multiple messages.
-      reqWriter.close();
+      reqWritable.close();
       await waitFor(() => expect(server.openStreams.size).toEqual(1));
       // ensure we no longer have any open streams since the input was closed.
       await waitFor(() => expect(server.openStreams.size).toEqual(0));
 
-      const result2 = await readNextResult(resReader);
+      const result2 = await readNextResult(resReadable);
       expect(result2).toStrictEqual({
         ok: true,
         payload: { response: '2' },
       });
 
-      expect(await isReadableDone(resReader)).toEqual(true);
+      expect(await isReadableDone(resReadable)).toEqual(true);
       // end procedure
 
       // number of message handlers shouldn't increase after stream ends
@@ -269,11 +269,11 @@ describe.each(testMatrix())(
 
       // start procedure
       const abortController = new AbortController();
-      const { resReader } = client.subscribable.value.subscribe(
+      const { resReadable } = client.subscribable.value.subscribe(
         {},
         { signal: abortController.signal },
       );
-      let result = await readNextResult(resReader);
+      let result = await readNextResult(resReadable);
       expect(result).toStrictEqual({
         ok: true,
         payload: { result: 0 },
@@ -281,7 +281,7 @@ describe.each(testMatrix())(
 
       const add1 = await client.subscribable.add.rpc({ n: 1 });
       expect(add1).toStrictEqual({ ok: true, payload: { result: 1 } });
-      result = await readNextResult(resReader);
+      result = await readNextResult(resReadable);
       expect(result).toStrictEqual({
         ok: true,
         payload: { result: 1 },
@@ -338,10 +338,12 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const { reqWriter, finalize } = client.uploadable.addMultiple.upload({});
-      reqWriter.write({ n: 1 });
-      reqWriter.write({ n: 2 });
-      reqWriter.close();
+      const { reqWritable, finalize } = client.uploadable.addMultiple.upload(
+        {},
+      );
+      reqWritable.write({ n: 1 });
+      reqWritable.write({ n: 2 });
+      reqWritable.close();
 
       const result = await finalize();
       expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
@@ -382,10 +384,10 @@ describe.each(testMatrix())(
       });
 
       // start a stream
-      const { reqWriter, resReader } = client.test.echo.stream({});
-      reqWriter.write({ msg: '1', ignore: false });
+      const { reqWritable, resReadable } = client.test.echo.stream({});
+      reqWritable.write({ msg: '1', ignore: false });
 
-      const result1 = await readNextResult(resReader);
+      const result1 = await readNextResult(resReadable);
       expect(result1).toStrictEqual({ ok: true, payload: { response: '1' } });
 
       // wait for session to disconnect
@@ -403,8 +405,8 @@ describe.each(testMatrix())(
 
       // push on the old stream and make sure its not sent
 
-      expect(() => reqWriter.write({ msg: '2', ignore: false })).toThrow();
-      const result2 = await readNextResult(resReader);
+      expect(() => reqWritable.write({ msg: '2', ignore: false })).toThrow();
+      const result2 = await readNextResult(resReadable);
       expect(result2).toMatchObject({ ok: false });
 
       await testFinishesCleanly({

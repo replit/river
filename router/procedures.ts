@@ -161,7 +161,7 @@ export interface UploadProcedure<
   handler(param: {
     ctx: ProcedureHandlerContext<State>;
     reqInit: Static<RequestInit>;
-    reqReader: Readable<
+    reqReadable: Readable<
       Static<RequestData>,
       Static<typeof RequestReaderErrorSchema>
     >;
@@ -190,7 +190,7 @@ export interface SubscriptionProcedure<
   handler(param: {
     ctx: ProcedureHandlerContext<State>;
     reqInit: Static<RequestInit>;
-    resWriter: Writable<Result<Static<ResponseData>, Static<ResponseErr>>>;
+    resWritable: Writable<Result<Static<ResponseData>, Static<ResponseErr>>>;
   }): Promise<void | undefined>;
 }
 
@@ -220,11 +220,11 @@ export interface StreamProcedure<
   handler(param: {
     ctx: ProcedureHandlerContext<State>;
     reqInit: Static<RequestInit>;
-    reqReader: Readable<
+    reqReadable: Readable<
       Static<RequestData>,
       Static<typeof RequestReaderErrorSchema>
     >;
-    resWriter: Writable<Result<Static<ResponseData>, Static<ResponseErr>>>;
+    resWritable: Writable<Result<Static<ResponseData>, Static<ResponseErr>>>;
   }): Promise<void | undefined>;
 }
 

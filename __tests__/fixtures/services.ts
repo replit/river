@@ -37,9 +37,9 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     requestInit: Type.Object({}),
     requestData: Type.Object({ n: Type.Number() }),
     responseData: Type.Array(Type.Number()),
-    async handler({ reqReader, resWriter }) {
-      for await (const msg of reqReader) {
-        resWriter.write(Ok([unwrap(msg).n]));
+    async handler({ reqReadable, resWritable }) {
+      for await (const msg of reqReadable) {
+        resWritable.write(Ok([unwrap(msg).n]));
       }
     },
   }),
@@ -48,15 +48,15 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     requestInit: Type.Object({}),
     requestData: EchoRequest,
     responseData: EchoResponse,
-    async handler({ reqReader, resWriter }) {
-      for await (const input of reqReader) {
+    async handler({ reqReadable, resWritable }) {
+      for await (const input of reqReadable) {
         const { ignore, msg } = unwrap(input);
         if (!ignore) {
-          resWriter.write(Ok({ response: msg }));
+          resWritable.write(Ok({ response: msg }));
         }
       }
 
-      resWriter.close();
+      resWritable.close();
     },
   }),
 
@@ -64,15 +64,15 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     requestInit: Type.Object({ prefix: Type.String() }),
     requestData: EchoRequest,
     responseData: EchoResponse,
-    async handler({ reqInit, reqReader, resWriter }) {
-      for await (const input of reqReader) {
+    async handler({ reqInit, reqReadable, resWritable }) {
+      for await (const input of reqReadable) {
         const { ignore, msg } = unwrap(input);
         if (!ignore) {
-          resWriter.write(Ok({ response: `${reqInit.prefix} ${msg}` }));
+          resWritable.write(Ok({ response: `${reqInit.prefix} ${msg}` }));
         }
       }
 
-      resWriter.close();
+      resWritable.close();
     },
   }),
 
@@ -197,20 +197,20 @@ export const FallibleServiceSchema = ServiceSchema.define({
       code: Type.Literal(STREAM_ERROR),
       message: Type.String(),
     }),
-    async handler({ reqReader, resWriter }) {
-      for await (const input of reqReader) {
+    async handler({ reqReadable, resWritable }) {
+      for await (const input of reqReadable) {
         const { msg, throwError, throwResult } = unwrap(input);
         if (throwError) {
           throw new Error('some message');
         } else if (throwResult) {
-          resWriter.write(
+          resWritable.write(
             Err({
               code: STREAM_ERROR,
               message: 'field throwResult was set to true',
             }),
           );
         } else {
-          resWriter.write(Ok({ response: msg }));
+          resWritable.write(Ok({ response: msg }));
         }
       }
     },
@@ -232,9 +232,9 @@ export const SubscribableServiceSchema = ServiceSchema.define(
     value: Procedure.subscription({
       requestInit: Type.Object({}),
       responseData: Type.Object({ result: Type.Number() }),
-      async handler({ ctx, resWriter }) {
+      async handler({ ctx, resWritable }) {
         const dispose = ctx.state.count.observe((count) => {
-          resWriter.write(Ok({ result: count }));
+          resWritable.write(Ok({ result: count }));
         });
 
         ctx.onRequestFinished(dispose);
@@ -248,9 +248,9 @@ export const UploadableServiceSchema = ServiceSchema.define({
     requestInit: Type.Object({}),
     requestData: Type.Object({ n: Type.Number() }),
     responseData: Type.Object({ result: Type.Number() }),
-    async handler({ reqReader }) {
+    async handler({ reqReadable }) {
       let result = 0;
-      for await (const input of reqReader) {
+      for await (const input of reqReadable) {
         result += unwrap(input).n;
       }
 
@@ -262,9 +262,9 @@ export const UploadableServiceSchema = ServiceSchema.define({
     requestInit: Type.Object({ prefix: Type.String() }),
     requestData: Type.Object({ n: Type.Number() }),
     responseData: Type.Object({ result: Type.String() }),
-    async handler({ reqInit, reqReader }) {
+    async handler({ reqInit, reqReadable }) {
       let result = 0;
-      for await (const input of reqReader) {
+      for await (const input of reqReadable) {
         result += unwrap(input).n;
       }
       return Ok({ result: `${reqInit.prefix} ${result}` });

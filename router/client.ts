@@ -66,7 +66,7 @@ type UploadFn<
   reqInit: ProcInit<Router, ProcName>,
   options?: CallOptions,
 ) => {
-  reqWriter: Writable<ProcInput<Router, ProcName>>;
+  reqWritable: Writable<ProcInput<Router, ProcName>>;
   finalize: () => Promise<
     Result<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>
   >;
@@ -79,8 +79,8 @@ type StreamFn<
   reqInit: ProcInit<Router, ProcName>,
   options?: CallOptions,
 ) => {
-  reqWriter: Writable<ProcInput<Router, ProcName>>;
-  resReader: Readable<
+  reqWritable: Writable<ProcInput<Router, ProcName>>;
+  resReadable: Readable<
     ProcOutput<Router, ProcName>,
     ProcErrors<Router, ProcName>
   >;
@@ -93,7 +93,7 @@ type SubscriptionFn<
   reqInit: ProcInit<Router, ProcName>,
   options?: CallOptions,
 ) => {
-  resReader: Readable<
+  resReadable: Readable<
     ProcOutput<Router, ProcName>,
     ProcErrors<Router, ProcName>
   >;
@@ -304,7 +304,7 @@ function handleProc(
     },
     // close callback
     () => {
-      span.addEvent('reqWriter closed');
+      span.addEvent('reqWritable closed');
 
       if (!procClosesWithInit && cleanClose) {
         transport.send(serverId, closeStreamMessage(streamId));
@@ -323,7 +323,7 @@ function handleProc(
   const closeReadable = () => {
     resReadable._triggerClose();
 
-    span.addEvent('resReader closed');
+    span.addEvent('resReadable closed');
 
     if (reqWritable.isClosed()) {
       cleanup();
@@ -491,7 +491,7 @@ function handleProc(
 
   if (procType === 'subscription') {
     return {
-      resReader: resReadable,
+      resReadable: resReadable,
     };
   }
 
@@ -502,7 +502,7 @@ function handleProc(
   if (procType === 'upload') {
     let didFinalize = false;
     return {
-      reqWriter: reqWritable,
+      reqWritable: reqWritable,
       finalize: () => {
         if (didFinalize) {
           throw new Error('upload stream already finalized');
@@ -521,8 +521,8 @@ function handleProc(
 
   // good ol' `stream` procType
   return {
-    resReader: resReadable,
-    reqWriter: reqWritable,
+    resReadable: resReadable,
+    reqWritable: reqWritable,
   };
 }
 

@@ -223,15 +223,15 @@ const services = {
       requestInit: Type.Object({}),
       requestData: Type.Object({ n: Type.Number() }),
       responseData: Type.Object({ n: Type.Number() }),
-      async handler({ resWriter }) {
-        resWriter.write(Ok({ n: 1 }));
+      async handler({ resWritable }) {
+        resWritable.write(Ok({ n: 1 }));
       },
     }),
     subscription: Procedure.subscription({
       requestInit: Type.Object({ n: Type.Number() }),
       responseData: Type.Object({ n: Type.Number() }),
-      async handler({ resWriter }) {
-        resWriter.write(Ok({ n: 1 }));
+      async handler({ resWritable }) {
+        resWritable.write(Ok({ n: 1 }));
       },
     }),
     upload: Procedure.upload({
@@ -271,8 +271,8 @@ describe('Output<> type', () => {
     }
 
     // Then
-    const { resReader } = client.test.stream.stream({});
-    void readNextResult(resReader).then(unwrap).then(acceptOutput);
+    const { resReadable } = client.test.stream.stream({});
+    void readNextResult(resReadable).then(unwrap).then(acceptOutput);
     expect(client).toBeTruthy();
   });
 
@@ -285,8 +285,8 @@ describe('Output<> type', () => {
     }
 
     // Then
-    const { resReader } = client.test.subscription.subscribe({ n: 1 });
-    void readNextResult(resReader).then(unwrap).then(acceptOutput);
+    const { resReadable } = client.test.subscription.subscribe({ n: 1 });
+    void readNextResult(resReadable).then(unwrap).then(acceptOutput);
 
     expect(client).toBeTruthy();
   });
