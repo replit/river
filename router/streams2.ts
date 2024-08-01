@@ -3,38 +3,40 @@ import { BaseErrorSchemaType, Err, Result } from './result';
 
 export const ReadableBrokenError = {
   code: 'READABLE_BROKEN',
-  message: 'Stream was drained',
+  message: 'Readable was broken before it is fully consumed',
 } as const;
 
-export type ReadStreamResult<T, E extends Static<BaseErrorSchemaType>> = Result<
+/**
+ * Similar to {@link Result} but with an extra error to handle cases where {@link Readable.break} is called
+ */
+export type ReadableResult<T, E extends Static<BaseErrorSchemaType>> = Result<
   T,
   E | typeof ReadableBrokenError
 >;
 
 /**
- * A {@link Readable} is an abstraction from which data is consumed.
+ * A {@link Readable} is an abstraction from which data is consumed from {@link Writable} source.
  *
- * - On the server that takes the form of a request reader, it's available to:
- *   - `upload` procedure handler
- *   - `stream` procedure handler
- * - On the client that takes the form of a response reader, it's available to:
- *   - `subscription` invokation
- *   - `stream` invokation
+ * - On the server the argument passed the procedure handler for `upload` and `stream` implements a {@link Readable} interface
+ *   so you can read client's request data.
+ * - On the client the returned value of `subscription` or `stream` invocation implements a {@link Readable} interface
+ *   so you can read server's response data.
  *
- * A {@link Readable} can only have one reader for the {@link Readable}'s lifetime,
- * in essense, reading from a {@link Readable} locks it forever.
- *
+ * A {@link Readable} can only have one consumer (iterator or {@link collect}) for the {@link Readable}'s
+ * lifetime, in essense, reading from a {@link Readable} locks it forever.
  */
 export interface Readable<T, E extends Static<BaseErrorSchemaType>> {
   /**
-   * Stream implements AsyncIterator API and can be consumed via
-   * for-await-of loops. Iteration locks the Readable.
+   * {@link Readable} implements AsyncIterator API and can be consumed via
+   * for-await-of loops. Iteration locks the Readable. Exiting the loop
+   * will **not** release the lock and it'll be equivalent of calling
+   * {@link break}.
    */
   [Symbol.asyncIterator](): {
     next(): Promise<
       | {
           done: false;
-          value: ReadStreamResult<T, E>;
+          value: ReadableResult<T, E>;
         }
       | {
           done: true;
@@ -42,53 +44,83 @@ export interface Readable<T, E extends Static<BaseErrorSchemaType>> {
         }
     >;
   };
-
   /**
-   * {@link collect} locks the stream and returns a promise that resolves
-   * with an array of the stream's content when the stream is closed.
+   * {@link collect} locks the {@link Readable} and returns a promise that resolves
+   * with an array of the content when the {@link Readable} is fully done. This could
+   * be due to the {@link Writable} end of the pipe closing cleanly, the procedure invocation
+   * is aborted, or {@link break} is called.
    */
-  collect(): Promise<Array<ReadStreamResult<T, E>>>;
+  collect(): Promise<Array<ReadableResult<T, E>>>;
   /**
-   * {@link break} locks the stream and discards any existing or future data.
+   * {@link break} locks the {@link Readable} and discards any existing or future incoming data.
    *
-   * If there is an existing Promise waiting for the next value,
-   * {@link break} causes it to resolve with a {@link ReadableBrokenError} error.
+   * If there is an existing reader waiting for the next value, {@link break} causes it to
+   * resolve with a {@link ReadableBrokenError} error.
    */
   break(): undefined;
   /**
-   * {@link isReadable} returns true if it's safe to read from the stream, either
-   * via iteration or {@link collect}. It returns false if the stream is locked
-   * by another reader or readable was broken via {@link break}.
+   * {@link isReadable} returns true if it's safe to read from the {@link Readable}, either
+   * via iteration or {@link collect}. It returns false if the {@link Readable} is locked
+   * by a consumer (iterator or {@link collect}) or readable was broken via {@link break}.
    */
   isReadable(): boolean;
 }
 
 /**
- * A {@link Writeable} is a an abstraction for a destination to which data is written.
+ * A {@link Writeable} is a an abstraction for a {@link Readable} destination to which data is written to.
  *
- * - On the server that takes the form of a response writer, it's available to:
- *   - `subscription` procedure handler
- *   - `stream` procedure handler
- * - On the client that takes the form of a request writer
- *   - `upload` invokation
- *   - `stream` invokation
+ * - On the server the argument passed the procedure handler for `subscription` and `stream` implements a {@link Writeable}
+ *   so you can write server's response data.
+ * - On the client the returned value of `upload` or `stream` invocation implements a {@link Writeable}
+ *   so you can write client's request data.
+ *
+ * Once closed, a {@link Writeable} can't be re-opened.`  `
  */
 export interface Writable<T> {
   /**
-   * {@link write} writes a value to the stream. An error is thrown if writing to a closed stream.
+   * {@link write} writes a value to the pipe. An error is thrown if writing to a closed {@link Writable}.
    */
   write(value: T): undefined;
   /**
-   * {@link close} signals the closure of the write stream, informing the reader that the stream is complete.
-   * Calling {@link close} multiple times has no effect.
+   * {@link close} signals the closure of the {@link Writeable}, informing the {@link Readable} end that
+   * all data has been transmitted and we've cleanly closed.
+   *
+   * Calling {@link close} multiple times is a no-op.
    */
   close(): undefined;
   /**
    * {@link isWritable} returns true if it's safe to call {@link write}, which
-   * means that the stream hasn't been closed due to {@link close} being called
-   * or stream cancellation.
+   * means that the {@link Writable} hasn't been closed due to {@link close} being called
+   * on this {@link Writable} or the procedure invocation being aborted for any reason.
    */
   isWritable(): boolean;
+}
+
+interface PromiseWithResolvers<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason: unknown) => void;
+}
+
+/**
+ * Same as https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/withResolvers
+ * but we support versions where it doesn't exist
+ */
+function createPromiseWithResolvers<T>(): PromiseWithResolvers<T> {
+  let resolve: (value: T) => void;
+  let reject: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return {
+    promise,
+    // @ts-expect-error promise callbacks are sync
+    resolve,
+    // @ts-expect-error promise callbacks are sync
+    reject,
+  };
 }
 
 /**
@@ -100,58 +132,69 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
   implements Readable<T, E>
 {
   /**
-   * Whether the stream is closed.
+   * Whether the {@link Readable} is closed.
+   *
+   * Closed {@link Readable}s are done receiving values, but that doesn't affect
+   * any other aspect of the {@link Readable} such as it's consumability.
    */
   private closed = false;
   /**
-   * Whether the stream is locked.
+   * Whether the {@link Readable} is locked.
+   *
+   * @see {@link Readable}'s typedoc to understand locking
    */
   private locked = false;
   /**
-   * Whether break was called.
+   * Whether {@link break} was called.
+   *
+   * @see {@link break} for more information
    */
   private broken = false;
   /**
-   * This flag allows us to avoid cases where break was called,
-   * but the stream is fully consumed and closed. We don't need
-   * to signal that break was called, only that the stream is closed.
+   * This flag allows us to avoid emitting a {@link ReadableBrokenError} after {@link break} was called
+   * in cases where the {@link queue} is fully consumed and {@link ReadableImpl} is {@link closed}. This is just an
+   * ergonomic feature to avoid emitting an error in our iteration when we don't have to.
    */
-  private didBreakDisposeValues = false;
+  private brokenWithValuesLeftToRead = false;
   /**
-   * A list of values that have been pushed to the stream but not yet emitted to the user.
+   * A list of values that have been pushed to the {@link ReadableImpl} but not yet emitted to the user.
    */
-  private queue: Array<ReadStreamResult<T, E>> = [];
+  private queue: Array<ReadableResult<T, E>> = [];
   /**
    * Used by methods in the class to signal to the iterator that it
    * should check for the next value.
    */
-  private nextPromise: Promise<void> | null = null;
-  /**
-   * Resolves nextPromise
-   */
-  private resolveNextPromise: null | (() => void) = null;
+  private next: PromiseWithResolvers<void> | null = null;
 
   public [Symbol.asyncIterator]() {
     if (this.locked) {
       throw new TypeError('Readable is already locked');
     }
 
-    // first iteration with break signals an error, the following one signals end of iteration.
-    let didSignalDrain = false;
+    /**
+     * First iteration with {@link break} signals an error, the following one signals end of iteration.
+     */
+    let didSignalBreak = false;
     this.locked = true;
 
     return {
       next: async () => {
-        if (this.broken && didSignalDrain) {
+        if (didSignalBreak) {
           return {
             done: true,
             value: undefined,
           } as const;
         }
 
-        // Wait until we have something in the queue
+        /**
+         * This while loop can be structured as a couple of if statements,
+         * so this loop will run at most a couple of times.
+         * - it will run 0 times if we have something in the queue to consume
+         * - it will run 1 time if we have nothing in the queue and then get something in the queue
+         * - it will run 2 times if we have nothing in the queue and then the readable closes or breaks
+         */
         while (this.queue.length === 0) {
-          if (this.closed && !this.didBreakDisposeValues) {
+          if (this.closed && !this.brokenWithValuesLeftToRead) {
             return {
               done: true,
               value: undefined,
@@ -159,7 +202,7 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
           }
 
           if (this.broken) {
-            didSignalDrain = true;
+            didSignalBreak = true;
 
             return {
               done: false,
@@ -167,15 +210,17 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
             } as const;
           }
 
-          if (!this.nextPromise) {
-            this.nextPromise = new Promise<void>((resolve) => {
-              this.resolveNextPromise = resolve;
-            });
+          if (this.next) {
+            // This should never happen as we unset next after every iteration
+            // but just to future proof for changes in Readable's implementation
+            throw new Error(
+              "Internal river error: did not expect Readable's next to be defined",
+            );
           }
 
-          await this.nextPromise;
-          this.nextPromise = null;
-          this.resolveNextPromise = null;
+          this.next = createPromiseWithResolvers();
+          await this.next.promise;
+          this.next = null;
         }
 
         // Unfortunately we have to use non-null assertion here, because T can be undefined
@@ -192,8 +237,8 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
     };
   }
 
-  public async collect(): Promise<Array<ReadStreamResult<T, E>>> {
-    const array: Array<ReadStreamResult<T, E>> = [];
+  public async collect(): Promise<Array<ReadableResult<T, E>>> {
+    const array: Array<ReadableResult<T, E>> = [];
     for await (const value of this) {
       array.push(value);
     }
@@ -208,11 +253,11 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
 
     this.locked = true;
     this.broken = true;
-    this.didBreakDisposeValues = this.queue.length > 0;
+    this.brokenWithValuesLeftToRead = this.queue.length > 0;
     this.queue.length = 0;
 
     // if we have any iterators waiting for the next value,
-    this.resolveNextPromise?.();
+    this.next?.resolve();
   }
 
   public isReadable(): boolean {
@@ -230,17 +275,17 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
     }
 
     if (this.closed) {
-      throw new Error('Cannot push to closed stream');
+      throw new Error('Cannot push to closed Readable');
     }
 
     this.queue.push(value);
-    this.resolveNextPromise?.();
+    this.next?.resolve();
   }
 
   /**
    * @internal meant for use within river, not exposed as a public API
    *
-   * Triggers the close of the stream. Make sure to push all remaining
+   * Triggers the close of the {@link Readable}. Make sure to push all remaining
    * values before calling this method.
    */
   public _triggerClose(): undefined {
@@ -249,7 +294,7 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
     }
 
     this.closed = true;
-    this.resolveNextPromise?.();
+    this.next?.resolve();
   }
 
   /**
@@ -267,16 +312,16 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
  */
 export class WritableImpl<T> implements Writable<T> {
   /**
-   * Passed via constructor to pass on writes
+   * Passed via constructor to pass on calls to {@link write}
    */
   private writeCb: (value: T) => void;
 
   /**
-   * Passed via constructor to pass on close
+   * Passed via constructor to pass on calls to {@link close}
    */
   private closeCb: () => void;
   /**
-   * Whether the stream is closed.
+   * Whether {@link close} was called, and {@link Writable} is not writable anymore.
    */
   private closed = false;
 
@@ -287,7 +332,7 @@ export class WritableImpl<T> implements Writable<T> {
 
   public write(value: T): undefined {
     if (this.closed) {
-      throw new Error('Cannot write to closed stream');
+      throw new Error('Cannot write to closed Writable');
     }
 
     this.writeCb(value);
