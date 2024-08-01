@@ -1,8 +1,8 @@
+import { describe, expect, test, vi } from 'vitest';
 import {
-  LeakyBucketRateLimit,
   ConnectionRetryOptions,
+  LeakyBucketRateLimit,
 } from '../transport/rateLimit';
-import { describe, test, expect, vi } from 'vitest';
 
 describe('LeakyBucketRateLimit', () => {
   const options: ConnectionRetryOptions = {

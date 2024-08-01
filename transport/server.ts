@@ -1,35 +1,34 @@
 import { SpanStatusCode } from '@opentelemetry/api';
-import { ParsedMetadata } from '../router/context';
-import { ServerHandshakeOptions } from '../router/handshake';
+import { Static } from '@sinclair/typebox';
+import { Value } from '@sinclair/typebox/value';
+import { ParsedMetadata, ServerHandshakeOptions } from '../handshake';
+import { MessageMetadata } from '../logging';
+import { coerceErrorString } from '../util/stringify';
+import { Connection } from './connection';
+import { ProtocolError } from './events';
 import {
   ControlMessageHandshakeRequestSchema,
   HandshakeErrorCustomHandlerFatalResponseCodes,
   HandshakeErrorResponseCodes,
   OpaqueTransportMessage,
-  acceptedProtocolVersions,
   PartialTransportMessage,
   TransportClientId,
-  handshakeResponseMessage,
+  acceptedProtocolVersions,
   currentProtocolVersion,
+  handshakeResponseMessage,
 } from './message';
 import {
   ProvidedServerTransportOptions,
   ServerTransportOptions,
   defaultServerTransportOptions,
 } from './options';
-import { DeleteSessionOptions, Transport } from './transport';
-import { coerceErrorString } from '../util/stringify';
-import { Static } from '@sinclair/typebox';
-import { Value } from '@sinclair/typebox/value';
-import { ProtocolError } from './events';
-import { Connection } from './connection';
-import { MessageMetadata } from '../logging';
 import { SessionWaitingForHandshake } from './sessionStateMachine/SessionWaitingForHandshake';
 import { SessionState } from './sessionStateMachine/common';
 import {
   ServerSession,
   ServerSessionStateGraph,
 } from './sessionStateMachine/transitions';
+import { DeleteSessionOptions, Transport } from './transport';
 
 export abstract class ServerTransport<
   ConnType extends Connection,

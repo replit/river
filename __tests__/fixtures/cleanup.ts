@@ -1,4 +1,7 @@
+import { Value } from '@sinclair/typebox/value';
 import { expect, vi } from 'vitest';
+import { Server } from '../../router';
+import { AnyServiceSchemaMap } from '../../router/server/services';
 import {
   ClientTransport,
   Connection,
@@ -6,14 +9,11 @@ import {
   ServerTransport,
   Transport,
 } from '../../transport';
-import { Server } from '../../router';
-import { AnyServiceSchemaMap } from '../../router/services';
+import { ControlMessageAckSchema } from '../../transport/message';
 import {
   numberOfConnections,
   testingSessionOptions,
 } from '../../util/testHelpers';
-import { Value } from '@sinclair/typebox/value';
-import { ControlMessageAckSchema } from '../../transport/message';
 
 const waitUntilOptions = {
   timeout: 500, // account for possibility of conn backoff

@@ -1,13 +1,4 @@
-export type {
-  Service,
-  ServiceConfiguration,
-  ProcHandler,
-  ProcInit,
-  ProcInput,
-  ProcOutput,
-  ProcErrors,
-  ProcType,
-} from './services';
+export type { Service, ServiceConfiguration } from './server/services';
 export {
   ServiceSchema,
   serializeSchema,
@@ -18,49 +9,33 @@ export {
   SerializedServerSchemaProtocolv1,
   SerializedServiceSchemaProtocolv1,
   SerializedProcedureSchemaProtocolv1,
-} from './services';
-export type {
-  ValidProcType,
-  PayloadType,
-  ProcedureMap,
-  RpcProcedure as RPCProcedure,
-  UploadProcedure,
-  SubscriptionProcedure,
-  StreamProcedure,
-  ProcedureErrorSchemaType,
-} from './procedures';
-export type { Writable, Readable } from './streams';
+} from './server/services';
+export type { ProcedureErrorSchemaType } from './server/procedure';
+export type { Readable, ReadableResult } from './readable';
+export type { Writable } from './writable';
 export {
-  Procedure,
   INTERNAL_RIVER_ERROR_CODE,
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
   INVALID_REQUEST_CODE,
   ABORT_CODE,
-  ResponseReaderErrorSchema,
-  RequestReaderErrorSchema,
-} from './procedures';
-export { createClient } from './client';
-export type { Client } from './client';
-export { createServer } from './server';
-export type { Server } from './server';
-export type {
-  ParsedMetadata,
-  ServiceContext,
-  ProcedureHandlerContext,
-} from './context';
-export { Ok, Err } from './result';
+  ResponseBuiltinErrorSchema,
+  RequestBuiltInErrorSchema,
+} from './result/errors';
+export { createClient } from './client/client';
+export type { Client } from './client/client';
+export { createServer } from './server/server';
+export type { Server } from './server/server';
+export type { ServiceContext, ProcedureHandlerContext } from './server/context';
+export { Procedure } from './server/procedure';
+export { Ok, Err, unwrap } from './result/result';
 export type {
   Result,
   ErrResult,
   OkResult,
   ResultUnwrapOk,
   ResultUnwrapErr,
-  Output,
-  BaseErrorSchemaType,
-} from './result';
-export {
-  createClientHandshakeOptions,
-  createServerHandshakeOptions,
-} from './handshake';
+} from './result/result';
+export { BaseErrorSchemaType } from './result/errors';
+export type { ResponseType } from './client/responseTypeExtractor';
 export { version as RIVER_VERSION } from '../package.json';

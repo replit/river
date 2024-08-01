@@ -1,6 +1,24 @@
 import { Static, TSchema } from '@sinclair/typebox';
-import { ParsedMetadata } from './context';
-import { HandshakeErrorCustomHandlerFatalResponseCodes } from '../transport/message';
+import { HandshakeErrorCustomHandlerFatalResponseCodes } from '../transport';
+
+/**
+ * The parsed metadata schema for a service. This is the
+ * return value of the {@link ServerHandshakeOptions.validate}
+ * if the handshake extension is used.
+ *
+ * You should use declaration merging to extend this interface
+ * with the sanitized metadata.
+ *
+ * ```ts
+ * declare module '@replit/river' {
+ *   interface ParsedMetadata {
+ *     userId: number;
+ *   }
+ * }
+ * ```
+ */
+/* eslint-disable-next-line @typescript-eslint/no-empty-interface */
+export interface ParsedMetadata extends Record<string, unknown> {}
 
 type ConstructHandshake<T extends TSchema> = () =>
   | Static<T>

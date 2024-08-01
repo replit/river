@@ -1,12 +1,32 @@
 import { OpaqueTransportMessage, TransportClientId } from '..';
+import { Logger } from '../../logging';
+import { PropagationContext, createSessionTelemetryInfo } from '../../tracing';
+import { Connection } from '../connection';
+import { generateId } from '../id';
+import {
+  SessionBackingOff,
+  SessionBackingOffListeners,
+} from './SessionBackingOff';
+import {
+  SessionConnected,
+  SessionConnectedListeners,
+} from './SessionConnected';
 import {
   SessionConnecting,
   SessionConnectingListeners,
 } from './SessionConnecting';
 import {
+  SessionHandshaking,
+  SessionHandshakingListeners,
+} from './SessionHandshaking';
+import {
   SessionNoConnection,
   SessionNoConnectionListeners,
 } from './SessionNoConnection';
+import {
+  SessionWaitingForHandshake,
+  SessionWaitingForHandshakeListeners,
+} from './SessionWaitingForHandshake';
 import {
   IdentifiedSession,
   IdentifiedSessionProps,
@@ -14,26 +34,6 @@ import {
   IdentifiedSessionWithGracePeriodProps,
   SessionOptions,
 } from './common';
-import { PropagationContext, createSessionTelemetryInfo } from '../../tracing';
-import {
-  SessionWaitingForHandshake,
-  SessionWaitingForHandshakeListeners,
-} from './SessionWaitingForHandshake';
-import {
-  SessionHandshaking,
-  SessionHandshakingListeners,
-} from './SessionHandshaking';
-import {
-  SessionConnected,
-  SessionConnectedListeners,
-} from './SessionConnected';
-import { generateId } from '../id';
-import { Connection } from '../connection';
-import { Logger } from '../../logging';
-import {
-  SessionBackingOff,
-  SessionBackingOffListeners,
-} from './SessionBackingOff';
 
 function inheritSharedSession(
   session: IdentifiedSession,

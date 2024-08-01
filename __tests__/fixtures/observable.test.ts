@@ -1,5 +1,5 @@
-import { Observable } from './observable';
 import { describe, expect, test, vitest } from 'vitest';
+import { Observable } from './observable';
 
 describe('Observable', () => {
   test('should set initial value correctly', () => {

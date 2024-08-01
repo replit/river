@@ -1,42 +1,41 @@
-import NodeWs, { WebSocketServer } from 'ws';
+import { Static, TSchema } from '@sinclair/typebox';
 import http from 'node:http';
-import { Err, Ok, Result, BaseErrorSchemaType } from '../router/result';
+import NodeWs, { WebSocketServer } from 'ws';
 import {
-  ProcedureErrorSchemaType,
-  RequestReaderErrorSchema,
-  ResponseReaderErrorSchema,
-  UNCAUGHT_ERROR_CODE,
-  PayloadType,
+  BaseErrorSchemaType,
+  Err,
+  Ok,
   Procedure,
-} from '../router/procedures';
-import { Static } from '@sinclair/typebox';
-import {
-  OpaqueTransportMessage,
-  PartialTransportMessage,
-  currentProtocolVersion,
-} from '../transport/message';
-import { coerceErrorString } from './stringify';
-import { Transport } from '../transport/transport';
-import {
+  ProcedureErrorSchemaType,
+  ProcedureHandlerContext,
   Readable,
-  ReadableImpl,
   ReadableResult,
-  ReadableIterator,
+  RequestBuiltInErrorSchema,
+  ResponseBuiltinErrorSchema,
+  Result,
+  ServiceContext,
+  UNCAUGHT_ERROR_CODE,
   Writable,
-  WritableImpl,
-} from '../router/streams';
-import { ServiceContext, ProcedureHandlerContext } from '../router/context';
-import { WsLike } from '../transport/impls/ws/wslike';
+} from '../router';
 import {
+  Connection,
+  currentProtocolVersion,
   defaultClientTransportOptions,
   defaultTransportOptions,
-} from '../transport/options';
-import { Connection } from '../transport/connection';
-import { SessionState } from '../transport/sessionStateMachine/common';
-import {
+  OpaqueTransportMessage,
+  PartialTransportMessage,
   Session,
-  SessionStateGraph,
-} from '../transport/sessionStateMachine/transitions';
+  SessionState,
+  Transport,
+} from '../transport';
+import { coerceErrorString } from './stringify';
+/**
+ * TODO: should probably do something about these unexported internals
+ */
+import { ReadableImpl, ReadableIterator } from '../router/readable';
+import { WritableImpl } from '../router/writable';
+import { WsLike } from '../transport/impls/ws/wslike';
+import { SessionStateGraph } from '../transport/sessionStateMachine/transitions';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
@@ -96,16 +95,14 @@ const readableIterators = new WeakMap<
 export function getReadableIterator<T, E extends Static<BaseErrorSchemaType>>(
   readable: Readable<T, E>,
 ): ReadableIterator<T, E> {
-  let iter = readableIterators.get(readable) as
-    | ReadableIterator<T, E>
-    | undefined;
+  let iter = readableIterators.get(readable);
 
   if (!iter) {
     iter = readable[Symbol.asyncIterator]();
     readableIterators.set(readable, iter);
   }
 
-  return iter;
+  return iter as ReadableIterator<T, E>;
 }
 
 /**
@@ -226,8 +223,8 @@ function dummyCtx<State>(
 
 export function asClientRpc<
   State extends object,
-  Init extends PayloadType,
-  Output extends PayloadType,
+  Init extends TSchema,
+  Output extends TSchema,
   Err extends ProcedureErrorSchemaType,
 >(
   state: State,
@@ -240,7 +237,7 @@ export function asClientRpc<
   ): Promise<
     Result<
       Static<Output>,
-      Static<Err> | Static<typeof ResponseReaderErrorSchema>
+      Static<Err> | Static<typeof ResponseBuiltinErrorSchema>
     >
   > => {
     return proc
@@ -253,18 +250,18 @@ export function asClientRpc<
 }
 
 function createResponsePipe<
-  Output extends PayloadType,
+  Output extends TSchema,
   Err extends ProcedureErrorSchemaType,
 >(): {
   readable: Readable<
     Static<Output>,
-    Static<Err> | Static<typeof ResponseReaderErrorSchema>
+    Static<Err> | Static<typeof ResponseBuiltinErrorSchema>
   >;
   writable: Writable<Result<Static<Output>, Static<Err>>>;
 } {
   const readable = new ReadableImpl<
     Static<Output>,
-    Static<Err> | Static<typeof ResponseReaderErrorSchema>
+    Static<Err> | Static<typeof ResponseBuiltinErrorSchema>
   >();
   const writable = new WritableImpl<Result<Static<Output>, Static<Err>>>(
     (v) => {
@@ -282,13 +279,13 @@ function createResponsePipe<
   return { readable, writable };
 }
 
-function createRequestPipe<Input extends PayloadType>(): {
-  readable: Readable<Static<Input>, Static<typeof RequestReaderErrorSchema>>;
+function createRequestPipe<Input extends TSchema>(): {
+  readable: Readable<Static<Input>, Static<typeof RequestBuiltInErrorSchema>>;
   writable: Writable<Static<Input>>;
 } {
   const readable = new ReadableImpl<
     Static<Input>,
-    Static<typeof RequestReaderErrorSchema>
+    Static<typeof RequestBuiltInErrorSchema>
   >();
   const writable = new WritableImpl<Static<Input>>(
     (v) => {
@@ -308,9 +305,9 @@ function createRequestPipe<Input extends PayloadType>(): {
 
 export function asClientStream<
   State extends object,
-  Init extends PayloadType,
-  Input extends PayloadType,
-  Output extends PayloadType,
+  Init extends TSchema,
+  Input extends TSchema,
+  Output extends TSchema,
   Err extends ProcedureErrorSchemaType,
 >(
   state: State,
@@ -342,8 +339,8 @@ export function asClientStream<
 
 export function asClientSubscription<
   State extends object,
-  Init extends PayloadType,
-  Output extends PayloadType,
+  Init extends TSchema,
+  Output extends TSchema,
   Err extends ProcedureErrorSchemaType,
 >(
   state: State,
@@ -372,9 +369,9 @@ export function asClientSubscription<
 
 export function asClientUpload<
   State extends object,
-  Init extends PayloadType,
-  Input extends PayloadType,
-  Output extends PayloadType,
+  Init extends TSchema,
+  Input extends TSchema,
+  Output extends TSchema,
   Err extends ProcedureErrorSchemaType,
 >(
   state: State,

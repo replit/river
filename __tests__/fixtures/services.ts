@@ -1,8 +1,8 @@
 import { Type } from '@sinclair/typebox';
-import { ServiceSchema } from '../../router/services';
-import { Err, Ok, unwrap } from '../../router/result';
-import { Observable } from './observable';
 import { Procedure } from '../../router';
+import { Err, Ok, unwrap } from '../../router/result/result';
+import { ServiceSchema } from '../../router/server/services';
+import { Observable } from './observable';
 
 export const EchoRequest = Type.Object({
   msg: Type.String(),

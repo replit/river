@@ -1,5 +1,5 @@
-import { TransportClientId } from '../transport/message';
-import { SessionId } from '../transport/sessionStateMachine/common';
+import { ParsedMetadata } from '../../handshake';
+import { SessionId, TransportClientId } from '../../transport';
 
 /**
  * ServiceContext exist for the purpose of declaration merging
@@ -21,25 +21,6 @@ import { SessionId } from '../transport/sessionStateMachine/common';
  */
 /* eslint-disable-next-line @typescript-eslint/no-empty-interface */
 export interface ServiceContext {}
-
-/**
- * The parsed metadata schema for a service. This is the
- * return value of the {@link ServerHandshakeOptions.validate}
- * if the handshake extension is used.
- *
- * You should use declaration merging to extend this interface
- * with the sanitized metadata.
- *
- * ```ts
- * declare module '@replit/river' {
- *   interface ParsedMetadata {
- *     userId: number;
- *   }
- * }
- * ```
- */
-/* eslint-disable-next-line @typescript-eslint/no-empty-interface */
-export interface ParsedMetadata extends Record<string, unknown> {}
 
 /**
  * This is passed to every procedure handler and contains various context-level
@@ -66,7 +47,7 @@ export type ProcedureHandlerContext<State> = ServiceContext & {
    * An AbortController for this stream. This is used to abort the stream from the
    * handler and notify the client that the stream was aborted.
    *
-   * Important to note that this controller is owned by the handler, if you
+   * important to note that this controller is owned by the handler, if you
    * want to listen to aborts coming from the client, you should use the
    * {@link clientAbortSignal}.
    *
@@ -84,7 +65,7 @@ export type ProcedureHandlerContext<State> = ServiceContext & {
    * this signal as it is triggered immediately after an abort comes in,
    * in readStreams some data may be buffered before the abort result shows up.
    *
-   * Important to note that this signal is owned by the client, you have a separate
+   * important to note that this signal is owned by the client, you have a separate
    * signal inside {@link abortController} for aborts triggered within the handler.
    *
    * Aborts are not the same as closing streams gracefully, please refer to

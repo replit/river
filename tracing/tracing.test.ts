@@ -1,27 +1,27 @@
-import { trace, context, propagation, Span } from '@opentelemetry/api';
-import { describe, test, expect, vi, assert, beforeEach } from 'vitest';
+import { context, propagation, Span, trace } from '@opentelemetry/api';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 import { dummySession } from '../util/testHelpers';
 
+import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import {
   BasicTracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
-import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { StackContextManager } from '@opentelemetry/sdk-trace-web';
-import tracer, {
-  createSessionTelemetryInfo,
-  getPropagationContext,
-  createHandlerSpan,
-} from './index';
-import { testMatrix } from '../__tests__/fixtures/matrix';
 import {
   cleanupTransports,
+  createPostTestCleanups,
   testFinishesCleanly,
   waitFor,
 } from '../__tests__/fixtures/cleanup';
+import { testMatrix } from '../__tests__/fixtures/matrix';
 import { TestSetupHelpers } from '../__tests__/fixtures/transports';
-import { createPostTestCleanups } from '../__tests__/fixtures/cleanup';
+import tracer, {
+  createHandlerSpan,
+  createSessionTelemetryInfo,
+  getPropagationContext,
+} from './index';
 
 describe('Basic tracing tests', () => {
   const provider = new BasicTracerProvider();

@@ -1,26 +1,24 @@
+import http from 'node:http';
+import {
+  ClientHandshakeOptions,
+  ServerHandshakeOptions,
+} from '../../handshake';
 import {
   ClientTransport,
+  ClientTransportOptions,
   Connection,
   ServerTransport,
+  ServerTransportOptions,
   TransportClientId,
 } from '../../transport';
-import http from 'node:http';
+import { WebSocketClientTransport } from '../../transport/impls/ws/client';
+import { WebSocketServerTransport } from '../../transport/impls/ws/server';
 import {
   createLocalWebSocketClient,
   createWebSocketServer,
   getTransportConnections,
   onWsServerReady,
 } from '../../util/testHelpers';
-import {
-  ClientTransportOptions,
-  ServerTransportOptions,
-} from '../../transport';
-import { WebSocketClientTransport } from '../../transport/impls/ws/client';
-import { WebSocketServerTransport } from '../../transport/impls/ws/server';
-import {
-  ClientHandshakeOptions,
-  ServerHandshakeOptions,
-} from '../../router/handshake';
 
 export type ValidTransports = 'ws';
 

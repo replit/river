@@ -1,16 +1,23 @@
 import {
-  OpaqueTransportMessage,
-  TransportClientId,
-  PartialTransportMessage,
-} from './message';
-import {
   BaseLogger,
   LogFn,
   Logger,
   LoggingLevel,
   createLogProxy,
 } from '../logging/log';
-import { EventDispatcher, EventHandler, EventMap, EventTypes } from './events';
+import { Connection } from './connection';
+import {
+  EventDispatcher,
+  EventHandler,
+  EventMap,
+  EventTypes,
+  TransportStatus,
+} from './events';
+import {
+  OpaqueTransportMessage,
+  PartialTransportMessage,
+  TransportClientId,
+} from './message';
 import {
   ProvidedTransportOptions,
   TransportOptions,
@@ -23,15 +30,7 @@ import {
   SessionNoConnection,
   SessionState,
 } from './sessionStateMachine';
-import { Connection } from './connection';
 import { Session, SessionStateGraph } from './sessionStateMachine/transitions';
-
-/**
- * Represents the possible states of a transport.
- * @property {'open'} open - The transport is open and operational (note that this doesn't mean it is actively connected)
- * @property {'closed'} closed - The transport is permanently closed and cannot be reopened.
- */
-export type TransportStatus = 'open' | 'closed';
 
 export interface DeleteSessionOptions {
   unhealthy: boolean;

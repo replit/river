@@ -1,54 +1,51 @@
-import { Static } from '@sinclair/typebox';
+import { Span, SpanStatusCode } from '@opentelemetry/api';
+import { Static, TSchema } from '@sinclair/typebox';
+import { Value } from '@sinclair/typebox/value';
+import { ParsedMetadata, ServerHandshakeOptions } from '../../handshake';
+import { Logger, MessageMetadata } from '../../logging/log';
+import { PropagationContext, createHandlerSpan } from '../../tracing';
 import {
-  PayloadType,
-  ProcedureErrorSchemaType,
-  RequestReaderErrorSchema,
-  ResponseReaderErrorSchema,
-  UNCAUGHT_ERROR_CODE,
-  UNEXPECTED_DISCONNECT_CODE,
-  AnyProcedure,
-  ABORT_CODE,
-  INVALID_REQUEST_CODE,
-  INTERNAL_RIVER_ERROR_CODE,
-} from './procedures';
-import {
-  AnyService,
-  InstantiatedServiceSchemaMap,
-  AnyServiceSchemaMap,
-} from './services';
-import {
+  Connection,
+  ControlFlags,
   ControlMessagePayloadSchema,
+  EventMap,
   OpaqueTransportMessage,
+  ServerTransport,
+  isStreamAbort,
   isStreamClose,
   isStreamOpen,
-  ControlFlags,
-  isStreamAbort,
-  closeStreamMessage,
-  abortMessage,
-} from '../transport/message';
+} from '../../transport';
+import { coerceErrorString } from '../../util/stringify';
 import {
-  ServiceContext,
-  ProcedureHandlerContext,
-  ParsedMetadata,
-} from './context';
-import { Logger, MessageMetadata } from '../logging/log';
-import { Value } from '@sinclair/typebox/value';
-import { Err, Result, Ok, ErrResultSchema, ErrResult } from './result';
-import { EventMap } from '../transport/events';
-import { coerceErrorString } from '../util/stringify';
-import { Span, SpanStatusCode } from '@opentelemetry/api';
-import { PropagationContext, createHandlerSpan } from '../tracing';
-import { ServerHandshakeOptions } from './handshake';
-import { Connection } from '../transport/connection';
-import { ServerTransport } from '../transport/server';
-import { ReadableImpl, WritableImpl } from './streams';
+  createAbortStreamMessage,
+  createCloseStreamMessage,
+} from '../messages';
+import { ReadableImpl } from '../readable';
+import {
+  ABORT_CODE,
+  INTERNAL_RIVER_ERROR_CODE,
+  INVALID_REQUEST_CODE,
+  RequestBuiltInErrorSchema,
+  ResponseBuiltinErrorSchema,
+  UNCAUGHT_ERROR_CODE,
+  UNEXPECTED_DISCONNECT_CODE,
+} from '../result/errors';
+import { Err, ErrResult, ErrResultSchema, Ok, Result } from '../result/result';
+import { WritableImpl } from '../writable';
+import { ProcedureHandlerContext, ServiceContext } from './context';
+import { AnyProcedure, ProcedureErrorSchemaType } from './procedure';
+import {
+  AnyService,
+  AnyServiceSchemaMap,
+  InstantiatedServiceSchemaMap,
+} from './services';
 
 type StreamId = string;
 
 /**
  * A result schema for errors that can be passed to input's readstream
  */
-const InputErrResultSchema = ErrResultSchema(RequestReaderErrorSchema);
+const InputErrResultSchema = ErrResultSchema(RequestBuiltInErrorSchema);
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -77,7 +74,7 @@ interface NewProcStreamInput {
   streamId: string;
   controlFlags: number;
   tracingCtx?: PropagationContext;
-  initPayload: Static<PayloadType>;
+  initPayload: Static<TSchema>;
   from: string;
   sessionId: string;
   protocolVersion: string;
@@ -391,8 +388,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       procedure.type === 'rpc' || procedure.type === 'upload';
 
     const reqReadable = new ReadableImpl<
-      Static<PayloadType>,
-      Static<typeof RequestReaderErrorSchema>
+      Static<TSchema>,
+      Static<typeof RequestBuiltInErrorSchema>
     >();
     const closeReadable = () => {
       reqReadable._triggerClose();
@@ -416,7 +413,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     }
 
     const resWritable = new WritableImpl<
-      Result<Static<PayloadType>, Static<ProcedureErrorSchemaType>>
+      Result<Static<TSchema>, Static<ProcedureErrorSchemaType>>
     >(
       // write callback
       (response) => {
@@ -434,11 +431,11 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           // we ended, send a close bit back to the client
           // also, if the client has disconnected, we don't need to send a close
 
-          const message = closeStreamMessage(streamId);
+          const message = createCloseStreamMessage(streamId);
           // TODO remove once clients migrate to v2
           message.controlFlags = getStreamCloseBackwardsCompat(protocolVersion);
 
-          this.transport.send(from, closeStreamMessage(streamId));
+          this.transport.send(from, createCloseStreamMessage(streamId));
         }
 
         // TODO remove once clients migrate to v2
@@ -616,7 +613,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       default:
         this.log?.error(
           `got request for invalid procedure type ${
-            (procedure as AnyProcedure).type
+            (procedure as unknown as { type: string }).type
           } at ${serviceName}.${procedureName}`,
           {
             ...loggingMetadata,
@@ -857,7 +854,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
   abortStream(
     to: string,
     streamId: string,
-    payload: ErrResult<Static<typeof ResponseReaderErrorSchema>>,
+    payload: ErrResult<Static<typeof ResponseBuiltinErrorSchema>>,
   ) {
     let abortedForSession = this.serverAbortedStreams.get(to);
 
@@ -873,8 +870,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       to,
       // TODO remove once clients migrate to v2
       this.transport.sessions.get(to)?.protocolVersion === 'v1.1'
-        ? closeStreamMessage(streamId)
-        : abortMessage(streamId, payload),
+        ? createCloseStreamMessage(streamId)
+        : createAbortStreamMessage(streamId, payload),
     );
   }
 }

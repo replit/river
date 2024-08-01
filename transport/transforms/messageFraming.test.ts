@@ -1,5 +1,5 @@
+import { describe, expect, test, vi } from 'vitest';
 import { MessageFramer } from './messageFraming';
-import { describe, test, expect, vi } from 'vitest';
 
 describe('MessageFramer', () => {
   const encodeMessage = (message: string) => {

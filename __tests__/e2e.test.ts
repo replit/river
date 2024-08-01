@@ -1,23 +1,24 @@
+import { Type } from '@sinclair/typebox';
 import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
+import {
+  createClientHandshakeOptions,
+  createServerHandshakeOptions,
+} from '../handshake';
+import {
+  ABORT_CODE,
+  createClient,
+  createServer,
+  Ok,
+  Procedure,
+  ServiceSchema,
+  UNCAUGHT_ERROR_CODE,
+} from '../router';
 import {
   closeAllConnections,
   isReadableDone,
   numberOfConnections,
   readNextResult,
 } from '../util/testHelpers';
-import { createServer } from '../router/server';
-import { createClient } from '../router/client';
-import {
-  BinaryFileServiceSchema,
-  DIV_BY_ZERO,
-  FallibleServiceSchema,
-  STREAM_ERROR,
-  SubscribableServiceSchema,
-  TestServiceSchema,
-  UploadableServiceSchema,
-  OrderingServiceSchema,
-  NonObjectSchemas,
-} from './fixtures/services';
 import {
   advanceFakeTimersBySessionGrace,
   cleanupTransports,
@@ -26,18 +27,17 @@ import {
   waitFor,
 } from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
-import { Type } from '@sinclair/typebox';
 import {
-  Procedure,
-  ServiceSchema,
-  Ok,
-  UNCAUGHT_ERROR_CODE,
-  ABORT_CODE,
-} from '../router';
-import {
-  createClientHandshakeOptions,
-  createServerHandshakeOptions,
-} from '../router/handshake';
+  BinaryFileServiceSchema,
+  DIV_BY_ZERO,
+  FallibleServiceSchema,
+  NonObjectSchemas,
+  OrderingServiceSchema,
+  STREAM_ERROR,
+  SubscribableServiceSchema,
+  TestServiceSchema,
+  UploadableServiceSchema,
+} from './fixtures/services';
 import { TestSetupHelpers } from './fixtures/transports';
 
 describe.each(testMatrix())(

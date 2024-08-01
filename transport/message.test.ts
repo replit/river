@@ -1,3 +1,4 @@
+import { describe, expect, test } from 'vitest';
 import { TransportMessage } from '.';
 import {
   ControlFlags,
@@ -7,7 +8,6 @@ import {
   isStreamClose,
   isStreamOpen,
 } from './message';
-import { describe, test, expect } from 'vitest';
 
 const msg = (
   to: string,

@@ -1,24 +1,25 @@
-import { describe, expect, test } from 'vitest';
-import { Procedure, ProcedureErrorSchemaType } from '../router/procedures';
-import { ServiceSchema } from '../router/services';
 import { Type } from '@sinclair/typebox';
-import { createServer } from '../router/server';
-import { Connection, ClientTransport, ServerTransport } from '../transport';
-import { createClient } from '../router/client';
-import {
-  Err,
-  Ok,
-  Output,
-  ResultUnwrapErr,
-  ResultUnwrapOk,
-  unwrap,
-} from '../router/result';
-import { TestServiceSchema } from './fixtures/services';
-import { readNextResult } from '../util/testHelpers';
+import { describe, expect, test } from 'vitest';
 import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,
-} from '../router/handshake';
+} from '../handshake';
+import {
+  createClient,
+  createServer,
+  Err,
+  Ok,
+  Procedure,
+  ProcedureErrorSchemaType,
+  ResponseType,
+  ResultUnwrapErr,
+  ResultUnwrapOk,
+  ServiceSchema,
+  unwrap,
+} from '../router';
+import { ClientTransport, Connection, ServerTransport } from '../transport';
+import { readNextResult } from '../util/testHelpers';
+import { TestServiceSchema } from './fixtures/services';
 
 const requestData = Type.Union([
   Type.Object({ a: Type.Number() }),
@@ -245,7 +246,7 @@ const services = {
   }),
 };
 
-describe('Output<> type', () => {
+describe('ResponseType<> type', () => {
   createServer(new MockServerTransport('SERVER'), services);
   const client = createClient<typeof services>(
     new MockClientTransport('client'),
@@ -253,10 +254,12 @@ describe('Output<> type', () => {
     { eagerlyConnect: false },
   );
 
-  test('it unwraps rpc outputs correctly', async () => {
+  test('it unwraps rpc response type correctly', async () => {
     // Given
-    function acceptOutput(output: Output<typeof client, 'test', 'rpc'>) {
-      return output;
+    function acceptOutput(
+      response: ResponseType<typeof client, 'test', 'rpc'>,
+    ) {
+      return response;
     }
 
     // Then
@@ -264,10 +267,12 @@ describe('Output<> type', () => {
     expect(client).toBeTruthy();
   });
 
-  test('it unwraps stream outputs correctly', async () => {
+  test('it unwraps stream response type correctly', async () => {
     // Given
-    function acceptOutput(output: Output<typeof client, 'test', 'stream'>) {
-      return output;
+    function acceptOutput(
+      response: ResponseType<typeof client, 'test', 'stream'>,
+    ) {
+      return response;
     }
 
     // Then
@@ -276,12 +281,12 @@ describe('Output<> type', () => {
     expect(client).toBeTruthy();
   });
 
-  test('it unwraps subscription outputs correctly', async () => {
+  test('it unwraps subscription response type correctly', async () => {
     // Given
     function acceptOutput(
-      output: Output<typeof client, 'test', 'subscription'>,
+      response: ResponseType<typeof client, 'test', 'subscription'>,
     ) {
-      return output;
+      return response;
     }
 
     // Then
@@ -291,10 +296,12 @@ describe('Output<> type', () => {
     expect(client).toBeTruthy();
   });
 
-  test('it unwraps upload outputs correctly', async () => {
+  test('it unwraps upload response type correctly', async () => {
     // Given
-    function acceptOutput(output: Output<typeof client, 'test', 'upload'>) {
-      return output;
+    function acceptOutput(
+      response: ResponseType<typeof client, 'test', 'upload'>,
+    ) {
+      return response;
     }
 
     // Then

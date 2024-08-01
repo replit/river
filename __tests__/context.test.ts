@@ -1,7 +1,5 @@
+import { Type } from '@sinclair/typebox';
 import { beforeEach, describe, expect, test } from 'vitest';
-import { cleanupTransports, createPostTestCleanups } from './fixtures/cleanup';
-import { testMatrix } from './fixtures/matrix';
-import { TestSetupHelpers } from './fixtures/transports';
 import {
   Ok,
   Procedure,
@@ -9,7 +7,9 @@ import {
   createClient,
   createServer,
 } from '../router';
-import { Type } from '@sinclair/typebox';
+import { cleanupTransports, createPostTestCleanups } from './fixtures/cleanup';
+import { testMatrix } from './fixtures/matrix';
+import { TestSetupHelpers } from './fixtures/transports';
 
 describe('should handle incompatabilities', async () => {
   const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();

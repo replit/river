@@ -1,6 +1,6 @@
 import { describe, expect, test, vitest } from 'vitest';
-import { EventDispatcher } from './events';
 import { OpaqueTransportMessage } from '.';
+import { EventDispatcher } from './events';
 import { generateId } from './id';
 
 function dummyMessage(): OpaqueTransportMessage {

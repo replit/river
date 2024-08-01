@@ -1,11 +1,12 @@
 export { Transport } from './transport';
 export { ClientTransport } from './client';
 export { ServerTransport } from './server';
-export type { TransportStatus } from './transport';
-export type {
-  ProvidedTransportOptions as TransportOptions,
-  ProvidedClientTransportOptions as ClientTransportOptions,
-  ProvidedServerTransportOptions as ServerTransportOptions,
+export {
+  defaultClientTransportOptions,
+  defaultTransportOptions,
+  type ProvidedTransportOptions as TransportOptions,
+  type ProvidedClientTransportOptions as ClientTransportOptions,
+  type ProvidedServerTransportOptions as ServerTransportOptions,
 } from './options';
 export {
   Session,
@@ -20,13 +21,18 @@ export { Connection } from './connection';
 export {
   TransportMessageSchema,
   OpaqueTransportMessageSchema,
-} from './message';
-export type {
-  TransportMessage,
-  OpaqueTransportMessage,
-  TransportClientId,
+  ControlMessagePayloadSchema,
+  ControlMessageCloseSchema,
   isStreamOpen,
   isStreamClose,
+  isStreamAbort,
+  ControlFlags,
+  HandshakeErrorCustomHandlerFatalResponseCodes,
+  PartialTransportMessage,
+  currentProtocolVersion,
+  type TransportMessage,
+  type OpaqueTransportMessage,
+  type TransportClientId,
 } from './message';
 export {
   EventMap,
@@ -34,4 +40,7 @@ export {
   EventHandler,
   ProtocolError,
   type ProtocolErrorType,
+  type TransportStatus,
 } from './events';
+export { generateId } from './id';
+export { SessionId } from './sessionStateMachine/common';

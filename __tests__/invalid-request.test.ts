@@ -1,22 +1,21 @@
 import { Type } from '@sinclair/typebox';
+import { nanoid } from 'nanoid';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
+  INVALID_REQUEST_CODE,
   Procedure,
   ServiceSchema,
   createClient,
   createServer,
 } from '../router';
-import { testMatrix } from './fixtures/matrix';
+import { ControlFlags, EventMap } from '../transport';
 import {
   cleanupTransports,
   createPostTestCleanups,
   waitFor,
 } from './fixtures/cleanup';
-import { EventMap } from '../transport';
-import { INVALID_REQUEST_CODE } from '../router/procedures';
-import { ControlFlags } from '../transport/message';
+import { testMatrix } from './fixtures/matrix';
 import { TestSetupHelpers } from './fixtures/transports';
-import { nanoid } from 'nanoid';
 
 describe('aborts invalid request', () => {
   const { transport, codec } = testMatrix()[0];

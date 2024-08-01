@@ -1,49 +1,53 @@
+import { Static, TSchema } from '@sinclair/typebox';
+import { Value } from '@sinclair/typebox/value';
+import { ClientHandshakeOptions } from '../../handshake';
+import { Logger } from '../../logging';
+import { createProcTelemetryInfo, getPropagationContext } from '../../tracing';
+import {
+  ClientTransport,
+  Connection,
+  ControlFlags,
+  ControlMessageCloseSchema,
+  EventMap,
+  OpaqueTransportMessage,
+  TransportClientId,
+  generateId,
+  isStreamAbort,
+  isStreamClose,
+} from '../../transport';
+import {
+  createAbortStreamMessage,
+  createCloseStreamMessage,
+} from '../messages';
+import { Readable, ReadableImpl } from '../readable';
+import {
+  ABORT_CODE,
+  BaseErrorSchemaType,
+  ResponseBuiltinErrorSchema,
+  UNEXPECTED_DISCONNECT_CODE,
+} from '../result/errors';
+import {
+  AnyResultSchema,
+  Err,
+  ErrResultSchema,
+  Result,
+} from '../result/result';
+import { ValidProcType } from '../server/procedure';
 import {
   AnyService,
+  AnyServiceSchemaMap,
+  InstantiatedServiceSchemaMap,
+} from '../server/services';
+import { Writable, WritableImpl } from '../writable';
+import {
   ProcErrors,
   ProcInit,
   ProcInput,
   ProcOutput,
   ProcType,
-  AnyServiceSchemaMap,
-  InstantiatedServiceSchemaMap,
-} from './services';
-import {
-  OpaqueTransportMessage,
-  ControlFlags,
-  TransportClientId,
-  isStreamClose,
-  ControlMessageCloseSchema,
-  isStreamAbort,
-  closeStreamMessage,
-  abortMessage,
-} from '../transport/message';
-import { Static } from '@sinclair/typebox';
-import {
-  BaseErrorSchemaType,
-  Err,
-  Result,
-  AnyResultSchema,
-  ErrResultSchema,
-} from './result';
-import { EventMap } from '../transport/events';
-import { Connection } from '../transport/connection';
-import { Logger } from '../logging';
-import { createProcTelemetryInfo, getPropagationContext } from '../tracing';
-import { ClientHandshakeOptions } from './handshake';
-import { ClientTransport } from '../transport/client';
-import { generateId } from '../transport/id';
-import { Readable, ReadableImpl, Writable, WritableImpl } from './streams';
-import { Value } from '@sinclair/typebox/value';
-import {
-  ABORT_CODE,
-  ResponseReaderErrorSchema,
-  PayloadType,
-  UNEXPECTED_DISCONNECT_CODE,
-  ValidProcType,
-} from './procedures';
+} from './procedureTypeExtractors';
 
-const OutputErrResultSchema = ErrResultSchema(ResponseReaderErrorSchema);
+const OutputErrResultSchema = ErrResultSchema(ResponseBuiltinErrorSchema);
 
 interface CallOptions {
   signal?: AbortSignal;
@@ -276,7 +280,7 @@ function handleProc(
   procType: ValidProcType,
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
-  init: Static<PayloadType>,
+  init: Static<TSchema>,
   serviceName: string,
   procedureName: string,
   abortSignal?: AbortSignal,
@@ -292,7 +296,7 @@ function handleProc(
     streamId,
   );
   let cleanClose = true;
-  const reqWritable = new WritableImpl<Static<PayloadType>>(
+  const reqWritable = new WritableImpl<Static<TSchema>>(
     // write callback
     (rawIn) => {
       transport.send(serverId, {
@@ -307,7 +311,7 @@ function handleProc(
       span.addEvent('reqWritable closed');
 
       if (!procClosesWithInit && cleanClose) {
-        transport.send(serverId, closeStreamMessage(streamId));
+        transport.send(serverId, createCloseStreamMessage(streamId));
       }
 
       if (resReadable.isClosed()) {
@@ -317,7 +321,7 @@ function handleProc(
   );
 
   const resReadable = new ReadableImpl<
-    Static<PayloadType>,
+    Static<TSchema>,
     Static<BaseErrorSchemaType>
   >();
   const closeReadable = () => {
@@ -359,7 +363,7 @@ function handleProc(
     reqWritable.close();
     transport.send(
       serverId,
-      abortMessage(
+      createAbortStreamMessage(
         streamId,
         Err({
           code: ABORT_CODE,

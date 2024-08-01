@@ -1,11 +1,11 @@
-import { expect, describe, test } from 'vitest';
+import { Type } from '@sinclair/typebox';
+import { describe, expect, test } from 'vitest';
+import { serializeSchema } from '../router';
 import {
   BinaryFileServiceSchema,
   FallibleServiceSchema,
   TestServiceSchema,
 } from './fixtures/services';
-import { serializeSchema } from '../router';
-import { Type } from '@sinclair/typebox';
 
 describe('serialize server to jsonschema', () => {
   test('serialize entire service schema', () => {

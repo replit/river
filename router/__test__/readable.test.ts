@@ -1,15 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
-import {
-  ReadableImpl,
-  WritableImpl,
-  ReadableBrokenError,
-} from '../router/streams';
-import { Err, Ok } from '../router';
+import { describe, expect, it } from 'vitest';
 import {
   getReadableIterator,
   isReadableDone,
   readNextResult,
-} from '../util/testHelpers';
+} from '../../util/testHelpers';
+import { ReadableBrokenError, ReadableImpl } from '../readable';
+import { Err, Ok } from '../result/result';
 
 interface SomeError {
   code: 'SOME_ERROR';
@@ -308,47 +304,5 @@ describe('Readable unit', () => {
 
       expect(i).toEqual(2);
     });
-  });
-});
-
-describe('Writable unit', () => {
-  it('should write', () => {
-    const writeCb = vi.fn();
-    const writable = new WritableImpl<number>(writeCb, () => undefined);
-    writable.write(1);
-    writable.write(2);
-
-    expect(writeCb).toHaveBeenNthCalledWith(1, 1);
-    expect(writeCb).toHaveBeenNthCalledWith(2, 2);
-  });
-
-  it('should close the writable', () => {
-    const closeCb = vi.fn();
-    const writable = new WritableImpl<number>(() => undefined, closeCb);
-
-    expect(writable.isWritable()).toBeTruthy();
-
-    writable.close();
-    expect(writable.isWritable()).toBeFalsy();
-    expect(closeCb).toHaveBeenCalledOnce();
-  });
-
-  it('should allow calling close multiple times', () => {
-    const closeCb = vi.fn();
-    const writable = new WritableImpl<number>(() => undefined, closeCb);
-
-    writable.close();
-    writable.close();
-    writable.close();
-    expect(closeCb).toHaveBeenCalledOnce();
-  });
-
-  it('should throw when writing after close', () => {
-    const writable = new WritableImpl<number>(
-      () => undefined,
-      () => undefined,
-    );
-    writable.close();
-    expect(() => writable.write(1)).toThrowError(Error);
   });
 });

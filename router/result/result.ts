@@ -1,27 +1,5 @@
-import {
-  Static,
-  TLiteral,
-  TObject,
-  TSchema,
-  TString,
-  TUnion,
-  Type,
-} from '@sinclair/typebox';
-import { Client } from './client';
-import { Readable } from './streams';
-
-type TLiteralString = TLiteral<string>;
-
-export type BaseErrorSchemaType =
-  | TObject<{
-      code: TLiteralString | TUnion<Array<TLiteralString>>;
-      message: TLiteralString | TString;
-    }>
-  | TObject<{
-      code: TLiteralString | TUnion<Array<TLiteralString>>;
-      message: TLiteralString | TString;
-      extras: TSchema;
-    }>;
+import { Static, Type } from '@sinclair/typebox';
+import { BaseErrorSchemaType } from './errors';
 
 /**
  * Takes in a specific error schema and returns a result schema the error
@@ -112,52 +90,4 @@ export function unwrap<T, Err extends Static<BaseErrorSchemaType>>(
  */
 export type ResultUnwrapErr<R> = R extends Result<infer __T, infer Err>
   ? Err
-  : never;
-
-/**
- * Retrieve the output type for a procedure, represented as a {@link Result}
- * type.
- * Example:
- * ```
- * type Message = Output<typeof client, 'serviceName', 'procedureName'>
- * ```
- */
-export type Output<
-  RiverClient,
-  ServiceName extends keyof RiverClient,
-  ProcedureName extends keyof RiverClient[ServiceName],
-  Procedure = RiverClient[ServiceName][ProcedureName],
-  Fn extends (...args: never) => unknown = (...args: never) => unknown,
-> = RiverClient extends Client<infer __ServiceSchemaMap>
-  ? Procedure extends object
-    ? Procedure extends object & { rpc: infer RpcFn extends Fn }
-      ? Awaited<ReturnType<RpcFn>>
-      : Procedure extends object & { upload: infer UploadFn extends Fn }
-      ? ReturnType<UploadFn> extends {
-          finalize: (...args: never) => Promise<infer UploadOutputMessage>;
-        }
-        ? UploadOutputMessage
-        : never
-      : Procedure extends object & { stream: infer StreamFn extends Fn }
-      ? ReturnType<StreamFn> extends {
-          resReadable: Readable<
-            infer StreamOutputMessage,
-            Static<BaseErrorSchemaType>
-          >;
-        }
-        ? StreamOutputMessage
-        : never
-      : Procedure extends object & {
-          subscribe: infer SubscriptionFn extends Fn;
-        }
-      ? Awaited<ReturnType<SubscriptionFn>> extends {
-          resReadable: Readable<
-            infer SubscriptionOutputMessage,
-            Static<BaseErrorSchemaType>
-          >;
-        }
-        ? SubscriptionOutputMessage
-        : never
-      : never
-    : never
   : never;

@@ -1,5 +1,12 @@
 import { SpanStatusCode } from '@opentelemetry/api';
-import { ClientHandshakeOptions } from '../router/handshake';
+// TODO transport should not import from router
+import { Value } from '@sinclair/typebox/value';
+import { ClientHandshakeOptions } from '../handshake';
+import { MessageMetadata } from '../logging';
+import tracer, { getPropagationContext } from '../tracing';
+import { coerceErrorString } from '../util/stringify';
+import { Connection } from './connection';
+import { ProtocolError } from './events';
 import {
   ControlMessageHandshakeResponseSchema,
   HandshakeErrorRetriableResponseCodes,
@@ -15,23 +22,17 @@ import {
   defaultClientTransportOptions,
 } from './options';
 import { LeakyBucketRateLimit } from './rateLimit';
-import { Transport } from './transport';
-import { coerceErrorString } from '../util/stringify';
-import { ProtocolError } from './events';
-import { Value } from '@sinclair/typebox/value';
-import tracer, { getPropagationContext } from '../tracing';
-import { Connection } from './connection';
-import { MessageMetadata } from '../logging';
+import { SessionState } from './sessionStateMachine/common';
+import { SessionBackingOff } from './sessionStateMachine/SessionBackingOff';
+import { SessionConnected } from './sessionStateMachine/SessionConnected';
 import { SessionConnecting } from './sessionStateMachine/SessionConnecting';
 import { SessionHandshaking } from './sessionStateMachine/SessionHandshaking';
-import { SessionConnected } from './sessionStateMachine/SessionConnected';
+import { SessionNoConnection } from './sessionStateMachine/SessionNoConnection';
 import {
   ClientSession,
   ClientSessionStateGraph,
 } from './sessionStateMachine/transitions';
-import { SessionState } from './sessionStateMachine/common';
-import { SessionNoConnection } from './sessionStateMachine/SessionNoConnection';
-import { SessionBackingOff } from './sessionStateMachine/SessionBackingOff';
+import { Transport } from './transport';
 
 export abstract class ClientTransport<
   ConnType extends Connection,

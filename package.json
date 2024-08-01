@@ -39,6 +39,10 @@
     "./test-util": {
       "import": "./dist/util/testHelpers.js",
       "require": "./dist/util/testHelpers.cjs"
+    },
+    "./handshake": {
+      "import": "./dist/handshake/index.js",
+      "require": "./dist/handshake/index.cjs"
     }
   },
   "sideEffects": [

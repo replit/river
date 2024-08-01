@@ -1,9 +1,11 @@
+import { Static } from '@sinclair/typebox';
 import { describe, expect, test, vi } from 'vitest';
+import { waitFor } from '../../__tests__/fixtures/cleanup';
 import {
   payloadToTransportMessage,
   testingSessionOptions,
 } from '../../util/testHelpers';
-import { waitFor } from '../../__tests__/fixtures/cleanup';
+import { Connection } from '../connection';
 import {
   ControlFlags,
   ControlMessageAckSchema,
@@ -11,11 +13,10 @@ import {
   handshakeRequestMessage,
 } from '../message';
 import { ERR_CONSUMED, IdentifiedSession, SessionState } from './common';
-import { Static } from '@sinclair/typebox';
 import {
-  SessionHandshaking,
-  SessionHandshakingListeners,
-} from './SessionHandshaking';
+  SessionBackingOff,
+  SessionBackingOffListeners,
+} from './SessionBackingOff';
 import {
   SessionConnected,
   SessionConnectedListeners,
@@ -25,16 +26,15 @@ import {
   SessionConnectingListeners,
 } from './SessionConnecting';
 import {
+  SessionHandshaking,
+  SessionHandshakingListeners,
+} from './SessionHandshaking';
+import {
   SessionNoConnection,
   SessionNoConnectionListeners,
 } from './SessionNoConnection';
-import { SessionStateGraph } from './transitions';
 import { SessionWaitingForHandshake } from './SessionWaitingForHandshake';
-import { Connection } from '../connection';
-import {
-  SessionBackingOff,
-  SessionBackingOffListeners,
-} from './SessionBackingOff';
+import { SessionStateGraph } from './transitions';
 
 function persistedSessionState(session: IdentifiedSession) {
   return {

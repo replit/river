@@ -1,4 +1,6 @@
+import { SpanStatusCode } from '@opentelemetry/api';
 import { Static } from '@sinclair/typebox';
+import { Connection } from '../connection';
 import {
   ControlFlags,
   ControlMessageAckSchema,
@@ -11,8 +13,6 @@ import {
   IdentifiedSessionProps,
   SessionState,
 } from './common';
-import { Connection } from '../connection';
-import { SpanStatusCode } from '@opentelemetry/api';
 
 export interface SessionConnectedListeners {
   onConnectionErrored: (err: unknown) => void;

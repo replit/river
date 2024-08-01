@@ -1,9 +1,9 @@
 import { Static } from '@sinclair/typebox';
 import { Connection } from '../connection';
 import {
+  HandshakeErrorResponseCodes,
   OpaqueTransportMessage,
   TransportMessage,
-  HandshakeErrorResponseCodes,
 } from '../message';
 import {
   IdentifiedSessionWithGracePeriod,

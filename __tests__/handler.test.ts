@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'vitest';
+import { UNCAUGHT_ERROR_CODE } from '../router';
 import {
   asClientRpc,
   asClientStream,
@@ -6,17 +8,15 @@ import {
   isReadableDone,
   readNextResult,
 } from '../util/testHelpers';
-import { describe, expect, test } from 'vitest';
+import { Observable } from './fixtures/observable';
 import {
   DIV_BY_ZERO,
   FallibleServiceSchema,
   STREAM_ERROR,
-  TestServiceSchema,
   SubscribableServiceSchema,
+  TestServiceSchema,
   UploadableServiceSchema,
 } from './fixtures/services';
-import { UNCAUGHT_ERROR_CODE } from '../router';
-import { Observable } from './fixtures/observable';
 
 describe('server-side test', () => {
   const service = TestServiceSchema.instantiate({});

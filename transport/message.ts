@@ -1,11 +1,6 @@
-import { Type, TSchema, Static } from '@sinclair/typebox';
+import { Static, TSchema, Type } from '@sinclair/typebox';
 import { PropagationContext } from '../tracing';
 import { generateId } from './id';
-import {
-  ErrResult,
-  RequestReaderErrorSchema,
-  ResponseReaderErrorSchema,
-} from '../router';
 
 /**
  * Control flags for transport messages.
@@ -247,29 +242,6 @@ export function handshakeResponseMessage({
       type: 'HANDSHAKE_RESP',
       status,
     } satisfies Static<typeof ControlMessageHandshakeResponseSchema>,
-  };
-}
-
-export function closeStreamMessage(streamId: string): PartialTransportMessage {
-  return {
-    streamId,
-    controlFlags: ControlFlags.StreamClosedBit,
-    payload: {
-      type: 'CLOSE' as const,
-    } satisfies Static<typeof ControlMessagePayloadSchema>,
-  };
-}
-
-export function abortMessage(
-  streamId: string,
-  payload: ErrResult<
-    Static<typeof ResponseReaderErrorSchema | typeof RequestReaderErrorSchema>
-  >,
-) {
-  return {
-    streamId,
-    controlFlags: ControlFlags.StreamAbortBit,
-    payload,
   };
 }
 

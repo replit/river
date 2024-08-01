@@ -7,7 +7,6 @@ import {
   trace,
 } from '@opentelemetry/api';
 import { version as RIVER_VERSION } from '../package.json';
-import { ValidProcType } from '../router';
 import { ClientTransport, Connection } from '../transport';
 
 export interface PropagationContext {
@@ -82,7 +81,7 @@ export function createConnectionTelemetryInfo(
 
 export function createProcTelemetryInfo(
   transport: ClientTransport<Connection>,
-  kind: ValidProcType,
+  procType: string,
   serviceName: string,
   procedureName: string,
   streamId: string,
@@ -93,7 +92,7 @@ export function createProcTelemetryInfo(
     {
       attributes: {
         component: 'river',
-        'river.method.kind': kind,
+        'river.method.kind': procType,
         'river.method.service': serviceName,
         'river.method.name': procedureName,
         'river.streamId': streamId,
@@ -121,7 +120,7 @@ export function createProcTelemetryInfo(
 }
 
 export function createHandlerSpan<Fn extends (span: Span) => unknown>(
-  kind: ValidProcType,
+  procType: string,
   serviceName: string,
   procedureName: string,
   streamId: string,
@@ -137,7 +136,7 @@ export function createHandlerSpan<Fn extends (span: Span) => unknown>(
     {
       attributes: {
         component: 'river',
-        'river.method.kind': kind,
+        'river.method.kind': procType,
         'river.method.service': serviceName,
         'river.method.name': procedureName,
         'river.streamId': streamId,

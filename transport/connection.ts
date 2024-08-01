@@ -1,5 +1,5 @@
-import { TelemetryInfo } from '../tracing';
 import { MessageMetadata } from '../logging';
+import { TelemetryInfo } from '../tracing';
 import { generateId } from './id';
 
 /**

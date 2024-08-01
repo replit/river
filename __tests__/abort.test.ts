@@ -1,28 +1,26 @@
 import { Type } from '@sinclair/typebox';
+import { nanoid } from 'nanoid';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
+  ABORT_CODE,
   Err,
   Procedure,
+  ProcedureHandlerContext,
   ServiceSchema,
+  UNCAUGHT_ERROR_CODE,
   createClient,
   createServer,
 } from '../router';
-import { testMatrix } from './fixtures/matrix';
+import { createAbortStreamMessage } from '../router/messages';
+import { StreamProcedure } from '../router/server/procedure';
+import { ControlFlags, EventMap } from '../transport';
 import {
   cleanupTransports,
   createPostTestCleanups,
   waitFor,
 } from './fixtures/cleanup';
-import { EventMap } from '../transport';
-import {
-  ABORT_CODE,
-  StreamProcedure,
-  UNCAUGHT_ERROR_CODE,
-} from '../router/procedures';
-import { ControlFlags, abortMessage } from '../transport/message';
+import { testMatrix } from './fixtures/matrix';
 import { TestSetupHelpers } from './fixtures/transports';
-import { nanoid } from 'nanoid';
-import { ProcedureHandlerContext } from '../router/context';
 
 const serverId = 'SERVER';
 
@@ -401,7 +399,7 @@ describe.each(testMatrix())(
 
           clientTransport.send(
             serverId,
-            abortMessage(
+            createAbortStreamMessage(
               streamId,
               Err({
                 code: ABORT_CODE,
@@ -553,7 +551,7 @@ describe.each(testMatrix())(
 
         serverTransport.send(
           'client',
-          abortMessage(
+          createAbortStreamMessage(
             initStreamId,
             Err({
               code: ABORT_CODE,
@@ -608,7 +606,7 @@ describe.each(testMatrix())(
 
         serverTransport.send(
           'client',
-          abortMessage(
+          createAbortStreamMessage(
             initStreamId,
             Err({
               code: ABORT_CODE,
@@ -664,7 +662,7 @@ describe.each(testMatrix())(
 
         serverTransport.send(
           'client',
-          abortMessage(
+          createAbortStreamMessage(
             initStreamId,
             Err({
               code: ABORT_CODE,
@@ -721,7 +719,7 @@ describe.each(testMatrix())(
 
         serverTransport.send(
           'client',
-          abortMessage(
+          createAbortStreamMessage(
             initStreamId,
             Err({
               code: ABORT_CODE,

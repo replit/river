@@ -1,5 +1,5 @@
 import { ValueError } from '@sinclair/typebox/value';
-import { OpaqueTransportMessage } from '../transport/message';
+import { OpaqueTransportMessage } from '../transport';
 
 const LoggingLevels = {
   debug: -1,

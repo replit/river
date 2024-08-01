@@ -1,17 +1,11 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { Static } from '@sinclair/typebox';
 import http from 'node:http';
-import {
-  cleanupTransports,
-  testFinishesCleanly,
-  waitFor,
-} from './fixtures/cleanup';
-import {
-  createDummyTransportMessage,
-  createLocalWebSocketClient,
-  createWebSocketServer,
-  numberOfConnections,
-  onWsServerReady,
-} from '../util/testHelpers';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+import NodeWs from 'ws';
+import { NaiveJsonCodec } from '../codec';
+import { ProtocolError } from '../transport/events';
+import { generateId } from '../transport/id';
+import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
 import {
   ControlFlags,
@@ -19,13 +13,19 @@ import {
   OpaqueTransportMessage,
   handshakeRequestMessage,
 } from '../transport/message';
-import { NaiveJsonCodec } from '../codec';
-import { Static } from '@sinclair/typebox';
-import { WebSocketClientTransport } from '../transport/impls/ws/client';
-import { ProtocolError } from '../transport/events';
-import NodeWs from 'ws';
-import { createPostTestCleanups } from './fixtures/cleanup';
-import { generateId } from '../transport/id';
+import {
+  createDummyTransportMessage,
+  createLocalWebSocketClient,
+  createWebSocketServer,
+  numberOfConnections,
+  onWsServerReady,
+} from '../util/testHelpers';
+import {
+  cleanupTransports,
+  createPostTestCleanups,
+  testFinishesCleanly,
+  waitFor,
+} from './fixtures/cleanup';
 
 describe('should handle incompatabilities', async () => {
   let server: http.Server;

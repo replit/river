@@ -1,14 +1,12 @@
-import { Type, TSchema, Static } from '@sinclair/typebox';
+import { TSchema, Type } from '@sinclair/typebox';
+import { ServiceContext } from './context';
 import {
+  AnyProcedure,
   Branded,
+  ProcedureErrorSchemaType,
   ProcedureMap,
   Unbranded,
-  AnyProcedure,
-  PayloadType,
-  ProcedureErrorSchemaType,
-  ResponseReaderErrorSchema,
-} from './procedures';
-import { ServiceContext } from './context';
+} from './procedure';
 
 /**
  * An instantiated service, probably from a {@link ServiceSchema}.
@@ -52,70 +50,6 @@ export type InstantiatedServiceSchemaMap<T extends AnyServiceSchemaMap> = {
 };
 
 /**
- * Helper to get the type definition for a specific handler of a procedure in a service.
- * @template S - The service.
- * @template ProcName - The name of the procedure.
- */
-export type ProcHandler<
-  S extends AnyService,
-  ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName]['handler'];
-
-/**
- * Helper to get the type definition for the procedure init type of a service.
- * @template S - The service.
- * @template ProcName - The name of the procedure.
- */
-export type ProcInit<
-  S extends AnyService,
-  ProcName extends keyof S['procedures'],
-> = Static<S['procedures'][ProcName]['requestInit']>;
-
-/**
- * Helper to get the type definition for the procedure input of a service.
- * @template S - The service.
- * @template ProcName - The name of the procedure.
- */
-export type ProcInput<
-  S extends AnyService,
-  ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName] extends { requestData: PayloadType }
-  ? Static<S['procedures'][ProcName]['requestData']>
-  : never;
-
-/**
- * Helper to get the type definition for the procedure output of a service.
- * @template S - The service.
- * @template ProcName - The name of the procedure.
- */
-export type ProcOutput<
-  S extends AnyService,
-  ProcName extends keyof S['procedures'],
-> = Static<S['procedures'][ProcName]['responseData']>;
-
-/**
- * Helper to get the type definition for the procedure errors of a service.
- * @template S - The service.
- * @template ProcName - The name of the procedure.
- */
-export type ProcErrors<
-  S extends AnyService,
-  ProcName extends keyof S['procedures'],
-> =
-  | Static<S['procedures'][ProcName]['responseError']>
-  | Static<typeof ResponseReaderErrorSchema>;
-
-/**
- * Helper to get the type of procedure in a service.
- * @template S - The service.
- * @template ProcName - The name of the procedure.
- */
-export type ProcType<
-  S extends AnyService,
-  ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName]['type'];
-
-/**
  * A list of procedures where every procedure is "branded", as-in the procedure
  * was created via the {@link Procedure} constructors.
  */
@@ -133,9 +67,9 @@ export interface ServiceConfiguration<State extends object> {
 
 // TODO remove once clients migrate to v2
 export interface SerializedProcedureSchemaProtocolv1 {
-  init?: PayloadType;
-  input: PayloadType;
-  output: PayloadType;
+  init?: TSchema;
+  input: TSchema;
+  output: TSchema;
   errors?: ProcedureErrorSchemaType;
   type: 'rpc' | 'subscription' | 'upload' | 'stream';
 }
@@ -180,9 +114,9 @@ export function serializeSchemaV1Compat(
 }
 
 export interface SerializedProcedureSchema {
-  init: PayloadType;
-  input?: PayloadType;
-  output: PayloadType;
+  init: TSchema;
+  input?: TSchema;
+  output: TSchema;
   errors?: ProcedureErrorSchemaType;
   type: 'rpc' | 'subscription' | 'upload' | 'stream';
 }

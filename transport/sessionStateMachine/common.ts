@@ -1,5 +1,8 @@
+import { Value } from '@sinclair/typebox/value';
+import { Codec } from '../../codec';
 import { Logger, MessageMetadata } from '../../logging';
 import { TelemetryInfo } from '../../tracing';
+import { generateId } from '../id';
 import {
   OpaqueTransportMessage,
   OpaqueTransportMessageSchema,
@@ -7,9 +10,6 @@ import {
   TransportClientId,
   TransportMessage,
 } from '../message';
-import { Value } from '@sinclair/typebox/value';
-import { Codec } from '../../codec';
-import { generateId } from '../id';
 
 export const enum SessionState {
   NoConnection = 'NoConnection',

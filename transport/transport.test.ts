@@ -1,34 +1,34 @@
-import { describe, test, expect, vi, assert, beforeEach } from 'vitest';
-import {
-  createDummyTransportMessage,
-  payloadToTransportMessage,
-  waitForMessage,
-  getTransportConnections,
-  closeAllConnections,
-  numberOfConnections,
-  testingClientSessionOptions,
-} from '../util/testHelpers';
-import { EventMap, ProtocolError } from '../transport/events';
+import { Type } from '@sinclair/typebox';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   advanceFakeTimersByConnectionBackoff,
   advanceFakeTimersByDisconnectGrace,
   advanceFakeTimersByHeartbeat,
   advanceFakeTimersBySessionGrace,
   cleanupTransports,
+  createPostTestCleanups,
   testFinishesCleanly,
   waitFor,
 } from '../__tests__/fixtures/cleanup';
 import { testMatrix } from '../__tests__/fixtures/matrix';
-import { PartialTransportMessage } from './message';
-import { Type } from '@sinclair/typebox';
 import { TestSetupHelpers } from '../__tests__/fixtures/transports';
-import { createPostTestCleanups } from '../__tests__/fixtures/cleanup';
-import { SessionState } from './sessionStateMachine';
+import { ParsedMetadata } from '../handshake';
+import { EventMap, ProtocolError } from '../transport/events';
+import {
+  closeAllConnections,
+  createDummyTransportMessage,
+  getTransportConnections,
+  numberOfConnections,
+  payloadToTransportMessage,
+  testingClientSessionOptions,
+  waitForMessage,
+} from '../util/testHelpers';
+import { PartialTransportMessage } from './message';
 import {
   ProvidedClientTransportOptions,
   ProvidedTransportOptions,
 } from './options';
-import { ParsedMetadata } from '../router';
+import { SessionState } from './sessionStateMachine';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',

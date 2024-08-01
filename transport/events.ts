@@ -1,8 +1,14 @@
 import { type Static } from '@sinclair/typebox';
 import { Connection } from './connection';
-import { OpaqueTransportMessage, HandshakeErrorResponseCodes } from './message';
+import { HandshakeErrorResponseCodes, OpaqueTransportMessage } from './message';
 import { Session, SessionState } from './sessionStateMachine';
-import { TransportStatus } from './transport';
+
+/**
+ * Represents the possible states of a transport.
+ * @property {'open'} open - The transport is open and operational (note that this doesn't mean it is actively connected)
+ * @property {'closed'} closed - The transport is permanently closed and cannot be reopened.
+ */
+export type TransportStatus = 'open' | 'closed';
 
 export const ProtocolError = {
   RetriesExceeded: 'conn_retry_exceeded',
