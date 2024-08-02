@@ -33,7 +33,7 @@ import {
   ParsedMetadata,
 } from './context';
 import { Logger, MessageMetadata } from '../logging/log';
-import { Value } from '@sinclair/typebox/value';
+import { Value, ValueError } from '@sinclair/typebox/value';
 import { Err, Result, Ok, ErrResultSchema, ErrResult } from './result';
 import { EventMap } from '../transport/events';
 import { coerceErrorString } from '../util/stringify';
@@ -272,7 +272,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       if (msg.from !== from) {
-        this.log?.error('Got stream message from unexpected client', {
+        this.log?.error('got stream message from unexpected client', {
           ...loggingMetadata,
           clientId: this.transport.clientId,
           transportMessage: msg,
@@ -282,14 +282,17 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         return;
       }
 
-      if (isStreamAbortBackwardsCompat(msg.controlFlags, protocolVersion)) {
+      if (
+        Value.Check(ControlMessagePayloadSchema, msg.payload) &&
+        isStreamAbortBackwardsCompat(msg.controlFlags, protocolVersion)
+      ) {
         let abortResult: Static<typeof InputErrResultSchema>;
         if (Value.Check(InputErrResultSchema, msg.payload)) {
           abortResult = msg.payload;
         } else {
           abortResult = Err({
             code: ABORT_CODE,
-            message: 'Stream aborted, client sent invalid payload',
+            message: 'stream aborted, client sent invalid payload',
           });
           this.log?.warn('Got stream abort without a valid protocol error', {
             ...loggingMetadata,
@@ -332,43 +335,62 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         return;
       }
 
+      // normal request data for upload or stream
       if (
         'requestData' in procedure &&
         Value.Check(procedure.requestData, msg.payload)
       ) {
         reqReadable._pushValue(Ok(msg.payload));
-      } else if (!Value.Check(ControlMessagePayloadSchema, msg.payload)) {
-        const validationErrors = [
-          ...Value.Errors(ControlMessagePayloadSchema, msg.payload),
-        ];
-        let errMessage = 'Expected control payload for procedure with no input';
-        if ('requestData' in procedure) {
-          errMessage =
-            'Expected either control or input payload, validation failed for both';
-          validationErrors.push(
-            ...Value.Errors(procedure.responseData, msg.payload),
-          );
+
+        if (isStreamCloseBackwardsCompat(msg.controlFlags, protocolVersion)) {
+          // It's atypical for any of our post-v1 clients to send a close with a
+          // request payload, but it's technically legal, so we'll handle it.
+          closeReadable();
         }
 
-        this.log?.warn(errMessage, {
-          ...loggingMetadata,
-          clientId: this.transport.clientId,
-          transportMessage: msg,
-          validationErrors,
-          tags: ['invalid-request'],
-        });
-
-        onServerAbort(
-          Err({
-            code: INVALID_REQUEST_CODE,
-            message: errMessage,
-          }),
-        );
+        return;
       }
 
-      if (isStreamCloseBackwardsCompat(msg.controlFlags, protocolVersion)) {
+      if (
+        Value.Check(ControlMessagePayloadSchema, msg.payload) &&
+        isStreamCloseBackwardsCompat(msg.controlFlags, protocolVersion)
+      ) {
+        // Clients typically send this shape of close for stream and upload
+        // after they're done.
         closeReadable();
+
+        return;
       }
+
+      // We couldn't make sense of the message, it's probably a bad request
+      let validationErrors: Array<ValueError>;
+      let errMessage: string;
+      if ('requestData' in procedure) {
+        errMessage = 'epected requestData or control payload';
+        validationErrors = [
+          ...Value.Errors(procedure.responseData, msg.payload),
+        ];
+      } else {
+        validationErrors = [
+          ...Value.Errors(ControlMessagePayloadSchema, msg.payload),
+        ];
+        errMessage = 'expected control payload';
+      }
+
+      this.log?.warn(errMessage, {
+        ...loggingMetadata,
+        clientId: this.transport.clientId,
+        transportMessage: msg,
+        validationErrors,
+        tags: ['invalid-request'],
+      });
+
+      onServerAbort(
+        Err({
+          code: INVALID_REQUEST_CODE,
+          message: errMessage,
+        }),
+      );
     };
     this.transport.addEventListener('message', onMessage);
 
@@ -476,7 +498,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     } else if (procedure.type === 'rpc' || procedure.type === 'subscription') {
       // Though things can work just fine if they eventually follow up with a stream
       // control message with a close bit set, it's an unusual client implementation!
-      this.log?.warn(`${procedure.type} sent an init without a stream close`, {
+      this.log?.warn('sent an init without a stream close', {
         ...loggingMetadata,
         clientId: this.transport.clientId,
       });
