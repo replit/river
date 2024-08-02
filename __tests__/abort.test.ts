@@ -24,8 +24,6 @@ import { TestSetupHelpers } from './fixtures/transports';
 import { nanoid } from 'nanoid';
 import { ProcedureHandlerContext } from '../router/context';
 
-const serverId = 'SERVER';
-
 describe.each(testMatrix())(
   'client initiated abort ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
@@ -370,10 +368,10 @@ describe.each(testMatrix())(
             await cleanupTransports([clientTransport, serverTransport]);
           });
 
-          clientTransport.connect(serverId);
+          clientTransport.connect(serverTransport.clientId);
 
           const streamId = nanoid();
-          clientTransport.send(serverId, {
+          clientTransport.send(serverTransport.clientId, {
             streamId,
             serviceName,
             procedureName,
@@ -400,7 +398,7 @@ describe.each(testMatrix())(
           ctx.clientAbortSignal.onabort = onClientAbort;
 
           clientTransport.send(
-            serverId,
+            serverTransport.clientId,
             abortMessage(
               streamId,
               Err({
@@ -779,14 +777,14 @@ describe.each(testMatrix())(
         };
 
         const server = createServer(serverTransport, services);
-        clientTransport.connect(serverId);
+        clientTransport.connect(serverTransport.clientId);
 
         addPostTestCleanup(async () => {
           await cleanupTransports([clientTransport, serverTransport]);
         });
 
         const streamId = nanoid();
-        clientTransport.send(serverId, {
+        clientTransport.send(serverTransport.clientId, {
           streamId,
           serviceName,
           procedureName,
@@ -861,7 +859,7 @@ describe.each(testMatrix())(
         };
 
         createServer(serverTransport, services);
-        clientTransport.connect(serverId);
+        clientTransport.connect(serverTransport.clientId);
 
         const serverSendSpy = vi.spyOn(serverTransport, 'send');
 
@@ -872,7 +870,7 @@ describe.each(testMatrix())(
         clientTransport.addEventListener('message', clientOnMessage);
 
         const streamId = nanoid();
-        clientTransport.send(serverId, {
+        clientTransport.send(serverTransport.clientId, {
           streamId,
           serviceName: 'service',
           procedureName: 'stream',
@@ -888,7 +886,7 @@ describe.each(testMatrix())(
         ctx.abortController.abort();
         // input for the stream should be ignored
         // instead of leading to an error response
-        clientTransport.send(serverId, {
+        clientTransport.send(serverTransport.clientId, {
           streamId,
           payload: {},
           controlFlags: 0,
@@ -1063,14 +1061,14 @@ describe.each(testMatrix())(
         };
 
         const server = createServer(serverTransport, services);
-        clientTransport.connect(serverId);
+        clientTransport.connect(serverTransport.clientId);
 
         addPostTestCleanup(async () => {
           await cleanupTransports([clientTransport, serverTransport]);
         });
 
         const streamId = nanoid();
-        clientTransport.send(serverId, {
+        clientTransport.send(serverTransport.clientId, {
           streamId,
           serviceName,
           procedureName,

@@ -172,7 +172,7 @@ describe('Readable unit', () => {
     expect(() => readable._pushValue(Ok(1))).toThrowError(Error);
   });
 
-  it('shouild throw when closing multiple times', async () => {
+  it('should throw when closing multiple times', async () => {
     const readable = new ReadableImpl<number, SomeError>();
     readable._triggerClose();
     expect(() => readable._triggerClose()).toThrowError(Error);

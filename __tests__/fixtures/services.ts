@@ -1,6 +1,6 @@
 import { Type } from '@sinclair/typebox';
 import { ServiceSchema } from '../../router/services';
-import { Err, Ok, unwrap } from '../../router/result';
+import { Err, Ok, unwrapOrThrow } from '../../router/result';
 import { Observable } from './observable';
 import { Procedure } from '../../router';
 
@@ -39,7 +39,7 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     responseData: Type.Array(Type.Number()),
     async handler({ reqReadable, resWritable }) {
       for await (const msg of reqReadable) {
-        resWritable.write(Ok([unwrap(msg).n]));
+        resWritable.write(Ok([unwrapOrThrow(msg).n]));
       }
     },
   }),
@@ -50,7 +50,7 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     responseData: EchoResponse,
     async handler({ reqReadable, resWritable }) {
       for await (const input of reqReadable) {
-        const { ignore, msg } = unwrap(input);
+        const { ignore, msg } = unwrapOrThrow(input);
         if (!ignore) {
           resWritable.write(Ok({ response: msg }));
         }
@@ -66,7 +66,7 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     responseData: EchoResponse,
     async handler({ reqInit, reqReadable, resWritable }) {
       for await (const input of reqReadable) {
-        const { ignore, msg } = unwrap(input);
+        const { ignore, msg } = unwrapOrThrow(input);
         if (!ignore) {
           resWritable.write(Ok({ response: `${reqInit.prefix} ${msg}` }));
         }
@@ -199,7 +199,7 @@ export const FallibleServiceSchema = ServiceSchema.define({
     }),
     async handler({ reqReadable, resWritable }) {
       for await (const input of reqReadable) {
-        const { msg, throwError, throwResult } = unwrap(input);
+        const { msg, throwError, throwResult } = unwrapOrThrow(input);
         if (throwError) {
           throw new Error('some message');
         } else if (throwResult) {
@@ -251,7 +251,7 @@ export const UploadableServiceSchema = ServiceSchema.define({
     async handler({ reqReadable }) {
       let result = 0;
       for await (const input of reqReadable) {
-        result += unwrap(input).n;
+        result += unwrapOrThrow(input).n;
       }
 
       return Ok({ result: result });
@@ -265,7 +265,7 @@ export const UploadableServiceSchema = ServiceSchema.define({
     async handler({ reqInit, reqReadable }) {
       let result = 0;
       for await (const input of reqReadable) {
-        result += unwrap(input).n;
+        result += unwrapOrThrow(input).n;
       }
       return Ok({ result: `${reqInit.prefix} ${result}` });
     },

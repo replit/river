@@ -11,7 +11,7 @@ import {
   Output,
   ResultUnwrapErr,
   ResultUnwrapOk,
-  unwrap,
+  unwrapOrThrow,
 } from '../router/result';
 import { TestServiceSchema } from './fixtures/services';
 import { readNextResult } from '../util/testHelpers';
@@ -272,7 +272,7 @@ describe('Output<> type', () => {
 
     // Then
     const { resReadable } = client.test.stream.stream({});
-    void readNextResult(resReadable).then(unwrap).then(acceptOutput);
+    void readNextResult(resReadable).then(unwrapOrThrow).then(acceptOutput);
     expect(client).toBeTruthy();
   });
 
@@ -286,7 +286,7 @@ describe('Output<> type', () => {
 
     // Then
     const { resReadable } = client.test.subscription.subscribe({ n: 1 });
-    void readNextResult(resReadable).then(unwrap).then(acceptOutput);
+    void readNextResult(resReadable).then(unwrapOrThrow).then(acceptOutput);
 
     expect(client).toBeTruthy();
   });
@@ -364,27 +364,6 @@ describe('Handshake', () => {
 });
 
 describe('Procedure error schema', () => {
-  // // Allow specific levels of nesting, otherwise typescript shits itself due to recursion
-  // type ProcedureErrorUnionSchema0 = TUnion<Array<BaseErrorSchemaType>>;
-  // type ProcedureErrorUnionSchema1 = TUnion<
-  //   Array<ProcedureErrorUnionSchema0 | BaseErrorSchemaType>
-  // >;
-  // type ProcedureErrorUnionSchema2 = TUnion<
-  //   Array<
-  //     | ProcedureErrorUnionSchema1
-  //     | ProcedureErrorUnionSchema0
-  //     | BaseErrorSchemaType
-  //   >
-  // >;
-
-  // /**
-  //  * Represents an acceptable schema to pass to a procedure.
-  //  * Just a type of a schema, not an actual schema.
-  //  */
-  // export type ProcedureErrorSchemaType =
-  //   | ProcedureErrorUnionSchema2
-  //   | BaseErrorSchemaType
-  //   | TNever;
   function acceptErrorSchema(errorSchema: ProcedureErrorSchemaType) {
     return errorSchema;
   }

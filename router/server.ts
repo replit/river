@@ -25,6 +25,7 @@ import {
   isStreamAbort,
   closeStreamMessage,
   abortMessage,
+  TransportClientId,
 } from '../transport/message';
 import {
   ServiceContext,
@@ -74,13 +75,14 @@ interface NewProcStreamInput {
   serviceName: string;
   sessionMetadata: ParsedMetadata;
   loggingMetadata: MessageMetadata;
-  streamId: string;
+  streamId: StreamId;
   controlFlags: number;
   tracingCtx?: PropagationContext;
   initPayload: Static<PayloadType>;
   from: string;
   sessionId: string;
   protocolVersion: string;
+  // TODO remove once clients migrate to v2
   passInitAsDataForBackwardsCompat: boolean;
 }
 
@@ -97,10 +99,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
    * We track aborted streams for every session separately, so
    * that bad clients don't affect good clients.
    */
-  private serverAbortedStreams: Map<string, LRUSet>;
+  private serverAbortedStreams: Map<TransportClientId, LRUSet>;
   private maxAbortedStreamTombstonesPerSession: number;
 
-  public openStreams: Set<string>;
+  public openStreams: Set<StreamId>;
   public services: InstantiatedServiceSchemaMap<Services>;
 
   constructor(

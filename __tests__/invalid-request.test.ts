@@ -618,7 +618,7 @@ describe('aborts invalid request', () => {
       createServer(serverTransport, services);
       clientTransport.connect(serverId);
 
-      const sendSpy = vi.spyOn(serverTransport, 'send');
+      const serverSendSpy = vi.spyOn(serverTransport, 'send');
 
       const streamId = nanoid();
       clientTransport.send(serverId, {
@@ -641,7 +641,7 @@ describe('aborts invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(sendSpy).toHaveBeenCalledWith('client', {
+        expect(serverSendSpy).toHaveBeenCalledWith('client', {
           streamId,
           controlFlags: ControlFlags.StreamAbortBit,
           payload: {
@@ -664,7 +664,7 @@ describe('aborts invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(sendSpy).toHaveBeenCalledWith('client', {
+        expect(serverSendSpy).toHaveBeenCalledWith('client', {
           streamId: anotherStreamId,
           controlFlags: ControlFlags.StreamAbortBit,
           payload: {
@@ -678,7 +678,7 @@ describe('aborts invalid request', () => {
         });
       });
 
-      expect(sendSpy).toHaveBeenCalledTimes(2);
+      expect(serverSendSpy).toHaveBeenCalledTimes(2);
     });
 
     test('starts responding to same stream after tombstones are evicted', async () => {
@@ -706,7 +706,7 @@ describe('aborts invalid request', () => {
       });
       clientTransport.connect(serverId);
 
-      const sendSpy = vi.spyOn(serverTransport, 'send');
+      const serverSendSpy = vi.spyOn(serverTransport, 'send');
 
       const firstStreamId = nanoid();
       clientTransport.send(serverId, {
@@ -717,7 +717,7 @@ describe('aborts invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(sendSpy).toHaveBeenNthCalledWith(1, 'client', {
+        expect(serverSendSpy).toHaveBeenNthCalledWith(1, 'client', {
           streamId: firstStreamId,
           controlFlags: ControlFlags.StreamAbortBit,
           payload: {
@@ -741,7 +741,7 @@ describe('aborts invalid request', () => {
       }
 
       await waitFor(() => {
-        expect(sendSpy).toHaveBeenCalledTimes(
+        expect(serverSendSpy).toHaveBeenCalledTimes(
           maxAbortedStreamTombstonesPerSession + 1,
         );
       });
@@ -754,12 +754,12 @@ describe('aborts invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(sendSpy).toHaveBeenCalledTimes(
+        expect(serverSendSpy).toHaveBeenCalledTimes(
           maxAbortedStreamTombstonesPerSession + 2,
         );
       });
 
-      expect(sendSpy).toHaveBeenNthCalledWith(
+      expect(serverSendSpy).toHaveBeenNthCalledWith(
         maxAbortedStreamTombstonesPerSession + 2,
         'client',
         {
@@ -808,7 +808,7 @@ describe('aborts invalid request', () => {
       client1Transport.connect(serverId);
       client2Transport.connect(serverId);
 
-      const sendSpy = vi.spyOn(serverTransport, 'send');
+      const serverSendSpy = vi.spyOn(serverTransport, 'send');
 
       const client1FirstStreamId = nanoid();
       client1Transport.send(serverId, {
@@ -828,7 +828,7 @@ describe('aborts invalid request', () => {
       }
 
       await waitFor(() => {
-        expect(sendSpy).toHaveBeenCalledTimes(
+        expect(serverSendSpy).toHaveBeenCalledTimes(
           maxAbortedStreamTombstonesPerSession + 1,
         );
       });
@@ -850,12 +850,12 @@ describe('aborts invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(sendSpy).toHaveBeenCalledTimes(
+        expect(serverSendSpy).toHaveBeenCalledTimes(
           maxAbortedStreamTombstonesPerSession + 2,
         );
       });
 
-      expect(sendSpy).toHaveBeenNthCalledWith(
+      expect(serverSendSpy).toHaveBeenNthCalledWith(
         maxAbortedStreamTombstonesPerSession + 2,
         'client1',
         {

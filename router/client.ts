@@ -50,63 +50,63 @@ interface CallOptions {
 }
 
 type RpcFn<
-  Router extends AnyService,
-  ProcName extends keyof Router['procedures'],
+  Service extends AnyService,
+  ProcName extends keyof Service['procedures'],
 > = (
-  reqInit: ProcInit<Router, ProcName>,
+  reqInit: ProcInit<Service, ProcName>,
   options?: CallOptions,
 ) => Promise<
-  Result<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>
+  Result<ProcOutput<Service, ProcName>, ProcErrors<Service, ProcName>>
 >;
 
 type UploadFn<
-  Router extends AnyService,
-  ProcName extends keyof Router['procedures'],
+  Service extends AnyService,
+  ProcName extends keyof Service['procedures'],
 > = (
-  reqInit: ProcInit<Router, ProcName>,
+  reqInit: ProcInit<Service, ProcName>,
   options?: CallOptions,
 ) => {
-  reqWritable: Writable<ProcInput<Router, ProcName>>;
+  reqWritable: Writable<ProcInput<Service, ProcName>>;
   finalize: () => Promise<
-    Result<ProcOutput<Router, ProcName>, ProcErrors<Router, ProcName>>
+    Result<ProcOutput<Service, ProcName>, ProcErrors<Service, ProcName>>
   >;
 };
 
 type StreamFn<
-  Router extends AnyService,
-  ProcName extends keyof Router['procedures'],
+  Service extends AnyService,
+  ProcName extends keyof Service['procedures'],
 > = (
-  reqInit: ProcInit<Router, ProcName>,
+  reqInit: ProcInit<Service, ProcName>,
   options?: CallOptions,
 ) => {
-  reqWritable: Writable<ProcInput<Router, ProcName>>;
+  reqWritable: Writable<ProcInput<Service, ProcName>>;
   resReadable: Readable<
-    ProcOutput<Router, ProcName>,
-    ProcErrors<Router, ProcName>
+    ProcOutput<Service, ProcName>,
+    ProcErrors<Service, ProcName>
   >;
 };
 
 type SubscriptionFn<
-  Router extends AnyService,
-  ProcName extends keyof Router['procedures'],
+  Service extends AnyService,
+  ProcName extends keyof Service['procedures'],
 > = (
-  reqInit: ProcInit<Router, ProcName>,
+  reqInit: ProcInit<Service, ProcName>,
   options?: CallOptions,
 ) => {
   resReadable: Readable<
-    ProcOutput<Router, ProcName>,
-    ProcErrors<Router, ProcName>
+    ProcOutput<Service, ProcName>,
+    ProcErrors<Service, ProcName>
   >;
 };
 
 /**
  * A helper type to transform an actual service type into a type
  * we can case to in the proxy.
- * @template Router - The type of the Router.
+ * @template Service - The type of the Service.
  */
-type ServiceClient<Router extends AnyService> = {
-  [ProcName in keyof Router['procedures']]: ProcType<
-    Router,
+type ServiceClient<Service extends AnyService> = {
+  [ProcName in keyof Service['procedures']]: ProcType<
+    Service,
     ProcName
   > extends 'rpc'
     ? {
@@ -114,31 +114,31 @@ type ServiceClient<Router extends AnyService> = {
         // go to the procedure name. For example:
         // riverClient.myService.someprocedure.rpc({})
         //            click here ^^^^^^^^^^^^^
-        rpc: RpcFn<Router, ProcName>;
+        rpc: RpcFn<Service, ProcName>;
       }
-    : ProcType<Router, ProcName> extends 'upload'
+    : ProcType<Service, ProcName> extends 'upload'
     ? {
         // If your go-to-definition ended up here, you probably meant to
         // go to the procedure name. For example:
         // riverClient.myService.someprocedure.upload({})
         //            click here ^^^^^^^^^^^^^
-        upload: UploadFn<Router, ProcName>;
+        upload: UploadFn<Service, ProcName>;
       }
-    : ProcType<Router, ProcName> extends 'stream'
+    : ProcType<Service, ProcName> extends 'stream'
     ? {
         // If your go-to-definition ended up here, you probably meant to
         // go to the procedure name. For example:
         // riverClient.myService.someprocedure.stream({})
         //            click here ^^^^^^^^^^^^^
-        stream: StreamFn<Router, ProcName>;
+        stream: StreamFn<Service, ProcName>;
       }
-    : ProcType<Router, ProcName> extends 'subscription'
+    : ProcType<Service, ProcName> extends 'subscription'
     ? {
         // If your go-to-definition ended up here, you probably meant to
         // go to the procedure name. For example:
         // riverClient.myService.subscribe.stream({})
         //            click here ^^^^^^^^^^^^^
-        subscribe: SubscriptionFn<Router, ProcName>;
+        subscribe: SubscriptionFn<Service, ProcName>;
       }
     : never;
 };
@@ -299,7 +299,6 @@ function handleProc(
         streamId,
         payload: rawIn,
         controlFlags: 0,
-        tracing: getPropagationContext(ctx),
       });
     },
     // close callback
@@ -526,6 +525,11 @@ function handleProc(
   };
 }
 
+/**
+ * Waits for a message in the response AND the server to close.
+ * Logs an error if we receive  multiple messages.
+ * Used in RPC and Upload.
+ */
 async function getSingleMessage(
   resReadable: Readable<unknown, Static<BaseErrorSchemaType>>,
   log?: Logger,

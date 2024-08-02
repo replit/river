@@ -95,7 +95,7 @@ export type ResultUnwrapOk<R> = R extends Result<infer T, infer __E>
  * @param result - The result to unwrap.
  * @throws Will throw an error if the result is not ok.
  */
-export function unwrap<T, Err extends Static<BaseErrorSchemaType>>(
+export function unwrapOrThrow<T, Err extends Static<BaseErrorSchemaType>>(
   result: Result<T, Err>,
 ): T {
   if (result.ok) {
