@@ -66,17 +66,17 @@ describe('Basic tracing tests', () => {
     const propagationContext = getPropagationContext(ctx);
     expect(propagationContext?.traceparent).toBeTruthy();
 
-    const spanMock = vi.fn<[Span]>();
-    void createHandlerSpan(
+    const handlerMock = vi.fn<(span: Span) => void>();
+    createHandlerSpan(
       'rpc',
       'myservice',
       'myprocedure',
       'mystream',
       propagationContext,
-      spanMock,
+      handlerMock,
     );
-    expect(spanMock).toHaveBeenCalledTimes(1);
-    const createdSpan = spanMock.mock.calls[0][0];
+    expect(handlerMock).toHaveBeenCalledTimes(1);
+    const createdSpan = handlerMock.mock.calls[0][0];
     // @ts-expect-error: hacking to get parentSpanId
     expect(createdSpan.parentSpanId).toBe(span.spanContext().spanId);
   });

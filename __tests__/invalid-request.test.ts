@@ -41,7 +41,7 @@ describe('aborts invalid request', () => {
     addPostTestCleanup(() =>
       cleanupTransports([clientTransport, serverTransport]),
     );
-    const serverId = 'SERVER';
+    const serverId = serverTransport.clientId;
 
     const services = {
       service: ServiceSchema.define({
@@ -66,7 +66,7 @@ describe('aborts invalid request', () => {
       controlFlags: 0,
     });
 
-    const clientOnMessage = vi.fn<[EventMap['message']]>();
+    const clientOnMessage = vi.fn<(msg: EventMap['message']) => void>();
     clientTransport.addEventListener('message', clientOnMessage);
 
     await waitFor(() => {
@@ -93,7 +93,7 @@ describe('aborts invalid request', () => {
     addPostTestCleanup(() =>
       cleanupTransports([clientTransport, serverTransport]),
     );
-    const serverId = 'SERVER';
+    const serverId = serverTransport.clientId;
 
     const services = {
       service: ServiceSchema.define({
@@ -117,7 +117,7 @@ describe('aborts invalid request', () => {
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
-    const clientOnMessage = vi.fn<[EventMap['message']]>();
+    const clientOnMessage = vi.fn<(msg: EventMap['message']) => void>();
     clientTransport.addEventListener('message', clientOnMessage);
 
     await waitFor(() => {
@@ -144,7 +144,7 @@ describe('aborts invalid request', () => {
     addPostTestCleanup(() =>
       cleanupTransports([clientTransport, serverTransport]),
     );
-    const serverId = 'SERVER';
+    const serverId = serverTransport.clientId;
 
     const services = {
       service: ServiceSchema.define({
@@ -168,7 +168,7 @@ describe('aborts invalid request', () => {
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
-    const clientOnMessage = vi.fn<[EventMap['message']]>();
+    const clientOnMessage = vi.fn<(msg: EventMap['message']) => void>();
     clientTransport.addEventListener('message', clientOnMessage);
 
     await waitFor(() => {
@@ -195,7 +195,7 @@ describe('aborts invalid request', () => {
     addPostTestCleanup(() =>
       cleanupTransports([clientTransport, serverTransport]),
     );
-    const serverId = 'SERVER';
+    const serverId = serverTransport.clientId;
 
     const services = {
       service: ServiceSchema.define({
@@ -220,7 +220,7 @@ describe('aborts invalid request', () => {
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
-    const clientOnMessage = vi.fn<[EventMap['message']]>();
+    const clientOnMessage = vi.fn<(msg: EventMap['message']) => void>();
     clientTransport.addEventListener('message', clientOnMessage);
 
     await waitFor(() => {
@@ -247,7 +247,7 @@ describe('aborts invalid request', () => {
     addPostTestCleanup(() =>
       cleanupTransports([clientTransport, serverTransport]),
     );
-    const serverId = 'SERVER';
+    const serverId = serverTransport.clientId;
 
     const services = {
       service: ServiceSchema.define({
@@ -272,7 +272,7 @@ describe('aborts invalid request', () => {
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
-    const clientOnMessage = vi.fn<[EventMap['message']]>();
+    const clientOnMessage = vi.fn<(msg: EventMap['message']) => void>();
     clientTransport.addEventListener('message', clientOnMessage);
 
     await waitFor(() => {
@@ -301,7 +301,7 @@ describe('aborts invalid request', () => {
     addPostTestCleanup(() =>
       cleanupTransports([clientTransport, serverTransport]),
     );
-    const serverId = 'SERVER';
+    const serverId = serverTransport.clientId;
 
     const services = {
       service: ServiceSchema.define({
@@ -326,7 +326,7 @@ describe('aborts invalid request', () => {
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
-    const clientOnMessage = vi.fn<[EventMap['message']]>();
+    const clientOnMessage = vi.fn<(msg: EventMap['message']) => void>();
     clientTransport.addEventListener('message', clientOnMessage);
 
     await waitFor(() => {
@@ -353,7 +353,7 @@ describe('aborts invalid request', () => {
     addPostTestCleanup(() =>
       cleanupTransports([clientTransport, serverTransport]),
     );
-    const serverId = 'SERVER';
+    const serverId = serverTransport.clientId;
 
     const services = {
       service: ServiceSchema.define({
@@ -384,7 +384,7 @@ describe('aborts invalid request', () => {
       controlFlags: 0,
     });
 
-    const clientOnMessage = vi.fn<[EventMap['message']]>();
+    const clientOnMessage = vi.fn<(msg: EventMap['message']) => void>();
     clientTransport.addEventListener('message', clientOnMessage);
 
     await waitFor(() => {
@@ -415,7 +415,7 @@ describe('aborts invalid request', () => {
     addPostTestCleanup(() =>
       cleanupTransports([clientTransport, serverTransport]),
     );
-    const serverId = 'SERVER';
+    const serverId = serverTransport.clientId;
 
     const services = {
       service: ServiceSchema.define({
@@ -445,7 +445,7 @@ describe('aborts invalid request', () => {
       controlFlags: 0,
     });
 
-    const clientOnMessage = vi.fn<[EventMap['message']]>();
+    const clientOnMessage = vi.fn<(msg: EventMap['message']) => void>();
     clientTransport.addEventListener('message', clientOnMessage);
 
     await waitFor(() => {
@@ -474,7 +474,7 @@ describe('aborts invalid request', () => {
     addPostTestCleanup(() =>
       cleanupTransports([clientTransport, serverTransport]),
     );
-    const serverId = 'SERVER';
+    const serverId = serverTransport.clientId;
 
     const services = {
       service: ServiceSchema.define({
@@ -511,7 +511,7 @@ describe('aborts invalid request', () => {
       controlFlags: 0,
     });
 
-    const clientOnMessage = vi.fn<[EventMap['message']]>();
+    const clientOnMessage = vi.fn<(msg: EventMap['message']) => void>();
     clientTransport.addEventListener('message', clientOnMessage);
 
     await waitFor(() => {
@@ -540,7 +540,7 @@ describe('aborts invalid request', () => {
     addPostTestCleanup(() =>
       cleanupTransports([clientTransport, serverTransport]),
     );
-    const serverId = 'SERVER';
+    const serverId = serverTransport.clientId;
 
     const services = {
       service: ServiceSchema.define({
@@ -604,7 +604,7 @@ describe('aborts invalid request', () => {
       addPostTestCleanup(() =>
         cleanupTransports([clientTransport, serverTransport]),
       );
-      const serverId = 'SERVER';
+      const serverId = serverTransport.clientId;
 
       const services = {
         service: ServiceSchema.define({
@@ -689,7 +689,7 @@ describe('aborts invalid request', () => {
       addPostTestCleanup(() =>
         cleanupTransports([clientTransport, serverTransport]),
       );
-      const serverId = 'SERVER';
+      const serverId = serverTransport.clientId;
 
       const services = {
         service: ServiceSchema.define({
@@ -790,7 +790,7 @@ describe('aborts invalid request', () => {
           serverTransport,
         ]),
       );
-      const serverId = 'SERVER';
+      const serverId = serverTransport.clientId;
 
       const services = {
         service: ServiceSchema.define({

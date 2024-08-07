@@ -63,38 +63,30 @@ export type ProcedureHandlerContext<State> = ServiceContext & {
    */
   from: TransportClientId;
   /**
-   * An AbortController for this stream. This is used to abort the stream from the
-   * handler and notify the client that the stream was aborted.
-   *
-   * Important to note that this controller is owned by the handler, if you
-   * want to listen to aborts coming from the client, you should use the
-   * {@link clientAbortSignal}.
+   * This is used to abort the stream from the handler and notify the client that the
+   * stream was aborted.
    *
    * Aborts are not the same as closing streams gracefully, please refer to
    * the river documentation to understand the difference between the two concepts.
    */
-  abortController: AbortController;
+  abort: () => void;
   /**
-   * You can listen to clientAbortSignal this to check if the client aborted the request,
-   * or if the request was aborted due to an unexpected disconnect from the calling
-   * session.
+   * This signal is a standard [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal)
+   * triggered when the procedure invocation is done.
    *
-   * If the procedure has a read stream (e.g. upload or stream), the procedure will
-   * notified of aborts as part of the stream, but you may still want to use
-   * this signal as it is triggered immediately after an abort comes in,
-   * in readStreams some data may be buffered before the abort result shows up.
+   * You can use this to pass it on to asynchronous operations (such as fetch).
    *
-   * Important to note that this signal is owned by the client, you have a separate
-   * signal inside {@link abortController} for aborts triggered within the handler.
+   * You may also want to explicitly register callbacks on the
+   * ['abort' event](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/abort_event)
+   * as a way to cleanup after the request is finished.
    *
-   * Aborts are not the same as closing streams gracefully, please refer to
-   * the river documentation to understand the difference between the two concepts.
+   * Note that (per standard AbortSignals) callbacks registered _after_ the procedure invocation
+   * is done are not triggered. In such cases, you can check the "aborted" property and cleanup
+   * immediately if needed.
+   *
+   * One source of confusion might be that this is an "Abort"Signal, it's worth emphasizing that
+   * it's not exclusively for river "aborts". This signal tracks the invocation/request finishing
+   * for any reason including the procedure invocation coming to a clean close.
    */
-  clientAbortSignal: AbortSignal;
-  /**
-   * Lets you add a function that will run when the request is done, this can be
-   * due to an abort (from either side), error, or success. If the callback is
-   * added after the stream ended, it will run immediately.
-   */
-  onRequestFinished: (callback: () => void) => void;
+  signal: AbortSignal;
 };

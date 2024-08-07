@@ -418,13 +418,14 @@ describe.each(testMatrix())(
   },
 );
 
-describe('handler registered cleanups', async () => {
+describe('request finishing triggers signal abort event listeners', async () => {
   const { transport, codec } = testMatrix()[0];
   const opts = { codec: codec.codec };
 
   const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
   let getClientTransport: TestSetupHelpers['getClientTransport'];
   let getServerTransport: TestSetupHelpers['getServerTransport'];
+
   beforeEach(async () => {
     const setup = await transport.setup({ client: opts, server: opts });
     getClientTransport = setup.getClientTransport;
@@ -440,11 +441,11 @@ describe('handler registered cleanups', async () => {
     { procedureType: 'subscription' },
     { procedureType: 'stream' },
     { procedureType: 'upload' },
-  ] as const)('$procedureType', async ({ procedureType }) => {
+  ] as const)('handler aborts $procedureType', async ({ procedureType }) => {
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
-    const handler = vi.fn<[ProcedureHandlerContext<object>]>();
-    const serverId = 'SERVER';
+    const handler = vi.fn<(ctx: ProcedureHandlerContext<object>) => void>();
+    const serverId = serverTransport.clientId;
     const serviceName = 'service';
     const procedureName = procedureType;
 
@@ -491,47 +492,15 @@ describe('handler registered cleanups', async () => {
 
     const [ctx] = handler.mock.calls[0];
 
-    const callOrder: Array<string> = [];
-    const neverResolvesCleanup = vi.fn().mockImplementation(() => {
-      callOrder.push('neverResolvesCleanup');
-      return new Promise(() => {
-        //
-      });
-    });
-    ctx.onRequestFinished(neverResolvesCleanup);
-    expect(neverResolvesCleanup).not.toHaveBeenCalled();
+    const fn1 = vi.fn();
+    ctx.signal.addEventListener('abort', fn1);
 
-    const throwsErrorCleanup = vi.fn().mockImplementation(() => {
-      callOrder.push('throwsErrorCleanup');
-      throw new Error('wat');
-    });
-    ctx.onRequestFinished(throwsErrorCleanup);
-    expect(throwsErrorCleanup).not.toHaveBeenCalled();
+    const fn2 = vi.fn();
+    ctx.signal.addEventListener('abort', fn2);
 
-    const normalCleanup = vi.fn().mockImplementation(() => {
-      callOrder.push('normalCleanup');
-    });
-    ctx.onRequestFinished(normalCleanup);
-    expect(normalCleanup).not.toHaveBeenCalled();
+    ctx.abort();
 
-    ctx.abortController.abort();
-    expect(neverResolvesCleanup).toHaveBeenCalledOnce();
-    expect(throwsErrorCleanup).toHaveBeenCalledOnce();
-    expect(normalCleanup).toHaveBeenCalledOnce();
-    expect(callOrder).toStrictEqual([
-      'neverResolvesCleanup',
-      'throwsErrorCleanup',
-      'normalCleanup',
-    ]);
-
-    const registeredAfterClose = vi.fn();
-    ctx.onRequestFinished(registeredAfterClose);
-    expect(registeredAfterClose).toHaveBeenCalledOnce();
-
-    const registeredAfterCloseThrows = vi.fn().mockImplementation(() => {
-      throw new Error('wat');
-    });
-    ctx.onRequestFinished(registeredAfterCloseThrows);
-    expect(registeredAfterCloseThrows).toHaveBeenCalledOnce();
+    expect(fn1).toHaveBeenCalled();
+    expect(fn2).toHaveBeenCalled();
   });
 });

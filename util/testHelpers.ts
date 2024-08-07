@@ -218,9 +218,9 @@ function dummyCtx<State>(
     sessionId: session.id,
     from: session.from,
     metadata: {},
-    abortController: new AbortController(),
-    clientAbortSignal: new AbortController().signal,
-    onRequestFinished: () => undefined,
+    // TODO might wanna hook these up!
+    abort: () => undefined,
+    signal: new AbortController().signal,
   };
 }
 

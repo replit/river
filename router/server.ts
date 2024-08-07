@@ -76,7 +76,7 @@ export interface Server<Services extends AnyServiceSchemaMap> {
   openStreams: Set<StreamId>;
 }
 
-type InputHandlerReturn = Promise<(() => void) | void>;
+type ProcHandlerReturn = Promise<(() => void) | void>;
 
 interface NewProcStreamInput {
   procedure: AnyProcedure;
@@ -239,17 +239,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       this.abortStream(from, streamId, errResult);
     };
 
-    const onHandlerAbort = () => {
-      onServerAbort(
-        Err({
-          code: ABORT_CODE,
-          message: 'Aborted by server procedure handler',
-        }),
-      );
-    };
-    const handlerAbortController = new AbortController();
-    handlerAbortController.signal.addEventListener('abort', onHandlerAbort);
-
     const clientAbortController = new AbortController();
 
     const onSessionStatus = (evt: EventMap['sessionStatus']) => {
@@ -271,8 +260,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         reqReadable._pushValue(Err(errPayload));
         closeReadable();
       }
-
-      clientAbortController.abort(errPayload);
 
       resWritable.close();
     };
@@ -404,21 +391,13 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     };
     this.transport.addEventListener('message', onMessage);
 
-    const onFinishedCallbacks: Array<() => void> = [];
+    const doneAbortController = new AbortController();
     const cleanup = () => {
       this.transport.removeEventListener('message', onMessage);
       this.transport.removeEventListener('sessionStatus', onSessionStatus);
-      handlerAbortController.signal.addEventListener('abort', onHandlerAbort);
 
+      doneAbortController.abort();
       this.openStreams.delete(streamId);
-      onFinishedCallbacks.forEach((cb) => {
-        try {
-          cb();
-        } catch {
-          // ignore user errors
-        }
-      });
-      onFinishedCallbacks.length = 0;
     };
 
     const procClosesWithResponse =
@@ -519,22 +498,15 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       from,
       sessionId,
       metadata: sessionMetadata,
-      abortController: handlerAbortController,
-      clientAbortSignal: clientAbortController.signal,
-      onRequestFinished: (cb) => {
-        if (reqReadable.isClosed() && resWritable.isClosed()) {
-          // Everything already closed, call cleanup immediately.
-          try {
-            cb();
-          } catch {
-            // ignore user errors
-          }
-
-          return;
-        }
-
-        onFinishedCallbacks.push(cb);
+      abort: () => {
+        onServerAbort(
+          Err({
+            code: ABORT_CODE,
+            message: 'Aborted by server procedure handler',
+          }),
+        );
       },
+      signal: doneAbortController.signal,
     };
 
     switch (procedure.type) {
@@ -545,7 +517,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           procedureName,
           streamId,
           tracingCtx,
-          async (span): InputHandlerReturn => {
+          async (span): ProcHandlerReturn => {
             try {
               const outputMessage = await procedure.handler({
                 ctx: handlerContext,
@@ -574,7 +546,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           procedureName,
           streamId,
           tracingCtx,
-          async (span): InputHandlerReturn => {
+          async (span): ProcHandlerReturn => {
             try {
               await procedure.handler({
                 ctx: handlerContext,
@@ -598,7 +570,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           procedureName,
           streamId,
           tracingCtx,
-          async (span): InputHandlerReturn => {
+          async (span): ProcHandlerReturn => {
             try {
               // TODO handle never resolving after cleanup/full close
               // which would lead to us holding on to the closure forever
@@ -622,7 +594,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           procedureName,
           streamId,
           tracingCtx,
-          async (span): InputHandlerReturn => {
+          async (span): ProcHandlerReturn => {
             try {
               // TODO handle never resolving after cleanup/full close
               // which would lead to us holding on to the closure forever

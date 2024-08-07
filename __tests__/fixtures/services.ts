@@ -237,7 +237,7 @@ export const SubscribableServiceSchema = ServiceSchema.define(
           resWritable.write(Ok({ result: count }));
         });
 
-        ctx.onRequestFinished(dispose);
+        ctx.signal.addEventListener('abort', () => dispose());
       },
     }),
   },

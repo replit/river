@@ -65,7 +65,7 @@ describe.each(testMatrix())(
           await cleanupTransports([clientTransport, serverTransport]);
         });
 
-        const serverOnMessage = vi.fn<[EventMap['message']]>();
+        const serverOnMessage = vi.fn<(msg: EventMap['message']) => void>();
         serverTransport.addEventListener('message', serverOnMessage);
 
         const abortController = new AbortController();
@@ -132,7 +132,7 @@ describe.each(testMatrix())(
           await cleanupTransports([clientTransport, serverTransport]);
         });
 
-        const serverOnMessage = vi.fn<[EventMap['message']]>();
+        const serverOnMessage = vi.fn<(msg: EventMap['message']) => void>();
         serverTransport.addEventListener('message', serverOnMessage);
 
         const abortController = new AbortController();
@@ -202,7 +202,7 @@ describe.each(testMatrix())(
           await cleanupTransports([clientTransport, serverTransport]);
         });
 
-        const serverOnMessage = vi.fn<[EventMap['message']]>();
+        const serverOnMessage = vi.fn<(msg: EventMap['message']) => void>();
         serverTransport.addEventListener('message', serverOnMessage);
 
         const abortController = new AbortController();
@@ -274,7 +274,7 @@ describe.each(testMatrix())(
           await cleanupTransports([clientTransport, serverTransport]);
         });
 
-        const serverOnMessage = vi.fn<[EventMap['message']]>();
+        const serverOnMessage = vi.fn<(msg: EventMap['message']) => void>();
         serverTransport.addEventListener('message', serverOnMessage);
 
         const abortController = new AbortController();
@@ -380,7 +380,7 @@ describe.each(testMatrix())(
               ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit,
           });
 
-          const serverOnMessage = vi.fn<[EventMap['message']]>();
+          const serverOnMessage = vi.fn<(msg: EventMap['message']) => void>();
           serverTransport.addEventListener('message', serverOnMessage);
 
           await waitFor(() => {
@@ -394,8 +394,8 @@ describe.each(testMatrix())(
             handler.mock.calls[0][0] as {
               ctx: ProcedureHandlerContext<object>;
             };
-          const onClientAbort = vi.fn();
-          ctx.clientAbortSignal.onabort = onClientAbort;
+          const onRequestFinished = vi.fn();
+          ctx.signal.addEventListener('abort', onRequestFinished);
 
           clientTransport.send(
             serverTransport.clientId,
@@ -412,7 +412,7 @@ describe.each(testMatrix())(
             expect(serverOnMessage).toHaveBeenCalledTimes(2);
           });
 
-          expect(onClientAbort).toHaveBeenCalled();
+          expect(onRequestFinished).toHaveBeenCalled();
           expect(server.openStreams.size).toEqual(0);
         },
       );
@@ -425,7 +425,7 @@ describe.each(testMatrix())(
         const serverTransport = getServerTransport();
         const handler = vi
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .fn<Parameters<StreamProcedure<any, any, any, any, any>['handler']>>()
+          .fn<StreamProcedure<any, any, any, any, any>['handler']>()
           .mockImplementation(
             () =>
               new Promise(() => {
@@ -460,8 +460,8 @@ describe.each(testMatrix())(
         });
 
         const [{ ctx, reqReadable, resWritable }] = handler.mock.calls[0];
-        const onClientAbort = vi.fn();
-        ctx.clientAbortSignal.onabort = onClientAbort;
+        const onRequestFinished = vi.fn();
+        ctx.signal.addEventListener('abort', onRequestFinished);
 
         clientAbortController.abort();
         // this should be ignored by the client since it already aborted
@@ -479,7 +479,7 @@ describe.each(testMatrix())(
         expect(reqWritable.isWritable()).toEqual(false);
 
         await waitFor(() => {
-          expect(onClientAbort).toHaveBeenCalled();
+          expect(onRequestFinished).toHaveBeenCalled();
         });
         expect(await reqReadable.collect()).toEqual([
           {
@@ -538,7 +538,7 @@ describe.each(testMatrix())(
           await cleanupTransports([clientTransport, serverTransport]);
         });
 
-        const serverOnMessage = vi.fn<[EventMap['message']]>();
+        const serverOnMessage = vi.fn<(msg: EventMap['message']) => void>();
         serverTransport.addEventListener('message', serverOnMessage);
 
         const resP = client.service.rpc.rpc({});
@@ -593,7 +593,7 @@ describe.each(testMatrix())(
           await cleanupTransports([clientTransport, serverTransport]);
         });
 
-        const serverOnMessage = vi.fn<[EventMap['message']]>();
+        const serverOnMessage = vi.fn<(msg: EventMap['message']) => void>();
         serverTransport.addEventListener('message', serverOnMessage);
 
         const { reqWritable, finalize } = client.service.upload.upload({});
@@ -649,7 +649,7 @@ describe.each(testMatrix())(
           await cleanupTransports([clientTransport, serverTransport]);
         });
 
-        const serverOnMessage = vi.fn<[EventMap['message']]>();
+        const serverOnMessage = vi.fn<(msg: EventMap['message']) => void>();
         serverTransport.addEventListener('message', serverOnMessage);
 
         const { reqWritable, resReadable } = client.service.stream.stream({});
@@ -706,7 +706,7 @@ describe.each(testMatrix())(
           await cleanupTransports([clientTransport, serverTransport]);
         });
 
-        const serverOnMessage = vi.fn<[EventMap['message']]>();
+        const serverOnMessage = vi.fn<(msg: EventMap['message']) => void>();
         serverTransport.addEventListener('message', serverOnMessage);
 
         const { resReadable } = client.service.subscribe.subscribe({});
@@ -750,7 +750,7 @@ describe.each(testMatrix())(
       ] as const)('$procedureType', async ({ procedureType }) => {
         const clientTransport = getClientTransport('client');
         const serverTransport = getServerTransport();
-        const handler = vi.fn<[{ ctx: ProcedureHandlerContext<object> }]>();
+        const handler = vi.fn<(ctx: ProcedureHandlerContext<object>) => void>();
         const serviceName = 'service';
         const procedureName = procedureType;
 
@@ -766,7 +766,7 @@ describe.each(testMatrix())(
                 : {}),
               responseData: Type.Object({}),
               async handler({ ctx }: { ctx: ProcedureHandlerContext<object> }) {
-                handler({ ctx });
+                handler(ctx);
 
                 return new Promise(() => {
                   // never resolves
@@ -793,10 +793,10 @@ describe.each(testMatrix())(
             ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit,
         });
 
-        const serverOnMessage = vi.fn<[EventMap['message']]>();
+        const serverOnMessage = vi.fn<(msg: EventMap['message']) => void>();
         serverTransport.addEventListener('message', serverOnMessage);
 
-        const clientOnMessage = vi.fn<[EventMap['message']]>();
+        const clientOnMessage = vi.fn<(msg: EventMap['message']) => void>();
         clientTransport.addEventListener('message', clientOnMessage);
 
         await waitFor(() => {
@@ -805,8 +805,8 @@ describe.each(testMatrix())(
 
         expect(server.openStreams.size).toEqual(1);
         expect(handler).toHaveBeenCalledTimes(1);
-        const [{ ctx }] = handler.mock.calls[0];
-        ctx.abortController.abort();
+        const [ctx] = handler.mock.calls[0];
+        ctx.abort();
 
         await waitFor(() => {
           expect(clientOnMessage).toHaveBeenCalledTimes(1);
@@ -840,7 +840,7 @@ describe.each(testMatrix())(
 
         const handler = vi
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .fn<Parameters<StreamProcedure<any, any, any, any, any>['handler']>>()
+          .fn<StreamProcedure<any, any, any, any, any>['handler']>()
           .mockImplementation(
             () =>
               new Promise(() => {
@@ -863,10 +863,10 @@ describe.each(testMatrix())(
 
         const serverSendSpy = vi.spyOn(serverTransport, 'send');
 
-        const serverOnMessage = vi.fn<[EventMap['message']]>();
+        const serverOnMessage = vi.fn<(msg: EventMap['message']) => void>();
         serverTransport.addEventListener('message', serverOnMessage);
 
-        const clientOnMessage = vi.fn<[EventMap['message']]>();
+        const clientOnMessage = vi.fn<(msg: EventMap['message']) => void>();
         clientTransport.addEventListener('message', clientOnMessage);
 
         const streamId = nanoid();
@@ -883,7 +883,7 @@ describe.each(testMatrix())(
         });
 
         const [{ ctx }] = handler.mock.calls[0];
-        ctx.abortController.abort();
+        ctx.abort();
         // input for the stream should be ignored
         // instead of leading to an error response
         clientTransport.send(serverTransport.clientId, {
@@ -939,7 +939,7 @@ describe.each(testMatrix())(
         const serverTransport = getServerTransport();
         const handler = vi
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .fn<Parameters<StreamProcedure<any, any, any, any, any>['handler']>>()
+          .fn<StreamProcedure<any, any, any, any, any>['handler']>()
           .mockImplementation(
             () =>
               new Promise(() => {
@@ -970,7 +970,7 @@ describe.each(testMatrix())(
 
         const [{ ctx, reqReadable, resWritable }] = handler.mock.calls[0];
 
-        ctx.abortController.abort();
+        ctx.abort();
         // this should be ignored by the server since it already aborted
         reqWritable.write({ ok: true, payload: {} });
         expect(await reqReadable.collect()).toEqual([
@@ -1002,7 +1002,7 @@ describe.each(testMatrix())(
 
 const createRejectable = () => {
   let reject: (reason: Error) => void;
-  const promise = new Promise((_res, rej) => {
+  const promise = new Promise<void>((_res, rej) => {
     reject = rej;
   });
 
@@ -1077,10 +1077,10 @@ describe.each(testMatrix())(
             ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit,
         });
 
-        const serverOnMessage = vi.fn<[EventMap['message']]>();
+        const serverOnMessage = vi.fn<(msg: EventMap['message']) => void>();
         serverTransport.addEventListener('message', serverOnMessage);
 
-        const clientOnMessage = vi.fn<[EventMap['message']]>();
+        const clientOnMessage = vi.fn<(msg: EventMap['message']) => void>();
         clientTransport.addEventListener('message', clientOnMessage);
 
         await waitFor(() => {
@@ -1122,7 +1122,7 @@ describe.each(testMatrix())(
         const rejectable = createRejectable();
         const handler = vi
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .fn<Parameters<StreamProcedure<any, any, any, any, any>['handler']>>()
+          .fn<StreamProcedure<any, any, any, any, any>['handler']>()
           .mockImplementation(() => rejectable.promise);
         const services = {
           service: ServiceSchema.define({
