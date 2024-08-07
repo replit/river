@@ -366,7 +366,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       let validationErrors: Array<ValueError>;
       let errMessage: string;
       if ('requestData' in procedure) {
-        errMessage = 'epected requestData or control payload';
+        errMessage = 'expected requestData or control payload';
         validationErrors = [
           ...Value.Errors(procedure.responseData, msg.payload),
         ];

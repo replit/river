@@ -401,7 +401,7 @@ describe('aborts invalid request', () => {
             code: INVALID_REQUEST_CODE,
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             message: expect.stringContaining(
-              'input payload, validation failed',
+              'expected requestData or control payload',
             ),
           },
         },
@@ -589,7 +589,9 @@ describe('aborts invalid request', () => {
         payload: {
           code: INVALID_REQUEST_CODE,
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          message: expect.stringContaining('input payload, validation'),
+          message: expect.stringContaining(
+            'expected requestData or control payload',
+          ),
         },
       },
     ]);
