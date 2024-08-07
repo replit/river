@@ -1,4 +1,4 @@
-import { Static } from '@sinclair/typebox';
+import { Static, Type } from '@sinclair/typebox';
 import {
   PayloadType,
   ProcedureErrorSchemaType,
@@ -49,7 +49,17 @@ type StreamId = string;
 /**
  * A result schema for errors that can be passed to input's readstream
  */
-const InputErrResultSchema = ErrResultSchema(RequestReaderErrorSchema);
+const RequestErrResultSchema = ErrResultSchema(RequestReaderErrorSchema);
+
+/**
+ * A schema for abort payloads sent from the client
+ */
+const ClientAbortResultSchema = ErrResultSchema(
+  Type.Object({
+    code: Type.Literal(ABORT_CODE),
+    message: Type.String(),
+  }),
+);
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -210,7 +220,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
     let cleanClose = true;
 
-    const onServerAbort = (errResult: Static<typeof InputErrResultSchema>) => {
+    const onServerAbort = (
+      errResult: Static<typeof RequestErrResultSchema>,
+    ) => {
       if (reqReadable.isClosed() && resWritable.isClosed()) {
         // Everything already closed, no-op.
         return;
@@ -282,14 +294,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         return;
       }
 
-      if (
-        Value.Check(ControlMessagePayloadSchema, msg.payload) &&
-        isStreamAbortBackwardsCompat(msg.controlFlags, protocolVersion)
-      ) {
-        let abortResult: Static<typeof InputErrResultSchema>;
-        if (Value.Check(InputErrResultSchema, msg.payload)) {
+      if (isStreamAbortBackwardsCompat(msg.controlFlags, protocolVersion)) {
+        let abortResult: Static<typeof ClientAbortResultSchema>;
+        if (Value.Check(ClientAbortResultSchema, msg.payload)) {
           abortResult = msg.payload;
         } else {
+          // If the payload is unexpected, then we just construct our own abort result
           abortResult = Err({
             code: ABORT_CODE,
             message: 'stream aborted, client sent invalid payload',
@@ -299,7 +309,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
             clientId: this.transport.clientId,
             transportMessage: msg,
             validationErrors: [
-              ...Value.Errors(InputErrResultSchema, msg.payload),
+              ...Value.Errors(ClientAbortResultSchema, msg.payload),
             ],
             tags: ['invalid-request'],
           });
