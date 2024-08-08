@@ -6,6 +6,7 @@ import {
   OpaqueTransportMessage,
   PartialTransportMessage,
   TransportClientId,
+  currentProtocolVersion,
   handshakeRequestMessage,
 } from './message';
 import {
@@ -125,6 +126,7 @@ export abstract class ClientTransport<
         },
       },
       this.options,
+      currentProtocolVersion,
       this.log,
     );
 

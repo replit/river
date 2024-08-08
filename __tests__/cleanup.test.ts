@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   closeAllConnections,
-  iterNext,
+  readNextResult,
+  isReadableDone,
   numberOfConnections,
 } from '../util/testHelpers';
 import {
@@ -9,7 +10,13 @@ import {
   TestServiceSchema,
   UploadableServiceSchema,
 } from './fixtures/services';
-import { createClient, createServer } from '../router';
+import {
+  Procedure,
+  ProcedureHandlerContext,
+  ServiceSchema,
+  createClient,
+  createServer,
+} from '../router';
 import {
   advanceFakeTimersByHeartbeat,
   advanceFakeTimersBySessionGrace,
@@ -20,6 +27,9 @@ import {
 } from './fixtures/cleanup';
 import { testMatrix } from './fixtures/matrix';
 import { TestSetupHelpers } from './fixtures/transports';
+import { ControlFlags } from '../transport/message';
+import { Type } from '@sinclair/typebox';
+import { nanoid } from 'nanoid';
 
 describe.each(testMatrix())(
   'procedures should clean up after themselves ($transport.name transport, $codec.name codec)',
@@ -191,32 +201,29 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const [input, output, close] = await client.test.echo.stream();
-      input.push({ msg: '1', ignore: false, end: undefined });
-      input.push({ msg: '2', ignore: false, end: true });
+      const { reqWritable, resReadable } = client.test.echo.stream({});
+      reqWritable.write({ msg: '1', ignore: false });
+      reqWritable.write({ msg: '2', ignore: false });
 
-      const result1 = await iterNext(output);
+      const result1 = await readNextResult(resReadable);
       expect(result1).toStrictEqual({
         ok: true,
         payload: { response: '1' },
       });
 
       // ensure we only have one stream despite pushing multiple messages.
-      await waitFor(() => expect(server.streams.size).toEqual(1));
-      input.end();
-      // ensure we no longer have any streams since the input was closed.
-      await waitFor(() => expect(server.streams.size).toEqual(0));
+      reqWritable.close();
+      await waitFor(() => expect(server.openStreams.size).toEqual(1));
+      // ensure we no longer have any open streams since the request was closed.
+      await waitFor(() => expect(server.openStreams.size).toEqual(0));
 
-      const result2 = await iterNext(output);
+      const result2 = await readNextResult(resReadable);
       expect(result2).toStrictEqual({
         ok: true,
         payload: { response: '2' },
       });
 
-      const result3 = await output.next();
-      expect(result3.done).toBe(true);
-
-      close();
+      expect(await isReadableDone(resReadable)).toEqual(true);
       // end procedure
 
       // number of message handlers shouldn't increase after stream ends
@@ -250,6 +257,7 @@ describe.each(testMatrix())(
         clientTransport,
         serverTransport.clientId,
       );
+
       addPostTestCleanup(async () => {
         await cleanupTransports([clientTransport, serverTransport]);
       });
@@ -260,10 +268,12 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const [subscription, close] = await client.subscribable.value.subscribe(
+      const abortController = new AbortController();
+      const { resReadable } = client.subscribable.value.subscribe(
         {},
+        { signal: abortController.signal },
       );
-      let result = await iterNext(subscription);
+      let result = await readNextResult(resReadable);
       expect(result).toStrictEqual({
         ok: true,
         payload: { result: 0 },
@@ -271,22 +281,24 @@ describe.each(testMatrix())(
 
       const add1 = await client.subscribable.add.rpc({ n: 1 });
       expect(add1).toStrictEqual({ ok: true, payload: { result: 1 } });
-      result = await iterNext(subscription);
+      result = await readNextResult(resReadable);
       expect(result).toStrictEqual({
         ok: true,
         payload: { result: 1 },
       });
 
-      close();
+      abortController.abort();
       // end procedure
 
       // number of message handlers shouldn't increase after subscription ends
-      expect(
-        serverTransport.eventDispatcher.numberOfListeners('message'),
-      ).toEqual(serverListeners);
-      expect(
-        clientTransport.eventDispatcher.numberOfListeners('message'),
-      ).toEqual(clientListeners);
+      await waitFor(() => {
+        expect(
+          serverTransport.eventDispatcher.numberOfListeners('message'),
+        ).toEqual(serverListeners);
+        expect(
+          clientTransport.eventDispatcher.numberOfListeners('message'),
+        ).toEqual(clientListeners);
+      });
 
       // check number of connections
       expect(numberOfConnections(clientTransport)).toEqual(1);
@@ -326,13 +338,14 @@ describe.each(testMatrix())(
         clientTransport.eventDispatcher.numberOfListeners('message');
 
       // start procedure
-      const [addStream, addResult] =
-        await client.uploadable.addMultiple.upload();
-      addStream.push({ n: 1 });
-      addStream.push({ n: 2 });
-      addStream.end();
+      const { reqWritable, finalize } = client.uploadable.addMultiple.upload(
+        {},
+      );
+      reqWritable.write({ n: 1 });
+      reqWritable.write({ n: 2 });
+      reqWritable.close();
 
-      const result = await addResult;
+      const result = await finalize();
       expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
       // end procedure
 
@@ -371,10 +384,10 @@ describe.each(testMatrix())(
       });
 
       // start a stream
-      const [input, output] = await client.test.echo.stream();
-      input.push({ msg: '1', ignore: false });
+      const { reqWritable, resReadable } = client.test.echo.stream({});
+      reqWritable.write({ msg: '1', ignore: false });
 
-      const result1 = await iterNext(output);
+      const result1 = await readNextResult(resReadable);
       expect(result1).toStrictEqual({ ok: true, payload: { response: '1' } });
 
       // wait for session to disconnect
@@ -391,8 +404,9 @@ describe.each(testMatrix())(
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
 
       // push on the old stream and make sure its not sent
-      input.push({ msg: '2', ignore: false });
-      const result2 = await iterNext(output);
+
+      expect(() => reqWritable.write({ msg: '2', ignore: false })).toThrow();
+      const result2 = await readNextResult(resReadable);
       expect(result2).toMatchObject({ ok: false });
 
       await testFinishesCleanly({
@@ -403,3 +417,90 @@ describe.each(testMatrix())(
     });
   },
 );
+
+describe('request finishing triggers signal onabort', async () => {
+  const { transport, codec } = testMatrix()[0];
+  const opts = { codec: codec.codec };
+
+  const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
+  let getClientTransport: TestSetupHelpers['getClientTransport'];
+  let getServerTransport: TestSetupHelpers['getServerTransport'];
+
+  beforeEach(async () => {
+    const setup = await transport.setup({ client: opts, server: opts });
+    getClientTransport = setup.getClientTransport;
+    getServerTransport = setup.getServerTransport;
+    return async () => {
+      await postTestCleanup();
+      await setup.cleanup();
+    };
+  });
+
+  test.each([
+    { procedureType: 'rpc' },
+    { procedureType: 'subscription' },
+    { procedureType: 'stream' },
+    { procedureType: 'upload' },
+  ] as const)('handler aborts $procedureType', async ({ procedureType }) => {
+    const clientTransport = getClientTransport('client');
+    const serverTransport = getServerTransport();
+    const handler = vi.fn<(ctx: ProcedureHandlerContext<object>) => void>();
+    const serverId = serverTransport.clientId;
+    const serviceName = 'service';
+    const procedureName = procedureType;
+
+    const services = {
+      [serviceName]: ServiceSchema.define({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any
+        [procedureType]: (Procedure[procedureType] as any)({
+          requestInit: Type.Object({}),
+          ...(procedureType === 'stream' || procedureType === 'upload'
+            ? {
+                requestData: Type.Object({}),
+              }
+            : {}),
+          responseData: Type.Object({}),
+          async handler({ ctx }: { ctx: ProcedureHandlerContext<object> }) {
+            handler(ctx);
+
+            return new Promise(() => {
+              // never resolves
+            });
+          },
+        }),
+      }),
+    };
+
+    createServer(serverTransport, services);
+    clientTransport.connect(serverId);
+
+    addPostTestCleanup(async () => {
+      await cleanupTransports([clientTransport, serverTransport]);
+    });
+
+    clientTransport.send(serverId, {
+      streamId: nanoid(),
+      serviceName,
+      procedureName,
+      payload: {},
+      controlFlags: ControlFlags.StreamOpenBit,
+    });
+
+    await waitFor(() => {
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    const [ctx] = handler.mock.calls[0];
+
+    const fn1 = vi.fn();
+    ctx.signal.addEventListener('abort', fn1);
+
+    const fn2 = vi.fn();
+    ctx.signal.onabort = fn2;
+
+    ctx.cancel();
+
+    expect(fn1).toHaveBeenCalled();
+    expect(fn2).toHaveBeenCalled();
+  });
+});

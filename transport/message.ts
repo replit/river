@@ -1,18 +1,28 @@
 import { Type, TSchema, Static } from '@sinclair/typebox';
 import { PropagationContext } from '../tracing';
 import { generateId } from './id';
+import { ErrResult, ReaderErrorSchema } from '../router';
 
 /**
  * Control flags for transport messages.
- * An RPC message is coded with StreamOpenBit | StreamClosedBit.
- * Streams are expected to start with StreamOpenBit sent and the client SHOULD send an empty
- * message with StreamClosedBit to close the stream handler on the server, indicating that
- * it will not be using the stream anymore.
  */
 export const enum ControlFlags {
-  AckBit = 0b0001,
-  StreamOpenBit = 0b0010,
-  StreamClosedBit = 0b0100,
+  /**
+   * Used in heartbeat messages.
+   */
+  AckBit = 0b00001,
+  /**
+   * Used in stream open requests.
+   */
+  StreamOpenBit = 0b00010,
+  /**
+   * Used when writer closes the stream.
+   */
+  StreamClosedBit = 0b01000,
+  /**
+   * Used when a stream is cancelled due errors or to explicit cancellation
+   */
+  StreamCancelBit = 0b00100,
 }
 
 /**
@@ -58,7 +68,9 @@ export const ControlMessageCloseSchema = Type.Object({
   type: Type.Literal('CLOSE'),
 });
 
-export const PROTOCOL_VERSION = 'v1.1';
+export const currentProtocolVersion = 'v2.0';
+export const acceptedProtocolVersions = ['v1.1', currentProtocolVersion];
+
 export const ControlMessageHandshakeRequestSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_REQ'),
   protocolVersion: Type.String(),
@@ -151,8 +163,8 @@ export const OpaqueTransportMessageSchema = TransportMessageSchema(
  */
 export interface TransportMessage<Payload = unknown> {
   id: string;
-  from: string;
-  to: string;
+  from: TransportClientId;
+  to: TransportClientId;
   seq: number;
   ack: number;
   serviceName?: string;
@@ -196,7 +208,7 @@ export function handshakeRequestMessage({
     tracing,
     payload: {
       type: 'HANDSHAKE_REQ',
-      protocolVersion: PROTOCOL_VERSION,
+      protocolVersion: currentProtocolVersion,
       sessionId,
       expectedSessionState,
       metadata,
@@ -244,6 +256,17 @@ export function closeStreamMessage(streamId: string): PartialTransportMessage {
   };
 }
 
+export function cancelMessage(
+  streamId: string,
+  payload: ErrResult<Static<typeof ReaderErrorSchema>>,
+) {
+  return {
+    streamId,
+    controlFlags: ControlFlags.StreamCancelBit,
+    payload,
+  };
+}
+
 /**
  * A type alias for a transport message with an opaque payload.
  * @template T - The type of the opaque payload.
@@ -283,5 +306,18 @@ export function isStreamClose(controlFlag: number): boolean {
     /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
     (controlFlag & ControlFlags.StreamClosedBit) ===
     ControlFlags.StreamClosedBit
+  );
+}
+
+/**
+ * Checks if the given control flag (usually found in msg.controlFlag) is an cancel message.
+ * @param controlFlag - The control flag to check.
+ * @returns True if the control flag contains the CancelBit, false otherwise
+ */
+export function isStreamCancel(controlFlag: number): boolean {
+  return (
+    /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
+    (controlFlag & ControlFlags.StreamCancelBit) ===
+    ControlFlags.StreamCancelBit
   );
 }

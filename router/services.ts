@@ -1,11 +1,12 @@
-import { Type, TUnion, TSchema } from '@sinclair/typebox';
-import { RiverError, RiverUncaughtSchema } from './result';
+import { Type, TSchema, Static } from '@sinclair/typebox';
 import {
   Branded,
   ProcedureMap,
   Unbranded,
   AnyProcedure,
   PayloadType,
+  ProcedureErrorSchemaType,
+  ReaderErrorSchema,
 } from './procedures';
 import { ServiceContext } from './context';
 
@@ -61,16 +62,6 @@ export type ProcHandler<
 > = S['procedures'][ProcName]['handler'];
 
 /**
- * Helper to get whether the type definition for the procedure contains an init type.
- * @template S - The service.
- * @template ProcName - The name of the procedure.
- */
-export type ProcHasInit<
-  S extends AnyService,
-  ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName] extends { init: PayloadType } ? true : false;
-
-/**
  * Helper to get the type definition for the procedure init type of a service.
  * @template S - The service.
  * @template ProcName - The name of the procedure.
@@ -78,29 +69,29 @@ export type ProcHasInit<
 export type ProcInit<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName] extends { init: PayloadType }
-  ? S['procedures'][ProcName]['init']
+> = Static<S['procedures'][ProcName]['requestInit']>;
+
+/**
+ * Helper to get the type definition for the procedure request of a service.
+ * @template S - The service.
+ * @template ProcName - The name of the procedure.
+ */
+export type ProcRequest<
+  S extends AnyService,
+  ProcName extends keyof S['procedures'],
+> = S['procedures'][ProcName] extends { requestData: PayloadType }
+  ? Static<S['procedures'][ProcName]['requestData']>
   : never;
 
 /**
- * Helper to get the type definition for the procedure input of a service.
+ * Helper to get the type definition for the procedure response of a service.
  * @template S - The service.
  * @template ProcName - The name of the procedure.
  */
-export type ProcInput<
+export type ProcResponse<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName]['input'];
-
-/**
- * Helper to get the type definition for the procedure output of a service.
- * @template S - The service.
- * @template ProcName - The name of the procedure.
- */
-export type ProcOutput<
-  S extends AnyService,
-  ProcName extends keyof S['procedures'],
-> = S['procedures'][ProcName]['output'];
+> = Static<S['procedures'][ProcName]['responseData']>;
 
 /**
  * Helper to get the type definition for the procedure errors of a service.
@@ -110,7 +101,9 @@ export type ProcOutput<
 export type ProcErrors<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
-> = TUnion<[S['procedures'][ProcName]['errors'], typeof RiverUncaughtSchema]>;
+> =
+  | Static<S['procedures'][ProcName]['responseError']>
+  | Static<typeof ReaderErrorSchema>;
 
 /**
  * Helper to get the type of procedure in a service.
@@ -138,12 +131,60 @@ export interface ServiceConfiguration<State extends object> {
   initializeState: (extendedContext: ServiceContext) => State;
 }
 
-export interface SerializedProcedureSchema {
+// TODO remove once clients migrate to v2
+export interface SerializedProcedureSchemaProtocolv1 {
+  init?: PayloadType;
   input: PayloadType;
   output: PayloadType;
-  errors?: RiverError;
+  errors?: ProcedureErrorSchemaType;
   type: 'rpc' | 'subscription' | 'upload' | 'stream';
-  init?: PayloadType;
+}
+
+// TODO remove once clients migrate to v2
+export interface SerializedServiceSchemaProtocolv1 {
+  procedures: Record<string, SerializedProcedureSchemaProtocolv1>;
+}
+
+// TODO remove once clients migrate to v2
+export interface SerializedServerSchemaProtocolv1 {
+  handshakeSchema?: TSchema;
+  services: Record<string, SerializedServiceSchemaProtocolv1>;
+}
+
+// TODO remove once clients migrate to v2
+/**
+ * Same as {@link serializeSchema} but with a format that is compatible with
+ * protocolv1. This is useful to be able to continue to generate schemas for older
+ * clients as they are still supported.
+ */
+export function serializeSchemaV1Compat(
+  services: AnyServiceSchemaMap,
+  handshakeSchema?: TSchema,
+): SerializedServerSchemaProtocolv1 {
+  const serializedServiceObject = Object.entries(services).reduce<
+    Record<string, SerializedServiceSchemaProtocolv1>
+  >((acc, [name, value]) => {
+    acc[name] = value.serializeV1Compat();
+    return acc;
+  }, {});
+
+  const schema: SerializedServerSchemaProtocolv1 = {
+    services: serializedServiceObject,
+  };
+
+  if (handshakeSchema) {
+    schema.handshakeSchema = Type.Strict(handshakeSchema);
+  }
+
+  return schema;
+}
+
+export interface SerializedProcedureSchema {
+  init: PayloadType;
+  input?: PayloadType;
+  output: PayloadType;
+  errors?: ProcedureErrorSchemaType;
+  type: 'rpc' | 'subscription' | 'upload' | 'stream';
 }
 
 export interface SerializedServiceSchema {
@@ -155,6 +196,9 @@ export interface SerializedServerSchema {
   services: Record<string, SerializedServiceSchema>;
 }
 
+/**
+ * Serializes a server schema into a plain object that is JSON compatible.
+ */
 export function serializeSchema(
   services: AnyServiceSchemaMap,
   handshakeSchema?: TSchema,
@@ -238,10 +282,10 @@ export class ServiceSchema<
    *
    * const incrementProcedures = MyServiceScaffold.procedures({
    *   increment: Procedure.rpc({
-   *     input: Type.Object({ amount: Type.Number() }),
-   *     output: Type.Object({ current: Type.Number() }),
-   *     async handler(ctx, input) {
-   *       ctx.state.count += input.amount;
+   *     requestInit: Type.Object({ amount: Type.Number() }),
+   *     responseData: Type.Object({ current: Type.Number() }),
+   *     async handler(ctx, init) {
+   *       ctx.state.count += init.amount;
    *       return Ok({ current: ctx.state.count });
    *     }
    *   }),
@@ -265,10 +309,10 @@ export class ServiceSchema<
    *   .scaffold({ initializeState: () => ({ count: 0 }) })
    *   .finalize({
    *     increment: Procedure.rpc({
-   *       input: Type.Object({ amount: Type.Number() }),
-   *       output: Type.Object({ current: Type.Number() }),
-   *       async handler(ctx, input) {
-   *         ctx.state.count += input.amount;
+   *       requestInit: Type.Object({ amount: Type.Number() }),
+   *       responseData: Type.Object({ current: Type.Number() }),
+   *       async handler(ctx, init) {
+   *         ctx.state.count += init.amount;
    *         return Ok({ current: ctx.state.count });
    *       }
    *     }),
@@ -298,10 +342,10 @@ export class ServiceSchema<
    *   { initializeState: () => ({ count: 0 }) },
    *   {
    *     increment: Procedure.rpc({
-   *       input: Type.Object({ amount: Type.Number() }),
-   *       output: Type.Object({ current: Type.Number() }),
-   *       async handler(ctx, input) {
-   *         ctx.state.count += input.amount;
+   *       requestInit: Type.Object({ amount: Type.Number() }),
+   *       responseData: Type.Object({ current: Type.Number() }),
+   *       async handler(ctx, init) {
+   *         ctx.state.count += init.amount;
    *         return Ok({ current: ctx.state.count });
    *       }
    *     }),
@@ -333,10 +377,10 @@ export class ServiceSchema<
    * ```
    * const service = ServiceSchema.define({
    *   add: Procedure.rpc({
-   *     input: Type.Object({ a: Type.Number(), b: Type.Number() }),
-   *     output: Type.Object({ result: Type.Number() }),
-   *     async handler(ctx, input) {
-   *       return Ok({ result: input.a + input.b });
+   *     requestInit: Type.Object({ a: Type.Number(), b: Type.Number() }),
+   *     responseData: Type.Object({ result: Type.Number() }),
+   *     async handler(ctx, init) {
+   *       return Ok({ result: init.a + init.b });
    *     }
    *   }),
    * });
@@ -384,27 +428,91 @@ export class ServiceSchema<
         Object.entries(this.procedures).map(([procName, procDef]) => [
           procName,
           {
-            input: Type.Strict(procDef.input),
-            output: Type.Strict(procDef.output),
+            init: Type.Strict(procDef.requestInit),
+            output: Type.Strict(procDef.responseData),
             // Only add `description` field if the type declares it.
             ...('description' in procDef
               ? { description: procDef.description }
               : {}),
             // Only add the `errors` field if the type declares it.
-            ...('errors' in procDef
+            ...('responseError' in procDef
               ? {
-                  errors: Type.Strict(procDef.errors),
+                  errors: Type.Strict(procDef.responseError),
                 }
               : {}),
             type: procDef.type,
-            // Only add the `init` field if the type declares it.
-            ...('init' in procDef
+            // Only add the `input` field if the type declares it.
+            ...('requestData' in procDef
               ? {
-                  init: Type.Strict(procDef.init),
+                  input: Type.Strict(procDef.requestData),
                 }
               : {}),
           },
         ]),
+      ),
+    };
+  }
+
+  // TODO remove once clients migrate to v2
+  /**
+   * Same as {@link ServiceSchema.serialize}, but with a format that is compatible with
+   * protocol v1. This is useful to be able to continue to generate schemas for older
+   * clients as they are still supported.
+   */
+  serializeV1Compat(): SerializedServiceSchemaProtocolv1 {
+    return {
+      procedures: Object.fromEntries(
+        Object.entries(this.procedures).map(
+          ([procName, procDef]): [
+            string,
+            SerializedProcedureSchemaProtocolv1,
+          ] => {
+            if (procDef.type === 'rpc' || procDef.type === 'subscription') {
+              return [
+                procName,
+                {
+                  // BACKWARDS COMPAT: map init to input for protocolv1
+                  // this is the only change needed to make it compatible.
+                  input: Type.Strict(procDef.requestInit),
+                  output: Type.Strict(procDef.responseData),
+                  // Only add `description` field if the type declares it.
+                  ...('description' in procDef
+                    ? { description: procDef.description }
+                    : {}),
+                  // Only add the `errors` field if the type declares it.
+                  ...('responseError' in procDef
+                    ? {
+                        errors: Type.Strict(procDef.responseError),
+                      }
+                    : {}),
+                  type: procDef.type,
+                },
+              ];
+            }
+
+            // No backwards compatibility needed for upload and stream types, as having an `init`
+            // all the time is compatible with protocol v1.
+            return [
+              procName,
+              {
+                init: Type.Strict(procDef.requestInit),
+                output: Type.Strict(procDef.responseData),
+                // Only add `description` field if the type declares it.
+                ...('description' in procDef
+                  ? { description: procDef.description }
+                  : {}),
+                // Only add the `errors` field if the type declares it.
+                ...('responseError' in procDef
+                  ? {
+                      errors: Type.Strict(procDef.responseError),
+                    }
+                  : {}),
+                type: procDef.type,
+                input: Type.Strict(procDef.requestData),
+              },
+            ];
+          },
+        ),
       ),
     };
   }

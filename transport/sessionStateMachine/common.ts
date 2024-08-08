@@ -197,12 +197,14 @@ export interface IdentifiedSessionProps extends CommonSessionProps {
   ack: number;
   sendBuffer: Array<OpaqueTransportMessage>;
   telemetry: TelemetryInfo;
+  protocolVersion: string;
 }
 
 export abstract class IdentifiedSession extends CommonSession {
   readonly id: SessionId;
   readonly telemetry: TelemetryInfo;
   readonly to: TransportClientId;
+  readonly protocolVersion: string;
 
   /**
    * Index of the message we will send next (excluding handshake)
@@ -216,7 +218,8 @@ export abstract class IdentifiedSession extends CommonSession {
   sendBuffer: Array<OpaqueTransportMessage>;
 
   constructor(props: IdentifiedSessionProps) {
-    const { id, to, seq, ack, sendBuffer, telemetry, log } = props;
+    const { id, to, seq, ack, sendBuffer, telemetry, log, protocolVersion } =
+      props;
     super(props);
     this.id = id;
     this.to = to;
@@ -225,6 +228,7 @@ export abstract class IdentifiedSession extends CommonSession {
     this.sendBuffer = sendBuffer;
     this.telemetry = telemetry;
     this.log = log;
+    this.protocolVersion = protocolVersion;
   }
 
   get loggingMetadata(): MessageMetadata {

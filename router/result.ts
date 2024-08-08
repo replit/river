@@ -1,6 +1,6 @@
 import {
+  Static,
   TLiteral,
-  TNever,
   TObject,
   TSchema,
   TString,
@@ -8,10 +8,11 @@ import {
   Type,
 } from '@sinclair/typebox';
 import { Client } from './client';
+import { Readable } from './streams';
 
 type TLiteralString = TLiteral<string>;
 
-export type RiverErrorSchema =
+export type BaseErrorSchemaType =
   | TObject<{
       code: TLiteralString | TUnion<Array<TLiteralString>>;
       message: TLiteralString | TString;
@@ -22,44 +23,59 @@ export type RiverErrorSchema =
       extras: TSchema;
     }>;
 
-export type RiverError =
-  | TUnion<Array<RiverErrorSchema>>
-  | RiverErrorSchema
-  | TNever;
+/**
+ * Takes in a specific error schema and returns a result schema the error
+ */
+export const ErrResultSchema = <T extends BaseErrorSchemaType>(t: T) =>
+  Type.Object({
+    ok: Type.Literal(false),
+    payload: t,
+  });
 
-export const UNCAUGHT_ERROR = 'UNCAUGHT_ERROR';
-export const UNEXPECTED_DISCONNECT = 'UNEXPECTED_DISCONNECT';
-export const RiverUncaughtSchema = Type.Object({
-  code: Type.Union([
-    Type.Literal(UNCAUGHT_ERROR),
-    Type.Literal(UNEXPECTED_DISCONNECT),
-  ]),
-  message: Type.String(),
-});
+/**
+ * AnyResultSchema is a schema to validate any result.
+ */
+export const AnyResultSchema = Type.Union([
+  Type.Object({
+    ok: Type.Literal(false),
+    payload: Type.Object({
+      code: Type.String(),
+      message: Type.String(),
+      extras: Type.Optional(Type.Unknown()),
+    }),
+  }),
 
-export type Result<T, E> =
-  | {
-      ok: true;
-      payload: T;
-    }
-  | {
-      ok: false;
-      payload: E;
-    };
+  Type.Object({
+    ok: Type.Literal(true),
+    payload: Type.Unknown(),
+  }),
+]);
 
-export function Ok<const T extends Array<unknown>, const E>(p: T): Result<T, E>;
-export function Ok<const T extends ReadonlyArray<unknown>, const E>(
-  p: T,
-): Result<T, E>;
-export function Ok<const T, const E>(payload: T): Result<T, E>;
-export function Ok<const T, const E>(payload: T): Result<T, E> {
+export interface OkResult<T> {
+  ok: true;
+  payload: T;
+}
+export interface ErrResult<Err extends Static<BaseErrorSchemaType>> {
+  ok: false;
+  payload: Err;
+}
+export type Result<T, Err extends Static<BaseErrorSchemaType>> =
+  | OkResult<T>
+  | ErrResult<Err>;
+
+export function Ok<const T extends Array<unknown>>(p: T): OkResult<T>;
+export function Ok<const T extends ReadonlyArray<unknown>>(p: T): OkResult<T>;
+export function Ok<const T>(payload: T): OkResult<T>;
+export function Ok<const T>(payload: T): OkResult<T> {
   return {
     ok: true,
     payload,
   };
 }
 
-export function Err<const T, const E>(error: E): Result<T, E> {
+export function Err<const Err extends Static<BaseErrorSchemaType>>(
+  error: Err,
+): ErrResult<Err> {
   return {
     ok: false,
     payload: error,
@@ -74,21 +90,39 @@ export type ResultUnwrapOk<R> = R extends Result<infer T, infer __E>
   : never;
 
 /**
+ * Unwrap a {@link Result} type and return the payload if successful,
+ * otherwise throws an error.
+ * @param result - The result to unwrap.
+ * @throws Will throw an error if the result is not ok.
+ */
+export function unwrapOrThrow<T, Err extends Static<BaseErrorSchemaType>>(
+  result: Result<T, Err>,
+): T {
+  if (result.ok) {
+    return result.payload;
+  }
+
+  throw new Error(
+    `Cannot non-ok result, got: ${result.payload.code} - ${result.payload.message}`,
+  );
+}
+
+/**
  * Refine a {@link Result} type to its error payload.
  */
-export type ResultUnwrapErr<R> = R extends Result<infer __T, infer E>
-  ? E
+export type ResultUnwrapErr<R> = R extends Result<infer __T, infer Err>
+  ? Err
   : never;
 
 /**
- * Retrieve the output type for a procedure, represented as a {@link Result}
+ * Retrieve the response type for a procedure, represented as a {@link Result}
  * type.
  * Example:
  * ```
- * type Message = Output<typeof client, 'serviceName', 'procedureName'>
+ * type Message = ResponseData<typeof client, 'serviceName', 'procedureName'>
  * ```
  */
-export type Output<
+export type ResponseData<
   RiverClient,
   ServiceName extends keyof RiverClient,
   ProcedureName extends keyof RiverClient[ServiceName],
@@ -96,30 +130,32 @@ export type Output<
   Fn extends (...args: never) => unknown = (...args: never) => unknown,
 > = RiverClient extends Client<infer __ServiceSchemaMap>
   ? Procedure extends object
-    ? Procedure extends object & { rpc: infer RpcHandler extends Fn }
-      ? Awaited<ReturnType<RpcHandler>>
-      : Procedure extends object & { upload: infer UploadHandler extends Fn }
-      ? Awaited<ReturnType<UploadHandler>> extends [
-          infer __UploadInputMessage,
-          infer UploadOutputMessage,
-        ]
-        ? Awaited<UploadOutputMessage>
+    ? Procedure extends object & { rpc: infer RpcFn extends Fn }
+      ? Awaited<ReturnType<RpcFn>>
+      : Procedure extends object & { upload: infer UploadFn extends Fn }
+      ? ReturnType<UploadFn> extends {
+          finalize: (...args: never) => Promise<infer UploadOutputMessage>;
+        }
+        ? UploadOutputMessage
         : never
-      : Procedure extends object & { stream: infer StreamHandler extends Fn }
-      ? Awaited<ReturnType<StreamHandler>> extends [
-          infer __StreamInputMessage,
-          AsyncGenerator<infer StreamOutputMessage>,
-          infer __StreamCloseHandle,
-        ]
+      : Procedure extends object & { stream: infer StreamFn extends Fn }
+      ? ReturnType<StreamFn> extends {
+          resReadable: Readable<
+            infer StreamOutputMessage,
+            Static<BaseErrorSchemaType>
+          >;
+        }
         ? StreamOutputMessage
         : never
       : Procedure extends object & {
-          subscribe: infer SubscriptionHandler extends Fn;
+          subscribe: infer SubscriptionFn extends Fn;
         }
-      ? Awaited<ReturnType<SubscriptionHandler>> extends [
-          AsyncGenerator<infer SubscriptionOutputMessage>,
-          infer __SubscriptionCloseHandle,
-        ]
+      ? Awaited<ReturnType<SubscriptionFn>> extends {
+          resReadable: Readable<
+            infer SubscriptionOutputMessage,
+            Static<BaseErrorSchemaType>
+          >;
+        }
         ? SubscriptionOutputMessage
         : never
       : never

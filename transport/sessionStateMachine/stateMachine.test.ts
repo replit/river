@@ -7,6 +7,7 @@ import { waitFor } from '../../__tests__/fixtures/cleanup';
 import {
   ControlFlags,
   ControlMessageAckSchema,
+  currentProtocolVersion,
   handshakeRequestMessage,
 } from '../message';
 import { ERR_CONSUMED, IdentifiedSession, SessionState } from './common';
@@ -142,6 +143,7 @@ function createSessionNoConnection() {
     'from',
     listeners,
     testingSessionOptions,
+    currentProtocolVersion,
   );
 
   return { session, ...listeners };
@@ -417,6 +419,7 @@ describe('session state machine', () => {
         'to',
         undefined,
         listeners,
+        currentProtocolVersion,
       );
 
       expect(session.state).toBe(SessionState.Connected);
@@ -473,6 +476,7 @@ describe('session state machine', () => {
         'to',
         undefined,
         listeners,
+        currentProtocolVersion,
       );
 
       session.send(payloadToTransportMessage('foo'));
@@ -1312,6 +1316,7 @@ describe('session state machine', () => {
         'to',
         undefined,
         listeners,
+        currentProtocolVersion,
       );
 
       // doing anything on the old session should throw
