@@ -36,7 +36,7 @@ export {
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
   INVALID_REQUEST_CODE,
-  ABORT_CODE,
+  CANCEL_CODE,
   ResponseReaderErrorSchema,
   RequestReaderErrorSchema,
 } from './procedures';

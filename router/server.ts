@@ -7,7 +7,7 @@ import {
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
   AnyProcedure,
-  ABORT_CODE,
+  CANCEL_CODE,
   INVALID_REQUEST_CODE,
   INTERNAL_RIVER_ERROR_CODE,
 } from './procedures';
@@ -22,9 +22,9 @@ import {
   isStreamClose,
   isStreamOpen,
   ControlFlags,
-  isStreamAbort,
+  isStreamCancel,
   closeStreamMessage,
-  abortMessage,
+  cancelMessage,
   TransportClientId,
 } from '../transport/message';
 import {
@@ -52,11 +52,11 @@ type StreamId = string;
 const RequestErrResultSchema = ErrResultSchema(RequestReaderErrorSchema);
 
 /**
- * A schema for abort payloads sent from the client
+ * A schema for cancel payloads sent from the client
  */
-const ClientAbortResultSchema = ErrResultSchema(
+const ClientCancelResultSchema = ErrResultSchema(
   Type.Object({
-    code: Type.Literal(ABORT_CODE),
+    code: Type.Literal(CANCEL_CODE),
     message: Type.String(),
   }),
 );
@@ -103,14 +103,14 @@ class RiverServer<Services extends AnyServiceSchemaMap>
   private contextMap: Map<AnyService, ServiceContext & { state: object }>;
   private log?: Logger;
   /**
-   * We create a tombstones for streams aborted by the server
+   * We create a tombstones for streams cancelled by the server
    * so that we don't hit errors when the client has inflight
-   * requests it sent before it saw the abort.
-   * We track aborted streams for every session separately, so
+   * requests it sent before it saw the cancel.
+   * We track cancelled streams for every session separately, so
    * that bad clients don't affect good clients.
    */
-  private serverAbortedStreams: Map<TransportClientId, LRUSet>;
-  private maxAbortedStreamTombstonesPerSession: number;
+  private serverCancelledStreams: Map<TransportClientId, LRUSet>;
+  private maxCancelledStreamTombstonesPerSession: number;
 
   public openStreams: Set<StreamId>;
   public services: InstantiatedServiceSchemaMap<Services>;
@@ -120,7 +120,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     services: Services,
     handshakeOptions?: ServerHandshakeOptions,
     extendedContext?: Omit<ServiceContext, 'state'>,
-    maxAbortedStreamTombstonesPerSession = 200,
+    maxCancelledStreamTombstonesPerSession = 200,
   ) {
     const instances: Record<string, AnyService> = {};
 
@@ -143,9 +143,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
     this.transport = transport;
     this.openStreams = new Set();
-    this.serverAbortedStreams = new Map();
-    this.maxAbortedStreamTombstonesPerSession =
-      maxAbortedStreamTombstonesPerSession;
+    this.serverCancelledStreams = new Map();
+    this.maxCancelledStreamTombstonesPerSession =
+      maxCancelledStreamTombstonesPerSession;
     this.log = transport.log;
 
     const handleMessage = (msg: EventMap['message']) => {
@@ -165,7 +165,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         return;
       }
 
-      if (this.serverAbortedStreams.get(msg.from)?.has(msg.streamId)) {
+      if (this.serverCancelledStreams.get(msg.from)?.has(msg.streamId)) {
         return;
       }
 
@@ -188,7 +188,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         evt.session.loggingMetadata,
       );
 
-      this.serverAbortedStreams.delete(disconnectedClientId);
+      this.serverCancelledStreams.delete(disconnectedClientId);
     };
     this.transport.addEventListener('sessionStatus', handleSessionStatus);
 
@@ -220,7 +220,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
     let cleanClose = true;
 
-    const onServerAbort = (
+    const onServerCancel = (
       errResult: Static<typeof RequestErrResultSchema>,
     ) => {
       if (reqReadable.isClosed() && resWritable.isClosed()) {
@@ -236,10 +236,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       resWritable.close();
-      this.abortStream(from, streamId, errResult);
+      this.cancelStream(from, streamId, errResult);
     };
-
-    const clientAbortController = new AbortController();
 
     const onSessionStatus = (evt: EventMap['sessionStatus']) => {
       if (evt.status !== 'disconnect') {
@@ -281,51 +279,49 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         return;
       }
 
-      if (isStreamAbortBackwardsCompat(msg.controlFlags, protocolVersion)) {
-        let abortResult: Static<typeof ClientAbortResultSchema>;
-        if (Value.Check(ClientAbortResultSchema, msg.payload)) {
-          abortResult = msg.payload;
+      if (isStreamCancelBackwardsCompat(msg.controlFlags, protocolVersion)) {
+        let cancelResult: Static<typeof ClientCancelResultSchema>;
+        if (Value.Check(ClientCancelResultSchema, msg.payload)) {
+          cancelResult = msg.payload;
         } else {
-          // If the payload is unexpected, then we just construct our own abort result
-          abortResult = Err({
-            code: ABORT_CODE,
-            message: 'stream aborted, client sent invalid payload',
+          // If the payload is unexpected, then we just construct our own cancel result
+          cancelResult = Err({
+            code: CANCEL_CODE,
+            message: 'stream cancelled, client sent invalid payload',
           });
-          this.log?.warn('Got stream abort without a valid protocol error', {
+          this.log?.warn('got stream cancel without a valid protocol error', {
             ...loggingMetadata,
             clientId: this.transport.clientId,
             transportMessage: msg,
             validationErrors: [
-              ...Value.Errors(ClientAbortResultSchema, msg.payload),
+              ...Value.Errors(ClientCancelResultSchema, msg.payload),
             ],
             tags: ['invalid-request'],
           });
         }
 
         if (!reqReadable.isClosed()) {
-          reqReadable._pushValue(abortResult);
+          reqReadable._pushValue(cancelResult);
           closeReadable();
         }
 
         resWritable.close();
 
-        clientAbortController.abort(abortResult.payload);
-
         return;
       }
 
       if (reqReadable.isClosed()) {
-        this.log?.warn('Received message after input stream is closed', {
+        this.log?.warn('received message after input stream is closed', {
           ...loggingMetadata,
           clientId: this.transport.clientId,
           transportMessage: msg,
           tags: ['invalid-request'],
         });
 
-        onServerAbort(
+        onServerCancel(
           Err({
             code: INVALID_REQUEST_CODE,
-            message: 'Received message after input stream is closed',
+            message: 'received message after input stream is closed',
           }),
         );
 
@@ -382,7 +378,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invalid-request'],
       });
 
-      onServerAbort(
+      onServerCancel(
         Err({
           code: INVALID_REQUEST_CODE,
           message: errMessage,
@@ -391,12 +387,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     };
     this.transport.addEventListener('message', onMessage);
 
-    const doneAbortController = new AbortController();
+    const finishedController = new AbortController();
     const cleanup = () => {
       this.transport.removeEventListener('message', onMessage);
       this.transport.removeEventListener('sessionStatus', onSessionStatus);
 
-      doneAbortController.abort();
+      finishedController.abort();
       this.openStreams.delete(streamId);
     };
 
@@ -474,7 +470,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       span.recordException(err instanceof Error ? err : new Error(errorMsg));
       span.setStatus({ code: SpanStatusCode.ERROR });
 
-      onServerAbort(
+      onServerCancel(
         Err({
           code: UNCAUGHT_ERROR_CODE,
           message: errorMsg,
@@ -498,15 +494,15 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       from,
       sessionId,
       metadata: sessionMetadata,
-      abort: () => {
-        onServerAbort(
+      cancel: () => {
+        onServerCancel(
           Err({
-            code: ABORT_CODE,
-            message: 'Aborted by server procedure handler',
+            code: CANCEL_CODE,
+            message: 'cancelled by server procedure handler',
           }),
         );
       },
-      signal: doneAbortController.signal,
+      signal: finishedController.signal,
     };
 
     switch (procedure.type) {
@@ -661,7 +657,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invariant-violation'],
       });
 
-      this.abortStream(
+      this.cancelStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -683,7 +679,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invariant-violation'],
       });
 
-      this.abortStream(
+      this.cancelStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -704,7 +700,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invalid-request'],
       });
 
-      this.abortStream(
+      this.cancelStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -725,7 +721,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invalid-request'],
       });
 
-      this.abortStream(
+      this.cancelStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -746,7 +742,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invalid-request'],
       });
 
-      this.abortStream(
+      this.cancelStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -767,7 +763,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invalid-request'],
       });
 
-      this.abortStream(
+      this.cancelStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -789,7 +785,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invalid-request'],
       });
 
-      this.abortStream(
+      this.cancelStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -827,7 +823,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invalid-request'],
       });
 
-      this.abortStream(
+      this.cancelStream(
         initMessage.from,
         initMessage.streamId,
         Err({
@@ -860,27 +856,29 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     };
   }
 
-  abortStream(
+  cancelStream(
     to: string,
     streamId: string,
     payload: ErrResult<Static<typeof ResponseReaderErrorSchema>>,
   ) {
-    let abortedForSession = this.serverAbortedStreams.get(to);
+    let cancelledForSession = this.serverCancelledStreams.get(to);
 
-    if (!abortedForSession) {
-      abortedForSession = new LRUSet(this.maxAbortedStreamTombstonesPerSession);
+    if (!cancelledForSession) {
+      cancelledForSession = new LRUSet(
+        this.maxCancelledStreamTombstonesPerSession,
+      );
 
-      this.serverAbortedStreams.set(to, abortedForSession);
+      this.serverCancelledStreams.set(to, cancelledForSession);
     }
 
-    abortedForSession.add(streamId);
+    cancelledForSession.add(streamId);
 
     this.transport.send(
       to,
       // TODO remove once clients migrate to v2
       this.transport.sessions.get(to)?.protocolVersion === 'v1.1'
         ? closeStreamMessage(streamId)
-        : abortMessage(streamId, payload),
+        : cancelMessage(streamId, payload),
     );
   }
 }
@@ -912,7 +910,7 @@ class LRUSet {
 }
 
 // TODO remove once clients migrate to v2
-function isStreamAbortBackwardsCompat(
+function isStreamCancelBackwardsCompat(
   controlFlags: ControlFlags,
   protocolVersion: string,
 ) {
@@ -921,7 +919,7 @@ function isStreamAbortBackwardsCompat(
     return false;
   }
 
-  return isStreamAbort(controlFlags);
+  return isStreamCancel(controlFlags);
 }
 
 // TODO remove once clients migrate to v2
@@ -930,8 +928,8 @@ function isStreamCloseBackwardsCompat(
   protocolVersion: string,
 ) {
   if (protocolVersion === 'v1.1') {
-    // in v1.1 the bits for close is what we use for abort now
-    return isStreamAbort(controlFlags);
+    // in v1.1 the bits for close is what we use for cancel now
+    return isStreamCancel(controlFlags);
   }
 
   return isStreamClose(controlFlags);
@@ -940,8 +938,8 @@ function isStreamCloseBackwardsCompat(
 // TODO remove once clients migrate to v2
 function getStreamCloseBackwardsCompat(protocolVersion: string) {
   if (protocolVersion === 'v1.1') {
-    // in v1.1 the bits for close is what we use for abort now
-    return ControlFlags.StreamAbortBit;
+    // in v1.1 the bits for close is what we use for cancel now
+    return ControlFlags.StreamCancelBit;
   }
 
   return ControlFlags.StreamClosedBit;
@@ -963,10 +961,10 @@ export function createServer<Services extends AnyServiceSchemaMap>(
     handshakeOptions?: ServerHandshakeOptions;
     extendedContext?: Omit<ServiceContext, 'state'>;
     /**
-     * Maximum number of aborted streams to keep track of to avoid
+     * Maximum number of cancelled streams to keep track of to avoid
      * cascading stream errors.
      */
-    maxAbortedStreamTombstonesPerSession?: number;
+    maxCancelledStreamTombstonesPerSession?: number;
   }>,
 ): Server<Services> {
   return new RiverServer(
@@ -974,6 +972,6 @@ export function createServer<Services extends AnyServiceSchemaMap>(
     services,
     providedServerOptions?.handshakeOptions,
     providedServerOptions?.extendedContext,
-    providedServerOptions?.maxAbortedStreamTombstonesPerSession,
+    providedServerOptions?.maxCancelledStreamTombstonesPerSession,
   );
 }

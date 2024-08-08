@@ -144,7 +144,7 @@ The `controlFlags` property is a [bit field](https://en.wikipedia.org/wiki/Bit_f
 
 - The `AckBit` (`0b00001`) MUST only be set in the case of an explicit heartbeat that _only_ contains ack/seq information and no application-level payload (i.e., only used to update transport level bookkeeping).
 - The `StreamOpenBit` (`0b00010`) MUST be set for the first message of a new stream.
-- The `StreamAbortBit` (`0b00100`) MUST be set when a stream is to be abruptly closed due to cancellations or an internal error condition.
+- The `StreamCancelBit` (`0b00100`) MUST be set when a stream is to be abruptly closed due to cancellations or an internal error condition.
 - The `StreamClosedBit` (`0b01000`) MUST be set for the last message of a stream.
 
 All messages MUST have no control flags set (i.e., the `controlFlags` field is `0b00000`) unless:
@@ -156,7 +156,7 @@ All messages MUST have no control flags set (i.e., the `controlFlags` field is `
     - All further messages MAY omit `serviceName` and `procedureName` as they are implied by the first message and are constant throughout the lifetime of a stream.
 - It is the last message of a stream, in which case the `StreamClosedBit` MUST be set.
   - If this is sent with no payload, it is a control message the payload MUST Be a `ControlClose`.
-- It is a message aborting the stream, in which case the `StreamAbortBit` MUST be set.
+- It is a message cancelling the stream, in which case the `StreamCancelBit` MUST be set.
   - This message MUST contain a `ProtocolError` payload.
 - It is an explicit heartbeat, so the `AckBit` MUST be the only bit set.
   - The payload MUST be `{ type: 'ACK' }`.
@@ -179,18 +179,18 @@ interface UncaughtError extends BaseError {
   message: string;
 }
 
-// This is sent when one side wishes to cancel or "abort" the stream
+// This is sent when one side wishes to cancel the stream
 // abruptly from user-space. Handling this is up to the procedure
 // implementation or the caller.
-interface AbortError extends BaseError {
-  code: 'ABORT';
+interface CancelError extends BaseError {
+  code: 'CANCEL';
   message: string;
 }
 
-type ProtocolError = UncaughtError | InvalidRequestError | AbortError;
+type ProtocolError = UncaughtError | InvalidRequestError | CancelError;
 ```
 
-`ProtocolError`s, just like service-level errors, are wrapped with a `Result`, which is further wrapped with `TransportMessage` and MUST have a `StreamAbortBit` flag. Please note that these are separate from user-defined errors, which should be treated just like any output message.
+`ProtocolError`s, just like service-level errors, are wrapped with a `Result`, which is further wrapped with `TransportMessage` and MUST have a `StreamCancelBit` flag. Please note that these are separate from user-defined errors, which should be treated just like any output message.
 
 There are 4 `Control` payloads:
 
@@ -276,7 +276,7 @@ When a message is received, it MUST be validated before being processed.
 - Either side can initiate a close by sending a message with a `StreamClosedBit`
   - The closing party MUST NOT send any more messages.
   - To get a full close, the other side MUST respond with a `StreamClosedBit` acknowledging the close.
-- In case of errors or if one side wishes to abruptly abort the stream, a message with a `StreamAbortBit` and a `ProtocolError` payload.
+- In case of errors or if one side wishes to abruptly cancel the stream, a message with a `StreamCancelBit` and a `ProtocolError` payload.
 
 When a message is validated at this level, the implementor must update the bookkeeping information for the session (see the 'Transparent Reconnections' heading for more information).
 
@@ -304,7 +304,7 @@ For an incoming message to be considered valid on the server, the transport mess
 - If this is the first message of the stream, the internal payload of the message should match the JSON schema for the `Init` type of the associated handler, and the server should pass the `Init` message to the handler.
 - If this is not the first message of the stream AND the procedure accepts further input, the internal payload of the message should match the JSON schema for the `Input` type of the associated handler, and the server should pass the `Input` message to the handler.
 
-If the message is invalid, the server MUST discard the message and send back an `INVALID_REQUEST` error message with a `StreamAbortBit`, this is an abrupt full close, the server should cleanup all associated resources with the stream without expecting a close response from the client. The server may choose to keep track of `INVALID_REQUEST` stream ids to avoid sending multiple errors back.
+If the message is invalid, the server MUST discard the message and send back an `INVALID_REQUEST` error message with a `StreamCancelBit`, this is an abrupt full close, the server should cleanup all associated resources with the stream without expecting a close response from the client. The server may choose to keep track of `INVALID_REQUEST` stream ids to avoid sending multiple errors back.
 
 Otherwise, the message is a normal message. Unwrap the payload and pass it to the handler associated with the `streamId` of the message.
 
@@ -320,7 +320,7 @@ The legend is as follows:
 - `x` represents an `Init` message with both `StreamOpenBit`and `StreamClosedBit` set.
 - `<` represents a `Result` message with the `StreamClosedBit` set.
   - This message may contain service-level errors.
-- `!` represents a `Result` message with the `StreamAbortBit` set and a `ProtocolError` in the payload.
+- `!` represents a `Result` message with the `StreamCancelBit` set and a `ProtocolError` in the payload.
 - `{` represents a `ControlClose` message.
 - `-` represents any message with no control flags set.
 

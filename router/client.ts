@@ -14,9 +14,9 @@ import {
   TransportClientId,
   isStreamClose,
   ControlMessageCloseSchema,
-  isStreamAbort,
+  isStreamCancel,
   closeStreamMessage,
-  abortMessage,
+  cancelMessage,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
 import {
@@ -36,7 +36,7 @@ import { generateId } from '../transport/id';
 import { Readable, ReadableImpl, Writable, WritableImpl } from './streams';
 import { Value } from '@sinclair/typebox/value';
 import {
-  ABORT_CODE,
+  CANCEL_CODE,
   ResponseReaderErrorSchema,
   PayloadType,
   UNEXPECTED_DISCONNECT_CODE,
@@ -332,24 +332,24 @@ function handleProc(
   function cleanup() {
     transport.removeEventListener('message', onMessage);
     transport.removeEventListener('sessionStatus', onSessionStatus);
-    abortSignal?.removeEventListener('abort', onClientAbort);
+    abortSignal?.removeEventListener('abort', onClientCancel);
     span.end();
   }
 
-  function onClientAbort() {
+  function onClientCancel() {
     if (resReadable.isClosed() && reqWritable.isClosed()) {
       return;
     }
 
-    span.addEvent('sending abort');
+    span.addEvent('sending cancel');
 
     cleanClose = false;
 
     if (!resReadable.isClosed()) {
       resReadable._pushValue(
         Err({
-          code: ABORT_CODE,
-          message: 'Aborted by client',
+          code: CANCEL_CODE,
+          message: 'cancelled by client',
         }),
       );
       closeReadable();
@@ -358,11 +358,11 @@ function handleProc(
     reqWritable.close();
     transport.send(
       serverId,
-      abortMessage(
+      cancelMessage(
         streamId,
         Err({
-          code: ABORT_CODE,
-          message: 'Aborted by client',
+          code: CANCEL_CODE,
+          message: 'cancelled by client',
         }),
       ),
     );
@@ -371,7 +371,7 @@ function handleProc(
   function onMessage(msg: OpaqueTransportMessage) {
     if (msg.streamId !== streamId) return;
     if (msg.to !== transport.clientId) {
-      transport.log?.error('Got stream message from unexpected client', {
+      transport.log?.error('got stream message from unexpected client', {
         clientId: transport.clientId,
         transportMessage: msg,
       });
@@ -379,21 +379,21 @@ function handleProc(
       return;
     }
 
-    if (isStreamAbort(msg.controlFlags)) {
+    if (isStreamCancel(msg.controlFlags)) {
       cleanClose = false;
 
-      span.addEvent('received abort');
-      let abortResult: Static<typeof OutputErrResultSchema>;
+      span.addEvent('received cancel');
+      let cancelResult: Static<typeof OutputErrResultSchema>;
 
       if (Value.Check(OutputErrResultSchema, msg.payload)) {
-        abortResult = msg.payload;
+        cancelResult = msg.payload;
       } else {
-        abortResult = Err({
-          code: ABORT_CODE,
-          message: 'Stream aborted with invalid payload',
+        cancelResult = Err({
+          code: CANCEL_CODE,
+          message: 'stream cancelled with invalid payload',
         });
         transport.log?.error(
-          'Got stream abort without a valid protocol error',
+          'got stream cancel without a valid protocol error',
           {
             clientId: transport.clientId,
             transportMessage: msg,
@@ -405,7 +405,7 @@ function handleProc(
       }
 
       if (!resReadable.isClosed()) {
-        resReadable._pushValue(abortResult);
+        resReadable._pushValue(cancelResult);
         closeReadable();
       }
 
@@ -415,9 +415,9 @@ function handleProc(
     }
 
     if (resReadable.isClosed()) {
-      span.recordException('Received message after output stream is closed');
+      span.recordException('received message after output stream is closed');
 
-      transport.log?.error('Received message after output stream is closed', {
+      transport.log?.error('received message after output stream is closed', {
         clientId: transport.clientId,
         transportMessage: msg,
       });
@@ -469,7 +469,7 @@ function handleProc(
     closeReadable();
   }
 
-  abortSignal?.addEventListener('abort', onClientAbort);
+  abortSignal?.addEventListener('abort', onClientCancel);
   transport.addEventListener('message', onMessage);
   transport.addEventListener('sessionStatus', onSessionStatus);
 

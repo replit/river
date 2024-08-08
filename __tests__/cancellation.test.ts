@@ -15,17 +15,17 @@ import {
 } from './fixtures/cleanup';
 import { EventMap } from '../transport';
 import {
-  ABORT_CODE,
+  CANCEL_CODE,
   StreamProcedure,
   UNCAUGHT_ERROR_CODE,
 } from '../router/procedures';
-import { ControlFlags, abortMessage } from '../transport/message';
+import { ControlFlags, cancelMessage } from '../transport/message';
 import { TestSetupHelpers } from './fixtures/transports';
 import { nanoid } from 'nanoid';
 import { ProcedureHandlerContext } from '../router/context';
 
 describe.each(testMatrix())(
-  'client initiated abort ($transport.name transport, $codec.name codec)',
+  'client initiated cancellation ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
 
@@ -81,7 +81,7 @@ describe.each(testMatrix())(
         await expect(resP).resolves.toEqual({
           ok: false,
           payload: {
-            code: ABORT_CODE,
+            code: CANCEL_CODE,
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             message: expect.any(String),
           },
@@ -95,11 +95,11 @@ describe.each(testMatrix())(
         expect(serverOnMessage).toHaveBeenNthCalledWith(
           2,
           expect.objectContaining({
-            controlFlags: ControlFlags.StreamAbortBit,
+            controlFlags: ControlFlags.StreamCancelBit,
             payload: {
               ok: false,
               payload: {
-                code: ABORT_CODE,
+                code: CANCEL_CODE,
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 message: expect.any(String),
               },
@@ -152,7 +152,7 @@ describe.each(testMatrix())(
         await expect(finalize()).resolves.toEqual({
           ok: false,
           payload: {
-            code: ABORT_CODE,
+            code: CANCEL_CODE,
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             message: expect.any(String),
           },
@@ -166,11 +166,11 @@ describe.each(testMatrix())(
         expect(serverOnMessage).toHaveBeenNthCalledWith(
           2,
           expect.objectContaining({
-            controlFlags: ControlFlags.StreamAbortBit,
+            controlFlags: ControlFlags.StreamCancelBit,
             payload: {
               ok: false,
               payload: {
-                code: ABORT_CODE,
+                code: CANCEL_CODE,
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 message: expect.any(String),
               },
@@ -222,7 +222,7 @@ describe.each(testMatrix())(
           {
             ok: false,
             payload: {
-              code: ABORT_CODE,
+              code: CANCEL_CODE,
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               message: expect.any(String),
             },
@@ -237,11 +237,11 @@ describe.each(testMatrix())(
         expect(serverOnMessage).toHaveBeenNthCalledWith(
           2,
           expect.objectContaining({
-            controlFlags: ControlFlags.StreamAbortBit,
+            controlFlags: ControlFlags.StreamCancelBit,
             payload: {
               ok: false,
               payload: {
-                code: ABORT_CODE,
+                code: CANCEL_CODE,
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 message: expect.any(String),
               },
@@ -296,7 +296,7 @@ describe.each(testMatrix())(
           {
             ok: false,
             payload: {
-              code: ABORT_CODE,
+              code: CANCEL_CODE,
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               message: expect.any(String),
             },
@@ -311,11 +311,11 @@ describe.each(testMatrix())(
         expect(serverOnMessage).toHaveBeenNthCalledWith(
           2,
           expect.objectContaining({
-            controlFlags: ControlFlags.StreamAbortBit,
+            controlFlags: ControlFlags.StreamCancelBit,
             payload: {
               ok: false,
               payload: {
-                code: ABORT_CODE,
+                code: CANCEL_CODE,
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 message: expect.any(String),
               },
@@ -399,10 +399,10 @@ describe.each(testMatrix())(
 
           clientTransport.send(
             serverTransport.clientId,
-            abortMessage(
+            cancelMessage(
               streamId,
               Err({
-                code: ABORT_CODE,
+                code: CANCEL_CODE,
                 message: '',
               }),
             ),
@@ -464,13 +464,13 @@ describe.each(testMatrix())(
         ctx.signal.addEventListener('abort', onRequestFinished);
 
         clientAbortController.abort();
-        // this should be ignored by the client since it already aborted
+        // this should be ignored by the client since it already cancelled
         resWritable.write({ ok: true, payload: {} });
         expect(await resReadable.collect()).toEqual([
           {
             ok: false,
             payload: {
-              code: ABORT_CODE,
+              code: CANCEL_CODE,
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               message: expect.any(String),
             },
@@ -485,7 +485,7 @@ describe.each(testMatrix())(
           {
             ok: false,
             payload: {
-              code: ABORT_CODE,
+              code: CANCEL_CODE,
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               message: expect.any(String),
             },
@@ -498,7 +498,7 @@ describe.each(testMatrix())(
 );
 
 describe.each(testMatrix())(
-  'server explicit abort ($transport.name transport, $codec.name codec)',
+  'server explicit cancellation ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
 
@@ -551,10 +551,10 @@ describe.each(testMatrix())(
 
         serverTransport.send(
           'client',
-          abortMessage(
+          cancelMessage(
             initStreamId,
             Err({
-              code: ABORT_CODE,
+              code: CANCEL_CODE,
               message: '',
             }),
           ),
@@ -563,7 +563,7 @@ describe.each(testMatrix())(
         await expect(resP).resolves.toEqual({
           ok: false,
           payload: {
-            code: ABORT_CODE,
+            code: CANCEL_CODE,
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             message: expect.any(String),
           },
@@ -606,10 +606,10 @@ describe.each(testMatrix())(
 
         serverTransport.send(
           'client',
-          abortMessage(
+          cancelMessage(
             initStreamId,
             Err({
-              code: ABORT_CODE,
+              code: CANCEL_CODE,
               message: '',
             }),
           ),
@@ -618,7 +618,7 @@ describe.each(testMatrix())(
         await expect(finalize()).resolves.toEqual({
           ok: false,
           payload: {
-            code: ABORT_CODE,
+            code: CANCEL_CODE,
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             message: expect.any(String),
           },
@@ -662,10 +662,10 @@ describe.each(testMatrix())(
 
         serverTransport.send(
           'client',
-          abortMessage(
+          cancelMessage(
             initStreamId,
             Err({
-              code: ABORT_CODE,
+              code: CANCEL_CODE,
               message: '',
             }),
           ),
@@ -675,7 +675,7 @@ describe.each(testMatrix())(
           {
             ok: false,
             payload: {
-              code: ABORT_CODE,
+              code: CANCEL_CODE,
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               message: expect.any(String),
             },
@@ -719,10 +719,10 @@ describe.each(testMatrix())(
 
         serverTransport.send(
           'client',
-          abortMessage(
+          cancelMessage(
             initStreamId,
             Err({
-              code: ABORT_CODE,
+              code: CANCEL_CODE,
               message: '',
             }),
           ),
@@ -732,7 +732,7 @@ describe.each(testMatrix())(
           {
             ok: false,
             payload: {
-              code: ABORT_CODE,
+              code: CANCEL_CODE,
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               message: expect.any(String),
             },
@@ -806,7 +806,7 @@ describe.each(testMatrix())(
         expect(server.openStreams.size).toEqual(1);
         expect(handler).toHaveBeenCalledTimes(1);
         const [ctx] = handler.mock.calls[0];
-        ctx.abort();
+        ctx.cancel();
 
         await waitFor(() => {
           expect(clientOnMessage).toHaveBeenCalledTimes(1);
@@ -815,12 +815,12 @@ describe.each(testMatrix())(
         expect(clientOnMessage).toHaveBeenCalledWith(
           expect.objectContaining({
             ack: 1,
-            controlFlags: ControlFlags.StreamAbortBit,
+            controlFlags: ControlFlags.StreamCancelBit,
             streamId,
             payload: {
               ok: false,
               payload: {
-                code: ABORT_CODE,
+                code: CANCEL_CODE,
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 message: expect.any(String),
               },
@@ -831,7 +831,7 @@ describe.each(testMatrix())(
         expect(server.openStreams.size).toEqual(0);
       });
 
-      test('tombstones aborted stream', async () => {
+      test('tombstones cancelled stream', async () => {
         const clientTransport = getClientTransport('client');
         const serverTransport = getServerTransport();
         addPostTestCleanup(() =>
@@ -883,7 +883,7 @@ describe.each(testMatrix())(
         });
 
         const [{ ctx }] = handler.mock.calls[0];
-        ctx.abort();
+        ctx.cancel();
         // input for the stream should be ignored
         // instead of leading to an error response
         clientTransport.send(serverTransport.clientId, {
@@ -899,11 +899,11 @@ describe.each(testMatrix())(
         expect(handler).toHaveBeenCalledTimes(1);
         expect(serverSendSpy).toHaveBeenCalledWith('client', {
           streamId,
-          controlFlags: ControlFlags.StreamAbortBit,
+          controlFlags: ControlFlags.StreamCancelBit,
           payload: {
             ok: false,
             payload: {
-              code: ABORT_CODE,
+              code: CANCEL_CODE,
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               message: expect.any(String),
             },
@@ -917,12 +917,12 @@ describe.each(testMatrix())(
         expect(clientOnMessage).toHaveBeenCalledWith(
           expect.objectContaining({
             ack: 1,
-            controlFlags: ControlFlags.StreamAbortBit,
+            controlFlags: ControlFlags.StreamCancelBit,
             streamId,
             payload: {
               ok: false,
               payload: {
-                code: ABORT_CODE,
+                code: CANCEL_CODE,
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 message: expect.any(String),
               },
@@ -970,14 +970,14 @@ describe.each(testMatrix())(
 
         const [{ ctx, reqReadable, resWritable }] = handler.mock.calls[0];
 
-        ctx.abort();
-        // this should be ignored by the server since it already aborted
+        ctx.cancel();
+        // this should be ignored by the server since it already cancelled
         reqWritable.write({ ok: true, payload: {} });
         expect(await reqReadable.collect()).toEqual([
           {
             ok: false,
             payload: {
-              code: ABORT_CODE,
+              code: CANCEL_CODE,
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               message: expect.any(String),
             },
@@ -989,7 +989,7 @@ describe.each(testMatrix())(
           {
             ok: false,
             payload: {
-              code: ABORT_CODE,
+              code: CANCEL_CODE,
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               message: expect.any(String),
             },
@@ -1011,7 +1011,7 @@ const createRejectable = () => {
 };
 
 describe.each(testMatrix())(
-  'handler uncaught exception error abort ($transport.name transport, $codec.name codec)',
+  'handler uncaught exception error cancellation ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
 
@@ -1098,7 +1098,7 @@ describe.each(testMatrix())(
         expect(clientOnMessage).toHaveBeenCalledWith(
           expect.objectContaining({
             ack: 1,
-            controlFlags: ControlFlags.StreamAbortBit,
+            controlFlags: ControlFlags.StreamCancelBit,
             streamId,
             payload: {
               ok: false,
@@ -1150,7 +1150,7 @@ describe.each(testMatrix())(
 
         const errorMessage = Math.random().toString();
         rejectable.reject(new Error(errorMessage));
-        // this should be ignored by the server since it already aborted
+        // this should be ignored by the server since it already cancelled
         reqWritable.write({ ok: true, payload: {} });
         expect(await reqReadable.collect()).toEqual([
           {

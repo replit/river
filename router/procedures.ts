@@ -55,9 +55,9 @@ export const UNEXPECTED_DISCONNECT_CODE = 'UNEXPECTED_DISCONNECT' as const;
  */
 export const INVALID_REQUEST_CODE = 'INVALID_REQUEST' as const;
 /**
- * ABORT_CODE is the code used when either server or client aborts the stream.
+ * CANCEL_CODE is the code used when either server or client cancels the stream.
  */
-export const ABORT_CODE = 'ABORT' as const;
+export const CANCEL_CODE = 'CANCEL' as const;
 
 /**
  * ResponseReaderErrorSchema is the schema for all the errors that can be
@@ -69,7 +69,7 @@ export const ResponseReaderErrorSchema = Type.Object({
     Type.Literal(UNCAUGHT_ERROR_CODE),
     Type.Literal(UNEXPECTED_DISCONNECT_CODE),
     Type.Literal(INVALID_REQUEST_CODE),
-    Type.Literal(ABORT_CODE),
+    Type.Literal(CANCEL_CODE),
   ]),
   message: Type.String(),
 });
@@ -83,7 +83,7 @@ export const RequestReaderErrorSchema = Type.Object({
     Type.Literal(UNCAUGHT_ERROR_CODE),
     Type.Literal(UNEXPECTED_DISCONNECT_CODE),
     Type.Literal(INVALID_REQUEST_CODE),
-    Type.Literal(ABORT_CODE),
+    Type.Literal(CANCEL_CODE),
   ]),
   message: Type.String(),
 });

@@ -55,7 +55,7 @@ export interface Readable<T, E extends Static<BaseErrorSchemaType>> {
    * {@link collect} locks the {@link Readable} and returns a promise that resolves
    * with an array of the content when the {@link Readable} is fully done. This could
    * be due to the {@link Writable} end of the pipe closing cleanly, the procedure invocation
-   * is aborted, or {@link break} is called.
+   * is cancelled, or {@link break} is called.
    */
   collect(): Promise<Array<ReadableResult<T, E>>>;
   /**
@@ -98,7 +98,7 @@ export interface Writable<T> {
   /**
    * {@link isWritable} returns true if it's safe to call {@link write}, which
    * means that the {@link Writable} hasn't been closed due to {@link close} being called
-   * on this {@link Writable} or the procedure invocation being aborted for any reason.
+   * on this {@link Writable} or the procedure invocation ending for any reason.
    */
   isWritable(): boolean;
 }

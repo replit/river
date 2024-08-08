@@ -418,7 +418,7 @@ describe.each(testMatrix())(
   },
 );
 
-describe('request finishing triggers signal abort event listeners', async () => {
+describe('request finishing triggers signal onabort', async () => {
   const { transport, codec } = testMatrix()[0];
   const opts = { codec: codec.codec };
 
@@ -496,9 +496,9 @@ describe('request finishing triggers signal abort event listeners', async () => 
     ctx.signal.addEventListener('abort', fn1);
 
     const fn2 = vi.fn();
-    ctx.signal.addEventListener('abort', fn2);
+    ctx.signal.onabort = fn2;
 
-    ctx.abort();
+    ctx.cancel();
 
     expect(fn1).toHaveBeenCalled();
     expect(fn2).toHaveBeenCalled();

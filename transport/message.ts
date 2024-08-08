@@ -24,9 +24,9 @@ export const enum ControlFlags {
    */
   StreamClosedBit = 0b01000,
   /**
-   * Used when a stream is aborted due to cancellation or errors
+   * Used when a stream is cancelled due errors or to explicit cancellation
    */
-  StreamAbortBit = 0b00100,
+  StreamCancelBit = 0b00100,
 }
 
 /**
@@ -260,7 +260,7 @@ export function closeStreamMessage(streamId: string): PartialTransportMessage {
   };
 }
 
-export function abortMessage(
+export function cancelMessage(
   streamId: string,
   payload: ErrResult<
     Static<typeof ResponseReaderErrorSchema | typeof RequestReaderErrorSchema>
@@ -268,7 +268,7 @@ export function abortMessage(
 ) {
   return {
     streamId,
-    controlFlags: ControlFlags.StreamAbortBit,
+    controlFlags: ControlFlags.StreamCancelBit,
     payload,
   };
 }
@@ -316,13 +316,14 @@ export function isStreamClose(controlFlag: number): boolean {
 }
 
 /**
- * Checks if the given control flag (usually found in msg.controlFlag) is an abort message.
+ * Checks if the given control flag (usually found in msg.controlFlag) is an cancel message.
  * @param controlFlag - The control flag to check.
- * @returns True if the control flag contains the AbortBit, false otherwise
+ * @returns True if the control flag contains the CancelBit, false otherwise
  */
-export function isStreamAbort(controlFlag: number): boolean {
+export function isStreamCancel(controlFlag: number): boolean {
   return (
     /* eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison */
-    (controlFlag & ControlFlags.StreamAbortBit) === ControlFlags.StreamAbortBit
+    (controlFlag & ControlFlags.StreamCancelBit) ===
+    ControlFlags.StreamCancelBit
   );
 }

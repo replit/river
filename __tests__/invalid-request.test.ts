@@ -18,7 +18,7 @@ import { ControlFlags } from '../transport/message';
 import { TestSetupHelpers } from './fixtures/transports';
 import { nanoid } from 'nanoid';
 
-describe('aborts invalid request', () => {
+describe('cancels invalid request', () => {
   const { transport, codec } = testMatrix()[0];
   const opts = { codec: codec.codec };
 
@@ -72,7 +72,7 @@ describe('aborts invalid request', () => {
     await waitFor(() => {
       expect(clientOnMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          controlFlags: ControlFlags.StreamAbortBit,
+          controlFlags: ControlFlags.StreamCancelBit,
           streamId,
           payload: {
             ok: false,
@@ -123,7 +123,7 @@ describe('aborts invalid request', () => {
     await waitFor(() => {
       expect(clientOnMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          controlFlags: ControlFlags.StreamAbortBit,
+          controlFlags: ControlFlags.StreamCancelBit,
           streamId,
           payload: {
             ok: false,
@@ -174,7 +174,7 @@ describe('aborts invalid request', () => {
     await waitFor(() => {
       expect(clientOnMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          controlFlags: ControlFlags.StreamAbortBit,
+          controlFlags: ControlFlags.StreamCancelBit,
           streamId,
           payload: {
             ok: false,
@@ -226,7 +226,7 @@ describe('aborts invalid request', () => {
     await waitFor(() => {
       expect(clientOnMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          controlFlags: ControlFlags.StreamAbortBit,
+          controlFlags: ControlFlags.StreamCancelBit,
           streamId,
           payload: {
             ok: false,
@@ -281,7 +281,7 @@ describe('aborts invalid request', () => {
 
     expect(clientOnMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        controlFlags: ControlFlags.StreamAbortBit,
+        controlFlags: ControlFlags.StreamCancelBit,
         streamId,
         payload: {
           ok: false,
@@ -332,7 +332,7 @@ describe('aborts invalid request', () => {
     await waitFor(() => {
       expect(clientOnMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          controlFlags: ControlFlags.StreamAbortBit,
+          controlFlags: ControlFlags.StreamCancelBit,
           streamId,
           payload: {
             ok: false,
@@ -393,7 +393,7 @@ describe('aborts invalid request', () => {
 
     expect(clientOnMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        controlFlags: ControlFlags.StreamAbortBit,
+        controlFlags: ControlFlags.StreamCancelBit,
         streamId,
         payload: {
           ok: false,
@@ -454,7 +454,7 @@ describe('aborts invalid request', () => {
 
     expect(clientOnMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        controlFlags: ControlFlags.StreamAbortBit,
+        controlFlags: ControlFlags.StreamCancelBit,
         streamId,
         payload: {
           ok: false,
@@ -517,7 +517,7 @@ describe('aborts invalid request', () => {
     await waitFor(() => {
       expect(clientOnMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          controlFlags: ControlFlags.StreamAbortBit,
+          controlFlags: ControlFlags.StreamCancelBit,
           streamId,
           payload: {
             ok: false,
@@ -645,7 +645,7 @@ describe('aborts invalid request', () => {
       await waitFor(() => {
         expect(serverSendSpy).toHaveBeenCalledWith('client', {
           streamId,
-          controlFlags: ControlFlags.StreamAbortBit,
+          controlFlags: ControlFlags.StreamCancelBit,
           payload: {
             ok: false,
             payload: {
@@ -668,7 +668,7 @@ describe('aborts invalid request', () => {
       await waitFor(() => {
         expect(serverSendSpy).toHaveBeenCalledWith('client', {
           streamId: anotherStreamId,
-          controlFlags: ControlFlags.StreamAbortBit,
+          controlFlags: ControlFlags.StreamCancelBit,
           payload: {
             ok: false,
             payload: {
@@ -702,9 +702,9 @@ describe('aborts invalid request', () => {
         }),
       };
 
-      const maxAbortedStreamTombstonesPerSession = 5;
+      const maxCancelledStreamTombstonesPerSession = 5;
       createServer(serverTransport, services, {
-        maxAbortedStreamTombstonesPerSession,
+        maxCancelledStreamTombstonesPerSession,
       });
       clientTransport.connect(serverId);
 
@@ -721,7 +721,7 @@ describe('aborts invalid request', () => {
       await waitFor(() => {
         expect(serverSendSpy).toHaveBeenNthCalledWith(1, 'client', {
           streamId: firstStreamId,
-          controlFlags: ControlFlags.StreamAbortBit,
+          controlFlags: ControlFlags.StreamCancelBit,
           payload: {
             ok: false,
             payload: {
@@ -733,7 +733,7 @@ describe('aborts invalid request', () => {
         });
       });
 
-      for (let i = 0; i < maxAbortedStreamTombstonesPerSession; i++) {
+      for (let i = 0; i < maxCancelledStreamTombstonesPerSession; i++) {
         clientTransport.send(serverId, {
           streamId: nanoid(), // new streams
           procedureName: 'stream',
@@ -744,7 +744,7 @@ describe('aborts invalid request', () => {
 
       await waitFor(() => {
         expect(serverSendSpy).toHaveBeenCalledTimes(
-          maxAbortedStreamTombstonesPerSession + 1,
+          maxCancelledStreamTombstonesPerSession + 1,
         );
       });
 
@@ -757,16 +757,16 @@ describe('aborts invalid request', () => {
 
       await waitFor(() => {
         expect(serverSendSpy).toHaveBeenCalledTimes(
-          maxAbortedStreamTombstonesPerSession + 2,
+          maxCancelledStreamTombstonesPerSession + 2,
         );
       });
 
       expect(serverSendSpy).toHaveBeenNthCalledWith(
-        maxAbortedStreamTombstonesPerSession + 2,
+        maxCancelledStreamTombstonesPerSession + 2,
         'client',
         {
           streamId: firstStreamId,
-          controlFlags: ControlFlags.StreamAbortBit,
+          controlFlags: ControlFlags.StreamCancelBit,
           payload: {
             ok: false,
             payload: {
@@ -803,9 +803,9 @@ describe('aborts invalid request', () => {
         }),
       };
 
-      const maxAbortedStreamTombstonesPerSession = 5;
+      const maxCancelledStreamTombstonesPerSession = 5;
       createServer(serverTransport, services, {
-        maxAbortedStreamTombstonesPerSession,
+        maxCancelledStreamTombstonesPerSession,
       });
       client1Transport.connect(serverId);
       client2Transport.connect(serverId);
@@ -820,7 +820,7 @@ describe('aborts invalid request', () => {
         controlFlags: ControlFlags.StreamOpenBit,
       });
 
-      for (let i = 0; i < maxAbortedStreamTombstonesPerSession; i++) {
+      for (let i = 0; i < maxCancelledStreamTombstonesPerSession; i++) {
         client2Transport.send(serverId, {
           streamId: nanoid(), // new streams
           procedureName: 'stream',
@@ -831,7 +831,7 @@ describe('aborts invalid request', () => {
 
       await waitFor(() => {
         expect(serverSendSpy).toHaveBeenCalledTimes(
-          maxAbortedStreamTombstonesPerSession + 1,
+          maxCancelledStreamTombstonesPerSession + 1,
         );
       });
 
@@ -853,16 +853,16 @@ describe('aborts invalid request', () => {
 
       await waitFor(() => {
         expect(serverSendSpy).toHaveBeenCalledTimes(
-          maxAbortedStreamTombstonesPerSession + 2,
+          maxCancelledStreamTombstonesPerSession + 2,
         );
       });
 
       expect(serverSendSpy).toHaveBeenNthCalledWith(
-        maxAbortedStreamTombstonesPerSession + 2,
+        maxCancelledStreamTombstonesPerSession + 2,
         'client1',
         {
           streamId: client1LastStreamId,
-          controlFlags: ControlFlags.StreamAbortBit,
+          controlFlags: ControlFlags.StreamCancelBit,
           payload: {
             ok: false,
             payload: {

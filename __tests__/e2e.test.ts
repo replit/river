@@ -32,7 +32,7 @@ import {
   ServiceSchema,
   Ok,
   UNCAUGHT_ERROR_CODE,
-  ABORT_CODE,
+  CANCEL_CODE,
 } from '../router';
 import {
   createClientHandshakeOptions,
@@ -403,7 +403,7 @@ describe.each(testMatrix())(
       expect(result).toStrictEqual({
         ok: false,
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        payload: expect.objectContaining({ code: ABORT_CODE }),
+        payload: expect.objectContaining({ code: CANCEL_CODE }),
       });
       expect(await isReadableDone(resReadable)).toEqual(true);
 
@@ -447,7 +447,7 @@ describe.each(testMatrix())(
       expect(result2).toStrictEqual({
         ok: false,
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        payload: expect.objectContaining({ code: ABORT_CODE }),
+        payload: expect.objectContaining({ code: CANCEL_CODE }),
       });
 
       expect(await isReadableDone(resReadable)).toEqual(true);

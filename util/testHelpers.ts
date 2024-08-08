@@ -219,7 +219,7 @@ function dummyCtx<State>(
     from: session.from,
     metadata: {},
     // TODO might wanna hook these up!
-    abort: () => undefined,
+    cancel: () => undefined,
     signal: new AbortController().signal,
   };
 }
