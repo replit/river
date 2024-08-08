@@ -115,14 +115,14 @@ export type ResultUnwrapErr<R> = R extends Result<infer __T, infer Err>
   : never;
 
 /**
- * Retrieve the output type for a procedure, represented as a {@link Result}
+ * Retrieve the response type for a procedure, represented as a {@link Result}
  * type.
  * Example:
  * ```
- * type Message = Output<typeof client, 'serviceName', 'procedureName'>
+ * type Message = ResponseData<typeof client, 'serviceName', 'procedureName'>
  * ```
  */
-export type Output<
+export type ResponseData<
   RiverClient,
   ServiceName extends keyof RiverClient,
   ProcedureName extends keyof RiverClient[ServiceName],

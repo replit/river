@@ -884,7 +884,7 @@ describe.each(testMatrix())(
 
         const [{ ctx }] = handler.mock.calls[0];
         ctx.cancel();
-        // input for the stream should be ignored
+        // requests on the stream should be ignored
         // instead of leading to an error response
         clientTransport.send(serverTransport.clientId, {
           streamId,

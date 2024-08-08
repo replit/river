@@ -65,11 +65,11 @@ Before proceeding, ensure you have TypeScript 5 installed and configured appropr
 
 - Router: a collection of services, namespaced by service name.
 - Service: a collection of procedures with a shared state.
-- Procedure: a single procedure. A procedure declares its type, an input message type, an output message type, optionally an error type, and the associated handler. Valid types are:
-  - `rpc` whose handler has a signature of `Input -> Result<Output, Error>`.
-  - `upload` whose handler has a signature of `AsyncIterableIterator<Input> -> Result<Output, Error>`.
-  - `subscription` whose handler has a signature of `Input -> Pushable<Result<Output, Error>>`.
-  - `stream` whose handler has a signature of `AsyncIterableIterator<Input> -> Pushable<Result<Output, Error>>`.
+- Procedure: a single procedure. A procedure declares its type, a request data type, a response data type, optionally a response error type, and the associated handler. Valid types are:
+  - `rpc`, single request, single response
+  - `upload`, multiple requests, single response
+  - `subscription`, single request, multiple responses
+  - `stream`, multiple requests, multiple response
 - Transport: manages the lifecycle (creation/deletion) of connections and multiplexing read/writes from clients. Both the client and the server must be passed in a subclass of `Transport` to work.
   - Connection: the actual raw underlying transport connection
   - Session: a higher-level abstraction that operates over the span of potentially multiple transport-level connections
@@ -92,11 +92,11 @@ export const ExampleService = ServiceSchema.define(
   // procedures
   {
     add: Procedure.rpc({
-      requestData: Type.Object({ n: Type.Number() }),
+      requestInit: Type.Object({ n: Type.Number() }),
       responseData: Type.Object({ result: Type.Number() }),
-      errors: Type.Never(),
+      requestErrors: Type.Never(),
       // note that a handler is unique per user RPC
-      async handler(ctx, { n }) {
+      async handler({ ctx, reqInit: { n } }) {
         // access and mutate shared state
         ctx.state.count += n;
         return Ok({ result: ctx.state.count });

@@ -64,18 +64,18 @@ Note that this protocol specification does NOT detail the language-level specifi
 1. `subscription`: the client sends 1 message, the server responds with m messages.
 
 A server (also called a router) is made up of multiple 'services'. Each 'service' has multiple 'procedures'.
-A procedure declares its type (`rpc | stream | upload | subscription`), an initial message (`Init`), an output message type (`Output`), an error type (`Error`), and the associated handler. `upload` and `stream` may define an input message type (`Input`), which means they accept further messages from the client.
+A procedure declares its type (`rpc | stream | upload | subscription`), an initial message (`Init`), a response message type (`Response`), an error type (`Error`), and the associated handler. `upload` and `stream` may define an request message type (`Request`), which means they accept further messages from the client.
 
 _Note: all types in this document are expressed roughly in TypeScript._
 
 The type signatures (in TypeScript) for the handlers of each of the procedure types are as follows:
 
-- `rpc`: `Init -> Result<Output, Error>`
-- `upload`: `Init, AsyncIter<Input> -> Result<Output, Error>`
-- `subscription`: `Init -> Pushable<Result<Output, Error>>`
-- `stream`: `Init, AsyncIter<Input> -> Pushable<Result<Output, Error>>`
+- `rpc`: `Init -> Result<Response, Error>`
+- `upload`: `Init, Readable<Request> -> Result<Response, Error>`
+- `subscription`: `Init -> Writable<Result<Response, Error>>`
+- `stream`: `Init, Readable<Request> -> Writable<Result<Response, Error>>`
 
-The types of `Init`, `Input`, `Output`, and `Error` MUST be representable as JSON schema.
+The types of `Init`, `Request`, `Response`, and `Error` MUST be representable as JSON schema.
 In the official TypeScript implementation, this is done via [TypeBox](https://github.com/sinclairzx81/typebox).
 The server is responsible for doing run-time type validation on incoming messages to ensure they match the handler's type signature before passing it to the handler.
 
@@ -100,7 +100,7 @@ type Result<SuccessPayload, ErrorPayload extends BaseError> =
   | { ok: false; payload: ErrorPayload };
 ```
 
-The messages in either direction must also contain additional information so that the receiving party knows where to route the message payload. This wrapper message is referred to as a `TransportMessage` and its payload can be a `Control`, a `Result`, an `Init`, an `Input`, or an `Output`. The schema for the transport message is as follows:
+The messages in either direction must also contain additional information so that the receiving party knows where to route the message payload. This wrapper message is referred to as a `TransportMessage` and its payload can be a `Control`, a `Result`, an `Init`, an `Request`, or an `Response`. The schema for the transport message is as follows:
 
 ```ts
 interface TransportMessage<Payload> {
@@ -118,8 +118,8 @@ interface TransportMessage<Payload> {
   procedureName?: string;
 
   // the actual payload
-  // - `Init` or `Input` in the client to server direction
-  // - `Result<Output, Error>` in the server to client direction
+  // - `Init` or `Request` in the client to server direction
+  // - `Result<Response, Error>` in the server to client direction
   // - `Control` in either direction
   payload: Payload;
 
@@ -162,7 +162,7 @@ All messages MUST have no control flags set (i.e., the `controlFlags` field is `
   - The payload MUST be `{ type: 'ACK' }`.
   - Because this is a control message that is not associated with a specific stream, you MUST NOT set `serviceName` or `procedureName` and `streamId` can be something arbitrary (e.g. `heartbeat`).
 
-There are 2 error payloads that are defined in the protocol sent from server to client, these codes are reserved:
+There are 4 error payloads that are defined in the protocol sent from server to client, these codes are reserved:
 
 ```ts
 // When a client sends a malformed request. This can be
@@ -187,10 +187,14 @@ interface CancelError extends BaseError {
   message: string;
 }
 
+// This is sent when the server encounters an internal error
+// i.e. an invariant has been violated
+interface;
+
 type ProtocolError = UncaughtError | InvalidRequestError | CancelError;
 ```
 
-`ProtocolError`s, just like service-level errors, are wrapped with a `Result`, which is further wrapped with `TransportMessage` and MUST have a `StreamCancelBit` flag. Please note that these are separate from user-defined errors, which should be treated just like any output message.
+`ProtocolError`s, just like service-level errors, are wrapped with a `Result`, which is further wrapped with `TransportMessage` and MUST have a `StreamCancelBit` flag. Please note that these are separate from user-defined errors, which should be treated just like any response message.
 
 There are 4 `Control` payloads:
 
@@ -210,6 +214,11 @@ interface ControlHandshakeRequest {
   type: 'HANDSHAKE_REQ';
   protocolVersion: 'v2.0';
   sessionId: string;
+  expectedSessionState: {
+    nextExpectedSeq: number; // integer
+    nextSentSeq: number; // integer
+  };
+  metdata?: unknown;
 }
 
 interface ControlHandshakeResponse {
@@ -238,29 +247,40 @@ Once a procedure is invoked, it opens a new stream and sends the first message o
 
 ### Reader and Writer Semantics
 
-All procedure types (`rpc`, `stream`, `upload`, `subscription`) are powered by bidirectional streams in the underlying protocol, but they are exposed differently at the API level and have different constraints on the number of messages sent and received. Bidirectional stream implies that for a given procedure, the client has a reader and the writer, and the server has a reader and a writer. The `stream` procedure type is the most general case exposing full bidirectional stream semantics.
+All procedure types (`rpc`, `stream`, `upload`, `subscription`) are powered by bidirectional streams in the underlying protocol, but they are exposed differently at the API level and have different constraints on the number of messages sent and received. Bidirectional stream implies that for a given procedure, there are 2 pipes, a request pipe and a response pipe. The client has the writer end of the request pipe, while the server has the reader of the request pipe, conversely, the server has
+the writer end of the response pipe, while the client has the reader end of the response pipe.
 
-Writers send messages that are recieved by the other side's reader. ONLY writers can end streams. Readers can send a signal to the writer that they are no longer interested in the stream, but the writer can choose to ignore this signal and continue sending messages.
+```
+                Stream/Procedure Invocation
+
+    Client                                     Server
+
+┌──────────────┐                             ┌──────────────┐
+│              │                             │              │
+│   Request    │ ────────Request Pipe──────> │    Request   │
+│   Writer     │                             │    Reader    │
+│              │                             │              │
+└──────────────┘                             └──────────────┘
+
+┌──────────────┐                             ┌──────────────┐
+│              │                             │              │
+│   Response   │ <───────Response Pipe────── │   Response   │
+│   Reader     │                             │   Writer     │
+│              │                             │              │
+└──────────────┘                             └──────────────┘
+```
+
+While `Init` is technically a "request", you want to treat it differently and pass it along to the handler without involving the request pipe.
+
+ONLY the writer end can close the pipe, the reader can only choose to stop reading.
 
 Streams can be in a half-closed state. This happens when one party sends a close signal indicating that it will no longer send
-any more data, but it can still receive data from the other side. In terms of readers and writers, the closing party's writer is
-closed but its reader is still open, and on the other side the reader is closed but the writer is open. This is useful when,
-for example, the client has finished sending its data but is still expecting a response from the server.
+any more data on the relevant pipe, but it can still receive data from the other side on the other pipe.
+In terms of readers and writers, the closing party's writer is closed but its reader is still open, and on the other side the reader
+is closed but the writer is open. This is useful when, for example, the client has finished sending its data but is still expecting
+a response from the server.
 
-Recommendation for API:
-
-- RPC:
-  - Client: a normal function call, arguments gets passed in and result is returned. Do not expose streams.
-  - Server: handler receives the arguments and returns the result.
-- Stream:
-  - Client: calls a function and gets back a writer and a reader interface.
-  - Server: handler recieves a writer and a reader interface.
-- Upload:
-  - Client: calls a function and gets back a writer interface, with a way to get the result at the end of the write.
-  - Server: handler recieves a reader interface, and returns the result at the end of the write.
-- Subscription:
-  - Client: calls a function and gets back a reader interface.
-  - Server: handler recieves a writer interface.
+A full-close is when both sides close their writers, or when a cancellation happens which results in an immediate full-close.
 
 ### Handling messages for streams
 
@@ -287,12 +307,12 @@ Then, depending on whether this is a client or server, the message must undergo 
 For an incoming message to be considered valid on the client, the transport message MUST fulfill the following criteria:
 
 - It should have a `streamId` that the client recognizes. That is, there MUST already be a message listener waiting for messages on the `streamId` of the original request message (recall that streams are only initiated by clients).
-- If a server sends an `ProtocolError` message the client MUST NOT send any further messages to the server for that stream including a `ControlClose` message.
+- If a server sends an `ProtocolError` message the client MUST NOT send any further messages to the server for that stream including a control messages.
 
 If the message is invalid, the client MUST silently discard the message.
 Otherwise, this is a normal message. Unwrap the payload and return it to the caller of the original procedure.
 
-In cases where the incoming message is a `ControlClose` message, the client MUST end the user-facing output stream (see the section below on 'Lifetime of Streams' for more information on when these explicit close messages are sent). The message MUST NOT be passed to the user-facing output stream.
+In cases where the incoming message is a `ControlClose` message, the client MUST end the user-facing response stream (see the section below on 'Lifetime of Streams' for more information on when these explicit close messages are sent). The message MUST NOT be passed to the user-facing response stream.
 
 #### On the server
 
@@ -301,14 +321,14 @@ For an incoming message to be considered valid on the server, the transport mess
 - It should match the JSON schema for the `TransportMessage` type.
 - If the message has the `StreamOpenBit` set, it MUST have a `serviceName` and `procedureName`. The server MUST open a new stream and start a new instantiation of the handler for the specific `serviceName` and `procedureName`. The server should maintain a mapping of `streamId` to the handler instantiation so that future messages with the same `streamId` can be routed to the correct instantiation of the handler.
 - If the message does not have the `StreamOpenBit` set, it MUST have a `streamId` that the server recognizes and has an associated handler open for.
-- If this is the first message of the stream, the internal payload of the message should match the JSON schema for the `Init` type of the associated handler, and the server should pass the `Init` message to the handler.
-- If this is not the first message of the stream AND the procedure accepts further input, the internal payload of the message should match the JSON schema for the `Input` type of the associated handler, and the server should pass the `Input` message to the handler.
+- If this is the first message of the stream, the message should have `StreamOpenBit` and the internal payload of the message should match the JSON schema for the `Init` type of the associated handler, and the server should pass the `Init` message to the handler.
+- If this is not the first message of the stream AND the procedure accepts further requests, the internal payload of the message should match the JSON schema for the `Request` type of the associated handler, and the server should pass the `Request` message to the handler.
 
 If the message is invalid, the server MUST discard the message and send back an `INVALID_REQUEST` error message with a `StreamCancelBit`, this is an abrupt full close, the server should cleanup all associated resources with the stream without expecting a close response from the client. The server may choose to keep track of `INVALID_REQUEST` stream ids to avoid sending multiple errors back.
 
 Otherwise, the message is a normal message. Unwrap the payload and pass it to the handler associated with the `streamId` of the message.
 
-In cases where the incoming message is a `ControlClose` message, the server should close the input stream for the handler. The message MUST NOT be passed to the handler.
+In cases where the incoming message is a `ControlClose` message, the server should close the request readable for the handler. The message MUST NOT be passed to the handler.
 
 #### Lifetime of streams
 
@@ -376,7 +396,7 @@ server:  -  -- - !
 
 ##### Upload
 
-An `upload` procedure starts with the client sending a single message with `StreamOpenBit` set and remains open until the client manually closes the input stream by sending `CloseControl` message. The server MUST send a final `Result` message with the `StreamClosedBit`.
+An `upload` procedure starts with the client sending a single message with `StreamOpenBit` set and remains open until the client manually closes the request stream by sending `CloseControl` message. The server MUST send a final `Result` message with the `StreamClosedBit`.
 
 Client finalizes upload:
 

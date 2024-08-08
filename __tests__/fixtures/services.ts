@@ -49,8 +49,8 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     requestData: EchoRequest,
     responseData: EchoResponse,
     async handler({ reqReadable, resWritable }) {
-      for await (const input of reqReadable) {
-        const { ignore, msg } = unwrapOrThrow(input);
+      for await (const req of reqReadable) {
+        const { ignore, msg } = unwrapOrThrow(req);
         if (!ignore) {
           resWritable.write(Ok({ response: msg }));
         }
@@ -65,8 +65,8 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     requestData: EchoRequest,
     responseData: EchoResponse,
     async handler({ reqInit, reqReadable, resWritable }) {
-      for await (const input of reqReadable) {
-        const { ignore, msg } = unwrapOrThrow(input);
+      for await (const req of reqReadable) {
+        const { ignore, msg } = unwrapOrThrow(req);
         if (!ignore) {
           resWritable.write(Ok({ response: `${reqInit.prefix} ${msg}` }));
         }
@@ -198,8 +198,8 @@ export const FallibleServiceSchema = ServiceSchema.define({
       message: Type.String(),
     }),
     async handler({ reqReadable, resWritable }) {
-      for await (const input of reqReadable) {
-        const { msg, throwError, throwResult } = unwrapOrThrow(input);
+      for await (const req of reqReadable) {
+        const { msg, throwError, throwResult } = unwrapOrThrow(req);
         if (throwError) {
           throw new Error('some message');
         } else if (throwResult) {
@@ -250,8 +250,8 @@ export const UploadableServiceSchema = ServiceSchema.define({
     responseData: Type.Object({ result: Type.Number() }),
     async handler({ reqReadable }) {
       let result = 0;
-      for await (const input of reqReadable) {
-        result += unwrapOrThrow(input).n;
+      for await (const req of reqReadable) {
+        result += unwrapOrThrow(req).n;
       }
 
       return Ok({ result: result });
@@ -264,8 +264,8 @@ export const UploadableServiceSchema = ServiceSchema.define({
     responseData: Type.Object({ result: Type.String() }),
     async handler({ reqInit, reqReadable }) {
       let result = 0;
-      for await (const input of reqReadable) {
-        result += unwrapOrThrow(input).n;
+      for await (const req of reqReadable) {
+        result += unwrapOrThrow(req).n;
       }
       return Ok({ result: `${reqInit.prefix} ${result}` });
     },

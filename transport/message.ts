@@ -1,11 +1,7 @@
 import { Type, TSchema, Static } from '@sinclair/typebox';
 import { PropagationContext } from '../tracing';
 import { generateId } from './id';
-import {
-  ErrResult,
-  RequestReaderErrorSchema,
-  ResponseReaderErrorSchema,
-} from '../router';
+import { ErrResult, ReaderErrorSchema } from '../router';
 
 /**
  * Control flags for transport messages.
@@ -262,9 +258,7 @@ export function closeStreamMessage(streamId: string): PartialTransportMessage {
 
 export function cancelMessage(
   streamId: string,
-  payload: ErrResult<
-    Static<typeof ResponseReaderErrorSchema | typeof RequestReaderErrorSchema>
-  >,
+  payload: ErrResult<Static<typeof ReaderErrorSchema>>,
 ) {
   return {
     streamId,

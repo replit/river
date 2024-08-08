@@ -3,8 +3,8 @@ export type {
   ServiceConfiguration,
   ProcHandler,
   ProcInit,
-  ProcInput,
-  ProcOutput,
+  ProcRequest,
+  ProcResponse,
   ProcErrors,
   ProcType,
 } from './services';
@@ -32,13 +32,11 @@ export type {
 export type { Writable, Readable } from './streams';
 export {
   Procedure,
-  INTERNAL_RIVER_ERROR_CODE,
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
   INVALID_REQUEST_CODE,
   CANCEL_CODE,
-  ResponseReaderErrorSchema,
-  RequestReaderErrorSchema,
+  ReaderErrorSchema,
 } from './procedures';
 export { createClient } from './client';
 export type { Client } from './client';
@@ -56,7 +54,7 @@ export type {
   OkResult,
   ResultUnwrapOk,
   ResultUnwrapErr,
-  Output,
+  ResponseData,
   BaseErrorSchemaType,
 } from './result';
 export {

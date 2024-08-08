@@ -2,8 +2,8 @@ import {
   AnyService,
   ProcErrors,
   ProcInit,
-  ProcInput,
-  ProcOutput,
+  ProcRequest,
+  ProcResponse,
   ProcType,
   AnyServiceSchemaMap,
   InstantiatedServiceSchemaMap,
@@ -37,13 +37,13 @@ import { Readable, ReadableImpl, Writable, WritableImpl } from './streams';
 import { Value } from '@sinclair/typebox/value';
 import {
   CANCEL_CODE,
-  ResponseReaderErrorSchema,
+  ReaderErrorSchema,
   PayloadType,
   UNEXPECTED_DISCONNECT_CODE,
   ValidProcType,
 } from './procedures';
 
-const OutputErrResultSchema = ErrResultSchema(ResponseReaderErrorSchema);
+const ReaderErrResultSchema = ErrResultSchema(ReaderErrorSchema);
 
 interface CallOptions {
   signal?: AbortSignal;
@@ -56,7 +56,7 @@ type RpcFn<
   reqInit: ProcInit<Service, ProcName>,
   options?: CallOptions,
 ) => Promise<
-  Result<ProcOutput<Service, ProcName>, ProcErrors<Service, ProcName>>
+  Result<ProcResponse<Service, ProcName>, ProcErrors<Service, ProcName>>
 >;
 
 type UploadFn<
@@ -66,9 +66,9 @@ type UploadFn<
   reqInit: ProcInit<Service, ProcName>,
   options?: CallOptions,
 ) => {
-  reqWritable: Writable<ProcInput<Service, ProcName>>;
+  reqWritable: Writable<ProcRequest<Service, ProcName>>;
   finalize: () => Promise<
-    Result<ProcOutput<Service, ProcName>, ProcErrors<Service, ProcName>>
+    Result<ProcResponse<Service, ProcName>, ProcErrors<Service, ProcName>>
   >;
 };
 
@@ -79,9 +79,9 @@ type StreamFn<
   reqInit: ProcInit<Service, ProcName>,
   options?: CallOptions,
 ) => {
-  reqWritable: Writable<ProcInput<Service, ProcName>>;
+  reqWritable: Writable<ProcRequest<Service, ProcName>>;
   resReadable: Readable<
-    ProcOutput<Service, ProcName>,
+    ProcResponse<Service, ProcName>,
     ProcErrors<Service, ProcName>
   >;
 };
@@ -94,7 +94,7 @@ type SubscriptionFn<
   options?: CallOptions,
 ) => {
   resReadable: Readable<
-    ProcOutput<Service, ProcName>,
+    ProcResponse<Service, ProcName>,
     ProcErrors<Service, ProcName>
   >;
 };
@@ -383,9 +383,9 @@ function handleProc(
       cleanClose = false;
 
       span.addEvent('received cancel');
-      let cancelResult: Static<typeof OutputErrResultSchema>;
+      let cancelResult: Static<typeof ReaderErrResultSchema>;
 
-      if (Value.Check(OutputErrResultSchema, msg.payload)) {
+      if (Value.Check(ReaderErrResultSchema, msg.payload)) {
         cancelResult = msg.payload;
       } else {
         cancelResult = Err({
@@ -398,7 +398,7 @@ function handleProc(
             clientId: transport.clientId,
             transportMessage: msg,
             validationErrors: [
-              ...Value.Errors(OutputErrResultSchema, msg.payload),
+              ...Value.Errors(ReaderErrResultSchema, msg.payload),
             ],
           },
         );

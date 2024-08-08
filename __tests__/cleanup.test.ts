@@ -214,7 +214,7 @@ describe.each(testMatrix())(
       // ensure we only have one stream despite pushing multiple messages.
       reqWritable.close();
       await waitFor(() => expect(server.openStreams.size).toEqual(1));
-      // ensure we no longer have any open streams since the input was closed.
+      // ensure we no longer have any open streams since the request was closed.
       await waitFor(() => expect(server.openStreams.size).toEqual(0));
 
       const result2 = await readNextResult(resReadable);

@@ -8,7 +8,7 @@ import { createClient } from '../router/client';
 import {
   Err,
   Ok,
-  Output,
+  ResponseData,
   ResultUnwrapErr,
   ResultUnwrapOk,
   unwrapOrThrow,
@@ -245,7 +245,7 @@ const services = {
   }),
 };
 
-describe('Output<> type', () => {
+describe('ResponseData<> type', () => {
   createServer(new MockServerTransport('SERVER'), services);
   const client = createClient<typeof services>(
     new MockClientTransport('client'),
@@ -253,53 +253,59 @@ describe('Output<> type', () => {
     { eagerlyConnect: false },
   );
 
-  test('it unwraps rpc outputs correctly', async () => {
+  test('it unwraps rpc response data correctly', async () => {
     // Given
-    function acceptOutput(output: Output<typeof client, 'test', 'rpc'>) {
-      return output;
+    function acceptResponse(
+      response: ResponseData<typeof client, 'test', 'rpc'>,
+    ) {
+      return response;
     }
 
     // Then
-    void client.test.rpc.rpc({ n: 1 }).then(acceptOutput);
+    void client.test.rpc.rpc({ n: 1 }).then(acceptResponse);
     expect(client).toBeTruthy();
   });
 
-  test('it unwraps stream outputs correctly', async () => {
+  test('it unwraps stream response data correctly', async () => {
     // Given
-    function acceptOutput(output: Output<typeof client, 'test', 'stream'>) {
-      return output;
+    function acceptResponse(
+      response: ResponseData<typeof client, 'test', 'stream'>,
+    ) {
+      return response;
     }
 
     // Then
     const { resReadable } = client.test.stream.stream({});
-    void readNextResult(resReadable).then(unwrapOrThrow).then(acceptOutput);
+    void readNextResult(resReadable).then(unwrapOrThrow).then(acceptResponse);
     expect(client).toBeTruthy();
   });
 
-  test('it unwraps subscription outputs correctly', async () => {
+  test('it unwraps subscription response data correctly', async () => {
     // Given
-    function acceptOutput(
-      output: Output<typeof client, 'test', 'subscription'>,
+    function acceptResponse(
+      response: ResponseData<typeof client, 'test', 'subscription'>,
     ) {
-      return output;
+      return response;
     }
 
     // Then
     const { resReadable } = client.test.subscription.subscribe({ n: 1 });
-    void readNextResult(resReadable).then(unwrapOrThrow).then(acceptOutput);
+    void readNextResult(resReadable).then(unwrapOrThrow).then(acceptResponse);
 
     expect(client).toBeTruthy();
   });
 
-  test('it unwraps upload outputs correctly', async () => {
+  test('it unwraps upload response data correctly', async () => {
     // Given
-    function acceptOutput(output: Output<typeof client, 'test', 'upload'>) {
-      return output;
+    function acceptResponse(
+      response: ResponseData<typeof client, 'test', 'upload'>,
+    ) {
+      return response;
     }
 
     // Then
     const { finalize } = client.test.upload.upload({});
-    void finalize().then(acceptOutput);
+    void finalize().then(acceptResponse);
 
     expect(client).toBeTruthy();
   });

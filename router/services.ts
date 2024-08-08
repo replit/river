@@ -6,7 +6,7 @@ import {
   AnyProcedure,
   PayloadType,
   ProcedureErrorSchemaType,
-  ResponseReaderErrorSchema,
+  ReaderErrorSchema,
 } from './procedures';
 import { ServiceContext } from './context';
 
@@ -72,11 +72,11 @@ export type ProcInit<
 > = Static<S['procedures'][ProcName]['requestInit']>;
 
 /**
- * Helper to get the type definition for the procedure input of a service.
+ * Helper to get the type definition for the procedure request of a service.
  * @template S - The service.
  * @template ProcName - The name of the procedure.
  */
-export type ProcInput<
+export type ProcRequest<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
 > = S['procedures'][ProcName] extends { requestData: PayloadType }
@@ -84,11 +84,11 @@ export type ProcInput<
   : never;
 
 /**
- * Helper to get the type definition for the procedure output of a service.
+ * Helper to get the type definition for the procedure response of a service.
  * @template S - The service.
  * @template ProcName - The name of the procedure.
  */
-export type ProcOutput<
+export type ProcResponse<
   S extends AnyService,
   ProcName extends keyof S['procedures'],
 > = Static<S['procedures'][ProcName]['responseData']>;
@@ -103,7 +103,7 @@ export type ProcErrors<
   ProcName extends keyof S['procedures'],
 > =
   | Static<S['procedures'][ProcName]['responseError']>
-  | Static<typeof ResponseReaderErrorSchema>;
+  | Static<typeof ReaderErrorSchema>;
 
 /**
  * Helper to get the type of procedure in a service.

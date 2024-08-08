@@ -35,50 +35,30 @@ export type ValidProcType =
 export type PayloadType = TSchema;
 
 /**
- * INTERNAL_RIVER_ERROR_CODE is the code that is used when an internal error occurs,
- * this means that some invariants expected by the river server implementation have
- * been violated. When encountering this error please report this to river maintainers.
- */
-export const INTERNAL_RIVER_ERROR_CODE = 'INTERNAL_RIVER_ERROR' as const;
-/**
- * UNCAUGHT_ERROR_CODE is the code that is used when an error is thrown
+ * {@link UNCAUGHT_ERROR_CODE} is the code that is used when an error is thrown
  * inside a procedure handler that's not required.
  */
 export const UNCAUGHT_ERROR_CODE = 'UNCAUGHT_ERROR' as const;
 /**
- * UNEXPECTED_DISCONNECT_CODE is the code used the stream's session
+ * {@link UNEXPECTED_DISCONNECT_CODE} is the code used the stream's session
  * disconnect unexpetedly.
  */
 export const UNEXPECTED_DISCONNECT_CODE = 'UNEXPECTED_DISCONNECT' as const;
 /**
- * INVALID_REQUEST_CODE is the code used when a client's request is invalid.
+ * {@link INVALID_REQUEST_CODE} is the code used when a client's request is invalid.
  */
 export const INVALID_REQUEST_CODE = 'INVALID_REQUEST' as const;
 /**
- * CANCEL_CODE is the code used when either server or client cancels the stream.
+ * {@link CANCEL_CODE} is the code used when either server or client cancels the stream.
  */
 export const CANCEL_CODE = 'CANCEL' as const;
 
 /**
- * ResponseReaderErrorSchema is the schema for all the errors that can be
- * emitted in the ResponseData ReadStream on the client.
+ * {@link ReaderErrorSchema} is the schema for all the built-in river errors that
+ * can be emitted to a reader (request reader on the server, and response reader
+ * on the client).
  */
-export const ResponseReaderErrorSchema = Type.Object({
-  code: Type.Union([
-    Type.Literal(INTERNAL_RIVER_ERROR_CODE),
-    Type.Literal(UNCAUGHT_ERROR_CODE),
-    Type.Literal(UNEXPECTED_DISCONNECT_CODE),
-    Type.Literal(INVALID_REQUEST_CODE),
-    Type.Literal(CANCEL_CODE),
-  ]),
-  message: Type.String(),
-});
-
-/**
- * RequestReaderErrorSchema is the schema for all the errors that can be
- * emitted in the RequestData ReadStream on the server.
- */
-export const RequestReaderErrorSchema = Type.Object({
+export const ReaderErrorSchema = Type.Object({
   code: Type.Union([
     Type.Literal(UNCAUGHT_ERROR_CODE),
     Type.Literal(UNEXPECTED_DISCONNECT_CODE),
@@ -115,7 +95,7 @@ export type ProcedureErrorSchemaType =
  *
  * @template State - The context state object.
  * @template RequestInit - The TypeBox schema of the initialization object.
- * @template ResponseData - The TypeBox schema of the output object.
+ * @template ResponseData - The TypeBox schema of the response object.
  * @template ResponseErr - The TypeBox schema of the error object.
  */
 export interface RpcProcedure<
@@ -141,8 +121,8 @@ export interface RpcProcedure<
  *
  * @template State - The context state object.
  * @template RequestInit - The TypeBox schema of the initialization object.
- * @template RequestData - The TypeBox schema of the input object.
- * @template ResponseData - The TypeBox schema of the output object.
+ * @template RequestData - The TypeBox schema of the request object.
+ * @template ResponseData - The TypeBox schema of the response object.
  * @template ResponseErr - The TypeBox schema of the error object.
  */
 export interface UploadProcedure<
@@ -163,7 +143,7 @@ export interface UploadProcedure<
     reqInit: Static<RequestInit>;
     reqReadable: Readable<
       Static<RequestData>,
-      Static<typeof RequestReaderErrorSchema>
+      Static<typeof ReaderErrorSchema>
     >;
   }): Promise<Result<Static<ResponseData>, Static<ResponseErr>>>;
 }
@@ -173,7 +153,7 @@ export interface UploadProcedure<
  *
  * @template State - The context state object.
  * @template RequestInit - The TypeBox schema of the initialization object.
- * @template ResponseData - The TypeBox schema of the output object.
+ * @template ResponseData - The TypeBox schema of the response object.
  * @template ResponseErr - The TypeBox schema of the error object.
  */
 export interface SubscriptionProcedure<
@@ -200,8 +180,8 @@ export interface SubscriptionProcedure<
  *
  * @template State - The context state object.
  * @template RequestInit - The TypeBox schema of the initialization object.
- * @template RequestData - The TypeBox schema of the input object.
- * @template ResponseData - The TypeBox schema of the output object.
+ * @template RequestData - The TypeBox schema of the request object.
+ * @template ResponseData - The TypeBox schema of the response object.
  * @template ResponseErr - The TypeBox schema of the error object.
  */
 export interface StreamProcedure<
@@ -222,7 +202,7 @@ export interface StreamProcedure<
     reqInit: Static<RequestInit>;
     reqReadable: Readable<
       Static<RequestData>,
-      Static<typeof RequestReaderErrorSchema>
+      Static<typeof ReaderErrorSchema>
     >;
     resWritable: Writable<Result<Static<ResponseData>, Static<ResponseErr>>>;
   }): Promise<void | undefined>;
@@ -239,9 +219,9 @@ export interface StreamProcedure<
  *
  * @template State - The TypeBox schema of the state object.
  * @template Ty - The type of the procedure.
- * @template RequestData - The TypeBox schema of the input object.
- * @template RequestInit - The TypeBox schema of the input initialization object, if any.
- * @template ResponseData - The TypeBox schema of the output object.
+ * @template RequestData - The TypeBox schema of the request object.
+ * @template RequestInit - The TypeBox schema of the request initialization object, if any.
+ * @template ResponseData - The TypeBox schema of the response object.
  */
 export type Procedure<
   State,

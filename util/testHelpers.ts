@@ -3,8 +3,7 @@ import http from 'node:http';
 import { Err, Ok, Result, BaseErrorSchemaType } from '../router/result';
 import {
   ProcedureErrorSchemaType,
-  RequestReaderErrorSchema,
-  ResponseReaderErrorSchema,
+  ReaderErrorSchema,
   UNCAUGHT_ERROR_CODE,
   PayloadType,
   Procedure,
@@ -227,21 +226,18 @@ function dummyCtx<State>(
 export function asClientRpc<
   State extends object,
   Init extends PayloadType,
-  Output extends PayloadType,
+  Res extends PayloadType,
   Err extends ProcedureErrorSchemaType,
 >(
   state: State,
-  proc: Procedure<State, 'rpc', Init, null, Output, Err>,
+  proc: Procedure<State, 'rpc', Init, null, Res, Err>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ) {
   return async (
     msg: Static<Init>,
   ): Promise<
-    Result<
-      Static<Output>,
-      Static<Err> | Static<typeof ResponseReaderErrorSchema>
-    >
+    Result<Static<Res>, Static<Err> | Static<typeof ReaderErrorSchema>>
   > => {
     return proc
       .handler({
@@ -253,20 +249,20 @@ export function asClientRpc<
 }
 
 function createResponsePipe<
-  Output extends PayloadType,
+  Res extends PayloadType,
   Err extends ProcedureErrorSchemaType,
 >(): {
   readable: Readable<
-    Static<Output>,
-    Static<Err> | Static<typeof ResponseReaderErrorSchema>
+    Static<Res>,
+    Static<Err> | Static<typeof ReaderErrorSchema>
   >;
-  writable: Writable<Result<Static<Output>, Static<Err>>>;
+  writable: Writable<Result<Static<Res>, Static<Err>>>;
 } {
   const readable = new ReadableImpl<
-    Static<Output>,
-    Static<Err> | Static<typeof ResponseReaderErrorSchema>
+    Static<Res>,
+    Static<Err> | Static<typeof ReaderErrorSchema>
   >();
-  const writable = new WritableImpl<Result<Static<Output>, Static<Err>>>(
+  const writable = new WritableImpl<Result<Static<Res>, Static<Err>>>(
     (v) => {
       readable._pushValue(v);
     },
@@ -282,15 +278,15 @@ function createResponsePipe<
   return { readable, writable };
 }
 
-function createRequestPipe<Input extends PayloadType>(): {
-  readable: Readable<Static<Input>, Static<typeof RequestReaderErrorSchema>>;
-  writable: Writable<Static<Input>>;
+function createRequestPipe<Req extends PayloadType>(): {
+  readable: Readable<Static<Req>, Static<typeof ReaderErrorSchema>>;
+  writable: Writable<Static<Req>>;
 } {
   const readable = new ReadableImpl<
-    Static<Input>,
-    Static<typeof RequestReaderErrorSchema>
+    Static<Req>,
+    Static<typeof ReaderErrorSchema>
   >();
-  const writable = new WritableImpl<Static<Input>>(
+  const writable = new WritableImpl<Static<Req>>(
     (v) => {
       readable._pushValue(Ok(v));
     },
@@ -309,21 +305,21 @@ function createRequestPipe<Input extends PayloadType>(): {
 export function asClientStream<
   State extends object,
   Init extends PayloadType,
-  Input extends PayloadType,
-  Output extends PayloadType,
+  Req extends PayloadType,
+  Res extends PayloadType,
   Err extends ProcedureErrorSchemaType,
 >(
   state: State,
-  proc: Procedure<State, 'stream', Init, Input, Output, Err>,
+  proc: Procedure<State, 'stream', Init, Req, Res, Err>,
   reqInit?: Static<Init>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ): {
-  reqWritable: Writable<Static<Input>>;
-  resReadable: Readable<Static<Output>, Static<Err>>;
+  reqWritable: Writable<Static<Req>>;
+  resReadable: Readable<Static<Res>, Static<Err>>;
 } {
-  const requestPipe = createRequestPipe<Input>();
-  const responsePipe = createResponsePipe<Output, Err>();
+  const requestPipe = createRequestPipe<Req>();
+  const responsePipe = createResponsePipe<Res, Err>();
 
   void proc
     .handler({
@@ -343,17 +339,17 @@ export function asClientStream<
 export function asClientSubscription<
   State extends object,
   Init extends PayloadType,
-  Output extends PayloadType,
+  Res extends PayloadType,
   Err extends ProcedureErrorSchemaType,
 >(
   state: State,
-  proc: Procedure<State, 'subscription', Init, null, Output, Err>,
+  proc: Procedure<State, 'subscription', Init, null, Res, Err>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ): (msg: Static<Init>) => {
-  resReadable: Readable<Static<Output>, Static<Err>>;
+  resReadable: Readable<Static<Res>, Static<Err>>;
 } {
-  const responsePipe = createResponsePipe<Output, Err>();
+  const responsePipe = createResponsePipe<Res, Err>();
 
   return (msg: Static<Init>) => {
     void proc
@@ -373,20 +369,20 @@ export function asClientSubscription<
 export function asClientUpload<
   State extends object,
   Init extends PayloadType,
-  Input extends PayloadType,
-  Output extends PayloadType,
+  Req extends PayloadType,
+  Res extends PayloadType,
   Err extends ProcedureErrorSchemaType,
 >(
   state: State,
-  proc: Procedure<State, 'upload', Init, Input, Output, Err>,
+  proc: Procedure<State, 'upload', Init, Req, Res, Err>,
   reqInit?: Static<Init>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ): {
-  reqWritable: Writable<Static<Input>>;
-  finalize: () => Promise<Result<Static<Output>, Static<Err>>>;
+  reqWritable: Writable<Static<Req>>;
+  finalize: () => Promise<Result<Static<Res>, Static<Err>>>;
 } {
-  const requestPipe = createRequestPipe<Input>();
+  const requestPipe = createRequestPipe<Req>();
   const result = proc
     .handler({
       ctx: dummyCtx(state, session, extendedContext),

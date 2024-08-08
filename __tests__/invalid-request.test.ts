@@ -347,7 +347,7 @@ describe('cancels invalid request', () => {
     });
   });
 
-  test('bad input message', async () => {
+  test('bad request message', async () => {
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
     addPostTestCleanup(() =>
@@ -409,7 +409,7 @@ describe('cancels invalid request', () => {
     );
   });
 
-  test('input message for non-input procedure', async () => {
+  test('request message for non-request procedure', async () => {
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
     addPostTestCleanup(() =>
@@ -468,7 +468,7 @@ describe('cancels invalid request', () => {
     );
   });
 
-  test('input after close', async () => {
+  test('request after close', async () => {
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
     addPostTestCleanup(() =>

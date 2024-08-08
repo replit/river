@@ -2,14 +2,12 @@ import { Static, Type } from '@sinclair/typebox';
 import {
   PayloadType,
   ProcedureErrorSchemaType,
-  RequestReaderErrorSchema,
-  ResponseReaderErrorSchema,
+  ReaderErrorSchema,
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
   AnyProcedure,
   CANCEL_CODE,
   INVALID_REQUEST_CODE,
-  INTERNAL_RIVER_ERROR_CODE,
 } from './procedures';
 import {
   AnyService,
@@ -47,14 +45,9 @@ import { ReadableImpl, WritableImpl } from './streams';
 type StreamId = string;
 
 /**
- * A result schema for errors that can be passed to input's readstream
- */
-const RequestErrResultSchema = ErrResultSchema(RequestReaderErrorSchema);
-
-/**
  * A schema for cancel payloads sent from the client
  */
-const ClientCancelResultSchema = ErrResultSchema(
+const CancelResultSchema = ErrResultSchema(
   Type.Object({
     code: Type.Literal(CANCEL_CODE),
     message: Type.String(),
@@ -220,9 +213,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
     let cleanClose = true;
 
-    const onServerCancel = (
-      errResult: Static<typeof RequestErrResultSchema>,
-    ) => {
+    const onServerCancel = (e: Static<typeof ReaderErrorSchema>) => {
       if (reqReadable.isClosed() && resWritable.isClosed()) {
         // Everything already closed, no-op.
         return;
@@ -230,13 +221,15 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
       cleanClose = false;
 
+      const result = Err(e);
+
       if (!reqReadable.isClosed()) {
-        reqReadable._pushValue(errResult);
+        reqReadable._pushValue(result);
         closeReadable();
       }
 
       resWritable.close();
-      this.cancelStream(from, streamId, errResult);
+      this.cancelStream(from, streamId, result);
     };
 
     const onSessionStatus = (evt: EventMap['sessionStatus']) => {
@@ -280,8 +273,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       if (isStreamCancelBackwardsCompat(msg.controlFlags, protocolVersion)) {
-        let cancelResult: Static<typeof ClientCancelResultSchema>;
-        if (Value.Check(ClientCancelResultSchema, msg.payload)) {
+        let cancelResult: Static<typeof CancelResultSchema>;
+        if (Value.Check(CancelResultSchema, msg.payload)) {
           cancelResult = msg.payload;
         } else {
           // If the payload is unexpected, then we just construct our own cancel result
@@ -294,7 +287,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
             clientId: this.transport.clientId,
             transportMessage: msg,
             validationErrors: [
-              ...Value.Errors(ClientCancelResultSchema, msg.payload),
+              ...Value.Errors(CancelResultSchema, msg.payload),
             ],
             tags: ['invalid-request'],
           });
@@ -311,19 +304,17 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       if (reqReadable.isClosed()) {
-        this.log?.warn('received message after input stream is closed', {
+        this.log?.warn('received message after request stream is closed', {
           ...loggingMetadata,
           clientId: this.transport.clientId,
           transportMessage: msg,
           tags: ['invalid-request'],
         });
 
-        onServerCancel(
-          Err({
-            code: INVALID_REQUEST_CODE,
-            message: 'received message after input stream is closed',
-          }),
-        );
+        onServerCancel({
+          code: INVALID_REQUEST_CODE,
+          message: 'received message after request stream is closed',
+        });
 
         return;
       }
@@ -378,12 +369,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invalid-request'],
       });
 
-      onServerCancel(
-        Err({
-          code: INVALID_REQUEST_CODE,
-          message: errMessage,
-        }),
-      );
+      onServerCancel({
+        code: INVALID_REQUEST_CODE,
+        message: errMessage,
+      });
     };
     this.transport.addEventListener('message', onMessage);
 
@@ -401,7 +390,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
     const reqReadable = new ReadableImpl<
       Static<PayloadType>,
-      Static<typeof RequestReaderErrorSchema>
+      Static<typeof ReaderErrorSchema>
     >();
     const closeReadable = () => {
       reqReadable._triggerClose();
@@ -470,12 +459,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       span.recordException(err instanceof Error ? err : new Error(errorMsg));
       span.setStatus({ code: SpanStatusCode.ERROR });
 
-      onServerCancel(
-        Err({
-          code: UNCAUGHT_ERROR_CODE,
-          message: errorMsg,
-        }),
-      );
+      onServerCancel({
+        code: UNCAUGHT_ERROR_CODE,
+        message: errorMsg,
+      });
     };
 
     if (isStreamCloseBackwardsCompat(controlFlags, protocolVersion)) {
@@ -495,12 +482,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       sessionId,
       metadata: sessionMetadata,
       cancel: () => {
-        onServerCancel(
-          Err({
-            code: CANCEL_CODE,
-            message: 'cancelled by server procedure handler',
-          }),
-        );
+        onServerCancel({
+          code: CANCEL_CODE,
+          message: 'cancelled by server procedure handler',
+        });
       },
       signal: finishedController.signal,
     };
@@ -515,7 +500,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           tracingCtx,
           async (span): ProcHandlerReturn => {
             try {
-              const outputMessage = await procedure.handler({
+              const responsePayload = await procedure.handler({
                 ctx: handlerContext,
                 reqInit: initPayload,
               });
@@ -525,7 +510,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
                 return;
               }
 
-              resWritable.write(outputMessage);
+              resWritable.write(responsePayload);
               resWritable.close();
             } catch (err) {
               onHandlerError(err, span);
@@ -594,7 +579,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
             try {
               // TODO handle never resolving after cleanup/full close
               // which would lead to us holding on to the closure forever
-              const outputMessage = await procedure.handler({
+              const responsePayload = await procedure.handler({
                 ctx: handlerContext,
                 reqInit: initPayload,
                 reqReadable: reqReadable,
@@ -604,7 +589,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
                 // A disconnect happened
                 return;
               }
-              resWritable.write(outputMessage);
+              resWritable.write(responsePayload);
               resWritable.close();
             } catch (err) {
               onHandlerError(err, span);
@@ -661,7 +646,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         initMessage.from,
         initMessage.streamId,
         Err({
-          code: INTERNAL_RIVER_ERROR_CODE,
+          code: UNCAUGHT_ERROR_CODE,
           message: errMessage,
         }),
       );
@@ -683,7 +668,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         initMessage.from,
         initMessage.streamId,
         Err({
-          code: INTERNAL_RIVER_ERROR_CODE,
+          code: UNCAUGHT_ERROR_CODE,
           message: errMessage,
         }),
       );
@@ -811,7 +796,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       // this backwards compatibility path requires procedures to define their `init` as
       // an empty-object-compatible-schema (i.e. either actually empty or optional values)
       // The reason we don't check if `init` is satisified here is because false positives
-      // are easy to hit, we'll err on the side of caution and treat it as an input, servers
+      // are easy to hit, we'll err on the side of caution and treat it as a request, servers
       // that expect v1.1 clients should handle this case themselves.
       passInitAsDataForBackwardsCompat = true;
     } else if (!Value.Check(procedure.requestInit, initMessage.payload)) {
@@ -859,7 +844,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
   cancelStream(
     to: string,
     streamId: string,
-    payload: ErrResult<Static<typeof ResponseReaderErrorSchema>>,
+    payload: ErrResult<Static<typeof ReaderErrorSchema>>,
   ) {
     let cancelledForSession = this.serverCancelledStreams.get(to);
 
