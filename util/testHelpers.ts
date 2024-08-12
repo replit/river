@@ -5,11 +5,12 @@ import {
   Err,
   PayloadType,
   Procedure,
+  ProcedureResult,
   ServiceContext,
   ServiceContextWithTransportInfo,
   UNCAUGHT_ERROR,
 } from '../router';
-import { RiverError, Result, RiverUncaughtSchema } from '../router/result';
+import { RiverError } from '../router/result';
 import { Static } from '@sinclair/typebox';
 import {
   OpaqueTransportMessage,
@@ -178,11 +179,7 @@ export function asClientRpc<
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ) {
-  return async (
-    msg: Static<I>,
-  ): Promise<
-    Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>
-  > => {
+  return async (msg: Static<I>): Promise<ProcedureResult<O, E>> => {
     return await proc
       .handler(dummyCtx(state, session, extendedContext), msg)
       .catch(catchProcError);
@@ -203,7 +200,7 @@ export function asClientStream<
   session: Session<Connection> = dummySession(),
 ) {
   const input = pushable<Static<I>>({ objectMode: true });
-  const output = pushable<Result<Static<O>, Static<E>>>({
+  const output = pushable<ProcedureResult<O, E>>({
     objectMode: true,
   });
 
@@ -235,7 +232,7 @@ export function asClientSubscription<
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ) {
-  const output = pushable<Result<Static<O>, Static<E>>>({
+  const output = pushable<ProcedureResult<O, E>>({
     objectMode: true,
   });
 
@@ -265,16 +262,20 @@ export function asClientUpload<
   const input = pushable<Static<I>>({ objectMode: true });
   if (init) {
     const _proc = proc as Procedure<State, 'upload', I, O, E, PayloadType>;
-    const result = _proc
-      .handler(dummyCtx(state, session, extendedContext), init, input)
-      .catch(catchProcError);
-    return [input, result] as const;
+    return [
+      input,
+      _proc
+        .handler(dummyCtx(state, session, extendedContext), init, input)
+        .catch(catchProcError),
+    ] as const;
   } else {
     const _proc = proc as Procedure<State, 'upload', I, O, E>;
-    const result = _proc
-      .handler(dummyCtx(state, session, extendedContext), input)
-      .catch(catchProcError);
-    return [input, result] as const;
+    return [
+      input,
+      _proc
+        .handler(dummyCtx(state, session, extendedContext), input)
+        .catch(catchProcError),
+    ] as const;
   }
 }
 
