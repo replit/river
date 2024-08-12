@@ -10,7 +10,7 @@ import {
   ServiceContextWithTransportInfo,
   UNCAUGHT_ERROR,
 } from '../router';
-import { RiverError, Result, RiverUncaughtSchema } from '../router/result';
+import { RiverError } from '../router/result';
 import { Static } from '@sinclair/typebox';
 import {
   OpaqueTransportMessage,
@@ -260,19 +260,22 @@ export function asClientUpload<
   session: Session<Connection> = dummySession(),
 ) {
   const input = pushable<Static<I>>({ objectMode: true });
-  let result: Promise<ProcedureResult<O, E>>;
   if (init) {
     const _proc = proc as Procedure<State, 'upload', I, O, E, PayloadType>;
-    result = _proc
-      .handler(dummyCtx(state, session, extendedContext), init, input)
-      .catch(catchProcError);
-    return [input, result] as const;
+    return [
+      input,
+      _proc
+        .handler(dummyCtx(state, session, extendedContext), init, input)
+        .catch(catchProcError),
+    ] as const;
   } else {
     const _proc = proc as Procedure<State, 'upload', I, O, E>;
-    result = _proc
-      .handler(dummyCtx(state, session, extendedContext), input)
-      .catch(catchProcError);
-    return [input, result] as const;
+    return [
+      input,
+      _proc
+        .handler(dummyCtx(state, session, extendedContext), input)
+        .catch(catchProcError),
+    ] as const;
   }
 }
 
