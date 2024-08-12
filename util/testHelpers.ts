@@ -5,6 +5,7 @@ import {
   Err,
   PayloadType,
   Procedure,
+  ProcedureResult,
   ServiceContext,
   ServiceContextWithTransportInfo,
   UNCAUGHT_ERROR,
@@ -178,11 +179,7 @@ export function asClientRpc<
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ) {
-  return async (
-    msg: Static<I>,
-  ): Promise<
-    Result<Static<O>, Static<E> | Static<typeof RiverUncaughtSchema>>
-  > => {
+  return async (msg: Static<I>): Promise<ProcedureResult<O, E>> => {
     return await proc
       .handler(dummyCtx(state, session, extendedContext), msg)
       .catch(catchProcError);
@@ -203,7 +200,7 @@ export function asClientStream<
   session: Session<Connection> = dummySession(),
 ) {
   const input = pushable<Static<I>>({ objectMode: true });
-  const output = pushable<Result<Static<O>, Static<E>>>({
+  const output = pushable<ProcedureResult<O, E>>({
     objectMode: true,
   });
 
@@ -235,7 +232,7 @@ export function asClientSubscription<
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ) {
-  const output = pushable<Result<Static<O>, Static<E>>>({
+  const output = pushable<ProcedureResult<O, E>>({
     objectMode: true,
   });
 
@@ -263,15 +260,16 @@ export function asClientUpload<
   session: Session<Connection> = dummySession(),
 ) {
   const input = pushable<Static<I>>({ objectMode: true });
+  let result: Promise<ProcedureResult<O, E>>;
   if (init) {
     const _proc = proc as Procedure<State, 'upload', I, O, E, PayloadType>;
-    const result = _proc
+    result = _proc
       .handler(dummyCtx(state, session, extendedContext), init, input)
       .catch(catchProcError);
     return [input, result] as const;
   } else {
     const _proc = proc as Procedure<State, 'upload', I, O, E>;
-    const result = _proc
+    result = _proc
       .handler(dummyCtx(state, session, extendedContext), input)
       .catch(catchProcError);
     return [input, result] as const;
