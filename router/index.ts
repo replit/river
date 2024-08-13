@@ -47,7 +47,7 @@ export type {
   ServiceContext,
   ProcedureHandlerContext,
 } from './context';
-export { Ok, Err } from './result';
+export { Ok, Err, unwrapOrThrow } from './result';
 export type {
   Result,
   ErrResult,
@@ -56,7 +56,6 @@ export type {
   ResultUnwrapErr,
   ResponseData,
   BaseErrorSchemaType,
-  unwrapOrThrow,
 } from './result';
 export {
   createClientHandshakeOptions,
