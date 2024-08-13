@@ -415,9 +415,9 @@ function handleProc(
     }
 
     if (resReadable.isClosed()) {
-      span.recordException('received message after output stream is closed');
+      span.recordException('received message after response stream is closed');
 
-      transport.log?.error('received message after output stream is closed', {
+      transport.log?.error('received message after response stream is closed', {
         clientId: transport.clientId,
         transportMessage: msg,
       });
@@ -441,7 +441,7 @@ function handleProc(
     }
 
     if (isStreamClose(msg.controlFlags)) {
-      span.addEvent('received output close');
+      span.addEvent('received response close');
 
       closeReadable();
     }

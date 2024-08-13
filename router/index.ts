@@ -56,6 +56,7 @@ export type {
   ResultUnwrapErr,
   ResponseData,
   BaseErrorSchemaType,
+  unwrapOrThrow,
 } from './result';
 export {
   createClientHandshakeOptions,
