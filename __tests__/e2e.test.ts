@@ -333,6 +333,7 @@ describe.each(testMatrix())(
       expect(result3).toStrictEqual({
         ok: false,
         payload: {
+          $kind: 'error',
           code: UNCAUGHT_ERROR,
           message: 'some message',
         },

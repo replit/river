@@ -132,6 +132,7 @@ describe('server-side test', () => {
     expect(result3).toStrictEqual({
       ok: false,
       payload: {
+        $kind: 'error',
         code: UNCAUGHT_ERROR,
         message: 'some message',
       },

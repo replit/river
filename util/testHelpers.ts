@@ -132,7 +132,7 @@ export async function waitForMessage(
 
 function catchProcError(err: unknown) {
   const errorMsg = coerceErrorString(err);
-  return Err({ code: UNCAUGHT_ERROR, message: errorMsg });
+  return Err({ $kind: 'error', code: UNCAUGHT_ERROR, message: errorMsg });
 }
 
 export const testingSessionOptions = defaultTransportOptions;

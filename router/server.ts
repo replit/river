@@ -302,6 +302,7 @@ class RiverServer<Services extends AnyServiceSchemaMap> {
       span.setStatus({ code: SpanStatusCode.ERROR });
       outgoing.push(
         Err({
+          $kind: 'error',
           code: UNCAUGHT_ERROR,
           message: errorMsg,
         } satisfies Static<typeof RiverUncaughtSchema>),

@@ -282,6 +282,7 @@ function handleRpc(
       cleanup();
       resolve(
         Err({
+          $kind: 'error',
           code: UNEXPECTED_DISCONNECT,
           message: `${serverId} unexpectedly disconnected`,
         }),
@@ -409,6 +410,7 @@ function handleStream(
   const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
     outputStream.push(
       Err({
+        $kind: 'error',
         code: UNEXPECTED_DISCONNECT,
         message: `${serverId} unexpectedly disconnected`,
       }),
@@ -488,6 +490,7 @@ function handleSubscribe(
   const onSessionStatus = createSessionDisconnectHandler(serverId, () => {
     outputStream.push(
       Err({
+        $kind: 'error',
         code: UNEXPECTED_DISCONNECT,
         message: `${serverId} unexpectedly disconnected`,
       }),
@@ -580,6 +583,7 @@ function handleUpload(
       cleanup();
       resolve(
         Err({
+          $kind: 'error',
           code: UNEXPECTED_DISCONNECT,
           message: `${serverId} unexpectedly disconnected`,
         }),
