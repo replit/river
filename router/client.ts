@@ -443,7 +443,13 @@ function handleProc(
     if (isStreamClose(msg.controlFlags)) {
       span.addEvent('received response close');
 
-      closeReadable();
+      if (resReadable.isClosed()) {
+        transport.log?.error(
+          'received stream close but readable was already closed',
+        );
+      } else {
+        closeReadable();
+      }
     }
   }
 
@@ -464,9 +470,10 @@ function handleProc(
           message: `${serverId} unexpectedly disconnected`,
         }),
       );
+      closeReadable();
     }
+
     reqWritable.close();
-    closeReadable();
   }
 
   abortSignal?.addEventListener('abort', onClientCancel);
