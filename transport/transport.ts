@@ -1,7 +1,7 @@
 import {
   OpaqueTransportMessage,
-  TransportClientId,
   PartialTransportMessage,
+  TransportClientId,
 } from './message';
 import {
   BaseLogger,
@@ -25,6 +25,7 @@ import {
 } from './sessionStateMachine';
 import { Connection } from './connection';
 import { Session, SessionStateGraph } from './sessionStateMachine/transitions';
+import { SessionId } from './sessionStateMachine/common';
 
 /**
  * Represents the possible states of a transport.
@@ -36,6 +37,10 @@ export type TransportStatus = 'open' | 'closed';
 export interface DeleteSessionOptions {
   unhealthy: boolean;
 }
+
+export type SessionBoundSendFn = (
+  msg: PartialTransportMessage,
+) => string | undefined;
 
 /**
  * Transports manage the lifecycle (creation/deletion) of sessions
@@ -112,11 +117,11 @@ export abstract class Transport<ConnType extends Connection> {
   /**
    * Called when a message is received by this transport.
    * You generally shouldn't need to override this in downstream transport implementations.
-   * @param msg The received message.
+   * @param message The received message.
    */
-  protected handleMsg(msg: OpaqueTransportMessage) {
+  protected handleMsg(message: OpaqueTransportMessage) {
     if (this.getStatus() !== 'open') return;
-    this.eventDispatcher.dispatchEvent('message', msg);
+    this.eventDispatcher.dispatchEvent('message', message);
   }
 
   /**
@@ -142,14 +147,6 @@ export abstract class Transport<ConnType extends Connection> {
   ): void {
     this.eventDispatcher.removeEventListener(type, handler);
   }
-
-  /**
-   * Sends a message over this transport, delegating to the appropriate connection to actually
-   * send the message.
-   * @param msg The message to send.
-   * @returns The ID of the sent message or undefined if it wasn't sent
-   */
-  abstract send(to: TransportClientId, msg: PartialTransportMessage): string;
 
   protected protocolError(message: EventMap['protocolError']) {
     this.eventDispatcher.dispatchEvent('protocolError', message);
@@ -274,5 +271,28 @@ export abstract class Transport<ConnType extends Connection> {
     }
 
     return this.updateSession(noConnectionSession);
+  }
+
+  /**
+   * Gets a send closure scoped to a specific session. Sending using the returned
+   * closure after the session has transitioned to a different state will be a noop.
+   *
+   * Session objects themselves can become stale as they transition between
+   * states. As stale sessions cannot be used again (and will throw), holding
+   * onto a session object is not recommended.
+   */
+  getSessionBoundSendFn(
+    to: TransportClientId,
+    sessionId: SessionId,
+  ): SessionBoundSendFn {
+    return (msg: PartialTransportMessage) => {
+      const session = this.sessions.get(to);
+      if (!session) return;
+
+      const sameSession = session.id === sessionId;
+      if (!sameSession) return;
+
+      return session.send(msg);
+    };
   }
 }

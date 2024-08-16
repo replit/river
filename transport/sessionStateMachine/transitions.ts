@@ -34,6 +34,7 @@ import {
   SessionBackingOff,
   SessionBackingOffListeners,
 } from './SessionBackingOff';
+import { ProtocolVersion } from '../message';
 
 function inheritSharedSession(
   session: IdentifiedSession,
@@ -68,7 +69,7 @@ export const SessionStateGraph = {
       from: TransportClientId,
       listeners: SessionNoConnectionListeners,
       options: SessionOptions,
-      protocolVersion: string,
+      protocolVersion: ProtocolVersion,
       log?: Logger,
     ) => {
       const id = `session-${generateId()}`;
@@ -225,7 +226,7 @@ export const SessionStateGraph = {
       to: TransportClientId,
       propagationCtx: PropagationContext | undefined,
       listeners: SessionConnectedListeners,
-      protocolVersion: string,
+      protocolVersion: ProtocolVersion,
     ): SessionConnected<ConnType> => {
       const conn = pendingSession.conn;
       const { from, options } = pendingSession;

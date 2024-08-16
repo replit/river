@@ -36,6 +36,7 @@ import {
   Session,
   SessionStateGraph,
 } from '../transport/sessionStateMachine/transitions';
+import { ClientTransport, ServerTransport } from '../transport';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
@@ -206,6 +207,32 @@ export function dummySession() {
   );
 }
 
+export function getClientSendFn(
+  clientTransport: ClientTransport<Connection>,
+  serverTransport: ServerTransport<Connection>,
+) {
+  const session = clientTransport.getOrCreateSession(serverTransport.clientId);
+  return clientTransport.getSessionBoundSendFn(
+    serverTransport.clientId,
+    session.id,
+  );
+}
+
+export function getServerSendFn(
+  serverTransport: ServerTransport<Connection>,
+  clientTransport: ClientTransport<Connection>,
+) {
+  const session = serverTransport.sessions.get(clientTransport.clientId);
+  if (!session) {
+    throw new Error('session not found');
+  }
+
+  return serverTransport.getSessionBoundSendFn(
+    clientTransport.clientId,
+    session.id,
+  );
+}
+
 function dummyCtx<State>(
   state: State,
   session: Session<Connection>,
@@ -262,18 +289,18 @@ function createResponsePipe<
     Static<Res>,
     Static<Err> | Static<typeof ReaderErrorSchema>
   >();
-  const writable = new WritableImpl<Result<Static<Res>, Static<Err>>>(
-    (v) => {
+  const writable = new WritableImpl<Result<Static<Res>, Static<Err>>>({
+    writeCb: (v) => {
       readable._pushValue(v);
     },
-    () => {
+    closeCb: () => {
       // Make it async to simulate request going over the wire
       // using promises so that we don't get affected by fake timers.
       void Promise.resolve().then(() => {
         readable._triggerClose();
       });
     },
-  );
+  });
 
   return { readable, writable };
 }
@@ -286,18 +313,18 @@ function createRequestPipe<Req extends PayloadType>(): {
     Static<Req>,
     Static<typeof ReaderErrorSchema>
   >();
-  const writable = new WritableImpl<Static<Req>>(
-    (v) => {
+  const writable = new WritableImpl<Static<Req>>({
+    writeCb: (v) => {
       readable._pushValue(Ok(v));
     },
-    () => {
+    closeCb: () => {
       // Make it async to simulate request going over the wire
       // using promises so that we don't get affected by fake timers.
       void Promise.resolve().then(() => {
         readable._triggerClose();
       });
     },
-  );
+  });
 
   return { readable, writable };
 }

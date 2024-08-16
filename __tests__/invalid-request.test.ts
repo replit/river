@@ -17,6 +17,7 @@ import { INVALID_REQUEST_CODE } from '../router/procedures';
 import { ControlFlags } from '../transport/message';
 import { TestSetupHelpers } from './fixtures/transports';
 import { nanoid } from 'nanoid';
+import { getClientSendFn } from '../util/testHelpers';
 
 describe('cancels invalid request', () => {
   const { transport, codec } = testMatrix()[0];
@@ -56,9 +57,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'service',
       procedureName: 'stream',
@@ -108,9 +110,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       procedureName: 'stream',
       payload: {},
@@ -159,9 +162,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'service',
       payload: {},
@@ -210,9 +214,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'serviceDoesNotExist',
       procedureName: 'stream',
@@ -262,9 +267,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'service',
       procedureName: 'procedureDoesNotExist',
@@ -316,9 +322,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'service',
       procedureName: 'stream',
@@ -368,9 +375,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'service',
       procedureName: 'stream',
@@ -378,7 +386,7 @@ describe('cancels invalid request', () => {
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       payload: {},
       controlFlags: 0,
@@ -429,9 +437,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'service',
       procedureName: 'rpc',
@@ -439,7 +448,7 @@ describe('cancels invalid request', () => {
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       payload: { wat: '1' },
       controlFlags: 0,
@@ -489,9 +498,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'service',
       procedureName: 'stream',
@@ -499,13 +509,13 @@ describe('cancels invalid request', () => {
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       payload: {},
       controlFlags: ControlFlags.StreamClosedBit,
     });
 
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       payload: {},
       controlFlags: 0,

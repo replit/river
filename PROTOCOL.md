@@ -560,7 +560,7 @@ The handshake request payload schema is the following:
 ```ts
 type HandshakeRequest = {
   type: 'HANDSHAKE_REQ';
-  protocolVersion: string;
+  protocolVersion: 'v0' | 'v1' | 'v1.1' | 'v2.0';
   sessionId: string;
   expectedSessionState: {
     nextExpectedSeq: number;

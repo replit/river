@@ -1,5 +1,5 @@
 import { ValueError } from '@sinclair/typebox/value';
-import { OpaqueTransportMessage } from '../transport/message';
+import { OpaqueTransportMessage, ProtocolVersion } from '../transport/message';
 
 const LoggingLevels = {
   debug: -1,
@@ -40,7 +40,7 @@ const cleanedLogFn = (log: LogFn) => {
 };
 
 export type MessageMetadata = Partial<{
-  protocolVersion: string;
+  protocolVersion: ProtocolVersion;
   clientId: string;
   connectedTo: string;
   sessionId: string;

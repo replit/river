@@ -7,10 +7,10 @@ import {
   HandshakeErrorResponseCodes,
   OpaqueTransportMessage,
   acceptedProtocolVersions,
-  PartialTransportMessage,
   TransportClientId,
   handshakeResponseMessage,
   currentProtocolVersion,
+  ProtocolVersion,
 } from './message';
 import {
   ProvidedServerTransportOptions,
@@ -70,33 +70,6 @@ export abstract class ServerTransport<
 
   extendHandshake(options: ServerHandshakeOptions) {
     this.handshakeExtensions = options;
-  }
-
-  send(to: string, msg: PartialTransportMessage): string {
-    if (this.getStatus() === 'closed') {
-      const err = 'transport is closed, cant send';
-      this.log?.error(err, {
-        clientId: this.clientId,
-        transportMessage: msg,
-        tags: ['invariant-violation'],
-      });
-
-      throw new Error(err);
-    }
-
-    const session = this.sessions.get(to);
-    if (!session) {
-      const err = `session to ${to} does not exist`;
-      this.log?.error(err, {
-        clientId: this.clientId,
-        transportMessage: msg,
-        tags: ['invariant-violation'],
-      });
-
-      throw new Error(err);
-    }
-
-    return session.send(msg);
   }
 
   protected deletePendingSession(
@@ -255,7 +228,7 @@ export abstract class ServerTransport<
     }
 
     // invariant: handshake request passes all the validation
-    const gotVersion = msg.payload.protocolVersion;
+    const gotVersion = msg.payload.protocolVersion as ProtocolVersion;
     if (!acceptedProtocolVersions.includes(gotVersion)) {
       this.rejectHandshakeRequest(
         session,
@@ -509,7 +482,9 @@ export abstract class ServerTransport<
             );
             this.onConnClosed(connectedSession);
           },
-          onMessage: (msg) => this.handleMsg(msg),
+          onMessage: (msg) => {
+            this.handleMsg(msg);
+          },
           onInvalidMessage: (reason) => {
             this.protocolError({
               type: ProtocolError.InvalidMessage,

@@ -90,9 +90,9 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
 export async function ensureServerIsClean(s: Server<AnyServiceSchemaMap>) {
   return waitFor(() =>
     expect(
-      s.openStreams,
+      s.streams,
       `[post-test cleanup] server should not have any open streams after the test`,
-    ).toStrictEqual(new Set()),
+    ).toStrictEqual(new Map()),
   );
 }
 

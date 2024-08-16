@@ -4,7 +4,6 @@ import {
   ControlMessageHandshakeResponseSchema,
   HandshakeErrorRetriableResponseCodes,
   OpaqueTransportMessage,
-  PartialTransportMessage,
   TransportClientId,
   currentProtocolVersion,
   handshakeRequestMessage,
@@ -94,26 +93,6 @@ export abstract class ClientTransport<
     if (this.reconnectOnConnectionDrop && this.getStatus() === 'open') {
       this.connect(to);
     }
-  }
-
-  send(to: string, msg: PartialTransportMessage): string {
-    if (this.getStatus() === 'closed') {
-      const err = 'transport is closed, cant send';
-      this.log?.error(err, {
-        clientId: this.clientId,
-        transportMessage: msg,
-        tags: ['invariant-violation'],
-      });
-
-      throw new Error(err);
-    }
-
-    let session = this.sessions.get(to);
-    if (!session) {
-      session = this.createUnconnectedSession(to);
-    }
-
-    return session.send(msg);
   }
 
   private createUnconnectedSession(to: string): SessionNoConnection {
@@ -298,7 +277,9 @@ export abstract class ClientTransport<
           );
           this.onConnClosed(connectedSession);
         },
-        onMessage: (msg) => this.handleMsg(msg),
+        onMessage: (msg) => {
+          this.handleMsg(msg);
+        },
         onInvalidMessage: (reason) => {
           this.deleteSession(connectedSession, { unhealthy: true });
           this.protocolError({
@@ -310,6 +291,10 @@ export abstract class ClientTransport<
 
     this.updateSession(connectedSession);
     this.retryBudget.startRestoringBudget();
+  }
+
+  getOrCreateSession(to: TransportClientId): ClientSession<ConnType> {
+    return this.sessions.get(to) ?? this.createUnconnectedSession(to);
   }
 
   /**
@@ -324,10 +309,7 @@ export abstract class ClientTransport<
       return;
     }
 
-    // create a new session if one does not exist
-    let session = this.sessions.get(to);
-    session ??= this.createUnconnectedSession(to);
-
+    const session = this.getOrCreateSession(to);
     if (session.state !== SessionState.NoConnection) {
       // already trying to connect
       this.log?.debug(

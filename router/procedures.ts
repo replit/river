@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
-import { Static, TNever, TSchema, TUnion, Type } from '@sinclair/typebox';
+import { Kind, Static, TNever, TSchema, TUnion, Type } from '@sinclair/typebox';
 import { ProcedureHandlerContext } from './context';
 import { BaseErrorSchemaType, Result } from './result';
 import { Readable, Writable } from './streams';
@@ -68,27 +68,67 @@ export const ReaderErrorSchema = Type.Object({
   message: Type.String(),
 });
 
-// Allow specific levels of nesting, otherwise typescript shits itself due to recursion
-type ProcedureErrorUnionSchema0 = TUnion<Array<BaseErrorSchemaType>>;
-type ProcedureErrorUnionSchema1 = TUnion<
-  Array<ProcedureErrorUnionSchema0 | BaseErrorSchemaType>
->;
-type ProcedureErrorUnionSchema2 = TUnion<
-  Array<
-    | ProcedureErrorUnionSchema1
-    | ProcedureErrorUnionSchema0
-    | BaseErrorSchemaType
-  >
->;
-
 /**
  * Represents an acceptable schema to pass to a procedure.
  * Just a type of a schema, not an actual schema.
+ *
  */
 export type ProcedureErrorSchemaType =
-  | ProcedureErrorUnionSchema2
+  | TNever
   | BaseErrorSchemaType
-  | TNever;
+  | TUnion<Array<BaseErrorSchemaType>>;
+
+// arbitrarily nested unions
+// river doesn't accept this by default, use the `flattenErrorType` helper
+type NestableProcedureErrorSchemaType =
+  | BaseErrorSchemaType
+  | TUnion<NestableProcedureErrorSchemaTypeArray>;
+// use an interface to defer the type definition to be evaluated lazily
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+interface NestableProcedureErrorSchemaTypeArray
+  extends Array<NestableProcedureErrorSchemaType> {}
+
+function isUnion(schema: TSchema): schema is TUnion {
+  return schema[Kind] === 'Union';
+}
+
+type Flatten<T> = T extends BaseErrorSchemaType
+  ? T
+  : T extends TUnion<Array<infer U extends TSchema>>
+  ? Flatten<U>
+  : unknown;
+
+/**
+ * In the case where API consumers for some god-forsaken reason want to use
+ * arbitrarily nested unions, this helper flattens them to a single level
+ *
+ * @param errType - An arbitrarily union-nested error schema.
+ * @returns The flattened error schema.
+ */
+export function flattenErrorType<T extends NestableProcedureErrorSchemaType>(
+  errType: T,
+): Flatten<T>;
+export function flattenErrorType(
+  errType: NestableProcedureErrorSchemaType,
+): ProcedureErrorSchemaType {
+  if (!isUnion(errType)) {
+    return errType;
+  }
+
+  const flattenedTypes: Array<BaseErrorSchemaType> = [];
+  function flatten(type: NestableProcedureErrorSchemaType) {
+    if (isUnion(type)) {
+      for (const t of type.anyOf) {
+        flatten(t);
+      }
+    } else {
+      flattenedTypes.push(type);
+    }
+  }
+
+  flatten(errType);
+  return Type.Union(flattenedTypes);
+}
 
 /**
  * Procedure for a single message in both directions (1:1).

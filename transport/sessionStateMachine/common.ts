@@ -4,6 +4,7 @@ import {
   OpaqueTransportMessage,
   OpaqueTransportMessageSchema,
   PartialTransportMessage,
+  ProtocolVersion,
   TransportClientId,
   TransportMessage,
 } from '../message';
@@ -197,14 +198,14 @@ export interface IdentifiedSessionProps extends CommonSessionProps {
   ack: number;
   sendBuffer: Array<OpaqueTransportMessage>;
   telemetry: TelemetryInfo;
-  protocolVersion: string;
+  protocolVersion: ProtocolVersion;
 }
 
 export abstract class IdentifiedSession extends CommonSession {
   readonly id: SessionId;
   readonly telemetry: TelemetryInfo;
   readonly to: TransportClientId;
-  readonly protocolVersion: string;
+  readonly protocolVersion: ProtocolVersion;
 
   /**
    * Index of the message we will send next (excluding handshake)
