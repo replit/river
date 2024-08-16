@@ -3,8 +3,8 @@ export type {
   ServiceConfiguration,
   ProcHandler,
   ProcInit,
-  ProcInput,
-  ProcOutput,
+  ProcRequest,
+  ProcResponse,
   ProcErrors,
   ProcType,
 } from './services';
@@ -14,18 +14,30 @@ export {
   SerializedServerSchema,
   SerializedServiceSchema,
   SerializedProcedureSchema,
+  serializeSchemaV1Compat,
+  SerializedServerSchemaProtocolv1,
+  SerializedServiceSchemaProtocolv1,
+  SerializedProcedureSchemaProtocolv1,
 } from './services';
 export type {
   ValidProcType,
   PayloadType,
   ProcedureMap,
-  ProcedureResult,
   RpcProcedure as RPCProcedure,
   UploadProcedure,
   SubscriptionProcedure,
   StreamProcedure,
+  ProcedureErrorSchemaType,
 } from './procedures';
-export { Procedure } from './procedures';
+export type { Writable, Readable } from './streams';
+export {
+  Procedure,
+  UNCAUGHT_ERROR_CODE,
+  UNEXPECTED_DISCONNECT_CODE,
+  INVALID_REQUEST_CODE,
+  CANCEL_CODE,
+  ReaderErrorSchema,
+} from './procedures';
 export { createClient } from './client';
 export type { Client } from './client';
 export { createServer } from './server';
@@ -33,17 +45,17 @@ export type { Server } from './server';
 export type {
   ParsedMetadata,
   ServiceContext,
-  ServiceContextWithState,
-  ServiceContextWithTransportInfo,
+  ProcedureHandlerContext,
 } from './context';
-export { Ok, Err, UNCAUGHT_ERROR, RiverUncaughtSchema } from './result';
+export { Ok, Err, unwrapOrThrow } from './result';
 export type {
-  RiverErrorSchema,
-  RiverError,
   Result,
+  ErrResult,
+  OkResult,
   ResultUnwrapOk,
   ResultUnwrapErr,
-  Output,
+  ResponseData,
+  BaseErrorSchemaType,
 } from './result';
 export {
   createClientHandshakeOptions,

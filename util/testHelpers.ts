@@ -1,29 +1,35 @@
 import NodeWs, { WebSocketServer } from 'ws';
 import http from 'node:http';
-import { pushable } from 'it-pushable';
+import { Err, Ok, Result, BaseErrorSchemaType } from '../router/result';
 import {
-  Err,
+  ProcedureErrorSchemaType,
+  ReaderErrorSchema,
+  UNCAUGHT_ERROR_CODE,
   PayloadType,
   Procedure,
-  ProcedureResult,
-  ServiceContext,
-  ServiceContextWithTransportInfo,
-  UNCAUGHT_ERROR,
-} from '../router';
-import { RiverError } from '../router/result';
+} from '../router/procedures';
 import { Static } from '@sinclair/typebox';
 import {
   OpaqueTransportMessage,
   PartialTransportMessage,
+  currentProtocolVersion,
 } from '../transport/message';
 import { coerceErrorString } from './stringify';
 import { Transport } from '../transport/transport';
+import {
+  Readable,
+  ReadableImpl,
+  ReadableResult,
+  ReadableIterator,
+  Writable,
+  WritableImpl,
+} from '../router/streams';
+import { ServiceContext, ProcedureHandlerContext } from '../router/context';
 import { WsLike } from '../transport/impls/ws/wslike';
 import {
   defaultClientTransportOptions,
   defaultTransportOptions,
 } from '../transport/options';
-import { generateId } from '../transport/id';
 import { Connection } from '../transport/connection';
 import { SessionState } from '../transport/sessionStateMachine/common';
 import {
@@ -74,13 +80,61 @@ export function onWsServerReady(server: http.Server): Promise<number> {
   });
 }
 
+const readableIterators = new WeakMap<
+  Readable<unknown, Static<BaseErrorSchemaType>>,
+  ReadableIterator<unknown, Static<BaseErrorSchemaType>>
+>();
+
 /**
- * Retrieves the next value from an async iterable iterator.
- * @param iter The async iterable iterator.
- * @returns A promise that resolves to the next value from the iterator.
+ * A safe way to access {@link Readble}'s iterator multiple times in test helpers.
+ *
+ * If there are other iteration attempts outside of the test helpers
+ * (this function, {@link readNextResult}, and {@link isReadableDone})
+ * it will throw an error.
  */
-export async function iterNext<T>(iter: AsyncIterableIterator<T>) {
-  return await iter.next().then((res) => res.value as T);
+export function getReadableIterator<T, E extends Static<BaseErrorSchemaType>>(
+  readable: Readable<T, E>,
+): ReadableIterator<T, E> {
+  let iter = readableIterators.get(readable) as
+    | ReadableIterator<T, E>
+    | undefined;
+
+  if (!iter) {
+    iter = readable[Symbol.asyncIterator]();
+    readableIterators.set(readable, iter);
+  }
+
+  return iter;
+}
+
+/**
+ * Retrieves the next value from {@link Readable}, or throws an error if the Readable is done.
+ *
+ * Calling semantics are similar to {@link getReadableIterator}
+ */
+export async function readNextResult<T, E extends Static<BaseErrorSchemaType>>(
+  readable: Readable<T, E>,
+): Promise<ReadableResult<T, E>> {
+  const res = await getReadableIterator(readable).next();
+
+  if (res.done) {
+    throw new Error('readNext from a done Readable');
+  }
+
+  return res.value;
+}
+
+/**
+ * Checks if the readable is done iterating, it consumes an iteration in the process.
+ *
+ * Calling semantics are similar to {@link getReadableIterator}
+ */
+export async function isReadableDone<T, E extends Static<BaseErrorSchemaType>>(
+  readable: Readable<T, E>,
+) {
+  const res = await getReadableIterator(readable).next();
+
+  return res.done;
 }
 
 export function payloadToTransportMessage<Payload>(
@@ -132,7 +186,7 @@ export async function waitForMessage(
 
 function catchProcError(err: unknown) {
   const errorMsg = coerceErrorString(err);
-  return Err({ code: UNCAUGHT_ERROR, message: errorMsg });
+  return Err({ code: UNCAUGHT_ERROR_CODE, message: errorMsg });
 }
 
 export const testingSessionOptions = defaultTransportOptions;
@@ -148,6 +202,7 @@ export function dummySession() {
       },
     },
     testingSessionOptions,
+    currentProtocolVersion,
   );
 }
 
@@ -155,128 +210,188 @@ function dummyCtx<State>(
   state: State,
   session: Session<Connection>,
   extendedContext?: Omit<ServiceContext, 'state'>,
-): ServiceContextWithTransportInfo<State> {
+): ProcedureHandlerContext<State> {
   return {
     ...extendedContext,
     state,
     sessionId: session.id,
-    to: session.to,
     from: session.from,
-    streamId: generateId(),
     metadata: {},
+    // TODO might wanna hook these up!
+    cancel: () => undefined,
+    signal: new AbortController().signal,
   };
 }
 
 export function asClientRpc<
   State extends object,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
-  Init extends PayloadType | null = null,
+  Init extends PayloadType,
+  Res extends PayloadType,
+  Err extends ProcedureErrorSchemaType,
 >(
   state: State,
-  proc: Procedure<State, 'rpc', I, O, E, Init>,
+  proc: Procedure<State, 'rpc', Init, null, Res, Err>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
 ) {
-  return async (msg: Static<I>): Promise<ProcedureResult<O, E>> => {
-    return await proc
-      .handler(dummyCtx(state, session, extendedContext), msg)
+  return async (
+    msg: Static<Init>,
+  ): Promise<
+    Result<Static<Res>, Static<Err> | Static<typeof ReaderErrorSchema>>
+  > => {
+    return proc
+      .handler({
+        ctx: dummyCtx(state, session, extendedContext),
+        reqInit: msg,
+      })
       .catch(catchProcError);
   };
 }
 
+function createResponsePipe<
+  Res extends PayloadType,
+  Err extends ProcedureErrorSchemaType,
+>(): {
+  readable: Readable<
+    Static<Res>,
+    Static<Err> | Static<typeof ReaderErrorSchema>
+  >;
+  writable: Writable<Result<Static<Res>, Static<Err>>>;
+} {
+  const readable = new ReadableImpl<
+    Static<Res>,
+    Static<Err> | Static<typeof ReaderErrorSchema>
+  >();
+  const writable = new WritableImpl<Result<Static<Res>, Static<Err>>>(
+    (v) => {
+      readable._pushValue(v);
+    },
+    () => {
+      // Make it async to simulate request going over the wire
+      // using promises so that we don't get affected by fake timers.
+      void Promise.resolve().then(() => {
+        readable._triggerClose();
+      });
+    },
+  );
+
+  return { readable, writable };
+}
+
+function createRequestPipe<Req extends PayloadType>(): {
+  readable: Readable<Static<Req>, Static<typeof ReaderErrorSchema>>;
+  writable: Writable<Static<Req>>;
+} {
+  const readable = new ReadableImpl<
+    Static<Req>,
+    Static<typeof ReaderErrorSchema>
+  >();
+  const writable = new WritableImpl<Static<Req>>(
+    (v) => {
+      readable._pushValue(Ok(v));
+    },
+    () => {
+      // Make it async to simulate request going over the wire
+      // using promises so that we don't get affected by fake timers.
+      void Promise.resolve().then(() => {
+        readable._triggerClose();
+      });
+    },
+  );
+
+  return { readable, writable };
+}
+
 export function asClientStream<
   State extends object,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
-  Init extends PayloadType | null = null,
+  Init extends PayloadType,
+  Req extends PayloadType,
+  Res extends PayloadType,
+  Err extends ProcedureErrorSchemaType,
 >(
   state: State,
-  proc: Procedure<State, 'stream', I, O, E, Init>,
-  init?: Init extends PayloadType ? Static<Init> : null,
+  proc: Procedure<State, 'stream', Init, Req, Res, Err>,
+  reqInit?: Static<Init>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
-) {
-  const input = pushable<Static<I>>({ objectMode: true });
-  const output = pushable<ProcedureResult<O, E>>({
-    objectMode: true,
-  });
+): {
+  reqWritable: Writable<Static<Req>>;
+  resReadable: Readable<Static<Res>, Static<Err>>;
+} {
+  const requestPipe = createRequestPipe<Req>();
+  const responsePipe = createResponsePipe<Res, Err>();
 
-  void (async () => {
-    if (init) {
-      const _proc = proc as Procedure<State, 'stream', I, O, E, PayloadType>;
-      await _proc
-        .handler(dummyCtx(state, session, extendedContext), init, input, output)
-        .catch((err: unknown) => output.push(catchProcError(err)));
-    } else {
-      const _proc = proc as Procedure<State, 'stream', I, O, E>;
-      await _proc
-        .handler(dummyCtx(state, session, extendedContext), input, output)
-        .catch((err: unknown) => output.push(catchProcError(err)));
-    }
-  })();
+  void proc
+    .handler({
+      ctx: dummyCtx(state, session, extendedContext),
+      reqInit: reqInit ?? {},
+      reqReadable: requestPipe.readable,
+      resWritable: responsePipe.writable,
+    })
+    .catch((err: unknown) => responsePipe.writable.write(catchProcError(err)));
 
-  return [input, output] as const;
+  return {
+    reqWritable: requestPipe.writable,
+    resReadable: responsePipe.readable,
+  };
 }
 
 export function asClientSubscription<
   State extends object,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
+  Init extends PayloadType,
+  Res extends PayloadType,
+  Err extends ProcedureErrorSchemaType,
 >(
   state: State,
-  proc: Procedure<State, 'subscription', I, O, E>,
+  proc: Procedure<State, 'subscription', Init, null, Res, Err>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
-) {
-  const output = pushable<ProcedureResult<O, E>>({
-    objectMode: true,
-  });
+): (msg: Static<Init>) => {
+  resReadable: Readable<Static<Res>, Static<Err>>;
+} {
+  const responsePipe = createResponsePipe<Res, Err>();
 
-  return (msg: Static<I>) => {
-    void (async () => {
-      return await proc
-        .handler(dummyCtx(state, session, extendedContext), msg, output)
-        .catch((err: unknown) => output.push(catchProcError(err)));
-    })();
-    return output;
+  return (msg: Static<Init>) => {
+    void proc
+      .handler({
+        ctx: dummyCtx(state, session, extendedContext),
+        reqInit: msg,
+        resWritable: responsePipe.writable,
+      })
+      .catch((err: unknown) =>
+        responsePipe.writable.write(catchProcError(err)),
+      );
+
+    return { resReadable: responsePipe.readable };
   };
 }
 
 export function asClientUpload<
   State extends object,
-  I extends PayloadType,
-  O extends PayloadType,
-  E extends RiverError,
-  Init extends PayloadType | null = null,
+  Init extends PayloadType,
+  Req extends PayloadType,
+  Res extends PayloadType,
+  Err extends ProcedureErrorSchemaType,
 >(
   state: State,
-  proc: Procedure<State, 'upload', I, O, E, Init>,
-  init?: Init extends PayloadType ? Static<Init> : null,
+  proc: Procedure<State, 'upload', Init, Req, Res, Err>,
+  reqInit?: Static<Init>,
   extendedContext?: Omit<ServiceContext, 'state'>,
   session: Session<Connection> = dummySession(),
-) {
-  const input = pushable<Static<I>>({ objectMode: true });
-  if (init) {
-    const _proc = proc as Procedure<State, 'upload', I, O, E, PayloadType>;
-    return [
-      input,
-      _proc
-        .handler(dummyCtx(state, session, extendedContext), init, input)
-        .catch(catchProcError),
-    ] as const;
-  } else {
-    const _proc = proc as Procedure<State, 'upload', I, O, E>;
-    return [
-      input,
-      _proc
-        .handler(dummyCtx(state, session, extendedContext), input)
-        .catch(catchProcError),
-    ] as const;
-  }
+): {
+  reqWritable: Writable<Static<Req>>;
+  finalize: () => Promise<Result<Static<Res>, Static<Err>>>;
+} {
+  const requestPipe = createRequestPipe<Req>();
+  const result = proc
+    .handler({
+      ctx: dummyCtx(state, session, extendedContext),
+      reqInit: reqInit ?? {},
+      reqReadable: requestPipe.readable,
+    })
+    .catch(catchProcError);
+
+  return { reqWritable: requestPipe.writable, finalize: () => result };
 }
 
 export function getTransportConnections<ConnType extends Connection>(

@@ -48,6 +48,7 @@ function inheritSharedSession(
     telemetry: session.telemetry,
     options: session.options,
     log: session.log,
+    protocolVersion: session.protocolVersion,
   };
 }
 
@@ -67,6 +68,7 @@ export const SessionStateGraph = {
       from: TransportClientId,
       listeners: SessionNoConnectionListeners,
       options: SessionOptions,
+      protocolVersion: string,
       log?: Logger,
     ) => {
       const id = `session-${generateId()}`;
@@ -84,6 +86,7 @@ export const SessionStateGraph = {
         sendBuffer,
         telemetry,
         options,
+        protocolVersion,
         log,
       });
 
@@ -222,6 +225,7 @@ export const SessionStateGraph = {
       to: TransportClientId,
       propagationCtx: PropagationContext | undefined,
       listeners: SessionConnectedListeners,
+      protocolVersion: string,
     ): SessionConnected<ConnType> => {
       const conn = pendingSession.conn;
       const { from, options } = pendingSession;
@@ -244,6 +248,7 @@ export const SessionStateGraph = {
             ),
             options,
             log: pendingSession.log,
+            protocolVersion,
           };
 
       pendingSession._handleStateExit();

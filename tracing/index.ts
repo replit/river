@@ -8,11 +8,7 @@ import {
 } from '@opentelemetry/api';
 import { version as RIVER_VERSION } from '../package.json';
 import { ValidProcType } from '../router';
-import {
-  ClientTransport,
-  Connection,
-  OpaqueTransportMessage,
-} from '../transport';
+import { ClientTransport, Connection } from '../transport';
 
 export interface PropagationContext {
   traceparent: string;
@@ -124,24 +120,27 @@ export function createProcTelemetryInfo(
   return { span, ctx };
 }
 
-export function createHandlerSpan(
+export function createHandlerSpan<Fn extends (span: Span) => unknown>(
   kind: ValidProcType,
-  message: OpaqueTransportMessage,
-  fn: (span: Span) => Promise<unknown>,
-) {
-  const ctx = message.tracing
-    ? propagation.extract(context.active(), message.tracing)
+  serviceName: string,
+  procedureName: string,
+  streamId: string,
+  tracing: PropagationContext | undefined,
+  fn: Fn,
+): ReturnType<Fn> {
+  const ctx = tracing
+    ? propagation.extract(context.active(), tracing)
     : context.active();
 
-  return tracer.startActiveSpan(
-    `procedure handler ${message.serviceName}.${message.procedureName}`,
+  return tracer.startActiveSpan<Fn>(
+    `procedure handler ${serviceName}.${procedureName}`,
     {
       attributes: {
         component: 'river',
         'river.method.kind': kind,
-        'river.method.service': message.serviceName,
-        'river.method.name': message.procedureName,
-        'river.streamId': message.streamId,
+        'river.method.service': serviceName,
+        'river.method.name': procedureName,
+        'river.streamId': streamId,
         'span.kind': 'server',
       },
       kind: SpanKind.SERVER,

@@ -3,7 +3,8 @@ import {
   asClientStream,
   asClientSubscription,
   asClientUpload,
-  iterNext,
+  isReadableDone,
+  readNextResult,
 } from '../util/testHelpers';
 import { describe, expect, test } from 'vitest';
 import {
@@ -14,7 +15,7 @@ import {
   SubscribableServiceSchema,
   UploadableServiceSchema,
 } from './fixtures/services';
-import { UNCAUGHT_ERROR } from '../router/result';
+import { UNCAUGHT_ERROR_CODE } from '../router';
 import { Observable } from './fixtures/observable';
 
 describe('server-side test', () => {
@@ -50,75 +51,76 @@ describe('server-side test', () => {
   });
 
   test('stream basic', async () => {
-    const [input, output] = asClientStream(
+    const { reqWritable, resReadable } = asClientStream(
       { count: 0 },
       service.procedures.echo,
     );
 
-    input.push({ msg: 'abc', ignore: false });
-    input.push({ msg: 'def', ignore: true });
-    input.push({ msg: 'ghi', ignore: false });
-    input.end();
+    reqWritable.write({ msg: 'abc', ignore: false });
+    reqWritable.write({ msg: 'def', ignore: true });
+    reqWritable.write({ msg: 'ghi', ignore: false });
+    reqWritable.close();
 
-    const result1 = await iterNext(output);
+    const result1 = await readNextResult(resReadable);
     expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
-    const result2 = await iterNext(output);
+    const result2 = await readNextResult(resReadable);
     expect(result2).toStrictEqual({ ok: true, payload: { response: 'ghi' } });
 
-    expect(output.readableLength).toBe(0);
+    expect(await isReadableDone(resReadable)).toEqual(true);
   });
 
   test('stream empty', async () => {
-    const [input, output] = asClientStream(
+    const { reqWritable, resReadable } = asClientStream(
       { count: 0 },
       service.procedures.echo,
     );
-    input.end();
+    reqWritable.close();
 
-    const result = await output.next();
-    expect(result).toStrictEqual({ done: true, value: undefined });
-
-    expect(output.readableLength).toBe(0);
+    expect(await isReadableDone(resReadable)).toEqual(true);
   });
 
   test('stream with initialization', async () => {
-    const [input, output] = asClientStream(
+    const { reqWritable, resReadable } = asClientStream(
       { count: 0 },
       service.procedures.echoWithPrefix,
       { prefix: 'test' },
     );
 
-    input.push({ msg: 'abc', ignore: false });
-    input.push({ msg: 'def', ignore: true });
-    input.push({ msg: 'ghi', ignore: false });
-    input.end();
+    reqWritable.write({ msg: 'abc', ignore: false });
+    reqWritable.write({ msg: 'def', ignore: true });
+    reqWritable.write({ msg: 'ghi', ignore: false });
+    reqWritable.close();
 
-    const result1 = await iterNext(output);
+    const result1 = await readNextResult(resReadable);
     expect(result1).toStrictEqual({
       ok: true,
       payload: { response: 'test abc' },
     });
 
-    const result2 = await iterNext(output);
+    const result2 = await readNextResult(resReadable);
     expect(result2).toStrictEqual({
       ok: true,
       payload: { response: 'test ghi' },
     });
 
-    expect(output.readableLength).toBe(0);
+    expect(await isReadableDone(resReadable)).toEqual(true);
   });
 
   test('fallible stream', async () => {
     const service = FallibleServiceSchema.instantiate({});
-    const [input, output] = asClientStream({}, service.procedures.echo);
+    const { reqWritable, resReadable } = asClientStream(
+      {},
+      service.procedures.echo,
+    );
 
-    input.push({ msg: 'abc', throwResult: false, throwError: false });
-    const result1 = await iterNext(output);
+    reqWritable.write({ msg: 'abc', throwResult: false, throwError: false });
+
+    const result1 = await readNextResult(resReadable);
     expect(result1).toStrictEqual({ ok: true, payload: { response: 'abc' } });
 
-    input.push({ msg: 'def', throwResult: true, throwError: false });
-    const result2 = await iterNext(output);
+    reqWritable.write({ msg: 'def', throwResult: true, throwError: false });
+    const result2 = await readNextResult(resReadable);
     expect(result2).toStrictEqual({
       ok: false,
       payload: {
@@ -127,18 +129,17 @@ describe('server-side test', () => {
       },
     });
 
-    input.push({ msg: 'ghi', throwResult: false, throwError: true });
-    const result3 = await iterNext(output);
+    reqWritable.write({ msg: 'ghi', throwResult: false, throwError: true });
+    const result3 = await readNextResult(resReadable);
     expect(result3).toStrictEqual({
       ok: false,
       payload: {
-        code: UNCAUGHT_ERROR,
+        code: UNCAUGHT_ERROR_CODE,
         message: 'some message',
       },
     });
 
-    input.end();
-    expect(output.readableLength).toBe(0);
+    reqWritable.close();
   });
 
   test('subscriptions', async () => {
@@ -147,46 +148,59 @@ describe('server-side test', () => {
     const add = asClientRpc(state, service.procedures.add);
     const subscribe = asClientSubscription(state, service.procedures.value);
 
-    const stream = subscribe({});
-    const streamResult1 = await iterNext(stream);
+    const { resReadable } = subscribe({});
+
+    const streamResult1 = await readNextResult(resReadable);
     expect(streamResult1).toStrictEqual({ ok: true, payload: { result: 0 } });
 
     const result = await add({ n: 3 });
     expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
 
-    const streamResult2 = await iterNext(stream);
+    const streamResult2 = await readNextResult(resReadable);
     expect(streamResult2).toStrictEqual({ ok: true, payload: { result: 3 } });
   });
 
   test('uploads', async () => {
     const service = UploadableServiceSchema.instantiate({});
-    const [input, result] = asClientUpload({}, service.procedures.addMultiple);
+    const { reqWritable, finalize } = asClientUpload(
+      {},
+      service.procedures.addMultiple,
+    );
 
-    input.push({ n: 1 });
-    input.push({ n: 2 });
-    input.end();
-    expect(await result).toStrictEqual({ ok: true, payload: { result: 3 } });
+    reqWritable.write({ n: 1 });
+    reqWritable.write({ n: 2 });
+    reqWritable.close();
+    expect(await finalize()).toStrictEqual({
+      ok: true,
+      payload: { result: 3 },
+    });
   });
 
   test('uploads empty', async () => {
     const service = UploadableServiceSchema.instantiate({});
-    const [input, result] = asClientUpload({}, service.procedures.addMultiple);
-    input.end();
-    expect(await result).toStrictEqual({ ok: true, payload: { result: 0 } });
+    const { reqWritable, finalize } = asClientUpload(
+      {},
+      service.procedures.addMultiple,
+    );
+    reqWritable.close();
+    expect(await finalize()).toStrictEqual({
+      ok: true,
+      payload: { result: 0 },
+    });
   });
 
   test('uploads with initialization', async () => {
     const service = UploadableServiceSchema.instantiate({});
-    const [input, result] = asClientUpload(
+    const { reqWritable, finalize } = asClientUpload(
       {},
       service.procedures.addMultipleWithPrefix,
       { prefix: 'test' },
     );
 
-    input.push({ n: 1 });
-    input.push({ n: 2 });
-    input.end();
-    expect(await result).toStrictEqual({
+    reqWritable.write({ n: 1 });
+    reqWritable.write({ n: 2 });
+    reqWritable.close();
+    expect(await finalize()).toStrictEqual({
       ok: true,
       payload: { result: 'test 3' },
     });

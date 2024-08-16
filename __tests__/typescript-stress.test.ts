@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { Procedure } from '../router/procedures';
+import { Procedure, ProcedureErrorSchemaType } from '../router/procedures';
 import { ServiceSchema } from '../router/services';
 import { Type } from '@sinclair/typebox';
 import { createServer } from '../router/server';
@@ -8,23 +8,26 @@ import { createClient } from '../router/client';
 import {
   Err,
   Ok,
-  Output,
+  ResponseData,
   ResultUnwrapErr,
   ResultUnwrapOk,
+  unwrapOrThrow,
 } from '../router/result';
 import { TestServiceSchema } from './fixtures/services';
-import { iterNext } from '../util/testHelpers';
+import { readNextResult } from '../util/testHelpers';
 import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,
 } from '../router/handshake';
 
-const input = Type.Union([
+const requestData = Type.Union([
   Type.Object({ a: Type.Number() }),
   Type.Object({ c: Type.String() }),
 ]);
-const output = Type.Object({ b: Type.Union([Type.Number(), Type.String()]) });
-const errors = Type.Union([
+const responseData = Type.Object({
+  b: Type.Union([Type.Number(), Type.String()]),
+});
+const responseError = Type.Union([
   Type.Object({
     code: Type.Literal('ERROR1'),
     message: Type.String(),
@@ -37,18 +40,18 @@ const errors = Type.Union([
 
 const fnBody = Procedure.rpc<
   Record<string, never>,
-  typeof input,
-  typeof output,
-  typeof errors
+  typeof requestData,
+  typeof responseData,
+  typeof responseError
 >({
-  input,
-  output,
-  errors,
-  async handler(_state, msg) {
-    if ('c' in msg) {
-      return Ok({ b: msg.c });
+  requestInit: requestData,
+  responseData,
+  responseError,
+  async handler({ reqInit }) {
+    if ('c' in reqInit) {
+      return Ok({ b: reqInit.c });
     } else {
-      return Ok({ b: msg.a });
+      return Ok({ b: reqInit.a });
     }
   },
 });
@@ -210,37 +213,39 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
 const services = {
   test: ServiceSchema.define({
     rpc: Procedure.rpc({
-      input: Type.Object({ n: Type.Number() }),
-      output: Type.Object({ n: Type.Number() }),
-      async handler(_, { n }) {
+      requestInit: Type.Object({ n: Type.Number() }),
+      responseData: Type.Object({ n: Type.Number() }),
+      async handler({ reqInit: { n } }) {
         return Ok({ n });
       },
     }),
     stream: Procedure.stream({
-      input: Type.Object({ n: Type.Number() }),
-      output: Type.Object({ n: Type.Number() }),
-      async handler(_c, _in, output) {
-        output.push(Ok({ n: 1 }));
+      requestInit: Type.Object({}),
+      requestData: Type.Object({ n: Type.Number() }),
+      responseData: Type.Object({ n: Type.Number() }),
+      async handler({ resWritable }) {
+        resWritable.write(Ok({ n: 1 }));
       },
     }),
     subscription: Procedure.subscription({
-      input: Type.Object({ n: Type.Number() }),
-      output: Type.Object({ n: Type.Number() }),
-      async handler(_c, _in, output) {
-        output.push(Ok({ n: 1 }));
+      requestInit: Type.Object({ n: Type.Number() }),
+      responseData: Type.Object({ n: Type.Number() }),
+      async handler({ resWritable }) {
+        resWritable.write(Ok({ n: 1 }));
       },
     }),
     upload: Procedure.upload({
-      input: Type.Object({ n: Type.Number() }),
-      output: Type.Object({ n: Type.Number() }),
-      async handler(_c, _in) {
+      requestInit: Type.Object({}),
+      requestData: Type.Object({ n: Type.Number() }),
+      responseData: Type.Object({ n: Type.Number() }),
+      async handler() {
         return Ok({ n: 1 });
       },
     }),
   }),
 };
 
-describe('Output<> type', () => {
+describe('ResponseData<> type', () => {
   createServer(new MockServerTransport('SERVER'), services);
   const client = createClient<typeof services>(
     new MockClientTransport('client'),
@@ -248,58 +253,60 @@ describe('Output<> type', () => {
     { eagerlyConnect: false },
   );
 
-  test('it unwraps rpc outputs correctly', async () => {
+  test('it unwraps rpc response data correctly', async () => {
     // Given
-    function acceptOutput(output: Output<typeof client, 'test', 'rpc'>) {
-      return output;
-    }
-
-    // Then
-    void client.test.rpc.rpc({ n: 1 }).then(acceptOutput);
-    expect(client).toBeTruthy();
-  });
-
-  test('it unwraps stream outputs correctly', async () => {
-    // Given
-    function acceptOutput(output: Output<typeof client, 'test', 'stream'>) {
-      return output;
-    }
-
-    // Then
-    void client.test.stream
-      .stream()
-      .then(([_in, output, _close]) => iterNext(output))
-      .then(acceptOutput);
-    expect(client).toBeTruthy();
-  });
-
-  test('it unwraps subscription outputs correctly', async () => {
-    // Given
-    function acceptOutput(
-      output: Output<typeof client, 'test', 'subscription'>,
+    function acceptResponse(
+      response: ResponseData<typeof client, 'test', 'rpc'>,
     ) {
-      return output;
+      return response;
     }
 
     // Then
-    void client.test.subscription
-      .subscribe({ n: 1 })
-      .then(([output, _close]) => iterNext(output))
-      .then(acceptOutput);
+    void client.test.rpc.rpc({ n: 1 }).then(acceptResponse);
     expect(client).toBeTruthy();
   });
 
-  test('it unwraps upload outputs correctly', async () => {
+  test('it unwraps stream response data correctly', async () => {
     // Given
-    function acceptOutput(output: Output<typeof client, 'test', 'upload'>) {
-      return output;
+    function acceptResponse(
+      response: ResponseData<typeof client, 'test', 'stream'>,
+    ) {
+      return response;
     }
 
     // Then
-    void client.test.upload
-      .upload()
-      .then(([_input, result]) => result)
-      .then(acceptOutput);
+    const { resReadable } = client.test.stream.stream({});
+    void readNextResult(resReadable).then(unwrapOrThrow).then(acceptResponse);
+    expect(client).toBeTruthy();
+  });
+
+  test('it unwraps subscription response data correctly', async () => {
+    // Given
+    function acceptResponse(
+      response: ResponseData<typeof client, 'test', 'subscription'>,
+    ) {
+      return response;
+    }
+
+    // Then
+    const { resReadable } = client.test.subscription.subscribe({ n: 1 });
+    void readNextResult(resReadable).then(unwrapOrThrow).then(acceptResponse);
+
+    expect(client).toBeTruthy();
+  });
+
+  test('it unwraps upload response data correctly', async () => {
+    // Given
+    function acceptResponse(
+      response: ResponseData<typeof client, 'test', 'upload'>,
+    ) {
+      return response;
+    }
+
+    // Then
+    const { finalize } = client.test.upload.upload({});
+    void finalize().then(acceptResponse);
+
     expect(client).toBeTruthy();
   });
 });
@@ -321,7 +328,7 @@ describe('ResultUwrap types', () => {
 
   test('it unwraps Err correctly', () => {
     // Given
-    const result = Err({ hello: 'world' });
+    const result = Err({ code: 'world', message: 'hello' });
 
     // When
     function acceptErr(payload: ResultUnwrapErr<typeof result>) {
@@ -330,7 +337,10 @@ describe('ResultUwrap types', () => {
 
     // Then
     expect(result.ok).toBe(false);
-    expect(acceptErr(result.payload)).toEqual({ hello: 'world' });
+    expect(acceptErr(result.payload)).toEqual({
+      code: 'world',
+      message: 'hello',
+    });
   });
 });
 
@@ -355,6 +365,215 @@ describe('Handshake', () => {
           return {};
         },
       ),
+    });
+  });
+});
+
+describe('Procedure error schema', () => {
+  function acceptErrorSchema(errorSchema: ProcedureErrorSchemaType) {
+    return errorSchema;
+  }
+
+  describe('allowed', () => {
+    test('object', () => {
+      acceptErrorSchema(
+        Type.Object({
+          code: Type.Literal('1'),
+          message: Type.String(),
+        }),
+      );
+    });
+
+    test('union of object', () => {
+      acceptErrorSchema(
+        Type.Union([
+          Type.Object({
+            code: Type.Literal('1'),
+            message: Type.String(),
+          }),
+          Type.Object({
+            code: Type.Literal('2'),
+            message: Type.String(),
+          }),
+        ]),
+      );
+    });
+
+    test('union of union', () => {
+      acceptErrorSchema(
+        Type.Union([
+          Type.Union([
+            Type.Object({
+              code: Type.Literal('1'),
+              message: Type.String(),
+            }),
+            Type.Object({
+              code: Type.Literal('2'),
+              message: Type.String(),
+            }),
+          ]),
+          Type.Union([
+            Type.Object({
+              code: Type.Literal('3'),
+              message: Type.String(),
+            }),
+            Type.Object({
+              code: Type.Literal('4'),
+              message: Type.String(),
+            }),
+          ]),
+        ]),
+      );
+    });
+
+    test('union of object and union', () => {
+      acceptErrorSchema(
+        Type.Union([
+          Type.Object({
+            code: Type.Literal('1'),
+            message: Type.String(),
+          }),
+          Type.Union([
+            Type.Object({
+              code: Type.Literal('2'),
+              message: Type.String(),
+            }),
+            Type.Object({
+              code: Type.Literal('3'),
+              message: Type.String(),
+            }),
+          ]),
+        ]),
+      );
+    });
+
+    test('mixed bag, union of object, unions, "union of unions", and "union of union and object" (I think)', () => {
+      acceptErrorSchema(
+        Type.Union([
+          Type.Object({
+            code: Type.Literal('1'),
+            message: Type.String(),
+          }),
+          Type.Union([
+            Type.Object({
+              code: Type.Literal('2'),
+              message: Type.String(),
+            }),
+            Type.Object({
+              code: Type.Literal('3'),
+              message: Type.String(),
+            }),
+          ]),
+          Type.Union([
+            Type.Union([
+              Type.Object({
+                code: Type.Literal('4'),
+                message: Type.String(),
+              }),
+              Type.Object({
+                code: Type.Literal('5'),
+                message: Type.String(),
+              }),
+            ]),
+            Type.Union([
+              Type.Object({
+                code: Type.Literal('6'),
+                message: Type.String(),
+              }),
+              Type.Object({
+                code: Type.Literal('7'),
+                message: Type.String(),
+              }),
+            ]),
+          ]),
+          Type.Union([
+            Type.Object({
+              code: Type.Literal('4'),
+              message: Type.String(),
+            }),
+            Type.Union([
+              Type.Object({
+                code: Type.Literal('4'),
+                message: Type.String(),
+              }),
+              Type.Object({
+                code: Type.Literal('5'),
+                message: Type.String(),
+              }),
+            ]),
+            Type.Union([
+              Type.Object({
+                code: Type.Literal('6'),
+                message: Type.String(),
+              }),
+              Type.Object({
+                code: Type.Literal('7'),
+                message: Type.String(),
+              }),
+            ]),
+          ]),
+        ]),
+      );
+    });
+  });
+
+  describe('fails', () => {
+    test('fails when object has an invalid error shape', () => {
+      acceptErrorSchema(
+        // @ts-expect-error testing this
+        Type.Object({
+          NOTCODE: Type.Literal('1'),
+          message: Type.String(),
+        }),
+      );
+
+      acceptErrorSchema(
+        // @ts-expect-error testing this
+        Type.Union([
+          Type.Object({
+            code: Type.Literal('1'),
+            message: Type.String(),
+          }),
+          Type.Object({
+            NOTCODE: Type.Literal('2'),
+            message: Type.String(),
+          }),
+        ]),
+      );
+    });
+
+    test("doesn't allow nesting too deep", () => {
+      acceptErrorSchema(
+        // @ts-expect-error testing this
+        Type.Union([
+          Type.Object({
+            code: Type.Literal('1'),
+            message: Type.String(),
+          }),
+          Type.Union([
+            Type.Object({
+              code: Type.Literal('2'),
+              message: Type.String(),
+            }),
+            Type.Union([
+              Type.Object({
+                code: Type.Literal('3'),
+                message: Type.String(),
+              }),
+              Type.Union([
+                Type.Object({
+                  code: Type.Literal('4'),
+                  message: Type.String(),
+                }),
+                Type.Object({
+                  code: Type.Literal('5'),
+                  message: Type.String(),
+                }),
+              ]),
+            ]),
+          ]),
+        ]),
+      );
     });
   });
 });

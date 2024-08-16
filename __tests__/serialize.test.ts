@@ -26,7 +26,7 @@ describe('serialize server to jsonschema', () => {
         test: {
           procedures: {
             add: {
-              input: {
+              init: {
                 properties: {
                   n: { type: 'number' },
                 },
@@ -49,7 +49,7 @@ describe('serialize server to jsonschema', () => {
               errors: {
                 not: {},
               },
-              input: {
+              init: {
                 properties: {
                   n: {
                     type: 'number',
@@ -70,6 +70,10 @@ describe('serialize server to jsonschema', () => {
               errors: {
                 not: {},
               },
+              init: {
+                properties: {},
+                type: 'object',
+              },
               input: {
                 properties: {
                   n: {
@@ -88,11 +92,14 @@ describe('serialize server to jsonschema', () => {
               type: 'stream',
             },
             echo: {
+              init: {
+                properties: {},
+                type: 'object',
+              },
               input: {
                 properties: {
                   msg: { type: 'string' },
                   ignore: { type: 'boolean' },
-                  end: { type: 'boolean' },
                 },
                 required: ['msg', 'ignore'],
                 type: 'object',
@@ -124,9 +131,6 @@ describe('serialize server to jsonschema', () => {
               },
               input: {
                 properties: {
-                  end: {
-                    type: 'boolean',
-                  },
                   ignore: {
                     type: 'boolean',
                   },
@@ -153,7 +157,7 @@ describe('serialize server to jsonschema', () => {
               errors: {
                 not: {},
               },
-              input: {
+              init: {
                 anyOf: [
                   {
                     description: 'A',
@@ -207,6 +211,38 @@ describe('serialize server to jsonschema', () => {
               },
               type: 'rpc',
             },
+            unimplementedSubscription: {
+              errors: {
+                not: {},
+              },
+              init: {
+                properties: {},
+                type: 'object',
+              },
+              output: {
+                properties: {},
+                type: 'object',
+              },
+              type: 'subscription',
+            },
+            unimplementedUpload: {
+              errors: {
+                not: {},
+              },
+              init: {
+                properties: {},
+                type: 'object',
+              },
+              input: {
+                properties: {},
+                type: 'object',
+              },
+              output: {
+                properties: {},
+                type: 'object',
+              },
+              type: 'upload',
+            },
           },
         },
       },
@@ -217,6 +253,348 @@ describe('serialize server to jsonschema', () => {
 describe('serialize service to jsonschema', () => {
   test('serialize basic service', () => {
     expect(TestServiceSchema.serialize()).toStrictEqual({
+      procedures: {
+        add: {
+          init: {
+            properties: {
+              n: { type: 'number' },
+            },
+            required: ['n'],
+            type: 'object',
+          },
+          output: {
+            properties: {
+              result: { type: 'number' },
+            },
+            required: ['result'],
+            type: 'object',
+          },
+          errors: {
+            not: {},
+          },
+          type: 'rpc',
+        },
+        array: {
+          errors: {
+            not: {},
+          },
+          init: {
+            properties: {
+              n: {
+                type: 'number',
+              },
+            },
+            required: ['n'],
+            type: 'object',
+          },
+          output: {
+            items: {
+              type: 'number',
+            },
+            type: 'array',
+          },
+          type: 'rpc',
+        },
+        arrayStream: {
+          errors: {
+            not: {},
+          },
+          init: {
+            properties: {},
+            type: 'object',
+          },
+          input: {
+            properties: {
+              n: {
+                type: 'number',
+              },
+            },
+            required: ['n'],
+            type: 'object',
+          },
+          output: {
+            items: {
+              type: 'number',
+            },
+            type: 'array',
+          },
+          type: 'stream',
+        },
+        echo: {
+          init: {
+            properties: {},
+            type: 'object',
+          },
+          input: {
+            properties: {
+              msg: { type: 'string' },
+              ignore: { type: 'boolean' },
+            },
+            required: ['msg', 'ignore'],
+            type: 'object',
+          },
+          output: {
+            properties: {
+              response: { type: 'string' },
+            },
+            required: ['response'],
+            type: 'object',
+          },
+          errors: {
+            not: {},
+          },
+          type: 'stream',
+        },
+        echoWithPrefix: {
+          errors: {
+            not: {},
+          },
+          init: {
+            properties: {
+              prefix: {
+                type: 'string',
+              },
+            },
+            required: ['prefix'],
+            type: 'object',
+          },
+          input: {
+            properties: {
+              ignore: {
+                type: 'boolean',
+              },
+              msg: {
+                type: 'string',
+              },
+            },
+            required: ['msg', 'ignore'],
+            type: 'object',
+          },
+          output: {
+            properties: {
+              response: {
+                type: 'string',
+              },
+            },
+            required: ['response'],
+            type: 'object',
+          },
+          type: 'stream',
+        },
+        echoUnion: {
+          description: 'Echos back whatever we sent',
+          errors: {
+            not: {},
+          },
+          init: {
+            anyOf: [
+              {
+                description: 'A',
+                properties: {
+                  a: {
+                    description: 'A number',
+                    type: 'number',
+                  },
+                },
+                required: ['a'],
+                type: 'object',
+              },
+              {
+                description: 'B',
+                properties: {
+                  b: {
+                    description: 'A string',
+                    type: 'string',
+                  },
+                },
+                required: ['b'],
+                type: 'object',
+              },
+            ],
+          },
+          output: {
+            anyOf: [
+              {
+                description: 'A',
+                properties: {
+                  a: {
+                    description: 'A number',
+                    type: 'number',
+                  },
+                },
+                required: ['a'],
+                type: 'object',
+              },
+              {
+                description: 'B',
+                properties: {
+                  b: {
+                    description: 'A string',
+                    type: 'string',
+                  },
+                },
+                required: ['b'],
+                type: 'object',
+              },
+            ],
+          },
+          type: 'rpc',
+        },
+        unimplementedSubscription: {
+          errors: {
+            not: {},
+          },
+          init: {
+            properties: {},
+            type: 'object',
+          },
+          output: {
+            properties: {},
+            type: 'object',
+          },
+          type: 'subscription',
+        },
+        unimplementedUpload: {
+          errors: {
+            not: {},
+          },
+          init: {
+            properties: {},
+            type: 'object',
+          },
+          input: {
+            properties: {},
+            type: 'object',
+          },
+          output: {
+            properties: {},
+            type: 'object',
+          },
+          type: 'upload',
+        },
+      },
+    });
+  });
+
+  test('serialize service with binary', () => {
+    expect(BinaryFileServiceSchema.serialize()).toStrictEqual({
+      procedures: {
+        getFile: {
+          errors: {
+            not: {},
+          },
+          init: {
+            properties: {
+              file: {
+                type: 'string',
+              },
+            },
+            required: ['file'],
+            type: 'object',
+          },
+          output: {
+            properties: {
+              contents: {
+                type: 'Uint8Array',
+              },
+            },
+            required: ['contents'],
+            type: 'object',
+          },
+          type: 'rpc',
+        },
+      },
+    });
+  });
+
+  test('serialize service with errors', () => {
+    expect(FallibleServiceSchema.serialize()).toStrictEqual({
+      procedures: {
+        divide: {
+          init: {
+            properties: {
+              a: { type: 'number' },
+              b: { type: 'number' },
+            },
+            required: ['a', 'b'],
+            type: 'object',
+          },
+          output: {
+            properties: {
+              result: { type: 'number' },
+            },
+            required: ['result'],
+            type: 'object',
+          },
+          errors: {
+            properties: {
+              code: { const: 'DIV_BY_ZERO', type: 'string' },
+              message: { type: 'string' },
+              extras: {
+                properties: {
+                  test: {
+                    type: 'string',
+                  },
+                },
+                required: ['test'],
+                type: 'object',
+              },
+            },
+            required: ['code', 'message', 'extras'],
+            type: 'object',
+          },
+          type: 'rpc',
+        },
+        echo: {
+          errors: {
+            properties: {
+              code: {
+                const: 'STREAM_ERROR',
+                type: 'string',
+              },
+              message: {
+                type: 'string',
+              },
+            },
+            required: ['code', 'message'],
+            type: 'object',
+          },
+          init: {
+            properties: {},
+            type: 'object',
+          },
+          input: {
+            properties: {
+              msg: {
+                type: 'string',
+              },
+              throwError: {
+                type: 'boolean',
+              },
+              throwResult: {
+                type: 'boolean',
+              },
+            },
+            required: ['msg', 'throwResult', 'throwError'],
+            type: 'object',
+          },
+          output: {
+            properties: {
+              response: {
+                type: 'string',
+              },
+            },
+            required: ['response'],
+            type: 'object',
+          },
+          type: 'stream',
+        },
+      },
+    });
+  });
+
+  test('serialize backwards compatible with v1', () => {
+    expect(TestServiceSchema.serializeV1Compat()).toStrictEqual({
       procedures: {
         add: {
           input: {
@@ -263,6 +641,10 @@ describe('serialize service to jsonschema', () => {
           errors: {
             not: {},
           },
+          init: {
+            properties: {},
+            type: 'object',
+          },
           input: {
             properties: {
               n: {
@@ -281,11 +663,14 @@ describe('serialize service to jsonschema', () => {
           type: 'stream',
         },
         echo: {
+          init: {
+            properties: {},
+            type: 'object',
+          },
           input: {
             properties: {
               msg: { type: 'string' },
               ignore: { type: 'boolean' },
-              end: { type: 'boolean' },
             },
             required: ['msg', 'ignore'],
             type: 'object',
@@ -317,9 +702,6 @@ describe('serialize service to jsonschema', () => {
           },
           input: {
             properties: {
-              end: {
-                type: 'boolean',
-              },
               ignore: {
                 type: 'boolean',
               },
@@ -400,118 +782,37 @@ describe('serialize service to jsonschema', () => {
           },
           type: 'rpc',
         },
-      },
-    });
-  });
-
-  test('serialize service with binary', () => {
-    expect(BinaryFileServiceSchema.serialize()).toStrictEqual({
-      procedures: {
-        getFile: {
+        unimplementedSubscription: {
           errors: {
             not: {},
           },
           input: {
-            properties: {
-              file: {
-                type: 'string',
-              },
-            },
-            required: ['file'],
+            properties: {},
             type: 'object',
           },
           output: {
-            properties: {
-              contents: {
-                type: 'Uint8Array',
-              },
-            },
-            required: ['contents'],
+            properties: {},
             type: 'object',
           },
-          type: 'rpc',
+          type: 'subscription',
         },
-      },
-    });
-  });
-
-  test('serialize service with errors', () => {
-    expect(FallibleServiceSchema.serialize()).toStrictEqual({
-      procedures: {
-        divide: {
-          input: {
-            properties: {
-              a: { type: 'number' },
-              b: { type: 'number' },
-            },
-            required: ['a', 'b'],
-            type: 'object',
-          },
-          output: {
-            properties: {
-              result: { type: 'number' },
-            },
-            required: ['result'],
-            type: 'object',
-          },
+        unimplementedUpload: {
           errors: {
-            properties: {
-              code: { const: 'DIV_BY_ZERO', type: 'string' },
-              message: { type: 'string' },
-              extras: {
-                properties: {
-                  test: {
-                    type: 'string',
-                  },
-                },
-                required: ['test'],
-                type: 'object',
-              },
-            },
-            required: ['code', 'message', 'extras'],
-            type: 'object',
+            not: {},
           },
-          type: 'rpc',
-        },
-        echo: {
-          errors: {
-            properties: {
-              code: {
-                const: 'STREAM_ERROR',
-                type: 'string',
-              },
-              message: {
-                type: 'string',
-              },
-            },
-            required: ['code', 'message'],
+          init: {
+            properties: {},
             type: 'object',
           },
           input: {
-            properties: {
-              msg: {
-                type: 'string',
-              },
-              throwError: {
-                type: 'boolean',
-              },
-              throwResult: {
-                type: 'boolean',
-              },
-            },
-            required: ['msg', 'throwResult', 'throwError'],
+            properties: {},
             type: 'object',
           },
           output: {
-            properties: {
-              response: {
-                type: 'string',
-              },
-            },
-            required: ['response'],
+            properties: {},
             type: 'object',
           },
-          type: 'stream',
+          type: 'upload',
         },
       },
     });

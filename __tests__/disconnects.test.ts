@@ -1,22 +1,26 @@
 import { assert, beforeEach, describe, expect, test } from 'vitest';
 import {
   closeAllConnections,
-  iterNext,
+  isReadableDone,
   numberOfConnections,
+  readNextResult,
 } from '../util/testHelpers';
 import {
   SubscribableServiceSchema,
   TestServiceSchema,
   UploadableServiceSchema,
 } from './fixtures/services';
-import { createClient, createServer } from '../router';
+import {
+  createClient,
+  createServer,
+  UNEXPECTED_DISCONNECT_CODE,
+} from '../router';
 import {
   advanceFakeTimersBySessionGrace,
   cleanupTransports,
   testFinishesCleanly,
   waitFor,
 } from './fixtures/cleanup';
-import { Err, UNEXPECTED_DISCONNECT } from '../router/result';
 import { testMatrix } from './fixtures/matrix';
 import { TestSetupHelpers } from './fixtures/transports';
 import { createPostTestCleanups } from './fixtures/cleanup';
@@ -69,11 +73,11 @@ describe.each(testMatrix())(
       await advanceFakeTimersBySessionGrace();
 
       // we should get an error + expect the streams to be cleaned up
-      await expect(procPromise).resolves.toMatchObject(
-        Err({
-          code: UNEXPECTED_DISCONNECT,
-        }),
-      );
+      await expect(procPromise).resolves.toMatchObject({
+        ok: false,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
+      });
 
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
@@ -98,9 +102,10 @@ describe.each(testMatrix())(
       });
 
       // start procedure
-      const [input, output] = await client.test.echo.stream();
-      input.push({ msg: 'abc', ignore: false });
-      const result = await iterNext(output);
+      const { reqWritable, resReadable } = client.test.echo.stream({});
+
+      reqWritable.write({ msg: 'abc', ignore: false });
+      const result = await readNextResult(resReadable);
       assert(result.ok);
 
       expect(numberOfConnections(clientTransport)).toEqual(1);
@@ -111,18 +116,18 @@ describe.each(testMatrix())(
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
-      const nextResPromise = iterNext(output);
+      const nextResPromise = readNextResult(resReadable);
       // end procedure
 
       // after we've disconnected, hit end of grace period
       await advanceFakeTimersBySessionGrace();
 
       // we should get an error + expect the streams to be cleaned up
-      await expect(nextResPromise).resolves.toMatchObject(
-        Err({
-          code: UNEXPECTED_DISCONNECT,
-        }),
-      );
+      await expect(nextResPromise).resolves.toMatchObject({
+        ok: false,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
+      });
 
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
@@ -150,6 +155,7 @@ describe.each(testMatrix())(
         client2Transport,
         serverTransport.clientId,
       );
+
       addPostTestCleanup(async () => {
         await cleanupTransports([
           client1Transport,
@@ -160,17 +166,22 @@ describe.each(testMatrix())(
 
       // start procedure
       // client1 and client2 both subscribe
-      const [subscription1, close1] =
-        await client1.subscribable.value.subscribe({});
-      let result = await iterNext(subscription1);
+      const abortController1 = new AbortController();
+      const { resReadable: resReadable1 } =
+        client1.subscribable.value.subscribe(
+          {},
+          { signal: abortController1.signal },
+        );
+
+      let result = await readNextResult(resReadable1);
       expect(result).toStrictEqual({
         ok: true,
         payload: { result: 0 },
       });
 
-      const [subscription2, close2] =
-        await client2.subscribable.value.subscribe({});
-      result = await iterNext(subscription2);
+      const { resReadable: resReadable2 } =
+        client2.subscribable.value.subscribe({});
+      result = await readNextResult(resReadable2);
       expect(result).toStrictEqual({
         ok: true,
         payload: { result: 0 },
@@ -181,9 +192,9 @@ describe.each(testMatrix())(
       expect(add1).toStrictEqual({ ok: true, payload: { result: 1 } });
 
       // both clients should receive the updated value
-      result = await iterNext(subscription1);
+      result = await readNextResult(resReadable1);
       expect(result).toStrictEqual({ ok: true, payload: { result: 1 } });
-      result = await iterNext(subscription2);
+      result = await readNextResult(resReadable2);
       expect(result).toStrictEqual({ ok: true, payload: { result: 1 } });
 
       // all clients are connected
@@ -205,23 +216,22 @@ describe.each(testMatrix())(
       // client1 who is still connected can still add values and receive updates
       const add2 = await client1.subscribable.add.rpc({ n: 2 });
       expect(add2).toStrictEqual({ ok: true, payload: { result: 3 } });
-      result = await iterNext(subscription1);
+      result = await readNextResult(resReadable1);
       expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
 
       // try receiving a value from client2
-      const nextResPromise = iterNext(subscription2);
+      const nextResPromise = readNextResult(resReadable2);
 
       // after we've disconnected, hit end of grace period
       // because this advances the global timer, we need to wait for client1 to reconnect
       // after missing some heartbeats
       await advanceFakeTimersBySessionGrace();
 
-      // we should get an error from the subscription on client2
-      await expect(nextResPromise).resolves.toMatchObject(
-        Err({
-          code: UNEXPECTED_DISCONNECT,
-        }),
-      );
+      await expect(nextResPromise).resolves.toMatchObject({
+        ok: false,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
+      });
 
       // at this point, only client1 is connected
       await waitFor(() => {
@@ -230,9 +240,8 @@ describe.each(testMatrix())(
         expect(numberOfConnections(serverTransport)).toEqual(1);
       });
 
-      // cleanup
-      close1();
-      close2();
+      expect(await isReadableDone(resReadable2)).toEqual(true);
+      abortController1.abort();
 
       await testFinishesCleanly({
         clientTransports: [client1Transport, client2Transport],
@@ -257,10 +266,11 @@ describe.each(testMatrix())(
       });
 
       // start procedure
-      const [addStream, addResult] =
-        await client.uploadable.addMultiple.upload();
-      addStream.push({ n: 1 });
-      addStream.push({ n: 2 });
+      const { reqWritable, finalize } = client.uploadable.addMultiple.upload(
+        {},
+      );
+      reqWritable.write({ n: 1 });
+      reqWritable.write({ n: 2 });
       // end procedure
 
       // need to wait for connection to be established
@@ -276,11 +286,11 @@ describe.each(testMatrix())(
       await advanceFakeTimersBySessionGrace();
 
       // we should get an error + expect the streams to be cleaned up
-      await expect(addResult).resolves.toMatchObject(
-        Err({
-          code: UNEXPECTED_DISCONNECT,
-        }),
-      );
+      await expect(finalize()).resolves.toMatchObject({
+        ok: false,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
+      });
 
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));

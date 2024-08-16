@@ -21,6 +21,7 @@ export type Logger = {
 export type Tags =
   | 'invariant-violation'
   | 'state-transition'
+  | 'invalid-request'
   | 'unhealthy-session';
 
 const cleanedLogFn = (log: LogFn) => {
