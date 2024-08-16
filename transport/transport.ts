@@ -209,6 +209,9 @@ export abstract class Transport<ConnType extends Connection> {
     session: Session<ConnType>,
     options?: DeleteSessionOptions,
   ) {
+    // ensure idempotency esp re: dispatching events
+    if (session._isConsumed) return;
+
     const loggingMetadata = session.loggingMetadata;
     if (loggingMetadata.tags && options?.unhealthy) {
       loggingMetadata.tags.push('unhealthy-session');
