@@ -211,7 +211,10 @@ export function getClientSendFn(
   clientTransport: ClientTransport<Connection>,
   serverTransport: ServerTransport<Connection>,
 ) {
-  const session = clientTransport._getOrCreateSession(serverTransport.clientId);
+  const session =
+    clientTransport.sessions.get(serverTransport.clientId) ??
+    clientTransport.createUnconnectedSession(serverTransport.clientId);
+
   return clientTransport.getSessionBoundSendFn(
     serverTransport.clientId,
     session.id,

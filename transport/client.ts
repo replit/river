@@ -95,7 +95,11 @@ export abstract class ClientTransport<
     }
   }
 
-  private createUnconnectedSession(to: string): SessionNoConnection {
+  /*
+   * Creates a raw unconnected session object.
+   * This is mostly a River internal, you shouldn't need to use this directly.
+   */
+  createUnconnectedSession(to: string): SessionNoConnection {
     const session = ClientSessionStateGraph.entrypoint(
       to,
       this.clientId,
@@ -293,10 +297,6 @@ export abstract class ClientTransport<
     this.retryBudget.startRestoringBudget();
   }
 
-  getOrCreateSession(to: TransportClientId): ClientSession<ConnType> {
-    return this.sessions.get(to) ?? this.createUnconnectedSession(to);
-  }
-
   /**
    * Manually attempts to connect to a client.
    * @param to The client ID of the node to connect to.
@@ -309,7 +309,7 @@ export abstract class ClientTransport<
       return;
     }
 
-    const session = this.getOrCreateSession(to);
+    const session = this.sessions.get(to) ?? this.createUnconnectedSession(to);
     if (session.state !== SessionState.NoConnection) {
       // already trying to connect
       this.log?.debug(
