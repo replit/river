@@ -134,7 +134,7 @@ export class MockClientTransport extends ClientTransport<Connection> {
   }
 }
 
-export class MockServerTransport extends ServerTransport<Connection> { }
+export class MockServerTransport extends ServerTransport<Connection> {}
 
 describe("ensure typescript doesn't give up trying to infer the types for large services", () => {
   test('service with many procedures hits typescript limit', () => {

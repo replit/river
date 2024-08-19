@@ -497,7 +497,7 @@ export abstract class ServerTransport<
       );
 
     this.sessionHandshakeMetadata.set(connectedSession.to, parsedMetadata);
-    this.updateSession(connectedSession);
+    this.createSession(connectedSession);
     this.pendingSessions.delete(session);
     connectedSession.startActiveHeartbeat();
   }

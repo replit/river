@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 import http from 'node:http';
 import {
   cleanupTransports,
@@ -6,7 +6,6 @@ import {
   waitFor,
 } from './fixtures/cleanup';
 import {
-  createDummyTransportMessage,
   createLocalWebSocketClient,
   createWebSocketServer,
   numberOfConnections,
@@ -45,30 +44,30 @@ describe('should handle incompatabilities', async () => {
     };
   });
 
-  test('throws when sending after close', async () => {
+  test('cannot get a bound send function on a closed transport', async () => {
     const clientTransport = new WebSocketClientTransport(
       () => Promise.resolve(createLocalWebSocketClient(port)),
       'client',
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
-    clientTransport.connect(serverTransport.clientId);
-    await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
-
-    const errMock = vi.fn();
-    clientTransport.addEventListener('protocolError', errMock);
     addPostTestCleanup(async () => {
       await cleanupTransports([clientTransport, serverTransport]);
     });
 
+    clientTransport.connect(serverTransport.clientId);
+    const clientSession = clientTransport.sessions.get(
+      serverTransport.clientId,
+    );
+    assert(clientSession);
+
     clientTransport.close();
     expect(() =>
-      clientTransport.send(
+      clientTransport.getSessionBoundSendFn(
         serverTransport.clientId,
-        createDummyTransportMessage(),
+        clientSession.id,
       ),
     ).toThrow();
 
-    clientTransport.removeEventListener('protocolError', errMock);
     await testFinishesCleanly({
       clientTransports: [clientTransport],
       serverTransport,

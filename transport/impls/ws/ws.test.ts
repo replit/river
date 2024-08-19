@@ -9,6 +9,8 @@ import {
   createLocalWebSocketClient,
   numberOfConnections,
   getTransportConnections,
+  getClientSendFn,
+  getServerSendFn,
 } from '../../../util/testHelpers';
 import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
@@ -47,12 +49,14 @@ describe('sending and receiving across websockets works', async () => {
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     clientTransport.connect(serverTransport.clientId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
+
     addPostTestCleanup(async () => {
       await cleanupTransports([clientTransport, serverTransport]);
     });
 
     const msg = createDummyTransportMessage();
-    const msgId = clientTransport.send(serverTransport.clientId, msg);
+    const msgId = clientSendFn(msg);
     await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msgId),
     ).resolves.toStrictEqual(msg.payload);
@@ -81,8 +85,9 @@ describe('sending and receiving across websockets works', async () => {
 
       // client to server
       client.connect(serverTransport.clientId);
+      const clientSendFn = getClientSendFn(client, serverTransport);
       const initMsg = makeDummyMessage('hello server');
-      const initMsgId = client.send(serverId, initMsg);
+      const initMsgId = clientSendFn(initMsg);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === initMsgId),
       ).resolves.toStrictEqual(initMsg.payload);
@@ -98,8 +103,8 @@ describe('sending and receiving across websockets works', async () => {
     // sending messages from server to client shouldn't leak between clients
     const msg1 = makeDummyMessage('hello client1');
     const msg2 = makeDummyMessage('hello client2');
-    const msg1Id = serverTransport.send(clientId1, msg1);
-    const msg2Id = serverTransport.send(clientId2, msg2);
+    const msg1Id = getServerSendFn(serverTransport, client1)(msg1);
+    const msg2Id = getServerSendFn(serverTransport, client2)(msg2);
     const promises = Promise.all([
       // true means reject if we receive any message that isn't the one we are expecting
       waitForMessage(client2, (recv) => recv.id === msg2Id, true),
@@ -154,6 +159,8 @@ describe('sending and receiving across websockets works', async () => {
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
 
     clientTransport.connect(serverTransport.clientId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
+
     addPostTestCleanup(async () => {
       await cleanupTransports([clientTransport, serverTransport]);
     });
@@ -161,7 +168,7 @@ describe('sending and receiving across websockets works', async () => {
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 
-    const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+    const msg1Id = clientSendFn(msg1);
     await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
     ).resolves.toStrictEqual(msg1.payload);
@@ -172,7 +179,7 @@ describe('sending and receiving across websockets works', async () => {
     }
 
     // by this point the client should have reconnected
-    const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
+    const msg2Id = clientSendFn(msg2);
     await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
     ).resolves.toStrictEqual(msg2.payload);
@@ -190,6 +197,8 @@ describe('sending and receiving across websockets works', async () => {
     );
     const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
     clientTransport.connect(serverTransport.clientId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
+
     addPostTestCleanup(async () => {
       await cleanupTransports([clientTransport, serverTransport]);
     });
@@ -197,7 +206,7 @@ describe('sending and receiving across websockets works', async () => {
     const msg1 = createDummyTransportMessage();
     const msg2 = createDummyTransportMessage();
 
-    const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+    const msg1Id = clientSendFn(msg1);
     await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
     ).resolves.toStrictEqual(msg1.payload);
@@ -210,7 +219,7 @@ describe('sending and receiving across websockets works', async () => {
     }
 
     // by this point the client should have reconnected
-    const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
+    const msg2Id = clientSendFn(msg2);
     await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
     ).resolves.toStrictEqual(msg2.payload);

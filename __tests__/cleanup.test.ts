@@ -12,6 +12,7 @@ import {
   UploadableServiceSchema,
 } from './fixtures/services';
 import {
+  Ok,
   Procedure,
   ProcedureHandlerContext,
   ServiceSchema,
@@ -160,7 +161,7 @@ describe.each(testMatrix())(
 
       // start procedure
       const res = await client.test.add.rpc({ n: 3 });
-      expect(res).toStrictEqual({ ok: true, payload: { result: 3 } });
+      expect(res).toStrictEqual(Ok({ result: 3 }));
       // end procedure
 
       // number of message handlers shouldn't increase after rpc
@@ -207,10 +208,7 @@ describe.each(testMatrix())(
       reqWritable.write({ msg: '2', ignore: false });
 
       const result1 = await readNextResult(resReadable);
-      expect(result1).toStrictEqual({
-        ok: true,
-        payload: { response: '1' },
-      });
+      expect(result1).toStrictEqual(Ok({ response: '1' }));
 
       // ensure we only have one stream despite pushing multiple messages.
       expect(server.streams.size);
@@ -220,10 +218,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(server.streams.size).toEqual(0));
 
       const result2 = await readNextResult(resReadable);
-      expect(result2).toStrictEqual({
-        ok: true,
-        payload: { response: '2' },
-      });
+      expect(result2).toStrictEqual(Ok({ response: '2' }));
 
       expect(await isReadableDone(resReadable)).toEqual(true);
       // end procedure

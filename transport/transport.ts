@@ -169,7 +169,6 @@ export abstract class Transport<ConnType extends Connection> {
     });
 
     this.eventDispatcher.removeAllListeners();
-
     this.log?.info(`manually closed transport`, { clientId: this.clientId });
   }
 
@@ -177,31 +176,45 @@ export abstract class Transport<ConnType extends Connection> {
     return this.status;
   }
 
-  protected updateSession<S extends Session<ConnType>>(session: S): S {
+  // state transitions
+  protected createSession<S extends Session<ConnType>>(session: S): void {
     const activeSession = this.sessions.get(session.to);
-    if (activeSession && activeSession.id !== session.id) {
-      const msg = `attempt to transition active session for ${session.to} but active session (${activeSession.id}) is different from handle (${session.id})`;
+    if (activeSession) {
+      const msg = `attempt to create session for ${session.to} but active session (${activeSession.id}) already exists`;
       throw new Error(msg);
     }
 
     this.sessions.set(session.to, session);
-
-    if (!activeSession) {
-      this.eventDispatcher.dispatchEvent('sessionStatus', {
-        status: 'connect',
-        session: session,
-      });
-    }
+    this.eventDispatcher.dispatchEvent('sessionStatus', {
+      status: 'connect',
+      session: session,
+    });
 
     this.eventDispatcher.dispatchEvent('sessionTransition', {
       state: session.state,
       session: session,
     } as EventMap['sessionTransition']);
-
-    return session;
   }
 
-  // state transitions
+  protected updateSession<S extends Session<ConnType>>(session: S): void {
+    const activeSession = this.sessions.get(session.to);
+    if (!activeSession) {
+      const msg = `attempt to transition session for ${session.to} but no active session exists`;
+      throw new Error(msg);
+    }
+
+    if (activeSession.id !== session.id) {
+      const msg = `attempt to transition active session for ${session.to} but active session (${activeSession.id}) is different from handle (${session.id})`;
+      throw new Error(msg);
+    }
+
+    this.sessions.set(session.to, session);
+    this.eventDispatcher.dispatchEvent('sessionTransition', {
+      state: session.state,
+      session: session,
+    } as EventMap['sessionTransition']);
+  }
+
   protected deleteSession(
     session: Session<ConnType>,
     options?: DeleteSessionOptions,
@@ -246,7 +259,8 @@ export abstract class Transport<ConnType extends Connection> {
         },
       });
 
-    return this.updateSession(noConnectionSession);
+    this.updateSession(noConnectionSession);
+    return noConnectionSession;
   }
 
   protected onConnClosed(
@@ -270,7 +284,8 @@ export abstract class Transport<ConnType extends Connection> {
         });
     }
 
-    return this.updateSession(noConnectionSession);
+    this.updateSession(noConnectionSession);
+    return noConnectionSession;
   }
 
   /**
@@ -285,6 +300,10 @@ export abstract class Transport<ConnType extends Connection> {
     to: TransportClientId,
     sessionId: SessionId,
   ): SessionBoundSendFn {
+    if (this.getStatus() !== 'open') {
+      throw new Error('cannot get a bound send function on a closed transport');
+    }
+
     return (msg: PartialTransportMessage) => {
       const session = this.sessions.get(to);
       if (!session) return;

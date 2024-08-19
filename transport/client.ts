@@ -109,7 +109,7 @@ export abstract class ClientTransport<
       this.log,
     );
 
-    this.updateSession(session);
+    this.createSession(session);
     return session;
   }
 

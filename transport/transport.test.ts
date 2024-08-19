@@ -7,6 +7,8 @@ import {
   closeAllConnections,
   numberOfConnections,
   testingClientSessionOptions,
+  getClientSendFn,
+  getServerSendFn,
 } from '../util/testHelpers';
 import { EventMap, ProtocolError } from '../transport/events';
 import {
@@ -52,6 +54,7 @@ describe.each(testMatrix())(
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       clientTransport.connect(serverTransport.clientId);
+      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       addPostTestCleanup(async () => {
         await cleanupTransports([clientTransport, serverTransport]);
@@ -60,7 +63,7 @@ describe.each(testMatrix())(
       const msg1 = createDummyTransportMessage();
       const msg2 = createDummyTransportMessage();
 
-      const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+      const msg1Id = clientSendFn(msg1);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
@@ -78,7 +81,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // by this point the client should have reconnected
-      const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
+      const msg2Id = clientSendFn(msg2);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
       ).resolves.toStrictEqual(msg2.payload);
@@ -101,6 +104,7 @@ describe.each(testMatrix())(
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       clientTransport.connect(serverTransport.clientId);
+      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       addPostTestCleanup(async () => {
         await cleanupTransports([clientTransport, serverTransport]);
@@ -109,7 +113,7 @@ describe.each(testMatrix())(
       const msg1 = createDummyTransportMessage();
       const msg2 = createDummyTransportMessage();
 
-      const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+      const msg1Id = clientSendFn(msg1);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
@@ -143,7 +147,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
 
       // by this point the client should have reconnected
-      const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
+      const msg2Id = clientSendFn(msg2);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
       ).resolves.toStrictEqual(msg2.payload);
@@ -215,6 +219,7 @@ describe.each(testMatrix())(
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       clientTransport.connect(serverTransport.clientId);
+      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       addPostTestCleanup(async () => {
         await cleanupTransports([clientTransport, serverTransport]);
@@ -223,7 +228,7 @@ describe.each(testMatrix())(
       clientTransport.connect(serverTransport.clientId);
       for (let i = 0; i < 5; i++) {
         const msg = createDummyTransportMessage();
-        const msg1Id = clientTransport.send(serverTransport.clientId, msg);
+        const msg1Id = clientSendFn(msg);
         await expect(
           waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
         ).resolves.toStrictEqual(msg.payload);
@@ -243,12 +248,13 @@ describe.each(testMatrix())(
       const protocolError = vi.fn();
       clientTransport.addEventListener('protocolError', protocolError);
       const serverTransport = getServerTransport();
+      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       const msg = createDummyTransportMessage();
       const msgPromise = waitForMessage(serverTransport);
       const sendHandle = (evt: EventMap['sessionStatus']) => {
         if (evt.status === 'connect') {
-          clientTransport.send(serverTransport.clientId, msg);
+          clientSendFn(msg);
         }
       };
 
@@ -274,6 +280,7 @@ describe.each(testMatrix())(
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       clientTransport.connect(serverTransport.clientId);
+      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       addPostTestCleanup(async () => {
         await cleanupTransports([clientTransport, serverTransport]);
@@ -294,7 +301,7 @@ describe.each(testMatrix())(
 
       for (let i = 0; i < 55; i++) {
         const msg = first90[i];
-        const id = clientTransport.send(serverTransport.clientId, msg);
+        const id = clientSendFn(msg);
         first90Ids.push(id);
         first90Promises.push(
           waitForMessage(serverTransport, (recv) => recv.id === id),
@@ -315,7 +322,7 @@ describe.each(testMatrix())(
 
       for (let i = 55; i < 90; i++) {
         const msg = first90[i];
-        const id = clientTransport.send(serverTransport.clientId, msg);
+        const id = clientSendFn(msg);
         first90Ids.push(id);
         first90Promises.push(
           waitForMessage(serverTransport, (recv) => recv.id === id),
@@ -324,9 +331,7 @@ describe.each(testMatrix())(
 
       // send the last 10
       const last10 = clientMsgs.slice(90);
-      const last10Ids = last10.map((msg) =>
-        clientTransport.send(serverTransport.clientId, msg),
-      );
+      const last10Ids = last10.map((msg) => clientSendFn(msg));
 
       // wait for the server to receive everything
       const last10Promises = last10Ids.map((id) =>
@@ -434,7 +439,8 @@ describe.each(testMatrix())(
       expect(serverSessStop).toHaveBeenCalledTimes(0);
 
       clientTransport.connect(serverTransport.clientId);
-      const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
+      const msg1Id = clientSendFn(msg1);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
@@ -468,7 +474,7 @@ describe.each(testMatrix())(
       // by this point the client should have reconnected
       // session    >  c----------| (connected)
       // connection >  c--x   c---| (connected)
-      const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
+      const msg2Id = clientSendFn(msg2);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
       ).resolves.toStrictEqual(msg2.payload);
@@ -504,13 +510,14 @@ describe.each(testMatrix())(
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       clientTransport.connect(serverTransport.clientId);
+      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       addPostTestCleanup(async () => {
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
       const msg1 = createDummyTransportMessage();
-      const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+      const msg1Id = clientSendFn(msg1);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
@@ -545,7 +552,7 @@ describe.each(testMatrix())(
 
         // client to server
         const initMsg = makeDummyMessage('hello\nserver');
-        const initMsgId = client.send(serverId, initMsg);
+        const initMsgId = getClientSendFn(client, serverTransport)(initMsg);
         await expect(
           waitForMessage(serverTransport, (recv) => recv.id === initMsgId),
         ).resolves.toStrictEqual(initMsg.payload);
@@ -565,8 +572,8 @@ describe.each(testMatrix())(
       // sending messages from server to client shouldn't leak between clients
       const msg1 = makeDummyMessage('hello\nclient1');
       const msg2 = makeDummyMessage('hello\nclient2');
-      const msg1Id = serverTransport.send(clientId1, msg1);
-      const msg2Id = serverTransport.send(clientId2, msg2);
+      const msg1Id = getServerSendFn(serverTransport, client1Transport)(msg1);
+      const msg2Id = getServerSendFn(serverTransport, client2Transport)(msg2);
 
       const promises = Promise.all([
         // true means reject if we receive any message that isn't the one we are expecting
@@ -915,6 +922,8 @@ describe.each(testMatrix())(
       serverTransport.addEventListener('sessionTransition', serverConnHandler);
       serverTransport.addEventListener('sessionStatus', serverSessHandler);
       clientTransport.connect(serverTransport.clientId);
+      let clientSendFn = getClientSendFn(clientTransport, serverTransport);
+      let serverSendFn = getServerSendFn(serverTransport, clientTransport);
 
       addPostTestCleanup(async () => {
         // teardown
@@ -927,7 +936,7 @@ describe.each(testMatrix())(
       });
 
       const msg1 = createDummyTransportMessage();
-      const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+      const msg1Id = clientSendFn(msg1);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
@@ -943,30 +952,32 @@ describe.each(testMatrix())(
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // queue up some messages
-      serverTransport.send(
-        clientTransport.clientId,
-        createDummyTransportMessage(),
-      );
-      serverTransport.send(
-        clientTransport.clientId,
-        createDummyTransportMessage(),
-      );
+      serverSendFn(createDummyTransportMessage());
+      serverSendFn(createDummyTransportMessage());
 
       // create a new client transport
       // and wait for it to connect
       clientTransport = testHelpers.getClientTransport('client');
+      const msgPromise = waitForMessage(
+        clientTransport,
+        (recv) => recv.id === msg4Id,
+        true,
+      );
       clientTransport.connect(serverTransport.clientId);
       await waitFor(() => expect(serverConnStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(serverSessStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(1));
 
+      // recreate send fns
+      clientSendFn = getClientSendFn(clientTransport, serverTransport);
+      serverSendFn = getServerSendFn(serverTransport, clientTransport);
+
       // when we reconnect, send another message
       const msg4 = createDummyTransportMessage();
-      const msg4Id = serverTransport.send(clientTransport.clientId, msg4);
+      const msg4Id = serverSendFn(msg4);
       await expect(
         // ensure that when the server gets it, it's not msg2 or msg3
-        // true indicates to reject any other messages
-        waitForMessage(clientTransport, (recv) => recv.id === msg4Id, true),
+        msgPromise,
       ).resolves.toStrictEqual(msg4.payload);
 
       await testFinishesCleanly({
@@ -1003,6 +1014,7 @@ describe.each(testMatrix())(
       clientTransport.addEventListener('sessionTransition', clientConnHandler);
       clientTransport.addEventListener('sessionStatus', clientSessHandler);
       clientTransport.connect(serverTransport.clientId);
+      let clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       addPostTestCleanup(async () => {
         // teardown
@@ -1015,7 +1027,7 @@ describe.each(testMatrix())(
       });
 
       const msg1 = createDummyTransportMessage();
-      const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+      const msg1Id = clientSendFn(msg1);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
@@ -1040,14 +1052,8 @@ describe.each(testMatrix())(
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
 
       // buffer some messages
-      clientTransport.send(
-        serverTransport.clientId,
-        createDummyTransportMessage(),
-      );
-      clientTransport.send(
-        serverTransport.clientId,
-        createDummyTransportMessage(),
-      );
+      clientSendFn(createDummyTransportMessage());
+      clientSendFn(createDummyTransportMessage());
 
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(1));
@@ -1061,6 +1067,7 @@ describe.each(testMatrix())(
       // eagerly reconnect client
       clientTransport.reconnectOnConnectionDrop = true;
       clientTransport.connect(serverTransport.clientId);
+      clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(2));
@@ -1076,7 +1083,7 @@ describe.each(testMatrix())(
 
       // when we reconnect, send another message
       const msg4 = createDummyTransportMessage();
-      const msg4Id = clientTransport.send(serverTransport.clientId, msg4);
+      const msg4Id = clientSendFn(msg4);
       const msgPromise = waitForMessage(
         serverTransport,
         (recv) => recv.id === msg4Id,
@@ -1106,7 +1113,7 @@ describe.each(testMatrix())(
 
       // send one more message to ensure that the message delivery is still working
       const msg5 = createDummyTransportMessage();
-      const msg5Id = clientTransport.send(serverTransport.clientId, msg5);
+      const msg5Id = clientSendFn(msg5);
       await expect(
         // ensure that when the server gets it, it's not an older message
         // true indicates to reject any other messages
@@ -1122,6 +1129,8 @@ describe.each(testMatrix())(
     test('recovers from phantom disconnects', async () => {
       const clientTransport = testHelpers.getClientTransport('client');
       const serverTransport = testHelpers.getServerTransport();
+      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
+
       const clientSessStart = vi.fn();
       const clientSessStop = vi.fn();
       const clientSessHandler = (evt: EventMap['sessionStatus']) => {
@@ -1175,7 +1184,7 @@ describe.each(testMatrix())(
       });
 
       const msg1 = createDummyTransportMessage();
-      const msg1Id = clientTransport.send(serverTransport.clientId, msg1);
+      const msg1Id = clientSendFn(msg1);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
@@ -1201,7 +1210,7 @@ describe.each(testMatrix())(
 
       // ensure sending across the connection still works
       const msg2 = createDummyTransportMessage();
-      const msg2Id = clientTransport.send(serverTransport.clientId, msg2);
+      const msg2Id = clientSendFn(msg2);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
       ).resolves.toStrictEqual(msg2.payload);

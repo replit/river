@@ -386,17 +386,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       streamId: StreamId,
       payload: ErrResult<Static<typeof ReaderErrorSchema>>,
     ) => {
-      let cancelledForSession = this.serverCancelledStreams.get(from);
-      if (!cancelledForSession) {
-        cancelledForSession = new LRUSet(
-          this.maxCancelledStreamTombstonesPerSession,
-        );
-
-        this.serverCancelledStreams.set(from, cancelledForSession);
-      }
-
-      cancelledForSession.add(streamId);
-      this.sendCancelToClient(
+      this.cancelStream(
+        from,
         sessionScopedSend,
         streamId,
         payload,
@@ -707,6 +698,20 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       initMessage.from,
       session.id,
     );
+
+    const cancelStream = (
+      streamId: StreamId,
+      payload: ErrResult<Static<typeof ReaderErrorSchema>>,
+    ) => {
+      this.cancelStream(
+        initMessage.from,
+        sessionScopedSend,
+        streamId,
+        payload,
+        session.protocolVersion,
+      );
+    };
+
     const sessionMetadata = this.transport.sessionHandshakeMetadata.get(
       session.to,
     );
@@ -718,14 +723,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invariant-violation'],
       });
 
-      this.sendCancelToClient(
-        sessionScopedSend,
+      cancelStream(
         initMessage.streamId,
         Err({
           code: UNCAUGHT_ERROR_CODE,
           message: errMessage,
         }),
-        session.protocolVersion,
       );
 
       return null;
@@ -740,14 +743,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invalid-request'],
       });
 
-      this.sendCancelToClient(
-        sessionScopedSend,
+      cancelStream(
         initMessage.streamId,
         Err({
           code: INVALID_REQUEST_CODE,
           message: errMessage,
         }),
-        session.protocolVersion,
       );
 
       return null;
@@ -761,14 +762,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invalid-request'],
       });
 
-      this.sendCancelToClient(
-        sessionScopedSend,
+      cancelStream(
         initMessage.streamId,
         Err({
           code: INVALID_REQUEST_CODE,
           message: errMessage,
         }),
-        session.protocolVersion,
       );
 
       return null;
@@ -782,14 +781,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invalid-request'],
       });
 
-      this.sendCancelToClient(
-        sessionScopedSend,
+      cancelStream(
         initMessage.streamId,
         Err({
           code: INVALID_REQUEST_CODE,
           message: errMessage,
         }),
-        session.protocolVersion,
       );
 
       return null;
@@ -804,14 +801,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invalid-request'],
       });
 
-      this.sendCancelToClient(
-        sessionScopedSend,
+      cancelStream(
         initMessage.streamId,
         Err({
           code: INVALID_REQUEST_CODE,
           message: errMessage,
         }),
-        session.protocolVersion,
       );
 
       return null;
@@ -826,14 +821,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invalid-request'],
       });
 
-      this.sendCancelToClient(
-        sessionScopedSend,
+      cancelStream(
         initMessage.streamId,
         Err({
           code: INVALID_REQUEST_CODE,
           message: errMessage,
         }),
-        session.protocolVersion,
       );
 
       return null;
@@ -881,14 +874,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         tags: ['invalid-request'],
       });
 
-      this.sendCancelToClient(
-        sessionScopedSend,
+      cancelStream(
         initMessage.streamId,
         Err({
           code: INVALID_REQUEST_CODE,
           message: errMessage,
         }),
-        session.protocolVersion,
       );
 
       return null;
@@ -912,13 +903,24 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     };
   }
 
-  sendCancelToClient(
+  cancelStream(
+    to: TransportClientId,
     sessionScopedSend: SessionBoundSendFn,
     streamId: StreamId,
     payload: ErrResult<Static<typeof ReaderErrorSchema>>,
     // TODO remove once clients migrate to v2
     protocolVersion: ProtocolVersion,
   ) {
+    let cancelledStreamsInSession = this.serverCancelledStreams.get(to);
+    if (!cancelledStreamsInSession) {
+      cancelledStreamsInSession = new LRUSet(
+        this.maxCancelledStreamTombstonesPerSession,
+      );
+
+      this.serverCancelledStreams.set(to, cancelledStreamsInSession);
+    }
+
+    cancelledStreamsInSession.add(streamId);
     const isOldProtocol = protocolVersion === 'v1.1';
     const msg = isOldProtocol
       ? closeStreamMessage(streamId)
