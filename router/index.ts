@@ -28,6 +28,7 @@ export type {
   SubscriptionProcedure,
   StreamProcedure,
   ProcedureErrorSchemaType,
+  flattenErrorType,
 } from './procedures';
 export type { Writable, Readable } from './streams';
 export {

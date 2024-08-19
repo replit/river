@@ -281,7 +281,7 @@ function handleProc(
   procedureName: string,
   abortSignal?: AbortSignal,
 ): AnyProcReturn {
-  const session = transport.getOrCreateSession(serverId);
+  const session = transport._getOrCreateSession(serverId);
   const sessionScopedSend = transport.getSessionBoundSendFn(
     serverId,
     session.id,
