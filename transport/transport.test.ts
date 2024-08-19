@@ -104,7 +104,7 @@ describe.each(testMatrix())(
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       clientTransport.connect(serverTransport.clientId);
-      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
+      let clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       addPostTestCleanup(async () => {
         await cleanupTransports([clientTransport, serverTransport]);
@@ -147,6 +147,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
 
       // by this point the client should have reconnected
+      clientSendFn = getClientSendFn(clientTransport, serverTransport);
       const msg2Id = clientSendFn(msg2);
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
@@ -248,13 +249,12 @@ describe.each(testMatrix())(
       const protocolError = vi.fn();
       clientTransport.addEventListener('protocolError', protocolError);
       const serverTransport = getServerTransport();
-      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       const msg = createDummyTransportMessage();
       const msgPromise = waitForMessage(serverTransport);
       const sendHandle = (evt: EventMap['sessionStatus']) => {
         if (evt.status === 'connect') {
-          clientSendFn(msg);
+          getClientSendFn(clientTransport, serverTransport)(msg);
         }
       };
 
@@ -923,7 +923,6 @@ describe.each(testMatrix())(
       serverTransport.addEventListener('sessionStatus', serverSessHandler);
       clientTransport.connect(serverTransport.clientId);
       let clientSendFn = getClientSendFn(clientTransport, serverTransport);
-      let serverSendFn = getServerSendFn(serverTransport, clientTransport);
 
       addPostTestCleanup(async () => {
         // teardown
@@ -944,6 +943,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverConnStart).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(serverSessStart).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(0));
+      let serverSendFn = getServerSendFn(serverTransport, clientTransport);
 
       // kill the client
       clientTransport.close();
@@ -1032,7 +1032,7 @@ describe.each(testMatrix())(
         waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
       ).resolves.toStrictEqual(msg1.payload);
 
-      // wait for hearbeat to elapse
+      // wait for heartbeat to elapse
       await advanceFakeTimersByHeartbeat();
 
       // make sure both sides agree on the session id.
@@ -1067,11 +1067,11 @@ describe.each(testMatrix())(
       // eagerly reconnect client
       clientTransport.reconnectOnConnectionDrop = true;
       clientTransport.connect(serverTransport.clientId);
-      clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       await waitFor(() => expect(clientConnStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(clientSessStart).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(1));
+      clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       // make sure both sides agree on the session id after the reconnect
       const newClientSession = serverTransport.sessions.get('client');
@@ -1129,7 +1129,6 @@ describe.each(testMatrix())(
     test('recovers from phantom disconnects', async () => {
       const clientTransport = testHelpers.getClientTransport('client');
       const serverTransport = testHelpers.getServerTransport();
-      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       const clientSessStart = vi.fn();
       const clientSessStop = vi.fn();
@@ -1171,6 +1170,7 @@ describe.each(testMatrix())(
         serverTransitionHandler,
       );
       clientTransport.connect(serverTransport.clientId);
+      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       addPostTestCleanup(async () => {
         // teardown

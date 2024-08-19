@@ -245,8 +245,6 @@ export abstract class ServerTransport<
       return;
     }
 
-    let oldSession = this.sessions.get(msg.from);
-
     // invariant: must pass custom validation if defined
     let parsedMetadata: ParsedMetadata = {};
     if (this.handshakeExtensions) {
@@ -271,9 +269,9 @@ export abstract class ServerTransport<
         return;
       }
 
-      const previousParsedMetadata = oldSession
-        ? this.sessionHandshakeMetadata.get(oldSession.to)
-        : undefined;
+      const previousParsedMetadata = this.sessionHandshakeMetadata.get(
+        msg.from,
+      );
 
       const parsedMetadataOrFailureCode =
         await this.handshakeExtensions.validate(
@@ -332,6 +330,7 @@ export abstract class ServerTransport<
       msg.payload.expectedSessionState.nextExpectedSeq;
     const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq;
 
+    let oldSession = this.sessions.get(msg.from);
     if (
       this.options.enableTransparentSessionReconnects &&
       oldSession &&
@@ -497,7 +496,12 @@ export abstract class ServerTransport<
       );
 
     this.sessionHandshakeMetadata.set(connectedSession.to, parsedMetadata);
-    this.createSession(connectedSession);
+    if (oldSession) {
+      this.updateSession(connectedSession);
+    } else {
+      this.createSession(connectedSession);
+    }
+
     this.pendingSessions.delete(session);
     connectedSession.startActiveHeartbeat();
   }
