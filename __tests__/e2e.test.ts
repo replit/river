@@ -40,8 +40,6 @@ import {
 } from '../router/handshake';
 import { TestSetupHelpers } from './fixtures/transports';
 
-// TODO: various rpc types across session disconnect scenarios
-
 describe.each(testMatrix())(
   'client <-> server integration test ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {

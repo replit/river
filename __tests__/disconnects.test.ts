@@ -129,6 +129,9 @@ describe.each(testMatrix())(
         payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
       });
 
+      // further writes should error
+      expect(() => reqWritable.write({ msg: 'def', ignore: false })).toThrow();
+
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
       await testFinishesCleanly({
@@ -233,6 +236,9 @@ describe.each(testMatrix())(
         payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
       });
 
+      // wait for client1 to restablish connection
+      // (elapsing by session grace on client2 will inadvertedly trigger a phantom disconnect
+      // on client1 because mocked timers are shared, which will cause it to reconnect)
       // at this point, only client1 is connected
       await waitFor(() => {
         expect(numberOfConnections(client1Transport)).toEqual(1);
@@ -292,8 +298,12 @@ describe.each(testMatrix())(
         payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
       });
 
+      // further writes should error
+      expect(() => reqWritable.write({ n: 3 })).toThrow();
+
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,

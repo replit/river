@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   Err,
   Ok,
+  OkResult,
   Procedure,
   ServiceSchema,
   createClient,
@@ -398,7 +399,7 @@ describe('cancels invalid request', () => {
     );
   });
 
-  test('request message for non-request procedure', async () => {
+  test('data message for non-stream procedure', async () => {
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
     addPostTestCleanup(() =>
@@ -411,7 +412,10 @@ describe('cancels invalid request', () => {
         rpc: Procedure.rpc({
           requestInit: Type.Object({}),
           responseData: Type.Object({}),
-          handler: async () => Ok({}),
+          handler: () =>
+            new Promise<OkResult<object>>(() => {
+              // hang forever
+            }),
         }),
       }),
     };
@@ -439,20 +443,21 @@ describe('cancels invalid request', () => {
     clientTransport.addEventListener('message', clientOnMessage);
 
     await waitFor(() => {
-      expect(clientOnMessage).toHaveBeenCalledTimes(1);
+      expect(clientOnMessage).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          controlFlags: ControlFlags.StreamCancelBit,
+          streamId,
+          payload: Err({
+            code: INVALID_REQUEST_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.stringContaining('control payload'),
+          }),
+        }),
+      );
     });
 
-    expect(clientOnMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        controlFlags: ControlFlags.StreamCancelBit,
-        streamId,
-        payload: Err({
-          code: INVALID_REQUEST_CODE,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          message: expect.stringContaining('control payload'),
-        }),
-      }),
-    );
+    expect(clientOnMessage).toHaveBeenCalledTimes(1);
   });
 
   test('request after close', async () => {
