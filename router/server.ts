@@ -105,6 +105,7 @@ interface ProcStream {
   sessionMetadata: ParsedMetadata;
   procedure: AnyProcedure;
   handleMsg: (msg: OpaqueTransportMessage) => void;
+  handleSessionDisconnect: () => void;
 }
 
 class RiverServer<Services extends AnyServiceSchemaMap>
@@ -208,6 +209,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         `got session disconnect from ${disconnectedClientId}, cleaning up streams`,
         evt.session.loggingMetadata,
       );
+
+      for (const stream of this.streams.values()) {
+        if (stream.from === disconnectedClientId) {
+          stream.handleSessionDisconnect();
+        }
+      }
 
       this.serverCancelledStreams.delete(disconnectedClientId);
     };
@@ -369,6 +376,20 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       sessionMetadata,
       procedure,
       handleMsg: onMessage,
+      handleSessionDisconnect: () => {
+        cleanClose = false;
+        const errPayload = {
+          code: UNEXPECTED_DISCONNECT_CODE,
+          message: 'client unexpectedly disconnected',
+        } as const;
+
+        if (!reqReadable.isClosed()) {
+          reqReadable._pushValue(Err(errPayload));
+          closeReadable();
+        }
+
+        resWritable.close();
+      },
     };
 
     const sessionScopedSend = this.transport.getSessionBoundSendFn(
@@ -400,30 +421,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       cancelStream(streamId, result);
     };
 
-    const onSessionStatus = (evt: EventMap['sessionStatus']) => {
-      if (evt.status !== 'disconnect' || evt.session.to !== from) {
-        return;
-      }
-
-      cleanClose = false;
-      const errPayload = {
-        code: UNEXPECTED_DISCONNECT_CODE,
-        message: 'client unexpectedly disconnected',
-      } as const;
-
-      if (!reqReadable.isClosed()) {
-        reqReadable._pushValue(Err(errPayload));
-        closeReadable();
-      }
-
-      resWritable.close();
-    };
-    this.transport.addEventListener('sessionStatus', onSessionStatus);
-
     const finishedController = new AbortController();
     const cleanup = () => {
-      this.transport.removeEventListener('sessionStatus', onSessionStatus);
-
       finishedController.abort();
       this.streams.delete(streamId);
     };
