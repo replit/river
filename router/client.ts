@@ -167,6 +167,7 @@ function _createRecursiveProxy(
     // property access, recurse and add field to path
     get(_obj, key) {
       if (typeof key !== 'string') return undefined;
+
       return _createRecursiveProxy(callback, [...path, key]);
     },
     // hit the end, let's invoke the handler
@@ -506,6 +507,7 @@ function handleProc(
 
   if (procType === 'upload') {
     let didFinalize = false;
+
     return {
       reqWritable: reqWritable,
       finalize: () => {

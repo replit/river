@@ -37,6 +37,7 @@ export class Observable<T> {
   observe(listener: (val: T) => void) {
     this.listeners.add(listener);
     listener(this.get());
+
     return () => this.listeners.delete(listener);
   }
 

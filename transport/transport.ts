@@ -107,6 +107,7 @@ export abstract class Transport<ConnType extends Connection> {
     // construct logger from fn
     if (typeof fn === 'function') {
       this.log = createLogProxy(new BaseLogger(fn, level));
+
       return;
     }
 
@@ -272,6 +273,7 @@ export abstract class Transport<ConnType extends Connection> {
       });
 
     this.updateSession(noConnectionSession);
+
     return noConnectionSession;
   }
 
@@ -297,6 +299,7 @@ export abstract class Transport<ConnType extends Connection> {
     }
 
     this.updateSession(noConnectionSession);
+
     return noConnectionSession;
   }
 

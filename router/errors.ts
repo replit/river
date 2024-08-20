@@ -80,6 +80,7 @@ export type ProcedureErrorSchemaType =
 type NestableProcedureErrorSchemaType =
   | BaseErrorSchemaType
   | TUnion<NestableProcedureErrorSchemaTypeArray>;
+
 // use an interface to defer the type definition to be evaluated lazily
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 interface NestableProcedureErrorSchemaTypeArray
@@ -127,5 +128,6 @@ export function flattenErrorType(
   }
 
   flatten(errType);
+
   return Type.Union(flattenedTypes);
 }

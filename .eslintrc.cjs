@@ -15,7 +15,7 @@ module.exports = {
     sourceType: 'module',
     project: ['./tsconfig.json'],
   },
-  plugins: ['@typescript-eslint'],
+  plugins: ['@typescript-eslint', '@stylistic/js', '@stylistic/ts'],
   rules: {
     'linebreak-style': ['error', 'unix'],
     '@typescript-eslint/no-confusing-void-expression': [
@@ -42,6 +42,21 @@ module.exports = {
       {
         allowNullish: true,
         allowNumber: true,
+      },
+    ],
+    '@stylistic/ts/lines-between-class-members': [
+      'error',
+      'always',
+      { exceptAfterSingleLine: true },
+    ],
+    '@stylistic/js/no-multiple-empty-lines': ['error', { max: 1 }],
+    '@stylistic/ts/padding-line-between-statements': [
+      'error',
+      { blankLine: 'always', prev: '*', next: 'return' },
+      {
+        blankLine: 'always',
+        prev: '*',
+        next: ['enum', 'interface', 'type'],
       },
     ],
   },

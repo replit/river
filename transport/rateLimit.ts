@@ -94,6 +94,7 @@ export class LeakyBucketRateLimit {
       const currentBudget = this.budgetConsumed;
       if (!currentBudget) {
         this.stopLeak();
+
         return;
       }
 

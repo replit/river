@@ -29,6 +29,7 @@ const cleanedLogFn = (log: LogFn) => {
     // skip cloning object if metadata has no transportMessage
     if (!metadata?.transportMessage) {
       log(msg, metadata);
+
       return;
     }
 

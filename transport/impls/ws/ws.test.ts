@@ -91,6 +91,7 @@ describe('sending and receiving across websockets works', async () => {
       await expect(
         waitForMessage(serverTransport, (recv) => recv.id === initMsgId),
       ).resolves.toStrictEqual(initMsg.payload);
+
       return client;
     };
 

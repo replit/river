@@ -30,6 +30,7 @@ export class Uint32LengthPrefixFraming extends Transform {
 
       this.emit('error', err);
       cb(err);
+
       return;
     }
 
@@ -76,6 +77,7 @@ export const MessageFramer = {
   write: (buf: Uint8Array) => {
     const lengthPrefix = Buffer.alloc(4);
     lengthPrefix.writeUInt32BE(buf.length, 0);
+
     return Buffer.concat([lengthPrefix, buf]);
   },
 };

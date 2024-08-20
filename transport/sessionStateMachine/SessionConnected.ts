@@ -52,6 +52,7 @@ export class SessionConnected<
     const constructedMsg = this.constructMsg(msg);
     this.sendBuffer.push(constructedMsg);
     this.conn.send(this.options.codec.toBuffer(constructedMsg));
+
     return constructedMsg.id;
   }
 
@@ -103,6 +104,7 @@ export class SessionConnected<
         this.conn.close();
         clearInterval(this.heartbeatHandle);
         this.heartbeatHandle = undefined;
+
         return;
       }
 
@@ -147,6 +149,7 @@ export class SessionConnected<
     const parsedMsg = this.parseMsg(msg);
     if (parsedMsg === null) {
       this.listeners.onInvalidMessage('could not parse message');
+
       return;
     }
 
@@ -192,6 +195,7 @@ export class SessionConnected<
     // dispatch directly if its not an explicit ack
     if (!isAck(parsedMsg.controlFlags)) {
       this.listeners.onMessage(parsedMsg);
+
       return;
     }
 

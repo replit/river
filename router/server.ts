@@ -178,6 +178,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       const stream = this.streams.get(streamId);
       if (stream) {
         stream.handleMsg(message);
+
         return;
       }
 

@@ -80,6 +80,7 @@ interface PendingMockConnectionHandle {
 function getPendingMockConnection(): PendingMockConnectionHandle {
   let resolve: (conn: MockConnection) => void;
   let reject: (err: Error) => void;
+
   return {
     pendingConn: new Promise<MockConnection>((res, rej) => {
       resolve = res;

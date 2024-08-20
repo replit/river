@@ -103,6 +103,7 @@ export interface Writable<T> {
    */
   isWritable(): boolean;
 }
+
 /**
  * @internal
  *
@@ -248,6 +249,7 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
       },
       return: () => {
         this.break();
+
         return { done: true, value: undefined } as const;
       },
     };

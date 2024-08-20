@@ -26,6 +26,7 @@ describe('should handle incompatabilities', async () => {
     });
     getClientTransport = setup.getClientTransport;
     getServerTransport = setup.getServerTransport;
+
     return async () => {
       await postTestCleanup();
       await setup.cleanup();

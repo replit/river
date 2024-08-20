@@ -68,6 +68,7 @@ export class SessionWaitingForHandshake<
         'could not parse message',
         'MALFORMED_HANDSHAKE',
       );
+
       return;
     }
 

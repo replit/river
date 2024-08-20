@@ -110,6 +110,7 @@ describe('should handle incompatabilities', async () => {
     const clientTransport = new WebSocketClientTransport(
       () => {
         connectCalls++;
+
         return Promise.resolve(createLocalWebSocketClient(port));
       },
       'client',
