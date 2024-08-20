@@ -453,11 +453,11 @@ function handleProc(
   }
 
   function onSessionStatus(evt: EventMap['sessionStatus']) {
-    if (evt.status !== 'disconnect') {
-      return;
-    }
-
-    if (evt.session.to !== serverId) {
+    if (
+      evt.status !== 'disconnect' ||
+      evt.session.to !== serverId ||
+      session.id !== evt.session.id
+    ) {
       return;
     }
 

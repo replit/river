@@ -318,10 +318,18 @@ export abstract class Transport<ConnType extends Connection> {
 
     return (msg: PartialTransportMessage) => {
       const session = this.sessions.get(to);
-      if (!session) return;
+      if (!session) {
+        throw new Error(
+          `session scope for ${sessionId} has ended (close), can't send`,
+        );
+      }
 
       const sameSession = session.id === sessionId;
-      if (!sameSession) return;
+      if (!sameSession) {
+        throw new Error(
+          `session scope for ${sessionId} has ended (transition), can't send`,
+        );
+      }
 
       return session.send(msg);
     };

@@ -578,8 +578,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               await procedure.handler({
                 ctx: handlerContext,
                 reqInit: initPayload,
-                reqReadable: reqReadable,
-                resWritable: resWritable,
+                reqReadable,
+                resWritable,
               });
             } catch (err) {
               onHandlerError(err, span);
