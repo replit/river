@@ -9,6 +9,7 @@ function uint8ArrayToBase64(uint8Array: Uint8Array) {
   uint8Array.forEach((byte) => {
     binary += String.fromCharCode(byte);
   });
+
   return btoa(binary);
 }
 
@@ -19,6 +20,7 @@ function base64ToUint8Array(base64: string) {
   for (let i = 0; i < binaryString.length; i++) {
     uint8Array[i] = binaryString.charCodeAt(i);
   }
+
   return uint8Array;
 }
 
@@ -59,6 +61,7 @@ export const NaiveJsonCodec: Codec = {
       ) as unknown;
 
       if (typeof parsed === 'object') return parsed;
+
       return null;
     } catch {
       return null;

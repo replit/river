@@ -146,6 +146,7 @@ export const SessionStateGraph = {
           tags: ['state-transition'],
         },
       );
+
       return session;
     },
     BackingOffToConnecting: <ConnType extends Connection>(
@@ -169,6 +170,7 @@ export const SessionStateGraph = {
           tags: ['state-transition'],
         },
       );
+
       return session;
     },
     ConnectingToHandshaking: <ConnType extends Connection>(

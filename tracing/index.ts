@@ -28,6 +28,7 @@ export function getPropagationContext(
     tracestate: '',
   };
   propagation.inject(ctx, tracing);
+
   return tracing;
 }
 
@@ -117,6 +118,7 @@ export function createProcTelemetryInfo(
       spanId: span.spanContext().spanId,
     },
   });
+
   return { span, ctx };
 }
 

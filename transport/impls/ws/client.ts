@@ -42,11 +42,13 @@ export class WebSocketClientTransport extends ClientTransport<WebSocketConnectio
     await new Promise<void>((resolve, reject) => {
       if (ws.readyState === ws.OPEN) {
         resolve();
+
         return;
       }
 
       if (ws.readyState === ws.CLOSING || ws.readyState === ws.CLOSED) {
         reject(new Error('ws is closing or closed'));
+
         return;
       }
 

@@ -44,6 +44,7 @@ describe.each(testMatrix())(
       const setup = await transport.setup({ client: opts, server: opts });
       getClientTransport = setup.getClientTransport;
       getServerTransport = setup.getServerTransport;
+
       return async () => {
         await postTestCleanup();
         await setup.cleanup();
@@ -556,6 +557,7 @@ describe.each(testMatrix())(
         await expect(
           waitForMessage(serverTransport, (recv) => recv.id === initMsgId),
         ).resolves.toStrictEqual(initMsg.payload);
+
         return client;
       };
 
@@ -608,6 +610,7 @@ describe.each(testMatrix())(
       testHelpers = await transport.setup({ client: opts, server: opts });
       getClientTransport = testHelpers.getClientTransport;
       getServerTransport = testHelpers.getServerTransport;
+
       return async () => {
         await postTestCleanup();
         await testHelpers.cleanup();
@@ -681,6 +684,7 @@ describe.each(testMatrix())(
       testHelpers = await transport.setup({ client: clientOpts, server: opts });
       getClientTransport = testHelpers.getClientTransport;
       getServerTransport = testHelpers.getServerTransport;
+
       return async () => {
         await postTestCleanup();
         await testHelpers.cleanup();
@@ -760,6 +764,7 @@ describe.each(testMatrix())(
     const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
     beforeEach(async () => {
       testHelpers = await transport.setup({ client: opts, server: opts });
+
       return async () => {
         await postTestCleanup();
         await testHelpers.cleanup();
@@ -834,6 +839,7 @@ describe.each(testMatrix())(
           await new Promise((resolve) =>
             setTimeout(resolve, testingClientSessionOptions.handshakeTimeoutMs),
           );
+
           return {};
         },
       });
@@ -1235,6 +1241,7 @@ describe.each(testMatrix())(
       const setup = await transport.setup({ client: opts, server: opts });
       getClientTransport = setup.getClientTransport;
       getServerTransport = setup.getServerTransport;
+
       return async () => {
         await postTestCleanup();
         await setup.cleanup();

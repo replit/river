@@ -45,6 +45,7 @@ describe.each(testMatrix())(
       const setup = await transport.setup({ client: opts, server: opts });
       getClientTransport = setup.getClientTransport;
       getServerTransport = setup.getServerTransport;
+
       return async () => {
         await postTestCleanup();
         await setup.cleanup();
@@ -487,6 +488,7 @@ describe('request finishing triggers signal onabort', async () => {
     const setup = await transport.setup({ client: opts, server: opts });
     getClientTransport = setup.getClientTransport;
     getServerTransport = setup.getServerTransport;
+
     return async () => {
       await postTestCleanup();
       await setup.cleanup();

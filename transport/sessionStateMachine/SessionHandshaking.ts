@@ -73,6 +73,7 @@ export class SessionHandshaking<
         'could not parse message',
         'MALFORMED_HANDSHAKE',
       );
+
       return;
     }
 

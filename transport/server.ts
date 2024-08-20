@@ -140,6 +140,7 @@ export abstract class ServerTransport<
             );
 
             this.deletePendingSession(pendingSession);
+
             return;
           }
 
@@ -432,6 +433,7 @@ export abstract class ServerTransport<
           transportMessage: msg,
         },
       );
+
       return;
     }
 

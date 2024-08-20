@@ -160,6 +160,7 @@ export async function testFinishesCleanly({
 
 export const createPostTestCleanups = () => {
   const cleanupFns: Array<() => Promise<void>> = [];
+
   return {
     addPostTestCleanup: (fn: () => Promise<void>) => {
       cleanupFns.push(fn);

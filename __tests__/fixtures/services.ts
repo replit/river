@@ -20,6 +20,7 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     responseData: Type.Object({ result: Type.Number() }),
     async handler({ ctx, reqInit: { n } }) {
       ctx.state.count += n;
+
       return Ok({ result: ctx.state.count });
     },
   }),
@@ -29,6 +30,7 @@ const testServiceProcedures = TestServiceScaffold.procedures({
     responseData: Type.Array(Type.Number()),
     async handler({ ctx, reqInit: { n } }) {
       ctx.state.count += n;
+
       return Ok([ctx.state.count]);
     },
   }),
@@ -133,6 +135,7 @@ export const OrderingServiceSchema = ServiceSchema.define(
       responseData: Type.Object({ n: Type.Number() }),
       async handler({ ctx, reqInit: { n } }) {
         ctx.state.msgs.push(n);
+
         return Ok({ n });
       },
     }),
@@ -153,6 +156,7 @@ export const BinaryFileServiceSchema = ServiceSchema.define({
     responseData: Type.Object({ contents: Type.Uint8Array() }),
     async handler({ reqInit: { file } }) {
       const bytes: Uint8Array = Buffer.from(`contents for file ${file}`);
+
       return Ok({ contents: bytes });
     },
   }),
@@ -236,6 +240,7 @@ export const SubscribableServiceSchema = ServiceSchema.define(
       responseData: Type.Object({ result: Type.Number() }),
       async handler({ ctx, reqInit: { n } }) {
         ctx.state.count.set((prev) => prev + n);
+
         return Ok({ result: ctx.state.count.get() });
       },
     }),
@@ -278,6 +283,7 @@ export const UploadableServiceSchema = ServiceSchema.define({
       for await (const req of reqReadable) {
         result += unwrapOrThrow(req).n;
       }
+
       return Ok({ result: `${reqInit.prefix} ${result}` });
     },
   }),

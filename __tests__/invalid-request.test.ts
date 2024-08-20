@@ -33,6 +33,7 @@ describe('cancels invalid request', () => {
     const setup = await transport.setup({ client: opts, server: opts });
     getClientTransport = setup.getClientTransport;
     getServerTransport = setup.getServerTransport;
+
     return async () => {
       await postTestCleanup();
       await setup.cleanup();

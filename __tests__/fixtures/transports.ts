@@ -58,6 +58,7 @@ export const transports: Array<TransportMatrixEntry> = [
       const transports: Array<
         WebSocketClientTransport | WebSocketServerTransport
       > = [];
+
       return {
         simulatePhantomDisconnect() {
           for (const transport of transports) {
@@ -87,6 +88,7 @@ export const transports: Array<TransportMatrixEntry> = [
           }, 'debug');
 
           transports.push(clientTransport);
+
           return clientTransport;
         },
         getServerTransport(handshakeOptions) {
@@ -110,6 +112,7 @@ export const transports: Array<TransportMatrixEntry> = [
           }
 
           transports.push(serverTransport);
+
           return serverTransport as ServerTransport<Connection>;
         },
         async restartServer() {

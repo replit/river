@@ -165,6 +165,7 @@ export abstract class CommonSession extends StateMachineState {
         `received malformed msg: ${decodedBuffer}`,
         this.loggingMetadata,
       );
+
       return null;
     }
 
@@ -264,6 +265,7 @@ export abstract class IdentifiedSession extends CommonSession {
     };
 
     this.seq++;
+
     return msg;
   }
 
@@ -274,6 +276,7 @@ export abstract class IdentifiedSession extends CommonSession {
   send(msg: PartialTransportMessage): string {
     const constructedMsg = this.constructMsg(msg);
     this.sendBuffer.push(constructedMsg);
+
     return constructedMsg.id;
   }
 

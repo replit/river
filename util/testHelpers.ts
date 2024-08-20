@@ -187,6 +187,7 @@ export async function waitForMessage(
 
 function catchProcError(err: unknown) {
   const errorMsg = coerceErrorString(err);
+
   return Err({ code: UNCAUGHT_ERROR_CODE, message: errorMsg });
 }
 

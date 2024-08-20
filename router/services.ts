@@ -164,6 +164,7 @@ export function serializeSchemaV1Compat(
     Record<string, SerializedServiceSchemaProtocolv1>
   >((acc, [name, value]) => {
     acc[name] = value.serializeV1Compat();
+
     return acc;
   }, {});
 
@@ -206,6 +207,7 @@ export function serializeSchema(
     Record<string, SerializedServiceSchema>
   >((acc, [name, value]) => {
     acc[name] = value.serialize();
+
     return acc;
   }, {});
 

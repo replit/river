@@ -41,6 +41,7 @@ describe('bandwidth', async () => {
         const msg = dummyPayloadSmall();
         const id = sendClosure(msg);
         await waitForMessage(serverTransport, (msg) => msg.id === id);
+
         return;
       },
       { time: BENCH_DURATION },

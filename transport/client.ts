@@ -114,6 +114,7 @@ export abstract class ClientTransport<
     );
 
     this.createSession(session);
+
     return session;
   }
 
@@ -121,6 +122,7 @@ export abstract class ClientTransport<
   protected onConnectingFailed(session: SessionConnecting<ConnType>) {
     const noConnectionSession = super.onConnectingFailed(session);
     this.tryReconnecting(noConnectionSession.to);
+
     return noConnectionSession;
   }
 
@@ -129,6 +131,7 @@ export abstract class ClientTransport<
   ) {
     const noConnectionSession = super.onConnClosed(session);
     this.tryReconnecting(noConnectionSession.to);
+
     return noConnectionSession;
   }
 
@@ -187,6 +190,7 @@ export abstract class ClientTransport<
 
     this.updateSession(handshakingSession);
     void this.sendHandshake(handshakingSession);
+
     return handshakingSession;
   }
 
@@ -218,6 +222,7 @@ export abstract class ClientTransport<
           ...Value.Errors(ControlMessageHandshakeResponseSchema, msg.payload),
         ],
       });
+
       return;
     }
 
@@ -255,6 +260,7 @@ export abstract class ClientTransport<
         ...session.loggingMetadata,
         transportMessage: msg,
       });
+
       return;
     }
 
@@ -306,6 +312,7 @@ export abstract class ClientTransport<
       this.log?.info(
         `transport state is no longer open, cancelling attempt to connect to ${to}`,
       );
+
       return;
     }
 
@@ -316,6 +323,7 @@ export abstract class ClientTransport<
         `session to ${to} has state ${session.state}, skipping connect attempt`,
         session.loggingMetadata,
       );
+
       return;
     }
 
@@ -328,6 +336,7 @@ export abstract class ClientTransport<
         type: ProtocolError.RetriesExceeded,
         message: errMsg,
       });
+
       return;
     }
 
