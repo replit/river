@@ -527,21 +527,33 @@ describe('serialize service to jsonschema', () => {
             type: 'object',
           },
           errors: {
-            properties: {
-              code: { const: 'DIV_BY_ZERO', type: 'string' },
-              message: { type: 'string' },
-              extras: {
+            anyOf: [
+              {
                 properties: {
-                  test: {
-                    type: 'string',
+                  code: { const: 'DIV_BY_ZERO', type: 'string' },
+                  message: { type: 'string' },
+                  extras: {
+                    properties: {
+                      test: {
+                        type: 'string',
+                      },
+                    },
+                    required: ['test'],
+                    type: 'object',
                   },
                 },
-                required: ['test'],
+                required: ['code', 'message', 'extras'],
                 type: 'object',
               },
-            },
-            required: ['code', 'message', 'extras'],
-            type: 'object',
+              {
+                properties: {
+                  code: { const: 'INFINITY', type: 'string' },
+                  message: { type: 'string' },
+                },
+                required: ['code', 'message'],
+                type: 'object',
+              },
+            ],
           },
           type: 'rpc',
         },

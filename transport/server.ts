@@ -7,10 +7,10 @@ import {
   HandshakeErrorResponseCodes,
   OpaqueTransportMessage,
   acceptedProtocolVersions,
-  PartialTransportMessage,
   TransportClientId,
   handshakeResponseMessage,
   currentProtocolVersion,
+  isAcceptedProtocolVersion,
 } from './message';
 import {
   ProvidedServerTransportOptions,
@@ -70,33 +70,6 @@ export abstract class ServerTransport<
 
   extendHandshake(options: ServerHandshakeOptions) {
     this.handshakeExtensions = options;
-  }
-
-  send(to: string, msg: PartialTransportMessage): string {
-    if (this.getStatus() === 'closed') {
-      const err = 'transport is closed, cant send';
-      this.log?.error(err, {
-        clientId: this.clientId,
-        transportMessage: msg,
-        tags: ['invariant-violation'],
-      });
-
-      throw new Error(err);
-    }
-
-    const session = this.sessions.get(to);
-    if (!session) {
-      const err = `session to ${to} does not exist`;
-      this.log?.error(err, {
-        clientId: this.clientId,
-        transportMessage: msg,
-        tags: ['invariant-violation'],
-      });
-
-      throw new Error(err);
-    }
-
-    return session.send(msg);
   }
 
   protected deletePendingSession(
@@ -256,7 +229,7 @@ export abstract class ServerTransport<
 
     // invariant: handshake request passes all the validation
     const gotVersion = msg.payload.protocolVersion;
-    if (!acceptedProtocolVersions.includes(gotVersion)) {
+    if (!isAcceptedProtocolVersion(gotVersion)) {
       this.rejectHandshakeRequest(
         session,
         msg.from,
@@ -271,8 +244,6 @@ export abstract class ServerTransport<
 
       return;
     }
-
-    let oldSession = this.sessions.get(msg.from);
 
     // invariant: must pass custom validation if defined
     let parsedMetadata: ParsedMetadata = {};
@@ -298,9 +269,9 @@ export abstract class ServerTransport<
         return;
       }
 
-      const previousParsedMetadata = oldSession
-        ? this.sessionHandshakeMetadata.get(oldSession.to)
-        : undefined;
+      const previousParsedMetadata = this.sessionHandshakeMetadata.get(
+        msg.from,
+      );
 
       const parsedMetadataOrFailureCode =
         await this.handshakeExtensions.validate(
@@ -359,6 +330,7 @@ export abstract class ServerTransport<
       msg.payload.expectedSessionState.nextExpectedSeq;
     const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq;
 
+    let oldSession = this.sessions.get(msg.from);
     if (
       this.options.enableTransparentSessionReconnects &&
       oldSession &&
@@ -509,7 +481,9 @@ export abstract class ServerTransport<
             );
             this.onConnClosed(connectedSession);
           },
-          onMessage: (msg) => this.handleMsg(msg),
+          onMessage: (msg) => {
+            this.handleMsg(msg);
+          },
           onInvalidMessage: (reason) => {
             this.protocolError({
               type: ProtocolError.InvalidMessage,
@@ -522,7 +496,12 @@ export abstract class ServerTransport<
       );
 
     this.sessionHandshakeMetadata.set(connectedSession.to, parsedMetadata);
-    this.updateSession(connectedSession);
+    if (oldSession) {
+      this.updateSession(connectedSession);
+    } else {
+      this.createSession(connectedSession);
+    }
+
     this.pendingSessions.delete(session);
     connectedSession.startActiveHeartbeat();
   }

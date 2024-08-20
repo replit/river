@@ -4,6 +4,7 @@ import {
   readNextResult,
   isReadableDone,
   numberOfConnections,
+  getClientSendFn,
 } from '../util/testHelpers';
 import {
   SubscribableServiceSchema,
@@ -11,6 +12,7 @@ import {
   UploadableServiceSchema,
 } from './fixtures/services';
 import {
+  Ok,
   Procedure,
   ProcedureHandlerContext,
   ServiceSchema,
@@ -159,7 +161,7 @@ describe.each(testMatrix())(
 
       // start procedure
       const res = await client.test.add.rpc({ n: 3 });
-      expect(res).toStrictEqual({ ok: true, payload: { result: 3 } });
+      expect(res).toStrictEqual(Ok({ result: 3 }));
       // end procedure
 
       // number of message handlers shouldn't increase after rpc
@@ -206,22 +208,17 @@ describe.each(testMatrix())(
       reqWritable.write({ msg: '2', ignore: false });
 
       const result1 = await readNextResult(resReadable);
-      expect(result1).toStrictEqual({
-        ok: true,
-        payload: { response: '1' },
-      });
+      expect(result1).toStrictEqual(Ok({ response: '1' }));
 
       // ensure we only have one stream despite pushing multiple messages.
+      expect(server.streams.size);
+
       reqWritable.close();
-      await waitFor(() => expect(server.openStreams.size).toEqual(1));
       // ensure we no longer have any open streams since the request was closed.
-      await waitFor(() => expect(server.openStreams.size).toEqual(0));
+      await waitFor(() => expect(server.streams.size).toEqual(0));
 
       const result2 = await readNextResult(resReadable);
-      expect(result2).toStrictEqual({
-        ok: true,
-        payload: { response: '2' },
-      });
+      expect(result2).toStrictEqual(Ok({ response: '2' }));
 
       expect(await isReadableDone(resReadable)).toEqual(true);
       // end procedure
@@ -237,6 +234,66 @@ describe.each(testMatrix())(
       // check number of connections
       expect(numberOfConnections(clientTransport)).toEqual(1);
       expect(numberOfConnections(serverTransport)).toEqual(1);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('cancellation after transport close', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = { test: TestServiceSchema };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // start procedure
+      const abortController = new AbortController();
+      const { reqWritable, resReadable } = client.test.echo.stream(
+        {},
+        { signal: abortController.signal },
+      );
+      reqWritable.write({ msg: '1', ignore: false });
+
+      const result1 = await readNextResult(resReadable);
+      expect(result1).toStrictEqual({
+        ok: true,
+        payload: { response: '1' },
+      });
+
+      // close the transport
+      clientTransport.close();
+      await waitFor(() => {
+        expect(numberOfConnections(clientTransport)).toEqual(0);
+        expect(numberOfConnections(serverTransport)).toEqual(0);
+      });
+
+      // wait for session timer to elapse and make sure there are not more sessions
+      await advanceFakeTimersBySessionGrace();
+      await waitFor(() => {
+        expect(serverTransport.sessions.size).toEqual(0);
+        expect(clientTransport.sessions.size).toEqual(0);
+      });
+
+      // close the req writable after the transport is closed
+      // should not send message nor start a new session
+      reqWritable.close();
+      expect(serverTransport.sessions.size).toEqual(0);
+      expect(clientTransport.sessions.size).toEqual(0);
+
+      // same with abort
+      abortController.abort();
+      expect(serverTransport.sessions.size).toEqual(0);
+      expect(clientTransport.sessions.size).toEqual(0);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -478,7 +535,8 @@ describe('request finishing triggers signal onabort', async () => {
       await cleanupTransports([clientTransport, serverTransport]);
     });
 
-    clientTransport.send(serverId, {
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
+    clientSendFn({
       streamId: nanoid(),
       serviceName,
       procedureName,

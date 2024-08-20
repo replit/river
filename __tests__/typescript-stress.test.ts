@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { Procedure, ProcedureErrorSchemaType } from '../router/procedures';
+import { Procedure } from '../router/procedures';
 import { ServiceSchema } from '../router/services';
 import { Type } from '@sinclair/typebox';
 import { createServer } from '../router/server';
@@ -19,6 +19,7 @@ import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,
 } from '../router/handshake';
+import { flattenErrorType, ProcedureErrorSchemaType } from '../router/errors';
 
 const requestData = Type.Union([
   Type.Object({ a: Type.Number() }),
@@ -401,118 +402,159 @@ describe('Procedure error schema', () => {
 
     test('union of union', () => {
       acceptErrorSchema(
-        Type.Union([
+        flattenErrorType(
           Type.Union([
-            Type.Object({
-              code: Type.Literal('1'),
-              message: Type.String(),
-            }),
-            Type.Object({
-              code: Type.Literal('2'),
-              message: Type.String(),
-            }),
+            Type.Union([
+              Type.Object({
+                code: Type.Literal('1'),
+                message: Type.String(),
+              }),
+              Type.Object({
+                code: Type.Literal('2'),
+                message: Type.String(),
+              }),
+            ]),
+            Type.Union([
+              Type.Object({
+                code: Type.Literal('3'),
+                message: Type.String(),
+              }),
+              Type.Object({
+                code: Type.Literal('4'),
+                message: Type.String(),
+              }),
+            ]),
           ]),
-          Type.Union([
-            Type.Object({
-              code: Type.Literal('3'),
-              message: Type.String(),
-            }),
-            Type.Object({
-              code: Type.Literal('4'),
-              message: Type.String(),
-            }),
-          ]),
-        ]),
+        ),
       );
     });
 
     test('union of object and union', () => {
       acceptErrorSchema(
-        Type.Union([
-          Type.Object({
-            code: Type.Literal('1'),
-            message: Type.String(),
-          }),
+        flattenErrorType(
           Type.Union([
             Type.Object({
-              code: Type.Literal('2'),
+              code: Type.Literal('1'),
               message: Type.String(),
             }),
-            Type.Object({
-              code: Type.Literal('3'),
-              message: Type.String(),
-            }),
+            Type.Union([
+              Type.Object({
+                code: Type.Literal('2'),
+                message: Type.String(),
+              }),
+              Type.Object({
+                code: Type.Literal('3'),
+                message: Type.String(),
+              }),
+            ]),
           ]),
-        ]),
+        ),
+      );
+    });
+
+    test('deeeeep nesting', () => {
+      acceptErrorSchema(
+        flattenErrorType(
+          Type.Union([
+            Type.Object({
+              code: Type.Literal('1'),
+              message: Type.String(),
+            }),
+            Type.Union([
+              Type.Object({
+                code: Type.Literal('2'),
+                message: Type.String(),
+              }),
+              Type.Union([
+                Type.Object({
+                  code: Type.Literal('3'),
+                  message: Type.String(),
+                }),
+                Type.Union([
+                  Type.Object({
+                    code: Type.Literal('4'),
+                    message: Type.String(),
+                  }),
+                  Type.Object({
+                    code: Type.Literal('5'),
+                    message: Type.String(),
+                  }),
+                ]),
+              ]),
+            ]),
+          ]),
+        ),
       );
     });
 
     test('mixed bag, union of object, unions, "union of unions", and "union of union and object" (I think)', () => {
       acceptErrorSchema(
-        Type.Union([
-          Type.Object({
-            code: Type.Literal('1'),
-            message: Type.String(),
-          }),
+        flattenErrorType(
           Type.Union([
             Type.Object({
-              code: Type.Literal('2'),
+              code: Type.Literal('1'),
               message: Type.String(),
             }),
-            Type.Object({
-              code: Type.Literal('3'),
-              message: Type.String(),
-            }),
-          ]),
-          Type.Union([
+            Type.Union([
+              Type.Object({
+                code: Type.Literal('2'),
+                message: Type.String(),
+              }),
+              Type.Object({
+                code: Type.Literal('3'),
+                message: Type.String(),
+              }),
+            ]),
+            Type.Union([
+              Type.Union([
+                Type.Object({
+                  code: Type.Literal('4'),
+                  message: Type.String(),
+                }),
+                Type.Object({
+                  code: Type.Literal('5'),
+                  message: Type.String(),
+                }),
+              ]),
+              Type.Union([
+                Type.Object({
+                  code: Type.Literal('6'),
+                  message: Type.String(),
+                }),
+                Type.Object({
+                  code: Type.Literal('7'),
+                  message: Type.String(),
+                }),
+              ]),
+            ]),
             Type.Union([
               Type.Object({
                 code: Type.Literal('4'),
                 message: Type.String(),
               }),
-              Type.Object({
-                code: Type.Literal('5'),
-                message: Type.String(),
-              }),
-            ]),
-            Type.Union([
-              Type.Object({
-                code: Type.Literal('6'),
-                message: Type.String(),
-              }),
-              Type.Object({
-                code: Type.Literal('7'),
-                message: Type.String(),
-              }),
-            ]),
-          ]),
-          Type.Union([
-            Type.Object({
-              code: Type.Literal('4'),
-              message: Type.String(),
-            }),
-            Type.Union([
-              Type.Object({
-                code: Type.Literal('4'),
-                message: Type.String(),
-              }),
-              Type.Object({
-                code: Type.Literal('5'),
-                message: Type.String(),
-              }),
-            ]),
-            Type.Union([
-              Type.Object({
-                code: Type.Literal('6'),
-                message: Type.String(),
-              }),
-              Type.Object({
-                code: Type.Literal('7'),
-                message: Type.String(),
-              }),
+              Type.Union([
+                Type.Object({
+                  code: Type.Literal('4'),
+                  message: Type.String(),
+                }),
+                Type.Object({
+                  code: Type.Literal('5'),
+                  message: Type.String(),
+                }),
+              ]),
+              Type.Union([
+                Type.Object({
+                  code: Type.Literal('6'),
+                  message: Type.String(),
+                }),
+                Type.Object({
+                  code: Type.Literal('7'),
+                  message: Type.String(),
+                }),
+              ]),
             ]),
           ]),
-        ]),
+        ),
       );
     });
   });
@@ -542,7 +584,7 @@ describe('Procedure error schema', () => {
       );
     });
 
-    test("doesn't allow nesting too deep", () => {
+    test('fails on nested union without helper', () => {
       acceptErrorSchema(
         // @ts-expect-error testing this
         Type.Union([
@@ -555,22 +597,10 @@ describe('Procedure error schema', () => {
               code: Type.Literal('2'),
               message: Type.String(),
             }),
-            Type.Union([
-              Type.Object({
-                code: Type.Literal('3'),
-                message: Type.String(),
-              }),
-              Type.Union([
-                Type.Object({
-                  code: Type.Literal('4'),
-                  message: Type.String(),
-                }),
-                Type.Object({
-                  code: Type.Literal('5'),
-                  message: Type.String(),
-                }),
-              ]),
-            ]),
+            Type.Object({
+              code: Type.Literal('3'),
+              message: Type.String(),
+            }),
           ]),
         ]),
       );

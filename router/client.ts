@@ -19,13 +19,7 @@ import {
   cancelMessage,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
-import {
-  BaseErrorSchemaType,
-  Err,
-  Result,
-  AnyResultSchema,
-  ErrResultSchema,
-} from './result';
+import { Err, Result, AnyResultSchema } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/connection';
 import { Logger } from '../logging';
@@ -35,13 +29,14 @@ import { ClientTransport } from '../transport/client';
 import { generateId } from '../transport/id';
 import { Readable, ReadableImpl, Writable, WritableImpl } from './streams';
 import { Value } from '@sinclair/typebox/value';
+import { PayloadType, ValidProcType } from './procedures';
 import {
+  BaseErrorSchemaType,
+  ErrResultSchema,
   CANCEL_CODE,
   ReaderErrorSchema,
-  PayloadType,
   UNEXPECTED_DISCONNECT_CODE,
-  ValidProcType,
-} from './procedures';
+} from './errors';
 
 const ReaderErrResultSchema = ErrResultSchema(ReaderErrorSchema);
 
@@ -281,8 +276,15 @@ function handleProc(
   procedureName: string,
   abortSignal?: AbortSignal,
 ): AnyProcReturn {
-  const procClosesWithInit = procType === 'rpc' || procType === 'subscription';
+  const session =
+    transport.sessions.get(serverId) ??
+    transport.createUnconnectedSession(serverId);
+  const sessionScopedSend = transport.getSessionBoundSendFn(
+    serverId,
+    session.id,
+  );
 
+  const procClosesWithInit = procType === 'rpc' || procType === 'subscription';
   const streamId = generateId();
   const { span, ctx } = createProcTelemetryInfo(
     transport,
@@ -292,28 +294,27 @@ function handleProc(
     streamId,
   );
   let cleanClose = true;
-  const reqWritable = new WritableImpl<Static<PayloadType>>(
-    // write callback
-    (rawIn) => {
-      transport.send(serverId, {
+  const reqWritable = new WritableImpl<Static<PayloadType>>({
+    writeCb: (rawIn) => {
+      sessionScopedSend({
         streamId,
         payload: rawIn,
         controlFlags: 0,
       });
     },
     // close callback
-    () => {
+    closeCb: () => {
       span.addEvent('reqWritable closed');
 
       if (!procClosesWithInit && cleanClose) {
-        transport.send(serverId, closeStreamMessage(streamId));
+        sessionScopedSend(closeStreamMessage(streamId));
       }
 
       if (resReadable.isClosed()) {
         cleanup();
       }
     },
-  );
+  });
 
   const resReadable = new ReadableImpl<
     Static<PayloadType>,
@@ -342,7 +343,6 @@ function handleProc(
     }
 
     span.addEvent('sending cancel');
-
     cleanClose = false;
 
     if (!resReadable.isClosed()) {
@@ -356,8 +356,7 @@ function handleProc(
     }
 
     reqWritable.close();
-    transport.send(
-      serverId,
+    sessionScopedSend(
       cancelMessage(
         streamId,
         Err({
@@ -454,11 +453,11 @@ function handleProc(
   }
 
   function onSessionStatus(evt: EventMap['sessionStatus']) {
-    if (evt.status !== 'disconnect') {
-      return;
-    }
-
-    if (evt.session.to !== serverId) {
+    if (
+      evt.status !== 'disconnect' ||
+      evt.session.to !== serverId ||
+      session.id !== evt.session.id
+    ) {
       return;
     }
 
@@ -480,7 +479,7 @@ function handleProc(
   transport.addEventListener('message', onMessage);
   transport.addEventListener('sessionStatus', onSessionStatus);
 
-  transport.send(serverId, {
+  sessionScopedSend({
     streamId,
     serviceName,
     procedureName,

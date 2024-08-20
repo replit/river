@@ -1,5 +1,5 @@
 import { afterAll, assert, bench, describe } from 'vitest';
-import { waitForMessage } from '../util/testHelpers';
+import { getClientSendFn, waitForMessage } from '../util/testHelpers';
 import { TestServiceSchema } from './fixtures/services';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
@@ -34,11 +34,12 @@ describe('bandwidth', async () => {
       serverTransport.clientId,
     );
 
+    const sendClosure = getClientSendFn(clientTransport, serverTransport);
     bench(
       `${name} -- raw transport send and recv`,
       async () => {
         const msg = dummyPayloadSmall();
-        const id = clientTransport.send(serverTransport.clientId, msg);
+        const id = sendClosure(msg);
         await waitForMessage(serverTransport, (msg) => msg.id === id);
         return;
       },

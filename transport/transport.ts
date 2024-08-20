@@ -1,7 +1,7 @@
 import {
   OpaqueTransportMessage,
-  TransportClientId,
   PartialTransportMessage,
+  TransportClientId,
 } from './message';
 import {
   BaseLogger,
@@ -25,6 +25,7 @@ import {
 } from './sessionStateMachine';
 import { Connection } from './connection';
 import { Session, SessionStateGraph } from './sessionStateMachine/transitions';
+import { SessionId } from './sessionStateMachine/common';
 
 /**
  * Represents the possible states of a transport.
@@ -36,6 +37,10 @@ export type TransportStatus = 'open' | 'closed';
 export interface DeleteSessionOptions {
   unhealthy: boolean;
 }
+
+export type SessionBoundSendFn = (
+  msg: PartialTransportMessage,
+) => string | undefined;
 
 /**
  * Transports manage the lifecycle (creation/deletion) of sessions
@@ -112,11 +117,11 @@ export abstract class Transport<ConnType extends Connection> {
   /**
    * Called when a message is received by this transport.
    * You generally shouldn't need to override this in downstream transport implementations.
-   * @param msg The received message.
+   * @param message The received message.
    */
-  protected handleMsg(msg: OpaqueTransportMessage) {
+  protected handleMsg(message: OpaqueTransportMessage) {
     if (this.getStatus() !== 'open') return;
-    this.eventDispatcher.dispatchEvent('message', msg);
+    this.eventDispatcher.dispatchEvent('message', message);
   }
 
   /**
@@ -143,14 +148,6 @@ export abstract class Transport<ConnType extends Connection> {
     this.eventDispatcher.removeEventListener(type, handler);
   }
 
-  /**
-   * Sends a message over this transport, delegating to the appropriate connection to actually
-   * send the message.
-   * @param msg The message to send.
-   * @returns The ID of the sent message or undefined if it wasn't sent
-   */
-  abstract send(to: TransportClientId, msg: PartialTransportMessage): string;
-
   protected protocolError(message: EventMap['protocolError']) {
     this.eventDispatcher.dispatchEvent('protocolError', message);
   }
@@ -172,7 +169,6 @@ export abstract class Transport<ConnType extends Connection> {
     });
 
     this.eventDispatcher.removeAllListeners();
-
     this.log?.info(`manually closed transport`, { clientId: this.clientId });
   }
 
@@ -180,31 +176,57 @@ export abstract class Transport<ConnType extends Connection> {
     return this.status;
   }
 
-  protected updateSession<S extends Session<ConnType>>(session: S): S {
+  // state transitions
+  protected createSession<S extends Session<ConnType>>(session: S): void {
     const activeSession = this.sessions.get(session.to);
-    if (activeSession && activeSession.id !== session.id) {
-      const msg = `attempt to transition active session for ${session.to} but active session (${activeSession.id}) is different from handle (${session.id})`;
+    if (activeSession) {
+      const msg = `attempt to create session for ${session.to} but active session (${activeSession.id}) already exists`;
+      this.log?.error(msg, {
+        ...session.loggingMetadata,
+        tags: ['invariant-violation'],
+      });
       throw new Error(msg);
     }
 
     this.sessions.set(session.to, session);
-
-    if (!activeSession) {
-      this.eventDispatcher.dispatchEvent('sessionStatus', {
-        status: 'connect',
-        session: session,
-      });
-    }
+    this.eventDispatcher.dispatchEvent('sessionStatus', {
+      status: 'connect',
+      session: session,
+    });
 
     this.eventDispatcher.dispatchEvent('sessionTransition', {
       state: session.state,
       session: session,
     } as EventMap['sessionTransition']);
-
-    return session;
   }
 
-  // state transitions
+  protected updateSession<S extends Session<ConnType>>(session: S): void {
+    const activeSession = this.sessions.get(session.to);
+    if (!activeSession) {
+      const msg = `attempt to transition session for ${session.to} but no active session exists`;
+      this.log?.error(msg, {
+        ...session.loggingMetadata,
+        tags: ['invariant-violation'],
+      });
+      throw new Error(msg);
+    }
+
+    if (activeSession.id !== session.id) {
+      const msg = `attempt to transition active session for ${session.to} but active session (${activeSession.id}) is different from handle (${session.id})`;
+      this.log?.error(msg, {
+        ...session.loggingMetadata,
+        tags: ['invariant-violation'],
+      });
+      throw new Error(msg);
+    }
+
+    this.sessions.set(session.to, session);
+    this.eventDispatcher.dispatchEvent('sessionTransition', {
+      state: session.state,
+      session: session,
+    } as EventMap['sessionTransition']);
+  }
+
   protected deleteSession(
     session: Session<ConnType>,
     options?: DeleteSessionOptions,
@@ -249,7 +271,8 @@ export abstract class Transport<ConnType extends Connection> {
         },
       });
 
-    return this.updateSession(noConnectionSession);
+    this.updateSession(noConnectionSession);
+    return noConnectionSession;
   }
 
   protected onConnClosed(
@@ -273,6 +296,42 @@ export abstract class Transport<ConnType extends Connection> {
         });
     }
 
-    return this.updateSession(noConnectionSession);
+    this.updateSession(noConnectionSession);
+    return noConnectionSession;
+  }
+
+  /**
+   * Gets a send closure scoped to a specific session. Sending using the returned
+   * closure after the session has transitioned to a different state will be a noop.
+   *
+   * Session objects themselves can become stale as they transition between
+   * states. As stale sessions cannot be used again (and will throw), holding
+   * onto a session object is not recommended.
+   */
+  getSessionBoundSendFn(
+    to: TransportClientId,
+    sessionId: SessionId,
+  ): SessionBoundSendFn {
+    if (this.getStatus() !== 'open') {
+      throw new Error('cannot get a bound send function on a closed transport');
+    }
+
+    return (msg: PartialTransportMessage) => {
+      const session = this.sessions.get(to);
+      if (!session) {
+        throw new Error(
+          `session scope for ${sessionId} has ended (close), can't send`,
+        );
+      }
+
+      const sameSession = session.id === sessionId;
+      if (!sameSession) {
+        throw new Error(
+          `session scope for ${sessionId} has ended (transition), can't send`,
+        );
+      }
+
+      return session.send(msg);
+    };
   }
 }

@@ -4,7 +4,6 @@ import {
   ControlMessageHandshakeResponseSchema,
   HandshakeErrorRetriableResponseCodes,
   OpaqueTransportMessage,
-  PartialTransportMessage,
   TransportClientId,
   currentProtocolVersion,
   handshakeRequestMessage,
@@ -96,27 +95,11 @@ export abstract class ClientTransport<
     }
   }
 
-  send(to: string, msg: PartialTransportMessage): string {
-    if (this.getStatus() === 'closed') {
-      const err = 'transport is closed, cant send';
-      this.log?.error(err, {
-        clientId: this.clientId,
-        transportMessage: msg,
-        tags: ['invariant-violation'],
-      });
-
-      throw new Error(err);
-    }
-
-    let session = this.sessions.get(to);
-    if (!session) {
-      session = this.createUnconnectedSession(to);
-    }
-
-    return session.send(msg);
-  }
-
-  private createUnconnectedSession(to: string): SessionNoConnection {
+  /*
+   * Creates a raw unconnected session object.
+   * This is mostly a River internal, you shouldn't need to use this directly.
+   */
+  createUnconnectedSession(to: string): SessionNoConnection {
     const session = ClientSessionStateGraph.entrypoint(
       to,
       this.clientId,
@@ -130,7 +113,7 @@ export abstract class ClientTransport<
       this.log,
     );
 
-    this.updateSession(session);
+    this.createSession(session);
     return session;
   }
 
@@ -298,7 +281,9 @@ export abstract class ClientTransport<
           );
           this.onConnClosed(connectedSession);
         },
-        onMessage: (msg) => this.handleMsg(msg),
+        onMessage: (msg) => {
+          this.handleMsg(msg);
+        },
         onInvalidMessage: (reason) => {
           this.deleteSession(connectedSession, { unhealthy: true });
           this.protocolError({
@@ -324,10 +309,7 @@ export abstract class ClientTransport<
       return;
     }
 
-    // create a new session if one does not exist
-    let session = this.sessions.get(to);
-    session ??= this.createUnconnectedSession(to);
-
+    const session = this.sessions.get(to) ?? this.createUnconnectedSession(to);
     if (session.state !== SessionState.NoConnection) {
       // already trying to connect
       this.log?.debug(

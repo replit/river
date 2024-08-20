@@ -1,6 +1,9 @@
 import { Type } from '@sinclair/typebox';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
+  Err,
+  Ok,
+  OkResult,
   Procedure,
   ServiceSchema,
   createClient,
@@ -13,10 +16,11 @@ import {
   waitFor,
 } from './fixtures/cleanup';
 import { EventMap } from '../transport';
-import { INVALID_REQUEST_CODE } from '../router/procedures';
+import { INVALID_REQUEST_CODE } from '../router/errors';
 import { ControlFlags } from '../transport/message';
 import { TestSetupHelpers } from './fixtures/transports';
 import { nanoid } from 'nanoid';
+import { getClientSendFn } from '../util/testHelpers';
 
 describe('cancels invalid request', () => {
   const { transport, codec } = testMatrix()[0];
@@ -56,9 +60,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'service',
       procedureName: 'stream',
@@ -74,14 +79,11 @@ describe('cancels invalid request', () => {
         expect.objectContaining({
           controlFlags: ControlFlags.StreamCancelBit,
           streamId,
-          payload: {
-            ok: false,
-            payload: {
-              code: INVALID_REQUEST_CODE,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              message: expect.stringContaining('stream open bit'),
-            },
-          },
+          payload: Err({
+            code: INVALID_REQUEST_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.stringContaining('stream open bit'),
+          }),
         }),
       );
     });
@@ -108,9 +110,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       procedureName: 'stream',
       payload: {},
@@ -125,14 +128,11 @@ describe('cancels invalid request', () => {
         expect.objectContaining({
           controlFlags: ControlFlags.StreamCancelBit,
           streamId,
-          payload: {
-            ok: false,
-            payload: {
-              code: INVALID_REQUEST_CODE,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              message: expect.stringContaining('service name'),
-            },
-          },
+          payload: Err({
+            code: INVALID_REQUEST_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.stringContaining('service name'),
+          }),
         }),
       );
     });
@@ -159,9 +159,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'service',
       payload: {},
@@ -176,14 +177,11 @@ describe('cancels invalid request', () => {
         expect.objectContaining({
           controlFlags: ControlFlags.StreamCancelBit,
           streamId,
-          payload: {
-            ok: false,
-            payload: {
-              code: INVALID_REQUEST_CODE,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              message: expect.stringContaining('procedure name'),
-            },
-          },
+          payload: Err({
+            code: INVALID_REQUEST_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.stringContaining('procedure name'),
+          }),
         }),
       );
     });
@@ -210,9 +208,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'serviceDoesNotExist',
       procedureName: 'stream',
@@ -228,14 +227,11 @@ describe('cancels invalid request', () => {
         expect.objectContaining({
           controlFlags: ControlFlags.StreamCancelBit,
           streamId,
-          payload: {
-            ok: false,
-            payload: {
-              code: INVALID_REQUEST_CODE,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              message: expect.stringContaining('find service'),
-            },
-          },
+          payload: Err({
+            code: INVALID_REQUEST_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.stringContaining('find service'),
+          }),
         }),
       );
     });
@@ -262,9 +258,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'service',
       procedureName: 'procedureDoesNotExist',
@@ -283,14 +280,11 @@ describe('cancels invalid request', () => {
       expect.objectContaining({
         controlFlags: ControlFlags.StreamCancelBit,
         streamId,
-        payload: {
-          ok: false,
-          payload: {
-            code: INVALID_REQUEST_CODE,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            message: expect.stringContaining('matching procedure'),
-          },
-        },
+        payload: Err({
+          code: INVALID_REQUEST_CODE,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          message: expect.stringContaining('matching procedure'),
+        }),
       }),
     );
   });
@@ -316,9 +310,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'service',
       procedureName: 'stream',
@@ -334,14 +329,11 @@ describe('cancels invalid request', () => {
         expect.objectContaining({
           controlFlags: ControlFlags.StreamCancelBit,
           streamId,
-          payload: {
-            ok: false,
-            payload: {
-              code: INVALID_REQUEST_CODE,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              message: expect.stringContaining('init failed validation'),
-            },
-          },
+          payload: Err({
+            code: INVALID_REQUEST_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.stringContaining('init failed validation'),
+          }),
         }),
       );
     });
@@ -368,9 +360,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'service',
       procedureName: 'stream',
@@ -378,7 +371,7 @@ describe('cancels invalid request', () => {
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       payload: {},
       controlFlags: 0,
@@ -395,21 +388,18 @@ describe('cancels invalid request', () => {
       expect.objectContaining({
         controlFlags: ControlFlags.StreamCancelBit,
         streamId,
-        payload: {
-          ok: false,
-          payload: {
-            code: INVALID_REQUEST_CODE,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            message: expect.stringContaining(
-              'expected requestData or control payload',
-            ),
-          },
-        },
+        payload: Err({
+          code: INVALID_REQUEST_CODE,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          message: expect.stringContaining(
+            'expected requestData or control payload',
+          ),
+        }),
       }),
     );
   });
 
-  test('request message for non-request procedure', async () => {
+  test('data message for non-stream procedure', async () => {
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
     addPostTestCleanup(() =>
@@ -422,16 +412,20 @@ describe('cancels invalid request', () => {
         rpc: Procedure.rpc({
           requestInit: Type.Object({}),
           responseData: Type.Object({}),
-          handler: async () => ({ ok: true, payload: {} }),
+          handler: () =>
+            new Promise<OkResult<object>>(() => {
+              // hang forever
+            }),
         }),
       }),
     };
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'service',
       procedureName: 'rpc',
@@ -439,7 +433,7 @@ describe('cancels invalid request', () => {
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       payload: { wat: '1' },
       controlFlags: 0,
@@ -449,23 +443,21 @@ describe('cancels invalid request', () => {
     clientTransport.addEventListener('message', clientOnMessage);
 
     await waitFor(() => {
-      expect(clientOnMessage).toHaveBeenCalledTimes(1);
-    });
-
-    expect(clientOnMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        controlFlags: ControlFlags.StreamCancelBit,
-        streamId,
-        payload: {
-          ok: false,
-          payload: {
+      expect(clientOnMessage).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          controlFlags: ControlFlags.StreamCancelBit,
+          streamId,
+          payload: Err({
             code: INVALID_REQUEST_CODE,
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             message: expect.stringContaining('control payload'),
-          },
-        },
-      }),
-    );
+          }),
+        }),
+      );
+    });
+
+    expect(clientOnMessage).toHaveBeenCalledTimes(1);
   });
 
   test('request after close', async () => {
@@ -489,9 +481,10 @@ describe('cancels invalid request', () => {
 
     createServer(serverTransport, services);
     clientTransport.connect(serverId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
     const streamId = nanoid();
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       serviceName: 'service',
       procedureName: 'stream',
@@ -499,13 +492,13 @@ describe('cancels invalid request', () => {
       controlFlags: ControlFlags.StreamOpenBit,
     });
 
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       payload: {},
       controlFlags: ControlFlags.StreamClosedBit,
     });
 
-    clientTransport.send(serverId, {
+    clientSendFn({
       streamId,
       payload: {},
       controlFlags: 0,
@@ -519,14 +512,11 @@ describe('cancels invalid request', () => {
         expect.objectContaining({
           controlFlags: ControlFlags.StreamCancelBit,
           streamId,
-          payload: {
-            ok: false,
-            payload: {
-              code: INVALID_REQUEST_CODE,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              message: expect.stringContaining('stream is closed'),
-            },
-          },
+          payload: Err({
+            code: INVALID_REQUEST_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.stringContaining('stream is closed'),
+          }),
         }),
       );
     });
@@ -547,7 +537,7 @@ describe('cancels invalid request', () => {
         rpc: Procedure.rpc({
           requestInit: Type.Object({}),
           responseData: Type.Object({}),
-          handler: async () => ({ ok: true, payload: {} }),
+          handler: async () => Ok({}),
         }),
         stream: Procedure.stream({
           requestInit: Type.Object({}),
@@ -566,14 +556,13 @@ describe('cancels invalid request', () => {
     // @ts-expect-error monkey-patched incompatible change :D
     delete services.service.procedures.rpc;
 
-    expect(await client.service.rpc.rpc({})).toEqual({
-      ok: false,
-      payload: {
+    expect(await client.service.rpc.rpc({})).toEqual(
+      Err({
         code: INVALID_REQUEST_CODE,
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         message: expect.stringContaining('matching procedure'),
-      },
-    });
+      }),
+    );
 
     // @ts-expect-error monkey-patched incompatible change :D
     services.service.procedures.stream.requestData = Type.Object({
@@ -584,20 +573,17 @@ describe('cancels invalid request', () => {
 
     reqWritable.write({ oldField: 'heyyo' });
     expect(await resReadable.collect()).toEqual([
-      {
-        ok: false,
-        payload: {
-          code: INVALID_REQUEST_CODE,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          message: expect.stringContaining(
-            'expected requestData or control payload',
-          ),
-        },
-      },
+      Err({
+        code: INVALID_REQUEST_CODE,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        message: expect.stringContaining(
+          'expected requestData or control payload',
+        ),
+      }),
     ]);
   });
 
-  describe('tombestones invalid request', () => {
+  describe('tombstones invalid request', () => {
     test('responds to multiple invalid requests for the same stream only once', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
@@ -619,23 +605,25 @@ describe('cancels invalid request', () => {
 
       createServer(serverTransport, services);
       clientTransport.connect(serverId);
+      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
-      const serverSendSpy = vi.spyOn(serverTransport, 'send');
+      const clientOnMessage = vi.fn();
+      clientTransport.addEventListener('message', clientOnMessage);
 
       const streamId = nanoid();
-      clientTransport.send(serverId, {
+      clientSendFn({
         streamId,
         procedureName: 'stream',
         payload: {},
         controlFlags: ControlFlags.StreamOpenBit,
       });
-      clientTransport.send(serverId, {
+      clientSendFn({
         streamId,
         procedureName: 'stream',
         payload: {},
         controlFlags: ControlFlags.StreamOpenBit,
       });
-      clientTransport.send(serverId, {
+      clientSendFn({
         streamId,
         procedureName: 'stream',
         payload: {},
@@ -643,22 +631,22 @@ describe('cancels invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(serverSendSpy).toHaveBeenCalledWith('client', {
-          streamId,
-          controlFlags: ControlFlags.StreamCancelBit,
-          payload: {
-            ok: false,
-            payload: {
+        expect(clientOnMessage).toHaveBeenNthCalledWith(
+          1,
+          expect.objectContaining({
+            streamId,
+            controlFlags: ControlFlags.StreamCancelBit,
+            payload: Err({
               code: INVALID_REQUEST_CODE,
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               message: expect.stringContaining('missing service name'),
-            },
-          },
-        });
+            }),
+          }),
+        );
       });
 
       const anotherStreamId = nanoid();
-      clientTransport.send(serverId, {
+      clientSendFn({
         streamId: anotherStreamId,
         procedureName: 'stream',
         payload: {},
@@ -666,21 +654,21 @@ describe('cancels invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(serverSendSpy).toHaveBeenCalledWith('client', {
-          streamId: anotherStreamId,
-          controlFlags: ControlFlags.StreamCancelBit,
-          payload: {
-            ok: false,
-            payload: {
+        expect(clientOnMessage).toHaveBeenNthCalledWith(
+          2,
+          expect.objectContaining({
+            streamId: anotherStreamId,
+            controlFlags: ControlFlags.StreamCancelBit,
+            payload: Err({
               code: INVALID_REQUEST_CODE,
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               message: expect.stringContaining('missing service name'),
-            },
-          },
-        });
+            }),
+          }),
+        );
       });
 
-      expect(serverSendSpy).toHaveBeenCalledTimes(2);
+      expect(clientOnMessage).toHaveBeenCalledTimes(2);
     });
 
     test('starts responding to same stream after tombstones are evicted', async () => {
@@ -707,11 +695,12 @@ describe('cancels invalid request', () => {
         maxCancelledStreamTombstonesPerSession,
       });
       clientTransport.connect(serverId);
+      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
-      const serverSendSpy = vi.spyOn(serverTransport, 'send');
-
+      const clientOnMessage = vi.fn();
+      clientTransport.addEventListener('message', clientOnMessage);
       const firstStreamId = nanoid();
-      clientTransport.send(serverId, {
+      clientSendFn({
         streamId: firstStreamId,
         procedureName: 'stream',
         payload: {},
@@ -719,22 +708,22 @@ describe('cancels invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(serverSendSpy).toHaveBeenNthCalledWith(1, 'client', {
-          streamId: firstStreamId,
-          controlFlags: ControlFlags.StreamCancelBit,
-          payload: {
-            ok: false,
-            payload: {
+        expect(clientOnMessage).toHaveBeenNthCalledWith(
+          1,
+          expect.objectContaining({
+            streamId: firstStreamId,
+            controlFlags: ControlFlags.StreamCancelBit,
+            payload: Err({
               code: INVALID_REQUEST_CODE,
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               message: expect.stringContaining('missing service name'),
-            },
-          },
-        });
+            }),
+          }),
+        );
       });
 
       for (let i = 0; i < maxCancelledStreamTombstonesPerSession; i++) {
-        clientTransport.send(serverId, {
+        clientSendFn({
           streamId: nanoid(), // new streams
           procedureName: 'stream',
           payload: {},
@@ -743,12 +732,12 @@ describe('cancels invalid request', () => {
       }
 
       await waitFor(() => {
-        expect(serverSendSpy).toHaveBeenCalledTimes(
+        expect(clientOnMessage).toHaveBeenCalledTimes(
           maxCancelledStreamTombstonesPerSession + 1,
         );
       });
 
-      clientTransport.send(serverId, {
+      clientSendFn({
         streamId: firstStreamId,
         procedureName: 'stream',
         payload: {},
@@ -756,26 +745,22 @@ describe('cancels invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(serverSendSpy).toHaveBeenCalledTimes(
+        expect(clientOnMessage).toHaveBeenCalledTimes(
           maxCancelledStreamTombstonesPerSession + 2,
         );
       });
 
-      expect(serverSendSpy).toHaveBeenNthCalledWith(
+      expect(clientOnMessage).toHaveBeenNthCalledWith(
         maxCancelledStreamTombstonesPerSession + 2,
-        'client',
-        {
+        expect.objectContaining({
           streamId: firstStreamId,
           controlFlags: ControlFlags.StreamCancelBit,
-          payload: {
-            ok: false,
-            payload: {
-              code: INVALID_REQUEST_CODE,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              message: expect.stringContaining('missing service name'),
-            },
-          },
-        },
+          payload: Err({
+            code: INVALID_REQUEST_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.stringContaining('missing service name'),
+          }),
+        }),
       );
     });
 
@@ -808,20 +793,26 @@ describe('cancels invalid request', () => {
         maxCancelledStreamTombstonesPerSession,
       });
       client1Transport.connect(serverId);
+      const client1SendFn = getClientSendFn(client1Transport, serverTransport);
       client2Transport.connect(serverId);
+      const client2SendFn = getClientSendFn(client2Transport, serverTransport);
 
-      const serverSendSpy = vi.spyOn(serverTransport, 'send');
+      const client1OnMessage = vi.fn();
+      client1Transport.addEventListener('message', client1OnMessage);
+      const client2OnMessage = vi.fn();
+      client2Transport.addEventListener('message', client2OnMessage);
 
       const client1FirstStreamId = nanoid();
-      client1Transport.send(serverId, {
+      client1SendFn({
         streamId: client1FirstStreamId,
         procedureName: 'stream',
         payload: {},
         controlFlags: ControlFlags.StreamOpenBit,
       });
 
+      // exhaust max for client 2
       for (let i = 0; i < maxCancelledStreamTombstonesPerSession; i++) {
-        client2Transport.send(serverId, {
+        client2SendFn({
           streamId: nanoid(), // new streams
           procedureName: 'stream',
           payload: {},
@@ -830,21 +821,24 @@ describe('cancels invalid request', () => {
       }
 
       await waitFor(() => {
-        expect(serverSendSpy).toHaveBeenCalledTimes(
-          maxCancelledStreamTombstonesPerSession + 1,
+        expect(client1OnMessage).toHaveBeenCalledTimes(1);
+        expect(client2OnMessage).toHaveBeenCalledTimes(
+          maxCancelledStreamTombstonesPerSession,
         );
       });
 
-      // server should ignore this
-      client1Transport.send(serverId, {
+      // server should still ignore this via tombstone
+      // even though client 2 has exhausted its tombstones
+      client1SendFn({
         streamId: client1FirstStreamId,
         procedureName: 'stream',
         payload: {},
         controlFlags: ControlFlags.StreamOpenBit,
       });
 
+      // this should still work
       const client1LastStreamId = nanoid();
-      client1Transport.send(serverId, {
+      client1SendFn({
         streamId: client1LastStreamId,
         procedureName: 'stream',
         payload: {},
@@ -852,27 +846,12 @@ describe('cancels invalid request', () => {
       });
 
       await waitFor(() => {
-        expect(serverSendSpy).toHaveBeenCalledTimes(
-          maxCancelledStreamTombstonesPerSession + 2,
+        expect(client1OnMessage).toHaveBeenCalledTimes(2);
+        // client 2 already hit max, shouldn't have received this
+        expect(client2OnMessage).toHaveBeenCalledTimes(
+          maxCancelledStreamTombstonesPerSession,
         );
       });
-
-      expect(serverSendSpy).toHaveBeenNthCalledWith(
-        maxCancelledStreamTombstonesPerSession + 2,
-        'client1',
-        {
-          streamId: client1LastStreamId,
-          controlFlags: ControlFlags.StreamCancelBit,
-          payload: {
-            ok: false,
-            payload: {
-              code: INVALID_REQUEST_CODE,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              message: expect.stringContaining('missing service name'),
-            },
-          },
-        },
-      );
     });
   });
 });

@@ -16,13 +16,13 @@ export const enum ControlFlags {
    */
   StreamOpenBit = 0b00010,
   /**
-   * Used when writer closes the stream.
-   */
-  StreamClosedBit = 0b01000,
-  /**
    * Used when a stream is cancelled due errors or to explicit cancellation
    */
   StreamCancelBit = 0b00100,
+  /**
+   * Used when writer closes the stream.
+   */
+  StreamClosedBit = 0b01000,
 }
 
 /**
@@ -68,8 +68,14 @@ export const ControlMessageCloseSchema = Type.Object({
   type: Type.Literal('CLOSE'),
 });
 
-export const currentProtocolVersion = 'v2.0';
+export type ProtocolVersion = 'v1.1' | 'v2.0';
+export const currentProtocolVersion = 'v2.0' satisfies ProtocolVersion;
 export const acceptedProtocolVersions = ['v1.1', currentProtocolVersion];
+export function isAcceptedProtocolVersion(
+  version: string,
+): version is ProtocolVersion {
+  return acceptedProtocolVersions.includes(version);
+}
 
 export const ControlMessageHandshakeRequestSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_REQ'),

@@ -1,5 +1,6 @@
 import { Static } from '@sinclair/typebox';
-import { BaseErrorSchemaType, Err, Result } from './result';
+import { Err, Result } from './result';
+import { BaseErrorSchemaType } from './errors';
 
 export const ReadableBrokenError: Static<BaseErrorSchemaType> = {
   code: 'READABLE_BROKEN',
@@ -347,9 +348,9 @@ export class WritableImpl<T> implements Writable<T> {
    */
   private closed = false;
 
-  constructor(writeCb: (value: T) => void, closeCb: () => void) {
-    this.writeCb = writeCb;
-    this.closeCb = closeCb;
+  constructor(callbacks: { writeCb: (value: T) => void; closeCb: () => void }) {
+    this.writeCb = callbacks.writeCb;
+    this.closeCb = callbacks.closeCb;
   }
 
   public write(value: T): undefined {

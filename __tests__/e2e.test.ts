@@ -100,6 +100,7 @@ describe.each(testMatrix())(
 
       // test
       const result = await client.fallible.divide.rpc({ a: 10, b: 2 });
+
       expect(result).toStrictEqual({ ok: true, payload: { result: 5 } });
       const result2 = await client.fallible.divide.rpc({ a: 10, b: 0 });
       expect(result2).toStrictEqual({

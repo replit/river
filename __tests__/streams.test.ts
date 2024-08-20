@@ -314,7 +314,10 @@ describe('Readable unit', () => {
 describe('Writable unit', () => {
   it('should write', () => {
     const writeCb = vi.fn();
-    const writable = new WritableImpl<number>(writeCb, () => undefined);
+    const writable = new WritableImpl<number>({
+      writeCb,
+      closeCb: () => undefined,
+    });
     writable.write(1);
     writable.write(2);
 
@@ -324,7 +327,10 @@ describe('Writable unit', () => {
 
   it('should close the writable', () => {
     const closeCb = vi.fn();
-    const writable = new WritableImpl<number>(() => undefined, closeCb);
+    const writable = new WritableImpl<number>({
+      writeCb: () => undefined,
+      closeCb,
+    });
 
     expect(writable.isWritable()).toBeTruthy();
 
@@ -335,7 +341,10 @@ describe('Writable unit', () => {
 
   it('should allow calling close multiple times', () => {
     const closeCb = vi.fn();
-    const writable = new WritableImpl<number>(() => undefined, closeCb);
+    const writable = new WritableImpl<number>({
+      writeCb: () => undefined,
+      closeCb,
+    });
 
     writable.close();
     writable.close();
@@ -344,10 +353,10 @@ describe('Writable unit', () => {
   });
 
   it('should throw when writing after close', () => {
-    const writable = new WritableImpl<number>(
-      () => undefined,
-      () => undefined,
-    );
+    const writable = new WritableImpl<number>({
+      writeCb: () => undefined,
+      closeCb: () => undefined,
+    });
     writable.close();
     expect(() => writable.write(1)).toThrowError(Error);
   });

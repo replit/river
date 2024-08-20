@@ -5,10 +5,9 @@ import {
   Unbranded,
   AnyProcedure,
   PayloadType,
-  ProcedureErrorSchemaType,
-  ReaderErrorSchema,
 } from './procedures';
 import { ServiceContext } from './context';
+import { ProcedureErrorSchemaType, ReaderErrorSchema } from './errors';
 
 /**
  * An instantiated service, probably from a {@link ServiceSchema}.

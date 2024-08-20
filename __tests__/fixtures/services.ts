@@ -171,6 +171,12 @@ export const FallibleServiceSchema = ServiceSchema.define({
         message: Type.String(),
         extras: Type.Object({ test: Type.String() }),
       }),
+      Type.Union([
+        Type.Object({
+          code: Type.Literal('INFINITY'),
+          message: Type.String(),
+        }),
+      ]),
     ]),
     async handler({ reqInit: { a, b } }) {
       if (b === 0) {
@@ -178,6 +184,11 @@ export const FallibleServiceSchema = ServiceSchema.define({
           code: DIV_BY_ZERO,
           message: 'Cannot divide by zero',
           extras: { test: 'abc' },
+        });
+      } else if (a === Infinity || b === Infinity) {
+        return Err({
+          code: 'INFINITY',
+          message: 'Result is infinity',
         });
       } else {
         return Ok({ result: a / b });
