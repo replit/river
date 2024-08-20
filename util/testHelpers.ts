@@ -30,13 +30,14 @@ import {
   Session,
   SessionStateGraph,
 } from '../transport/sessionStateMachine/transitions';
-import { ClientTransport, ServerTransport } from '../transport';
 import {
   BaseErrorSchemaType,
   ProcedureErrorSchemaType,
   ReaderErrorSchema,
   UNCAUGHT_ERROR_CODE,
 } from '../router/errors';
+import { ClientTransport } from '../transport/client';
+import { ServerTransport } from '../transport/server';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
