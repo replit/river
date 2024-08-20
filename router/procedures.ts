@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
-import { Kind, Static, TNever, TSchema, TUnion, Type } from '@sinclair/typebox';
+import { Static, TNever, TSchema, Type } from '@sinclair/typebox';
 import { ProcedureHandlerContext } from './context';
-import { BaseErrorSchemaType, Result } from './result';
+import { Result } from './result';
 import { Readable, Writable } from './streams';
+import { ProcedureErrorSchemaType, ReaderErrorSchema } from './errors';
 
 /**
  * Brands a type to prevent it from being directly constructed.
@@ -33,102 +34,6 @@ export type ValidProcType =
  * Represents the payload type for {@link Procedure}s.
  */
 export type PayloadType = TSchema;
-
-/**
- * {@link UNCAUGHT_ERROR_CODE} is the code that is used when an error is thrown
- * inside a procedure handler that's not required.
- */
-export const UNCAUGHT_ERROR_CODE = 'UNCAUGHT_ERROR' as const;
-/**
- * {@link UNEXPECTED_DISCONNECT_CODE} is the code used the stream's session
- * disconnect unexpetedly.
- */
-export const UNEXPECTED_DISCONNECT_CODE = 'UNEXPECTED_DISCONNECT' as const;
-/**
- * {@link INVALID_REQUEST_CODE} is the code used when a client's request is invalid.
- */
-export const INVALID_REQUEST_CODE = 'INVALID_REQUEST' as const;
-/**
- * {@link CANCEL_CODE} is the code used when either server or client cancels the stream.
- */
-export const CANCEL_CODE = 'CANCEL' as const;
-
-/**
- * {@link ReaderErrorSchema} is the schema for all the built-in river errors that
- * can be emitted to a reader (request reader on the server, and response reader
- * on the client).
- */
-export const ReaderErrorSchema = Type.Object({
-  code: Type.Union([
-    Type.Literal(UNCAUGHT_ERROR_CODE),
-    Type.Literal(UNEXPECTED_DISCONNECT_CODE),
-    Type.Literal(INVALID_REQUEST_CODE),
-    Type.Literal(CANCEL_CODE),
-  ]),
-  message: Type.String(),
-});
-
-/**
- * Represents an acceptable schema to pass to a procedure.
- * Just a type of a schema, not an actual schema.
- *
- */
-export type ProcedureErrorSchemaType =
-  | TNever
-  | BaseErrorSchemaType
-  | TUnion<Array<BaseErrorSchemaType>>;
-
-// arbitrarily nested unions
-// river doesn't accept this by default, use the `flattenErrorType` helper
-type NestableProcedureErrorSchemaType =
-  | BaseErrorSchemaType
-  | TUnion<NestableProcedureErrorSchemaTypeArray>;
-// use an interface to defer the type definition to be evaluated lazily
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-interface NestableProcedureErrorSchemaTypeArray
-  extends Array<NestableProcedureErrorSchemaType> {}
-
-function isUnion(schema: TSchema): schema is TUnion {
-  return schema[Kind] === 'Union';
-}
-
-type Flatten<T> = T extends BaseErrorSchemaType
-  ? T
-  : T extends TUnion<Array<infer U extends TSchema>>
-  ? Flatten<U>
-  : unknown;
-
-/**
- * In the case where API consumers for some god-forsaken reason want to use
- * arbitrarily nested unions, this helper flattens them to a single level
- *
- * @param errType - An arbitrarily union-nested error schema.
- * @returns The flattened error schema.
- */
-export function flattenErrorType<T extends NestableProcedureErrorSchemaType>(
-  errType: T,
-): Flatten<T>;
-export function flattenErrorType(
-  errType: NestableProcedureErrorSchemaType,
-): ProcedureErrorSchemaType {
-  if (!isUnion(errType)) {
-    return errType;
-  }
-
-  const flattenedTypes: Array<BaseErrorSchemaType> = [];
-  function flatten(type: NestableProcedureErrorSchemaType) {
-    if (isUnion(type)) {
-      for (const t of type.anyOf) {
-        flatten(t);
-      }
-    } else {
-      flattenedTypes.push(type);
-    }
-  }
-
-  flatten(errType);
-  return Type.Union(flattenedTypes);
-}
 
 /**
  * Procedure for a single message in both directions (1:1).

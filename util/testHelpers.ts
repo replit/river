@@ -1,13 +1,7 @@
 import NodeWs, { WebSocketServer } from 'ws';
 import http from 'node:http';
-import { Err, Ok, Result, BaseErrorSchemaType } from '../router/result';
-import {
-  ProcedureErrorSchemaType,
-  ReaderErrorSchema,
-  UNCAUGHT_ERROR_CODE,
-  PayloadType,
-  Procedure,
-} from '../router/procedures';
+import { Err, Ok, Result } from '../router/result';
+import { PayloadType, Procedure } from '../router/procedures';
 import { Static } from '@sinclair/typebox';
 import {
   OpaqueTransportMessage,
@@ -37,6 +31,12 @@ import {
   SessionStateGraph,
 } from '../transport/sessionStateMachine/transitions';
 import { ClientTransport, ServerTransport } from '../transport';
+import {
+  BaseErrorSchemaType,
+  ProcedureErrorSchemaType,
+  ReaderErrorSchema,
+  UNCAUGHT_ERROR_CODE,
+} from '../router/errors';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.

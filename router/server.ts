@@ -1,13 +1,14 @@
 import { Static, Type } from '@sinclair/typebox';
+import { PayloadType, AnyProcedure } from './procedures';
 import {
-  PayloadType,
   ReaderErrorSchema,
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
-  AnyProcedure,
   CANCEL_CODE,
   INVALID_REQUEST_CODE,
-} from './procedures';
+  BaseErrorSchemaType,
+  ErrResultSchema,
+} from './errors';
 import {
   AnyService,
   InstantiatedServiceSchemaMap,
@@ -32,14 +33,7 @@ import {
 } from './context';
 import { Logger } from '../logging/log';
 import { Value, ValueError } from '@sinclair/typebox/value';
-import {
-  Err,
-  Result,
-  Ok,
-  ErrResultSchema,
-  ErrResult,
-  BaseErrorSchemaType,
-} from './result';
+import { Err, Result, Ok, ErrResult } from './result';
 import { EventMap } from '../transport/events';
 import { coerceErrorString } from '../util/stringify';
 import { Span, SpanStatusCode } from '@opentelemetry/api';
@@ -386,13 +380,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       streamId: StreamId,
       payload: ErrResult<Static<typeof ReaderErrorSchema>>,
     ) => {
-      this.cancelStream(
-        from,
-        sessionScopedSend,
-        streamId,
-        payload,
-        protocolVersion,
-      );
+      this.cancelStream(from, sessionScopedSend, streamId, payload);
     };
 
     const onServerCancel = (e: Static<typeof ReaderErrorSchema>) => {
@@ -421,7 +409,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       const errPayload = {
         code: UNEXPECTED_DISCONNECT_CODE,
         message: 'client unexpectedly disconnected',
-      };
+      } as const;
 
       if (!reqReadable.isClosed()) {
         reqReadable._pushValue(Err(errPayload));
@@ -480,8 +468,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           payload: response,
         });
 
-        // TODO: should the procClosesWithResponse
-        // check also close the writable?
         if (procClosesWithResponse) {
           resWritable.close();
         }
@@ -703,13 +689,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       streamId: StreamId,
       payload: ErrResult<Static<typeof ReaderErrorSchema>>,
     ) => {
-      this.cancelStream(
-        initMessage.from,
-        sessionScopedSend,
-        streamId,
-        payload,
-        session.protocolVersion,
-      );
+      this.cancelStream(initMessage.from, sessionScopedSend, streamId, payload);
     };
 
     const sessionMetadata = this.transport.sessionHandshakeMetadata.get(
@@ -908,8 +888,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     sessionScopedSend: SessionBoundSendFn,
     streamId: StreamId,
     payload: ErrResult<Static<typeof ReaderErrorSchema>>,
-    // TODO remove once clients migrate to v2
-    protocolVersion: ProtocolVersion,
   ) {
     let cancelledStreamsInSession = this.serverCancelledStreams.get(to);
     if (!cancelledStreamsInSession) {
@@ -921,10 +899,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     }
 
     cancelledStreamsInSession.add(streamId);
-    const isOldProtocol = protocolVersion === 'v1.1';
-    const msg = isOldProtocol
-      ? closeStreamMessage(streamId)
-      : cancelMessage(streamId, payload);
+    const msg = cancelMessage(streamId, payload);
     sessionScopedSend(msg);
   }
 }

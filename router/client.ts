@@ -19,13 +19,7 @@ import {
   cancelMessage,
 } from '../transport/message';
 import { Static } from '@sinclair/typebox';
-import {
-  BaseErrorSchemaType,
-  Err,
-  Result,
-  AnyResultSchema,
-  ErrResultSchema,
-} from './result';
+import { Err, Result, AnyResultSchema } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/connection';
 import { Logger } from '../logging';
@@ -35,13 +29,14 @@ import { ClientTransport } from '../transport/client';
 import { generateId } from '../transport/id';
 import { Readable, ReadableImpl, Writable, WritableImpl } from './streams';
 import { Value } from '@sinclair/typebox/value';
+import { PayloadType, ValidProcType } from './procedures';
 import {
+  BaseErrorSchemaType,
+  ErrResultSchema,
   CANCEL_CODE,
   ReaderErrorSchema,
-  PayloadType,
   UNEXPECTED_DISCONNECT_CODE,
-  ValidProcType,
-} from './procedures';
+} from './errors';
 
 const ReaderErrResultSchema = ErrResultSchema(ReaderErrorSchema);
 

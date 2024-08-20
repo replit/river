@@ -181,6 +181,10 @@ export abstract class Transport<ConnType extends Connection> {
     const activeSession = this.sessions.get(session.to);
     if (activeSession) {
       const msg = `attempt to create session for ${session.to} but active session (${activeSession.id}) already exists`;
+      this.log?.error(msg, {
+        ...session.loggingMetadata,
+        tags: ['invariant-violation'],
+      });
       throw new Error(msg);
     }
 
@@ -200,11 +204,19 @@ export abstract class Transport<ConnType extends Connection> {
     const activeSession = this.sessions.get(session.to);
     if (!activeSession) {
       const msg = `attempt to transition session for ${session.to} but no active session exists`;
+      this.log?.error(msg, {
+        ...session.loggingMetadata,
+        tags: ['invariant-violation'],
+      });
       throw new Error(msg);
     }
 
     if (activeSession.id !== session.id) {
       const msg = `attempt to transition active session for ${session.to} but active session (${activeSession.id}) is different from handle (${session.id})`;
+      this.log?.error(msg, {
+        ...session.loggingMetadata,
+        tags: ['invariant-violation'],
+      });
       throw new Error(msg);
     }
 

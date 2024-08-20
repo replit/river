@@ -68,12 +68,14 @@ export const ControlMessageCloseSchema = Type.Object({
   type: Type.Literal('CLOSE'),
 });
 
-export type ProtocolVersion = 'v0' | 'v1' | 'v1.1' | 'v2.0';
+export type ProtocolVersion = 'v1.1' | 'v2.0';
 export const currentProtocolVersion = 'v2.0' satisfies ProtocolVersion;
-export const acceptedProtocolVersions: Array<ProtocolVersion> = [
-  'v1.1',
-  currentProtocolVersion,
-] as const;
+export const acceptedProtocolVersions = ['v1.1', currentProtocolVersion];
+export function isAcceptedProtocolVersion(
+  version: string,
+): version is ProtocolVersion {
+  return acceptedProtocolVersions.includes(version);
+}
 
 export const ControlMessageHandshakeRequestSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_REQ'),

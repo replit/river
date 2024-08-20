@@ -1,36 +1,7 @@
-import {
-  Static,
-  TLiteral,
-  TObject,
-  TSchema,
-  TString,
-  TUnion,
-  Type,
-} from '@sinclair/typebox';
+import { Static, Type } from '@sinclair/typebox';
 import { Client } from './client';
 import { Readable } from './streams';
-
-type TLiteralString = TLiteral<string>;
-
-export type BaseErrorSchemaType =
-  | TObject<{
-      code: TLiteralString | TUnion<Array<TLiteralString>>;
-      message: TLiteralString | TString;
-    }>
-  | TObject<{
-      code: TLiteralString | TUnion<Array<TLiteralString>>;
-      message: TLiteralString | TString;
-      extras: TSchema;
-    }>;
-
-/**
- * Takes in a specific error schema and returns a result schema the error
- */
-export const ErrResultSchema = <T extends BaseErrorSchemaType>(t: T) =>
-  Type.Object({
-    ok: Type.Literal(false),
-    payload: t,
-  });
+import { BaseErrorSchemaType } from './errors';
 
 /**
  * AnyResultSchema is a schema to validate any result.

@@ -10,7 +10,7 @@ import {
   TransportClientId,
   handshakeResponseMessage,
   currentProtocolVersion,
-  ProtocolVersion,
+  isAcceptedProtocolVersion,
 } from './message';
 import {
   ProvidedServerTransportOptions,
@@ -228,8 +228,8 @@ export abstract class ServerTransport<
     }
 
     // invariant: handshake request passes all the validation
-    const gotVersion = msg.payload.protocolVersion as ProtocolVersion;
-    if (!acceptedProtocolVersions.includes(gotVersion)) {
+    const gotVersion = msg.payload.protocolVersion;
+    if (!isAcceptedProtocolVersion(gotVersion)) {
       this.rejectHandshakeRequest(
         session,
         msg.from,

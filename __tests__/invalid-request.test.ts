@@ -16,7 +16,7 @@ import {
   waitFor,
 } from './fixtures/cleanup';
 import { EventMap } from '../transport';
-import { INVALID_REQUEST_CODE } from '../router/procedures';
+import { INVALID_REQUEST_CODE } from '../router/errors';
 import { ControlFlags } from '../transport/message';
 import { TestSetupHelpers } from './fixtures/transports';
 import { nanoid } from 'nanoid';

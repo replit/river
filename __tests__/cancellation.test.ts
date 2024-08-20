@@ -16,7 +16,7 @@ import {
   testFinishesCleanly,
   waitFor,
 } from './fixtures/cleanup';
-import { CANCEL_CODE, UNCAUGHT_ERROR_CODE } from '../router/procedures';
+import { CANCEL_CODE, UNCAUGHT_ERROR_CODE } from '../router/errors';
 import { TestSetupHelpers } from './fixtures/transports';
 
 function makeMockHandler<T extends ValidProcType>(

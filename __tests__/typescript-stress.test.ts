@@ -1,9 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import {
-  Procedure,
-  ProcedureErrorSchemaType,
-  flattenErrorType,
-} from '../router/procedures';
+import { Procedure } from '../router/procedures';
 import { ServiceSchema } from '../router/services';
 import { Type } from '@sinclair/typebox';
 import { createServer } from '../router/server';
@@ -23,6 +19,7 @@ import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,
 } from '../router/handshake';
+import { flattenErrorType, ProcedureErrorSchemaType } from '../router/errors';
 
 const requestData = Type.Union([
   Type.Object({ a: Type.Number() }),

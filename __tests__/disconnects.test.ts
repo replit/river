@@ -129,8 +129,8 @@ describe.each(testMatrix())(
         payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
       });
 
-      // further writes should error
-      expect(() => reqWritable.write({ msg: 'def', ignore: false })).toThrow();
+      // req writable should be closed
+      expect(reqWritable.isWritable()).toBe(false);
 
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
@@ -298,8 +298,8 @@ describe.each(testMatrix())(
         payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
       });
 
-      // further writes should error
-      expect(() => reqWritable.write({ n: 3 })).toThrow();
+      // req writable should be closed
+      expect(reqWritable.isWritable()).toBe(false);
 
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));

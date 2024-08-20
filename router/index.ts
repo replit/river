@@ -27,18 +27,19 @@ export type {
   UploadProcedure,
   SubscriptionProcedure,
   StreamProcedure,
-  ProcedureErrorSchemaType,
-  flattenErrorType,
 } from './procedures';
 export type { Writable, Readable } from './streams';
+export { Procedure } from './procedures';
 export {
-  Procedure,
+  ProcedureErrorSchemaType,
+  flattenErrorType,
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
   INVALID_REQUEST_CODE,
   CANCEL_CODE,
   ReaderErrorSchema,
-} from './procedures';
+  BaseErrorSchemaType,
+} from './errors';
 export { createClient } from './client';
 export type { Client } from './client';
 export { createServer } from './server';
@@ -56,7 +57,6 @@ export type {
   ResultUnwrapOk,
   ResultUnwrapErr,
   ResponseData,
-  BaseErrorSchemaType,
 } from './result';
 export {
   createClientHandshakeOptions,
