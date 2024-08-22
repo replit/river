@@ -73,7 +73,12 @@ export type ProcedureHandlerContext<State> = ServiceContext & {
   /**
    * This signal is a standard [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal)
    * triggered when the procedure invocation is done. This signal tracks the invocation/request finishing
-   * for _any_ reason including the procedure invocation.
+   * for _any_ reason, for example:
+   * - client explicit cancellation
+   * - procedure handler explicit cancellation via {@link cancel}
+   * - client session disconnect
+   * - server cancellation due to client invalid payload
+   * - invocation finishing cleanly (i.e. rpc handler return, or both sides closing streams)
    *
    * You can use this to pass it on to asynchronous operations (such as fetch).
    *
