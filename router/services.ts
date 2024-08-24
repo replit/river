@@ -1,4 +1,4 @@
-import { Type, TSchema, Static, Kind, TNever } from '@sinclair/typebox';
+import { Type, TSchema, Static, Kind } from '@sinclair/typebox';
 import {
   Branded,
   ProcedureMap,
