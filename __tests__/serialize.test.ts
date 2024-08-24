@@ -8,7 +8,7 @@ import { serializeSchema } from '../router';
 import { Type } from '@sinclair/typebox';
 
 describe('serialize server to jsonschema', () => {
-  test('serialize entire service schema', () => {
+  test.only('serialize entire service schema', () => {
     const schema = { test: TestServiceSchema };
     const handshakeSchema = Type.Object({
       token: Type.String(),

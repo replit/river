@@ -1,4 +1,4 @@
-import { Type, TSchema, Static } from '@sinclair/typebox';
+import { Type, TSchema, Static, Kind, TNever } from '@sinclair/typebox';
 import {
   Branded,
   ProcedureMap,
@@ -7,7 +7,11 @@ import {
   PayloadType,
 } from './procedures';
 import { ServiceContext } from './context';
-import { ProcedureErrorSchemaType, ReaderErrorSchema } from './errors';
+import {
+  flattenErrorType,
+  ProcedureErrorSchemaType,
+  ReaderErrorSchema,
+} from './errors';
 
 /**
  * An instantiated service, probably from a {@link ServiceSchema}.
@@ -431,15 +435,10 @@ export class ServiceSchema<
           {
             init: Type.Strict(procDef.requestInit),
             output: Type.Strict(procDef.responseData),
+            errors: getSerializedProcErrors(procDef),
             // Only add `description` field if the type declares it.
             ...('description' in procDef
               ? { description: procDef.description }
-              : {}),
-            // Only add the `errors` field if the type declares it.
-            ...('responseError' in procDef
-              ? {
-                  errors: Type.Strict(procDef.responseError),
-                }
               : {}),
             type: procDef.type,
             // Only add the `input` field if the type declares it.
@@ -476,15 +475,10 @@ export class ServiceSchema<
                   // this is the only change needed to make it compatible.
                   input: Type.Strict(procDef.requestInit),
                   output: Type.Strict(procDef.responseData),
+                  errors: getSerializedProcErrors(procDef),
                   // Only add `description` field if the type declares it.
                   ...('description' in procDef
                     ? { description: procDef.description }
-                    : {}),
-                  // Only add the `errors` field if the type declares it.
-                  ...('responseError' in procDef
-                    ? {
-                        errors: Type.Strict(procDef.responseError),
-                      }
                     : {}),
                   type: procDef.type,
                 },
@@ -498,15 +492,10 @@ export class ServiceSchema<
               {
                 init: Type.Strict(procDef.requestInit),
                 output: Type.Strict(procDef.responseData),
+                errors: getSerializedProcErrors(procDef),
                 // Only add `description` field if the type declares it.
                 ...('description' in procDef
                   ? { description: procDef.description }
-                  : {}),
-                // Only add the `errors` field if the type declares it.
-                ...('responseError' in procDef
-                  ? {
-                      errors: Type.Strict(procDef.responseError),
-                    }
                   : {}),
                 type: procDef.type,
                 input: Type.Strict(procDef.requestData),
@@ -530,6 +519,23 @@ export class ServiceSchema<
       procedures: this.procedures,
     });
   }
+}
+
+function getSerializedProcErrors(
+  procDef: AnyProcedure,
+): ProcedureErrorSchemaType {
+  if (
+    !('responseError' in procDef) ||
+    procDef.responseError[Kind] === 'Never'
+  ) {
+    return Type.Strict(ReaderErrorSchema);
+  }
+
+  const withProtocolErrors = flattenErrorType(
+    Type.Union([procDef.responseError, ReaderErrorSchema]),
+  );
+
+  return Type.Strict(withProtocolErrors);
 }
 
 /**
