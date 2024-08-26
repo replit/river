@@ -78,7 +78,7 @@ export type ProcedureHandlerContext<State> = ServiceContext & {
    * - procedure handler explicit cancellation via {@link cancel}
    * - client session disconnect
    * - server cancellation due to client invalid payload
-   * - invocation finishing cleanly (i.e. rpc handler return, or both sides closing streams)
+   * - invocation finishes cleanly, this depends on the type of the procedure (i.e. rpc handler return, or in a stream after the client-side has closed the request writable and the server-side has closed the response writable)
    *
    * You can use this to pass it on to asynchronous operations (such as fetch).
    *
