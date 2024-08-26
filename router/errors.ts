@@ -32,11 +32,11 @@ type TLiteralString = TLiteral<string>;
 
 export type BaseErrorSchemaType =
   | TObject<{
-      code: TLiteralString | TUnion<Array<TLiteralString>>;
+      code: TLiteralString;
       message: TLiteralString | TString;
     }>
   | TObject<{
-      code: TLiteralString | TUnion<Array<TLiteralString>>;
+      code: TLiteralString;
       message: TLiteralString | TString;
       extras: TSchema;
     }>;
@@ -44,7 +44,7 @@ export type BaseErrorSchemaType =
 /**
  * Takes in a specific error schema and returns a result schema the error
  */
-export const ErrResultSchema = <T extends BaseErrorSchemaType>(t: T) =>
+export const ErrResultSchema = <T extends ProcedureErrorSchemaType>(t: T) =>
   Type.Object({
     ok: Type.Literal(false),
     payload: t,
@@ -55,15 +55,24 @@ export const ErrResultSchema = <T extends BaseErrorSchemaType>(t: T) =>
  * can be emitted to a reader (request reader on the server, and response reader
  * on the client).
  */
-export const ReaderErrorSchema = Type.Object({
-  code: Type.Union([
-    Type.Literal(UNCAUGHT_ERROR_CODE),
-    Type.Literal(UNEXPECTED_DISCONNECT_CODE),
-    Type.Literal(INVALID_REQUEST_CODE),
-    Type.Literal(CANCEL_CODE),
-  ]),
-  message: Type.String(),
-});
+export const ReaderErrorSchema = Type.Union([
+  Type.Object({
+    code: Type.Literal(UNCAUGHT_ERROR_CODE),
+    message: Type.String(),
+  }),
+  Type.Object({
+    code: Type.Literal(UNEXPECTED_DISCONNECT_CODE),
+    message: Type.String(),
+  }),
+  Type.Object({
+    code: Type.Literal(INVALID_REQUEST_CODE),
+    message: Type.String(),
+  }),
+  Type.Object({
+    code: Type.Literal(CANCEL_CODE),
+    message: Type.String(),
+  }),
+]) satisfies ProcedureErrorSchemaType;
 
 /**
  * Represents an acceptable schema to pass to a procedure.
