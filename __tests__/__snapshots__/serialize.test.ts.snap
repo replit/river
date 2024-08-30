@@ -18,7 +18,72 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
       "procedures": {
         "add": {
           "errors": {
-            "not": {},
+            "anyOf": [
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+            ],
           },
           "init": {
             "properties": {
@@ -46,7 +111,72 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
         },
         "array": {
           "errors": {
-            "not": {},
+            "anyOf": [
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+            ],
           },
           "init": {
             "properties": {
@@ -69,7 +199,72 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
         },
         "arrayStream": {
           "errors": {
-            "not": {},
+            "anyOf": [
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+            ],
           },
           "init": {
             "properties": {},
@@ -96,7 +291,72 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
         },
         "echo": {
           "errors": {
-            "not": {},
+            "anyOf": [
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+            ],
           },
           "init": {
             "properties": {},
@@ -133,7 +393,72 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
         "echoUnion": {
           "description": "Echos back whatever we sent",
           "errors": {
-            "not": {},
+            "anyOf": [
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+            ],
           },
           "init": {
             "anyOf": [
@@ -199,7 +524,72 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
         },
         "echoWithPrefix": {
           "errors": {
-            "not": {},
+            "anyOf": [
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+            ],
           },
           "init": {
             "properties": {
@@ -242,7 +632,72 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
         },
         "unimplementedSubscription": {
           "errors": {
-            "not": {},
+            "anyOf": [
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+            ],
           },
           "init": {
             "properties": {},
@@ -256,7 +711,72 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
         },
         "unimplementedUpload": {
           "errors": {
-            "not": {},
+            "anyOf": [
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+            ],
           },
           "init": {
             "properties": {},
@@ -283,7 +803,72 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
   "procedures": {
     "add": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "input": {
         "properties": {
@@ -311,7 +896,72 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
     },
     "array": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "input": {
         "properties": {
@@ -334,7 +984,72 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
     },
     "arrayStream": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "init": {
         "properties": {},
@@ -361,7 +1076,72 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
     },
     "echo": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "init": {
         "properties": {},
@@ -398,7 +1178,72 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
     "echoUnion": {
       "description": "Echos back whatever we sent",
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "input": {
         "anyOf": [
@@ -464,7 +1309,72 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
     },
     "echoWithPrefix": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "init": {
         "properties": {
@@ -507,7 +1417,72 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
     },
     "unimplementedSubscription": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "input": {
         "properties": {},
@@ -521,7 +1496,72 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
     },
     "unimplementedUpload": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "init": {
         "properties": {},
@@ -546,7 +1586,72 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
   "procedures": {
     "add": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "init": {
         "properties": {
@@ -574,7 +1679,72 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
     },
     "array": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "init": {
         "properties": {
@@ -597,7 +1767,72 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
     },
     "arrayStream": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "init": {
         "properties": {},
@@ -624,7 +1859,72 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
     },
     "echo": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "init": {
         "properties": {},
@@ -661,7 +1961,72 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
     "echoUnion": {
       "description": "Echos back whatever we sent",
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "init": {
         "anyOf": [
@@ -727,7 +2092,72 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
     },
     "echoWithPrefix": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "init": {
         "properties": {
@@ -770,7 +2200,72 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
     },
     "unimplementedSubscription": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "init": {
         "properties": {},
@@ -784,7 +2279,72 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
     },
     "unimplementedUpload": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "init": {
         "properties": {},
@@ -809,7 +2369,72 @@ exports[`serialize service to jsonschema > serialize service with binary 1`] = `
   "procedures": {
     "getFile": {
       "errors": {
-        "not": {},
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        ],
       },
       "init": {
         "properties": {
@@ -889,6 +2514,70 @@ exports[`serialize service to jsonschema > serialize service with errors 1`] = `
             ],
             "type": "object",
           },
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
         ],
       },
       "init": {
@@ -921,20 +2610,88 @@ exports[`serialize service to jsonschema > serialize service with errors 1`] = `
     },
     "echo": {
       "errors": {
-        "properties": {
-          "code": {
-            "const": "STREAM_ERROR",
-            "type": "string",
+        "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "STREAM_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
           },
-          "message": {
-            "type": "string",
+          {
+            "properties": {
+              "code": {
+                "const": "UNCAUGHT_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
           },
-        },
-        "required": [
-          "code",
-          "message",
+          {
+            "properties": {
+              "code": {
+                "const": "UNEXPECTED_DISCONNECT",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "INVALID_REQUEST",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
         ],
-        "type": "object",
       },
       "init": {
         "properties": {},
