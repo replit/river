@@ -509,6 +509,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         `${serviceName}.${procedureName} handler threw an uncaught error`,
         {
           ...loggingMetadata,
+          transportMessage: {
+            procedureName,
+            serviceName,
+          },
           extras: {
             error: errorMsg,
           },
