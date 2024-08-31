@@ -505,6 +505,20 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       span.recordException(err instanceof Error ? err : new Error(errorMsg));
       span.setStatus({ code: SpanStatusCode.ERROR });
 
+      this.log?.error(
+        `${serviceName}.${procedureName} handler threw an uncaught error`,
+        {
+          ...loggingMetadata,
+          transportMessage: {
+            procedureName,
+            serviceName,
+          },
+          extras: {
+            error: errorMsg,
+          },
+        },
+      );
+
       onServerCancel({
         code: UNCAUGHT_ERROR_CODE,
         message: errorMsg,
@@ -518,10 +532,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     } else if (procedure.type === 'rpc' || procedure.type === 'subscription') {
       // Though things can work just fine if they eventually follow up with a stream
       // control message with a close bit set, it's an unusual client implementation!
-      this.log?.warn('sent an init without a stream close', {
-        ...loggingMetadata,
-        clientId: this.transport.clientId,
-      });
+      this.log?.warn('sent an init without a stream close', loggingMetadata);
     }
 
     const handlerContext: ProcedureHandlerContext<object> = {
