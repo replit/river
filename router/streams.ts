@@ -183,7 +183,7 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
    */
   private next: PromiseWithResolvers<void> | null = null;
 
-  public [Symbol.asyncIterator](): ReadableIterator<T, E> {
+  public [Symbol.asyncIterator]() {
     if (this.locked) {
       throw new TypeError('Readable is already locked');
     }
