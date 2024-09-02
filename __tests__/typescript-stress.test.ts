@@ -20,6 +20,7 @@ import {
   createServerHandshakeOptions,
 } from '../router/handshake';
 import { flattenErrorType, ProcedureErrorSchemaType } from '../router/errors';
+import { ReadableImpl } from '../router/streams';
 
 const requestData = Type.Union([
   Type.Object({ a: Type.Number() }),
@@ -605,5 +606,31 @@ describe('Procedure error schema', () => {
         ]),
       );
     });
+  });
+});
+
+describe('Readable types', () => {
+  // Skip, we're only testing types
+  test.skip('should maintain result types', async () => {
+    function acceptsErrors(_code: 'SOME_ERROR' | 'READABLE_BROKEN') {
+      // pass
+    }
+
+    function acceptsSuccess(_success: 'SUCCESS') {
+      // pass
+    }
+
+    const readable = new ReadableImpl<
+      'SUCCESS',
+      { code: 'SOME_ERROR'; message: string }
+    >();
+    for await (const value of readable) {
+      if (value.ok) {
+        acceptsSuccess(value.payload);
+        continue;
+      }
+
+      acceptsErrors(value.payload.code);
+    }
   });
 });

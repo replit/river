@@ -2,10 +2,10 @@ import { Static } from '@sinclair/typebox';
 import { Err, Result } from './result';
 import { BaseErrorSchemaType } from './errors';
 
-export const ReadableBrokenError: Static<BaseErrorSchemaType> = {
+export const ReadableBrokenError = {
   code: 'READABLE_BROKEN',
   message: 'Readable was broken before it is fully consumed',
-} as const;
+} as const satisfies Static<BaseErrorSchemaType>;
 
 /**
  * Similar to {@link Result} but with an extra error to handle cases where {@link Readable.break} is called
