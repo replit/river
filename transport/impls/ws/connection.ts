@@ -1,7 +1,7 @@
 import { Connection } from '../../connection';
 import { WsLike } from './wslike';
 
-interface ConnectionInfoExtras {
+interface ConnectionInfoExtras extends Record<string, unknown> {
   headers: Record<string, string>;
 }
 

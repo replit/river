@@ -22,7 +22,8 @@ export type Tags =
   | 'invariant-violation'
   | 'state-transition'
   | 'invalid-request'
-  | 'unhealthy-session';
+  | 'unhealthy-session'
+  | 'uncaught-handler-error';
 
 const cleanedLogFn = (log: LogFn) => {
   return (msg: string, metadata?: MessageMetadata) => {
@@ -53,7 +54,7 @@ export type MessageMetadata = Partial<{
     traceId: string;
     spanId: string;
   };
-  extras: unknown;
+  extras?: Record<string, unknown>;
 }>;
 
 export class BaseLogger implements Logger {
