@@ -1,8 +1,8 @@
 import { Connection } from '../../connection';
 import { WsLike } from './wslike';
 
-interface ConnectionInfoExtras {
-  headers: Record<string, string>;
+interface ConnectionInfoExtras extends Record<string, unknown> {
+  headers: Record<string, unknown>;
 }
 
 const WS_HEALTHY_CLOSE_CODE = 1000;
