@@ -521,7 +521,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           },
           extras: {
             error: errorMsg,
+            originalException: err,
           },
+          tags: ['uncaught-handler-error'],
         },
       );
 
