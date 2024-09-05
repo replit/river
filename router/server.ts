@@ -234,7 +234,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     this.transport.addEventListener('transportStatus', handleTransportStatus);
   }
 
-  private createNewProcStream(props: StreamInitProps): ProcStream {
+  private createNewProcStream(props: StreamInitProps) {
     const {
       streamId,
       initialSession,
@@ -653,9 +653,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         break;
     }
 
-    this.streams.set(streamId, procStream);
-
-    return procStream;
+    if (!finishedController.signal.aborted) {
+      this.streams.set(streamId, procStream);
+    }
   }
 
   private getContext(service: AnyService, serviceName: string) {
