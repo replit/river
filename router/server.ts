@@ -567,7 +567,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               }
 
               resWritable.write(responsePayload);
-              resWritable.close();
             } catch (err) {
               onHandlerError(err, span);
             } finally {
@@ -591,8 +590,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
                 reqReadable,
                 resWritable,
               });
-
-              resWritable.close();
             } catch (err) {
               onHandlerError(err, span);
             } finally {
@@ -616,8 +613,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
                 reqInit: initPayload,
                 resWritable: resWritable,
               });
-
-              resWritable.close();
             } catch (err) {
               onHandlerError(err, span);
             } finally {
@@ -647,7 +642,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
               }
 
               resWritable.write(responsePayload);
-              resWritable.close();
             } catch (err) {
               onHandlerError(err, span);
             } finally {
