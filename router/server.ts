@@ -195,11 +195,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       // if its not a cancelled stream, validate and create a new stream
-      const newStream = this.createNewProcStream({
+      this.createNewProcStream({
         ...newStreamProps,
         ...message,
       });
-      this.streams.set(streamId, newStream);
     };
 
     const handleSessionStatus = (evt: EventMap['sessionStatus']) => {
@@ -235,7 +234,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     this.transport.addEventListener('transportStatus', handleTransportStatus);
   }
 
-  private createNewProcStream(props: StreamInitProps): ProcStream {
+  private createNewProcStream(props: StreamInitProps) {
     const {
       streamId,
       initialSession,
@@ -369,6 +368,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       });
     };
 
+    const finishedController = new AbortController();
     const procStream: ProcStream = {
       from: from,
       streamId,
@@ -422,7 +422,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       cancelStream(streamId, result);
     };
 
-    const finishedController = new AbortController();
     const cleanup = () => {
       finishedController.abort();
       this.streams.delete(streamId);
@@ -531,10 +530,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     // only consists of an init message and we shouldn't expect follow up data
     if (procClosesWithInit) {
       closeReadable();
-    } else if (procedure.type === 'rpc' || procedure.type === 'subscription') {
-      // Though things can work just fine if they eventually follow up with a stream
-      // control message with a close bit set, it's an unusual client implementation!
-      this.log?.warn('sent an init without a stream close', loggingMetadata);
     }
 
     const handlerContext: ProcedureHandlerContext<object> = {
@@ -658,7 +653,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         break;
     }
 
-    return procStream;
+    if (!finishedController.signal.aborted) {
+      this.streams.set(streamId, procStream);
+    }
   }
 
   private getContext(service: AnyService, serviceName: string) {

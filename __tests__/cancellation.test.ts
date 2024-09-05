@@ -39,7 +39,222 @@ function makeMockHandler<T extends ValidProcType>(
   >(impl);
 }
 
-describe.each(testMatrix(['ws', 'naive']))(
+describe.each(testMatrix())(
+  'clean handler cancellation ($transport.name transport, $codec.name codec)',
+
+  async ({ transport, codec }) => {
+    const opts = { codec: codec.codec };
+
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
+    let getClientTransport: TestSetupHelpers['getClientTransport'];
+    let getServerTransport: TestSetupHelpers['getServerTransport'];
+    beforeEach(async () => {
+      const setup = await transport.setup({ client: opts, server: opts });
+      getClientTransport = setup.getClientTransport;
+      getServerTransport = setup.getServerTransport;
+
+      return async () => {
+        await postTestCleanup();
+        await setup.cleanup();
+      };
+    });
+
+    describe('e2e', () => {
+      test('rpc', async () => {
+        const clientTransport = getClientTransport('client');
+        const serverTransport = getServerTransport();
+
+        const signalReceiver = vi.fn<(sig: AbortSignal) => void>();
+        const services = {
+          service: ServiceSchema.define({
+            rpc: Procedure.rpc({
+              requestInit: Type.Object({}),
+              responseData: Type.Object({}),
+              handler: async ({ ctx }) => {
+                signalReceiver(ctx.signal);
+
+                return Ok({});
+              },
+            }),
+          }),
+        };
+
+        const server = createServer(serverTransport, services);
+        const client = createClient<typeof services>(
+          clientTransport,
+          serverTransport.clientId,
+        );
+
+        await client.service.rpc.rpc({});
+
+        await waitFor(() => {
+          expect(signalReceiver).toHaveBeenCalledTimes(1);
+        });
+
+        const [sig] = signalReceiver.mock.calls[0];
+        expect(sig.aborted).toEqual(true);
+
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+
+      test('stream', async () => {
+        const clientTransport = getClientTransport('client');
+        const serverTransport = getServerTransport();
+        addPostTestCleanup(async () => {
+          await cleanupTransports([clientTransport, serverTransport]);
+        });
+
+        const signalReceiver = vi.fn<(sig: AbortSignal) => void>();
+        const services = {
+          service: ServiceSchema.define({
+            stream: Procedure.stream({
+              requestInit: Type.Object({}),
+              requestData: Type.Object({}),
+              responseData: Type.Object({}),
+              handler: async ({ ctx, resWritable }) => {
+                signalReceiver(ctx.signal);
+
+                resWritable.write(Ok({}));
+                resWritable.close();
+
+                return;
+              },
+            }),
+          }),
+        };
+
+        const server = createServer(serverTransport, services);
+        const client = createClient<typeof services>(
+          clientTransport,
+          serverTransport.clientId,
+        );
+
+        const { reqWritable, resReadable } = client.service.stream.stream({});
+
+        await waitFor(() => {
+          expect(signalReceiver).toHaveBeenCalledTimes(1);
+        });
+
+        const [sig] = signalReceiver.mock.calls[0];
+        expect(sig.aborted).toEqual(false);
+
+        reqWritable.close();
+        await waitFor(() => expect(sig.aborted).toEqual(true));
+
+        // collect should resolve as the stream has been properly ended
+        await expect(resReadable.collect()).resolves.toEqual([Ok({})]);
+
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+
+      test('upload', async () => {
+        const clientTransport = getClientTransport('client');
+        const serverTransport = getServerTransport();
+        addPostTestCleanup(async () => {
+          await cleanupTransports([clientTransport, serverTransport]);
+        });
+
+        const signalReceiver = vi.fn<(sig: AbortSignal) => void>();
+        const services = {
+          service: ServiceSchema.define({
+            upload: Procedure.upload({
+              requestInit: Type.Object({}),
+              requestData: Type.Object({}),
+              responseData: Type.Object({}),
+              handler: async ({ ctx }) => {
+                signalReceiver(ctx.signal);
+
+                return Ok({});
+              },
+            }),
+          }),
+        };
+
+        const server = createServer(serverTransport, services);
+        const client = createClient<typeof services>(
+          clientTransport,
+          serverTransport.clientId,
+        );
+
+        const { reqWritable, finalize } = client.service.upload.upload({});
+
+        await waitFor(() => {
+          expect(signalReceiver).toHaveBeenCalledTimes(1);
+        });
+
+        const [sig] = signalReceiver.mock.calls[0];
+        expect(sig.aborted).toEqual(false);
+
+        reqWritable.close();
+        await waitFor(() => expect(sig.aborted).toEqual(true));
+
+        expect(await finalize()).toEqual(Ok({}));
+
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+
+      test('subscribe', async () => {
+        const clientTransport = getClientTransport('client');
+        const serverTransport = getServerTransport();
+        addPostTestCleanup(async () => {
+          await cleanupTransports([clientTransport, serverTransport]);
+        });
+
+        const signalReceiver = vi.fn<(sig: AbortSignal) => void>();
+        const services = {
+          service: ServiceSchema.define({
+            subscribe: Procedure.subscription({
+              requestInit: Type.Object({}),
+              responseData: Type.Object({}),
+              handler: async ({ ctx, resWritable }) => {
+                resWritable.close();
+                signalReceiver(ctx.signal);
+
+                return;
+              },
+            }),
+          }),
+        };
+
+        const server = createServer(serverTransport, services);
+        const client = createClient<typeof services>(
+          clientTransport,
+          serverTransport.clientId,
+        );
+
+        const { resReadable } = client.service.subscribe.subscribe({});
+
+        await waitFor(() => {
+          expect(signalReceiver).toHaveBeenCalledTimes(1);
+        });
+
+        const [sig] = signalReceiver.mock.calls[0];
+        expect(sig.aborted).toEqual(true);
+        await expect(resReadable.collect()).resolves.toEqual([]);
+
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+    });
+  },
+);
+
+describe.each(testMatrix())(
   'client initiated cancellation ($transport.name transport, $codec.name codec)',
   async ({ transport, codec }) => {
     const opts = { codec: codec.codec };
