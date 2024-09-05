@@ -104,7 +104,6 @@ interface ProcStream {
   serviceName: string;
   sessionMetadata: ParsedMetadata;
   procedure: AnyProcedure;
-  endedSignal: AbortSignal;
   handleMsg: (msg: OpaqueTransportMessage) => void;
   handleSessionDisconnect: () => void;
 }
@@ -196,15 +195,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       // if its not a cancelled stream, validate and create a new stream
-      const newStream = this.createNewProcStream({
+      this.createNewProcStream({
         ...newStreamProps,
         ...message,
       });
-
-      if (!newStream.endedSignal.aborted) {
-        // if the stream was immediately aborted, don't bother setting it up
-        this.streams.set(streamId, newStream);
-      }
     };
 
     const handleSessionStatus = (evt: EventMap['sessionStatus']) => {
@@ -383,7 +377,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       sessionMetadata,
       procedure,
       handleMsg: onMessage,
-      endedSignal: finishedController.signal,
       handleSessionDisconnect: () => {
         cleanClose = false;
         const errPayload = {
@@ -665,6 +658,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
         break;
     }
+
+    this.streams.set(streamId, procStream);
 
     return procStream;
   }
