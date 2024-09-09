@@ -1,12 +1,5 @@
-import {
-  asClientRpc,
-  asClientStream,
-  asClientSubscription,
-  asClientUpload,
-  isReadableDone,
-  readNextResult,
-} from '../util/testHelpers';
-import { describe, expect, test } from 'vitest';
+import { isReadableDone, readNextResult } from '../util/testHelpers';
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import {
   DIV_BY_ZERO,
   FallibleServiceSchema,
@@ -15,31 +8,44 @@ import {
   SubscribableServiceSchema,
   UploadableServiceSchema,
 } from './fixtures/services';
-import { UNCAUGHT_ERROR_CODE } from '../router';
-import { Observable } from './fixtures/observable';
+import { createClient, createServer, UNCAUGHT_ERROR_CODE } from '../router';
+import { createMockTransportNetwork } from '../util/mockTransport';
 
 describe('server-side test', () => {
-  const service = TestServiceSchema.instantiate({});
+  let mockTransportNetwork: ReturnType<typeof createMockTransportNetwork>;
+
+  beforeEach(async () => {
+    mockTransportNetwork = createMockTransportNetwork();
+  });
+
+  afterEach(async () => {
+    await mockTransportNetwork.cleanup();
+  });
 
   test('rpc basic', async () => {
-    const add = asClientRpc({ count: 0 }, service.procedures.add);
-    const result = await add({ n: 3 });
+    const services = { test: TestServiceSchema };
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
+    );
+
+    const result = await client.test.add.rpc({ n: 3 });
     expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
   });
 
-  test('rpc initial state', async () => {
-    const add = asClientRpc({ count: 5 }, service.procedures.add);
-    const result = await add({ n: 6 });
-    expect(result).toStrictEqual({ ok: true, payload: { result: 11 } });
-  });
-
   test('fallible rpc', async () => {
-    const service = FallibleServiceSchema.instantiate({});
-    const divide = asClientRpc({}, service.procedures.divide);
-    const result = await divide({ a: 10, b: 2 });
+    const services = { test: FallibleServiceSchema };
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
+    );
+
+    const result = await client.test.divide.rpc({ a: 10, b: 2 });
     expect(result).toStrictEqual({ ok: true, payload: { result: 5 } });
 
-    const result2 = await divide({ a: 10, b: 0 });
+    const result2 = await client.test.divide.rpc({ a: 10, b: 0 });
     expect(result2).toStrictEqual({
       ok: false,
       payload: {
@@ -51,10 +57,14 @@ describe('server-side test', () => {
   });
 
   test('stream basic', async () => {
-    const { reqWritable, resReadable } = asClientStream(
-      { count: 0 },
-      service.procedures.echo,
+    const services = { test: TestServiceSchema };
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
     );
+
+    const { reqWritable, resReadable } = client.test.echo.stream({});
 
     reqWritable.write({ msg: 'abc', ignore: false });
     reqWritable.write({ msg: 'def', ignore: true });
@@ -71,21 +81,30 @@ describe('server-side test', () => {
   });
 
   test('stream empty', async () => {
-    const { reqWritable, resReadable } = asClientStream(
-      { count: 0 },
-      service.procedures.echo,
+    const services = { test: TestServiceSchema };
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
     );
+
+    const { reqWritable, resReadable } = client.test.echo.stream({});
     reqWritable.close();
 
     expect(await isReadableDone(resReadable)).toEqual(true);
   });
 
   test('stream with initialization', async () => {
-    const { reqWritable, resReadable } = asClientStream(
-      { count: 0 },
-      service.procedures.echoWithPrefix,
-      { prefix: 'test' },
+    const services = { test: TestServiceSchema };
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
     );
+
+    const { reqWritable, resReadable } = client.test.echoWithPrefix.stream({
+      prefix: 'test',
+    });
 
     reqWritable.write({ msg: 'abc', ignore: false });
     reqWritable.write({ msg: 'def', ignore: true });
@@ -108,12 +127,14 @@ describe('server-side test', () => {
   });
 
   test('fallible stream', async () => {
-    const service = FallibleServiceSchema.instantiate({});
-    const { reqWritable, resReadable } = asClientStream(
-      {},
-      service.procedures.echo,
+    const services = { test: FallibleServiceSchema };
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
     );
 
+    const { reqWritable, resReadable } = client.test.echo.stream({});
     reqWritable.write({ msg: 'abc', throwResult: false, throwError: false });
 
     const result1 = await readNextResult(resReadable);
@@ -143,17 +164,19 @@ describe('server-side test', () => {
   });
 
   test('subscriptions', async () => {
-    const service = SubscribableServiceSchema.instantiate({});
-    const state = { count: new Observable(0) };
-    const add = asClientRpc(state, service.procedures.add);
-    const subscribe = asClientSubscription(state, service.procedures.value);
+    const services = { test: SubscribableServiceSchema };
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
+    );
 
-    const { resReadable } = subscribe({});
+    const { resReadable } = client.test.value.subscribe({});
 
     const streamResult1 = await readNextResult(resReadable);
     expect(streamResult1).toStrictEqual({ ok: true, payload: { result: 0 } });
 
-    const result = await add({ n: 3 });
+    const result = await client.test.add.rpc({ n: 3 });
     expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
 
     const streamResult2 = await readNextResult(resReadable);
@@ -161,11 +184,14 @@ describe('server-side test', () => {
   });
 
   test('uploads', async () => {
-    const service = UploadableServiceSchema.instantiate({});
-    const { reqWritable, finalize } = asClientUpload(
-      {},
-      service.procedures.addMultiple,
+    const services = { test: UploadableServiceSchema };
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
     );
+
+    const { reqWritable, finalize } = client.test.addMultiple.upload({});
 
     reqWritable.write({ n: 1 });
     reqWritable.write({ n: 2 });
@@ -177,11 +203,14 @@ describe('server-side test', () => {
   });
 
   test('uploads empty', async () => {
-    const service = UploadableServiceSchema.instantiate({});
-    const { reqWritable, finalize } = asClientUpload(
-      {},
-      service.procedures.addMultiple,
+    const services = { test: UploadableServiceSchema };
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
     );
+
+    const { reqWritable, finalize } = client.test.addMultiple.upload({});
     reqWritable.close();
     expect(await finalize()).toStrictEqual({
       ok: true,
@@ -190,12 +219,16 @@ describe('server-side test', () => {
   });
 
   test('uploads with initialization', async () => {
-    const service = UploadableServiceSchema.instantiate({});
-    const { reqWritable, finalize } = asClientUpload(
-      {},
-      service.procedures.addMultipleWithPrefix,
-      { prefix: 'test' },
+    const services = { test: UploadableServiceSchema };
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
     );
+
+    const { reqWritable, finalize } = client.test.addMultipleWithPrefix.upload({
+      prefix: 'test',
+    });
 
     reqWritable.write({ n: 1 });
     reqWritable.write({ n: 2 });

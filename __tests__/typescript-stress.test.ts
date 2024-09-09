@@ -3,7 +3,6 @@ import { Procedure } from '../router/procedures';
 import { ServiceSchema } from '../router/services';
 import { Type } from '@sinclair/typebox';
 import { createServer } from '../router/server';
-import { Connection, ClientTransport, ServerTransport } from '../transport';
 import { createClient } from '../router/client';
 import {
   Err,
@@ -21,6 +20,7 @@ import {
 } from '../router/handshake';
 import { flattenErrorType, ProcedureErrorSchemaType } from '../router/errors';
 import { ReadableImpl } from '../router/streams';
+import { createMockTransportNetwork } from '../util/mockTransport';
 
 const requestData = Type.Union([
   Type.Object({ a: Type.Number() }),
@@ -123,17 +123,6 @@ const StupidlyLargeServiceSchema = ServiceSchema.define({
   f59: fnBody,
 });
 
-// mock transport
-export class MockClientTransport extends ClientTransport<Connection> {
-  protected async createNewOutgoingConnection(
-    _to: string,
-  ): Promise<Connection> {
-    throw new Error('Method not implemented.');
-  }
-}
-
-export class MockServerTransport extends ServerTransport<Connection> {}
-
 describe("ensure typescript doesn't give up trying to infer the types for large services", () => {
   test('service with many procedures hits typescript limit', () => {
     expect(StupidlyLargeServiceSchema.serialize()).toBeTruthy();
@@ -195,10 +184,15 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
       z1: StupidlyLargeServiceSchema,
       test: TestServiceSchema,
     };
-    const server = createServer(new MockServerTransport('SERVER'), services);
+
+    const mockTransportNetwork = createMockTransportNetwork();
+    const server = createServer(
+      mockTransportNetwork.getServerTransport(),
+      services,
+    );
 
     const client = createClient<typeof services>(
-      new MockClientTransport('client'),
+      mockTransportNetwork.getClientTransport('client'),
       'SERVER',
       { eagerlyConnect: false },
     );
@@ -248,9 +242,11 @@ const services = {
 };
 
 describe('ResponseData<> type', () => {
-  createServer(new MockServerTransport('SERVER'), services);
+  const mockTransportNetwork = createMockTransportNetwork();
+
+  createServer(mockTransportNetwork.getServerTransport(), services);
   const client = createClient<typeof services>(
-    new MockClientTransport('client'),
+    mockTransportNetwork.getClientTransport('client'),
     'SERVER',
     { eagerlyConnect: false },
   );
@@ -349,14 +345,19 @@ describe('ResultUwrap types', () => {
 describe('Handshake', () => {
   test('custom handhshake types should work', () => {
     const schema = Type.Object({ token: Type.String() });
-    createClient<typeof services>(new MockClientTransport('client'), 'SERVER', {
-      eagerlyConnect: false,
-      handshakeOptions: createClientHandshakeOptions(schema, () => ({
-        token: '123',
-      })),
-    });
+    const mockTransportNetwork = createMockTransportNetwork();
+    createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
+      {
+        eagerlyConnect: false,
+        handshakeOptions: createClientHandshakeOptions(schema, () => ({
+          token: '123',
+        })),
+      },
+    );
 
-    createServer(new MockServerTransport('SERVER'), services, {
+    createServer(mockTransportNetwork.getServerTransport(), services, {
       handshakeOptions: createServerHandshakeOptions(
         schema,
         (metadata, _prev) => {

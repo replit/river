@@ -21,8 +21,9 @@ import {
   ClientHandshakeOptions,
   ServerHandshakeOptions,
 } from '../../router/handshake';
+import { createMockTransportNetwork } from '../../util/mockTransport';
 
-export type ValidTransports = 'ws';
+export type ValidTransports = 'ws' | 'mock';
 
 export interface TestTransportOptions {
   client?: ClientTransportOptions;
@@ -135,6 +136,14 @@ export const transports: Array<TransportMatrixEntry> = [
           server.close();
         },
       };
+    },
+  },
+  {
+    name: 'mock',
+    setup: async (opts) => {
+      const network = createMockTransportNetwork(opts);
+
+      return network;
     },
   },
 ];

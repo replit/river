@@ -26,7 +26,7 @@ export class Observable<T> {
   set(tx: (preValue: T) => T) {
     const newValue = tx(this.value);
     this.value = newValue;
-    this.listeners.forEach((listener) => listener(newValue));
+    [...this.listeners].forEach((listener) => listener(newValue));
   }
 
   /**
