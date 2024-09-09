@@ -1,16 +1,16 @@
-import { TransportClientId } from '../transport';
-import { ClientTransport } from '../transport/client';
-import { Connection } from '../transport/connection';
-import { ServerTransport } from '../transport/server';
+import { TransportClientId } from '../../transport';
+import { ClientTransport } from '../../transport/client';
+import { Connection } from '../../transport/connection';
+import { ServerTransport } from '../../transport/server';
 import {
   ClientHandshakeOptions,
   ServerHandshakeOptions,
-} from '../router/handshake';
-import { Observable } from './observable';
-import { ProvidedServerTransportOptions } from '../transport/options';
-import { TestTransportOptions } from '../__tests__/fixtures/transports';
+} from '../../router/handshake';
+import { Observable } from '../observable';
+import { ProvidedServerTransportOptions } from '../../transport/options';
+import { TestTransportOptions } from './transports';
 import { Duplex } from 'node:stream';
-import { duplexPair } from './duplexPair';
+import { duplexPair } from '../duplexPair';
 
 export class InMemoryConnection extends Connection {
   conn: Duplex;
@@ -80,9 +80,7 @@ export function createMockTransportNetwork(opts?: TestTransportOptions): {
   class MockClientTransport extends ClientTransport<InMemoryConnection> {
     async createNewOutgoingConnection(): Promise<InMemoryConnection> {
       const [clientToServer, serverToClient] = duplexPair();
-
-      // await with some jitter to simulate network latency
-      await new Promise((resolve) => setTimeout(resolve, Math.random() * 10));
+      await new Promise((resolve) => setImmediate(resolve));
 
       connections.set((prev) => ({
         ...prev,

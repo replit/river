@@ -21,7 +21,7 @@ import {
   ClientHandshakeOptions,
   ServerHandshakeOptions,
 } from '../../router/handshake';
-import { createMockTransportNetwork } from '../../util/mockTransport';
+import { createMockTransportNetwork } from './mockTransport';
 
 export type ValidTransports = 'ws' | 'mock';
 

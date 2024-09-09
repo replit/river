@@ -20,7 +20,7 @@ import {
 } from '../router/handshake';
 import { flattenErrorType, ProcedureErrorSchemaType } from '../router/errors';
 import { ReadableImpl } from '../router/streams';
-import { createMockTransportNetwork } from '../util/mockTransport';
+import { createMockTransportNetwork } from './fixtures/mockTransport';
 
 const requestData = Type.Union([
   Type.Object({ a: Type.Number() }),

@@ -19,7 +19,7 @@ const dummyPayloadSmall = () => ({
 // give time for v8 to warm up
 const BENCH_DURATION = 10_000;
 describe('bandwidth', async () => {
-  for (const { name, setup } of transports) {
+  for (const { name, setup } of transports.filter((t) => t.name !== 'mock')) {
     const { getClientTransport, getServerTransport, cleanup } = await setup();
     afterAll(cleanup);
 
@@ -57,11 +57,12 @@ describe('bandwidth', async () => {
     );
 
     const { reqWritable, resReadable } = client.test.echo.stream({});
+    const resIter = resReadable[Symbol.asyncIterator]();
     bench(
       `${name} -- stream`,
       async () => {
         reqWritable.write({ msg: nanoid(), ignore: false });
-        const result = await resReadable[Symbol.asyncIterator]().next();
+        const result = await resIter.next();
         assert(result.value?.ok);
       },
       { time: BENCH_DURATION },

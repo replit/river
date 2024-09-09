@@ -27,7 +27,7 @@ import { ServerTransport } from '../transport/server';
 export {
   createMockTransportNetwork,
   InMemoryConnection,
-} from './mockTransport';
+} from '../__tests__/fixtures/mockTransport';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
