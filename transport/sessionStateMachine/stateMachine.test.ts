@@ -3,7 +3,7 @@ import {
   payloadToTransportMessage,
   testingSessionOptions,
 } from '../../testUtil';
-import { waitFor } from '../../__tests__/fixtures/cleanup';
+import { waitFor } from '../../testUtil/fixtures/cleanup';
 import {
   ControlFlags,
   ControlMessageAckSchema,

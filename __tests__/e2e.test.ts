@@ -17,15 +17,15 @@ import {
   UploadableServiceSchema,
   OrderingServiceSchema,
   NonObjectSchemas,
-} from './fixtures/services';
+} from '../testUtil/fixtures/services';
 import {
   advanceFakeTimersBySessionGrace,
   cleanupTransports,
   createPostTestCleanups,
   testFinishesCleanly,
   waitFor,
-} from './fixtures/cleanup';
-import { testMatrix } from './fixtures/matrix';
+} from '../testUtil/fixtures/cleanup';
+import { testMatrix } from '../testUtil/fixtures/matrix';
 import { Type } from '@sinclair/typebox';
 import {
   Procedure,
@@ -38,7 +38,7 @@ import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,
 } from '../router/handshake';
-import { TestSetupHelpers } from './fixtures/transports';
+import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 
 describe.each(testMatrix())(
   'client <-> server integration test ($transport.name transport, $codec.name codec)',
@@ -869,6 +869,7 @@ describe.each(testMatrix())(
         createClientHandshakeOptions(requestSchema, () => ({ data: 'foobar' })),
       );
       const serverTransport = getServerTransport(
+        'SERVER',
         createServerHandshakeOptions(requestSchema, (metadata) => {
           return {
             data: metadata.data,

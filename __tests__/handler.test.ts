@@ -7,9 +7,9 @@ import {
   TestServiceSchema,
   SubscribableServiceSchema,
   UploadableServiceSchema,
-} from './fixtures/services';
+} from '../testUtil/fixtures/services';
 import { createClient, createServer, UNCAUGHT_ERROR_CODE } from '../router';
-import { createMockTransportNetwork } from './fixtures/mockTransport';
+import { createMockTransportNetwork } from '../testUtil/fixtures/mockTransport';
 
 describe('server-side test', () => {
   let mockTransportNetwork: ReturnType<typeof createMockTransportNetwork>;

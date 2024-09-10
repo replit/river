@@ -9,16 +9,16 @@ import {
   createClient,
   createServer,
 } from '../router';
-import { testMatrix } from './fixtures/matrix';
+import { testMatrix } from '../testUtil/fixtures/matrix';
 import {
   cleanupTransports,
   createPostTestCleanups,
   waitFor,
-} from './fixtures/cleanup';
+} from '../testUtil/fixtures/cleanup';
 import { EventMap } from '../transport';
 import { INVALID_REQUEST_CODE } from '../router/errors';
 import { ControlFlags } from '../transport/message';
-import { TestSetupHelpers } from './fixtures/transports';
+import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 import { nanoid } from 'nanoid';
 import { getClientSendFn } from '../testUtil';
 

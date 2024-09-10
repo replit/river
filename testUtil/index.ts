@@ -8,7 +8,6 @@ import {
 } from '../transport/message';
 import { Transport } from '../transport/transport';
 import { Readable, ReadableResult, ReadableIterator } from '../router/streams';
-import { ServiceContext, ProcedureHandlerContext } from '../router/context';
 import { WsLike } from '../transport/impls/ws/wslike';
 import {
   defaultClientTransportOptions,
@@ -16,10 +15,7 @@ import {
 } from '../transport/options';
 import { Connection } from '../transport/connection';
 import { SessionState } from '../transport/sessionStateMachine/common';
-import {
-  Session,
-  SessionStateGraph,
-} from '../transport/sessionStateMachine/transitions';
+import { SessionStateGraph } from '../transport/sessionStateMachine/transitions';
 import { BaseErrorSchemaType } from '../router/errors';
 import { ClientTransport } from '../transport/client';
 import { ServerTransport } from '../transport/server';
@@ -27,7 +23,7 @@ import { ServerTransport } from '../transport/server';
 export {
   createMockTransportNetwork,
   InMemoryConnection,
-} from '../__tests__/fixtures/mockTransport';
+} from './fixtures/mockTransport';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
@@ -220,23 +216,6 @@ export function getServerSendFn(
     clientTransport.clientId,
     session.id,
   );
-}
-
-export function dummyCtx<State>(
-  state: State,
-  session: Session<Connection>,
-  extendedContext?: Omit<ServiceContext, 'state'>,
-): ProcedureHandlerContext<State> {
-  return {
-    ...extendedContext,
-    state,
-    sessionId: session.id,
-    from: session.from,
-    metadata: {},
-    // TODO might wanna hook these up!
-    cancel: () => undefined,
-    signal: new AbortController().signal,
-  };
 }
 
 export function getTransportConnections<ConnType extends Connection>(

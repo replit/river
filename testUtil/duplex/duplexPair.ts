@@ -1,5 +1,5 @@
 import { Duplex } from 'node:stream';
-import { assert } from 'vitest';
+import assert from 'assert';
 
 const kCallback = Symbol('Callback');
 const kInitOtherSide = Symbol('InitOtherSide');

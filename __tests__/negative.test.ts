@@ -4,7 +4,7 @@ import {
   cleanupTransports,
   testFinishesCleanly,
   waitFor,
-} from './fixtures/cleanup';
+} from '../testUtil/fixtures/cleanup';
 import {
   createLocalWebSocketClient,
   createWebSocketServer,
@@ -23,7 +23,7 @@ import { Static } from '@sinclair/typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
 import NodeWs from 'ws';
-import { createPostTestCleanups } from './fixtures/cleanup';
+import { createPostTestCleanups } from '../testUtil/fixtures/cleanup';
 import { generateId } from '../transport/id';
 
 describe('should handle incompatabilities', async () => {

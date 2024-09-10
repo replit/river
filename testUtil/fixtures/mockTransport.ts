@@ -2,15 +2,12 @@ import { TransportClientId } from '../../transport';
 import { ClientTransport } from '../../transport/client';
 import { Connection } from '../../transport/connection';
 import { ServerTransport } from '../../transport/server';
-import {
-  ClientHandshakeOptions,
-  ServerHandshakeOptions,
-} from '../../router/handshake';
-import { Observable } from '../observable';
+import { Observable } from '../observable/observable';
 import { ProvidedServerTransportOptions } from '../../transport/options';
-import { TestTransportOptions } from './transports';
+import { TestSetupHelpers, TestTransportOptions } from './transports';
 import { Duplex } from 'node:stream';
-import { duplexPair } from '../duplexPair';
+import { duplexPair } from '../duplex/duplexPair';
+import { nanoid } from 'nanoid';
 
 export class InMemoryConnection extends Connection {
   conn: Duplex;
@@ -54,8 +51,11 @@ export class InMemoryConnection extends Connection {
 }
 
 interface BidiConnection {
+  id: string;
   clientToServer: Duplex;
   serverToClient: Duplex;
+  clientId: TransportClientId;
+  serverId: TransportClientId;
   handled: boolean;
 }
 
@@ -67,34 +67,29 @@ interface BidiConnection {
 // difficult with real network connections (e.g. simulating a phantom
 // disconnect, .pause() vs .removeAllListeners('data'), congestion,
 // latency, differences in ws implementations between node and browsers, etc.)
-export function createMockTransportNetwork(opts?: TestTransportOptions): {
-  getClientTransport: (
-    id: TransportClientId,
-    handshakeOptions?: ClientHandshakeOptions,
-  ) => ClientTransport<InMemoryConnection>;
-  getServerTransport: (
-    handshakeOptions?: ServerHandshakeOptions,
-  ) => ServerTransport<InMemoryConnection>;
-  simulatePhantomDisconnect: () => void;
-  restartServer: () => Promise<void>;
-  cleanup: () => Promise<void> | void;
-} {
-  // client id -> [client->server, server->client]
-  const connections = new Observable<Record<TransportClientId, BidiConnection>>(
-    {},
-  );
+export function createMockTransportNetwork(
+  opts?: TestTransportOptions,
+): TestSetupHelpers {
+  // conn id -> [client->server, server->client]
+  const connections = new Observable<Record<string, BidiConnection>>({});
 
   const transports: Array<MockClientTransport | MockServerTransport> = [];
   class MockClientTransport extends ClientTransport<InMemoryConnection> {
-    async createNewOutgoingConnection(): Promise<InMemoryConnection> {
+    async createNewOutgoingConnection(
+      to: TransportClientId,
+    ): Promise<InMemoryConnection> {
       const [clientToServer, serverToClient] = duplexPair();
       await new Promise((resolve) => setImmediate(resolve));
 
+      const connId = nanoid();
       connections.set((prev) => ({
         ...prev,
-        [this.clientId]: {
+        [connId]: {
+          id: connId,
           clientToServer,
           serverToClient,
+          clientId: this.clientId,
+          serverId: to,
           handled: false,
         },
       }));
@@ -115,14 +110,14 @@ export function createMockTransportNetwork(opts?: TestTransportOptions): {
       this.subscribeCleanup = connections.observe((conns) => {
         // look for any unhandled connections
         for (const conn of Object.values(conns)) {
-          if (conn.handled) {
+          // if we've already handled this connection, skip it
+          // or if it's not for us, skip it
+          if (conn.handled || conn.serverId !== this.clientId) {
             continue;
           }
 
-          // if we find one, handle it
           conn.handled = true;
           const connection = new InMemoryConnection(conn.serverToClient);
-
           this.handleConnection(connection);
         }
       });
@@ -145,8 +140,8 @@ export function createMockTransportNetwork(opts?: TestTransportOptions): {
 
       return clientTransport;
     },
-    getServerTransport: (handshakeOptions) => {
-      const serverTransport = new MockServerTransport('SERVER', opts?.server);
+    getServerTransport: (id = 'SERVER', handshakeOptions) => {
+      const serverTransport = new MockServerTransport(id, opts?.server);
       if (handshakeOptions) {
         serverTransport.extendHandshake(handshakeOptions);
       }

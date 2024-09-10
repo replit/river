@@ -19,12 +19,12 @@ import {
   cleanupTransports,
   testFinishesCleanly,
   waitFor,
-} from '../__tests__/fixtures/cleanup';
-import { testMatrix } from '../__tests__/fixtures/matrix';
+} from '../testUtil/fixtures/cleanup';
+import { testMatrix } from '../testUtil/fixtures/matrix';
 import { PartialTransportMessage } from './message';
 import { Type } from '@sinclair/typebox';
-import { TestSetupHelpers } from '../__tests__/fixtures/transports';
-import { createPostTestCleanups } from '../__tests__/fixtures/cleanup';
+import { TestSetupHelpers } from '../testUtil/fixtures/transports';
+import { createPostTestCleanups } from '../testUtil/fixtures/cleanup';
 import { SessionState } from './sessionStateMachine';
 import {
   ProvidedClientTransportOptions,
@@ -703,7 +703,7 @@ describe.each(testMatrix())(
         return promise;
       });
 
-      const serverTransport = getServerTransport({
+      const serverTransport = getServerTransport('SERVER', {
         schema,
         validate: parse,
       });
@@ -832,7 +832,7 @@ describe.each(testMatrix())(
           return { attemptNumber: attemptNumber++ };
         },
       });
-      const serverTransport = testHelpers.getServerTransport({
+      const serverTransport = testHelpers.getServerTransport('SERVER', {
         schema,
         async validate(_metadata, _previousParsedMetadata) {
           connsReachedServer++;
@@ -1260,7 +1260,7 @@ describe.each(testMatrix())(
         kept: metadata.kept,
       }));
 
-      const serverTransport = getServerTransport({
+      const serverTransport = getServerTransport('SERVER', {
         schema,
         validate: parse,
       });
@@ -1305,7 +1305,7 @@ describe.each(testMatrix())(
         foo: metadata.foo,
       }));
 
-      const serverTransport = getServerTransport({
+      const serverTransport = getServerTransport('SERVER', {
         schema,
         validate: parse,
       });
@@ -1361,7 +1361,7 @@ describe.each(testMatrix())(
         foo: metadata.foo,
       }));
 
-      const serverTransport = getServerTransport({
+      const serverTransport = getServerTransport('SERVER', {
         schema: serverRequestSchema,
         validate: parse,
       });
@@ -1428,7 +1428,10 @@ describe.each(testMatrix())(
         kept: metadata.kept,
       }));
 
-      const serverTransport = getServerTransport({ schema, validate });
+      const serverTransport = getServerTransport('SERVER', {
+        schema,
+        validate,
+      });
       const clientTransport = getClientTransport('client', {
         schema,
         construct,
@@ -1492,7 +1495,7 @@ describe.each(testMatrix())(
 
       const get = vi.fn(async () => ({ foo: 'foo' }));
       const parse = vi.fn(async () => 'REJECTED_BY_CUSTOM_HANDLER' as const);
-      const serverTransport = getServerTransport({
+      const serverTransport = getServerTransport('SERVER', {
         schema,
         validate: parse,
       });

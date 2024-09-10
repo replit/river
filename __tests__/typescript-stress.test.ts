@@ -12,7 +12,7 @@ import {
   ResultUnwrapOk,
   unwrapOrThrow,
 } from '../router/result';
-import { TestServiceSchema } from './fixtures/services';
+import { TestServiceSchema } from '../testUtil/fixtures/services';
 import { readNextResult } from '../testUtil';
 import {
   createClientHandshakeOptions,
@@ -20,7 +20,7 @@ import {
 } from '../router/handshake';
 import { flattenErrorType, ProcedureErrorSchemaType } from '../router/errors';
 import { ReadableImpl } from '../router/streams';
-import { createMockTransportNetwork } from './fixtures/mockTransport';
+import { createMockTransportNetwork } from '../testUtil/fixtures/mockTransport';
 
 const requestData = Type.Union([
   Type.Object({ a: Type.Number() }),

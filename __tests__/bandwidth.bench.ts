@@ -1,9 +1,9 @@
 import { afterAll, assert, bench, describe } from 'vitest';
 import { getClientSendFn, waitForMessage } from '../testUtil';
-import { TestServiceSchema } from './fixtures/services';
+import { TestServiceSchema } from '../testUtil/fixtures/services';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
-import { transports } from './fixtures/transports';
+import { transports } from '../testUtil/fixtures/transports';
 import { nanoid } from 'nanoid';
 
 let n = 0;

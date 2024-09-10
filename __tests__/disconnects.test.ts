@@ -9,7 +9,7 @@ import {
   SubscribableServiceSchema,
   TestServiceSchema,
   UploadableServiceSchema,
-} from './fixtures/services';
+} from '../testUtil/fixtures/services';
 import {
   createClient,
   createServer,
@@ -20,10 +20,10 @@ import {
   cleanupTransports,
   testFinishesCleanly,
   waitFor,
-} from './fixtures/cleanup';
-import { testMatrix } from './fixtures/matrix';
-import { TestSetupHelpers } from './fixtures/transports';
-import { createPostTestCleanups } from './fixtures/cleanup';
+} from '../testUtil/fixtures/cleanup';
+import { testMatrix } from '../testUtil/fixtures/matrix';
+import { TestSetupHelpers } from '../testUtil/fixtures/transports';
+import { createPostTestCleanups } from '../testUtil/fixtures/cleanup';
 
 describe.each(testMatrix())(
   'procedures should handle unexpected disconnects ($transport.name transport, $codec.name codec)',

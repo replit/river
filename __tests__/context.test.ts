@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { cleanupTransports, createPostTestCleanups } from './fixtures/cleanup';
-import { testMatrix } from './fixtures/matrix';
-import { TestSetupHelpers } from './fixtures/transports';
+import {
+  cleanupTransports,
+  createPostTestCleanups,
+} from '../testUtil/fixtures/cleanup';
+import { testMatrix } from '../testUtil/fixtures/matrix';
+import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 import {
   Ok,
   Procedure,

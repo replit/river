@@ -10,7 +10,7 @@ import {
   createWebSocketServer,
   getTransportConnections,
   onWsServerReady,
-} from '../../testUtil';
+} from '..';
 import {
   ClientTransportOptions,
   ServerTransportOptions,
@@ -36,6 +36,7 @@ export interface TestSetupHelpers {
     handshakeOptions?: ClientHandshakeOptions,
   ) => ClientTransport<Connection>;
   getServerTransport: (
+    id?: TransportClientId,
     handshakeOptions?: ServerHandshakeOptions,
   ) => ServerTransport<Connection>;
   simulatePhantomDisconnect: () => void;
@@ -92,10 +93,10 @@ export const transports: Array<TransportMatrixEntry> = [
 
           return clientTransport;
         },
-        getServerTransport(handshakeOptions) {
+        getServerTransport(id = 'SERVER', handshakeOptions) {
           const serverTransport = new WebSocketServerTransport(
             wss,
-            'SERVER',
+            id,
             opts?.server,
           );
 

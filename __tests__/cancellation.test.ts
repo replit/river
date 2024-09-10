@@ -9,15 +9,15 @@ import {
   createClient,
   createServer,
 } from '../router';
-import { testMatrix } from './fixtures/matrix';
+import { testMatrix } from '../testUtil/fixtures/matrix';
 import {
   cleanupTransports,
   createPostTestCleanups,
   testFinishesCleanly,
   waitFor,
-} from './fixtures/cleanup';
+} from '../testUtil/fixtures/cleanup';
 import { CANCEL_CODE, UNCAUGHT_ERROR_CODE } from '../router/errors';
-import { TestSetupHelpers } from './fixtures/transports';
+import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 
 function makeMockHandler<T extends ValidProcType>(
   _type: T,
