@@ -5,12 +5,12 @@ import {
   isReadableDone,
   numberOfConnections,
   getClientSendFn,
-} from '../util/testHelpers';
+} from '../testUtil';
 import {
   SubscribableServiceSchema,
   TestServiceSchema,
   UploadableServiceSchema,
-} from './fixtures/services';
+} from '../testUtil/fixtures/services';
 import {
   Ok,
   Procedure,
@@ -26,9 +26,9 @@ import {
   createPostTestCleanups,
   testFinishesCleanly,
   waitFor,
-} from './fixtures/cleanup';
-import { testMatrix } from './fixtures/matrix';
-import { TestSetupHelpers } from './fixtures/transports';
+} from '../testUtil/fixtures/cleanup';
+import { testMatrix } from '../testUtil/fixtures/matrix';
+import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 import { ControlFlags } from '../transport/message';
 import { Type } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';

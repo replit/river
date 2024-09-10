@@ -3,7 +3,7 @@ import {
   BinaryFileServiceSchema,
   FallibleServiceSchema,
   TestServiceSchema,
-} from './fixtures/services';
+} from '../testUtil/fixtures/services';
 import { serializeSchema } from '../router';
 import { Type } from '@sinclair/typebox';
 

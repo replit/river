@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { codecs } from '../__tests__/fixtures/codec';
+import { codecs } from '../testUtil/fixtures/codec';
 
 describe.each(codecs)('codec -- $name', ({ codec }) => {
   test('empty object', () => {

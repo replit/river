@@ -11,7 +11,7 @@ import {
   getTransportConnections,
   getClientSendFn,
   getServerSendFn,
-} from '../../../util/testHelpers';
+} from '../../../testUtil';
 import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
 import {
@@ -19,10 +19,10 @@ import {
   cleanupTransports,
   testFinishesCleanly,
   waitFor,
-} from '../../../__tests__/fixtures/cleanup';
+} from '../../../testUtil/fixtures/cleanup';
 import { PartialTransportMessage } from '../../message';
 import type NodeWs from 'ws';
-import { createPostTestCleanups } from '../../../__tests__/fixtures/cleanup';
+import { createPostTestCleanups } from '../../../testUtil/fixtures/cleanup';
 
 describe('sending and receiving across websockets works', async () => {
   let server: http.Server;

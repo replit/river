@@ -9,7 +9,7 @@ import {
   getReadableIterator,
   isReadableDone,
   readNextResult,
-} from '../util/testHelpers';
+} from '../testUtil';
 
 interface SomeError {
   code: 'SOME_ERROR';

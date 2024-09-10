@@ -8,10 +8,7 @@ import {
 } from '../../transport';
 import { Server } from '../../router';
 import { AnyServiceSchemaMap } from '../../router/services';
-import {
-  numberOfConnections,
-  testingSessionOptions,
-} from '../../util/testHelpers';
+import { numberOfConnections, testingSessionOptions } from '..';
 import { Value } from '@sinclair/typebox/value';
 import { ControlMessageAckSchema } from '../../transport/message';
 

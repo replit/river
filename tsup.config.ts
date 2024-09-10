@@ -5,7 +5,7 @@ export default defineConfig({
     'router/index.ts',
     'logging/index.ts',
     'codec/index.ts',
-    'util/testHelpers.ts',
+    'testUtil/index.ts',
     'transport/index.ts',
     'transport/impls/ws/client.ts',
     'transport/impls/ws/server.ts',

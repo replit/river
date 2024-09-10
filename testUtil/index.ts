@@ -1,24 +1,13 @@
 import NodeWs, { WebSocketServer } from 'ws';
 import http from 'node:http';
-import { Err, Ok, Result } from '../router/result';
-import { PayloadType, Procedure } from '../router/procedures';
 import { Static } from '@sinclair/typebox';
 import {
   OpaqueTransportMessage,
   PartialTransportMessage,
   currentProtocolVersion,
 } from '../transport/message';
-import { coerceErrorString } from './stringify';
 import { Transport } from '../transport/transport';
-import {
-  Readable,
-  ReadableImpl,
-  ReadableResult,
-  ReadableIterator,
-  Writable,
-  WritableImpl,
-} from '../router/streams';
-import { ServiceContext, ProcedureHandlerContext } from '../router/context';
+import { Readable, ReadableResult, ReadableIterator } from '../router/streams';
 import { WsLike } from '../transport/impls/ws/wslike';
 import {
   defaultClientTransportOptions,
@@ -26,18 +15,15 @@ import {
 } from '../transport/options';
 import { Connection } from '../transport/connection';
 import { SessionState } from '../transport/sessionStateMachine/common';
-import {
-  Session,
-  SessionStateGraph,
-} from '../transport/sessionStateMachine/transitions';
-import {
-  BaseErrorSchemaType,
-  ProcedureErrorSchemaType,
-  ReaderErrorSchema,
-  UNCAUGHT_ERROR_CODE,
-} from '../router/errors';
+import { SessionStateGraph } from '../transport/sessionStateMachine/transitions';
+import { BaseErrorSchemaType } from '../router/errors';
 import { ClientTransport } from '../transport/client';
 import { ServerTransport } from '../transport/server';
+
+export {
+  createMockTransportNetwork,
+  InMemoryConnection,
+} from './fixtures/mockTransport';
 
 /**
  * Creates a WebSocket client that connects to a local server at the specified port.
@@ -186,12 +172,6 @@ export async function waitForMessage(
   });
 }
 
-function catchProcError(err: unknown) {
-  const errorMsg = coerceErrorString(err);
-
-  return Err({ code: UNCAUGHT_ERROR_CODE, message: errorMsg });
-}
-
 export const testingSessionOptions = defaultTransportOptions;
 export const testingClientSessionOptions = defaultClientTransportOptions;
 
@@ -236,194 +216,6 @@ export function getServerSendFn(
     clientTransport.clientId,
     session.id,
   );
-}
-
-function dummyCtx<State>(
-  state: State,
-  session: Session<Connection>,
-  extendedContext?: Omit<ServiceContext, 'state'>,
-): ProcedureHandlerContext<State> {
-  return {
-    ...extendedContext,
-    state,
-    sessionId: session.id,
-    from: session.from,
-    metadata: {},
-    // TODO might wanna hook these up!
-    cancel: () => undefined,
-    signal: new AbortController().signal,
-  };
-}
-
-export function asClientRpc<
-  State extends object,
-  Init extends PayloadType,
-  Res extends PayloadType,
-  Err extends ProcedureErrorSchemaType,
->(
-  state: State,
-  proc: Procedure<State, 'rpc', Init, null, Res, Err>,
-  extendedContext?: Omit<ServiceContext, 'state'>,
-  session: Session<Connection> = dummySession(),
-) {
-  return async (
-    msg: Static<Init>,
-  ): Promise<
-    Result<Static<Res>, Static<Err> | Static<typeof ReaderErrorSchema>>
-  > => {
-    return proc
-      .handler({
-        ctx: dummyCtx(state, session, extendedContext),
-        reqInit: msg,
-      })
-      .catch(catchProcError);
-  };
-}
-
-function createResponsePipe<
-  Res extends PayloadType,
-  Err extends ProcedureErrorSchemaType,
->(): {
-  readable: Readable<
-    Static<Res>,
-    Static<Err> | Static<typeof ReaderErrorSchema>
-  >;
-  writable: Writable<Result<Static<Res>, Static<Err>>>;
-} {
-  const readable = new ReadableImpl<
-    Static<Res>,
-    Static<Err> | Static<typeof ReaderErrorSchema>
-  >();
-  const writable = new WritableImpl<Result<Static<Res>, Static<Err>>>({
-    writeCb: (v) => {
-      readable._pushValue(v);
-    },
-    closeCb: () => {
-      // Make it async to simulate request going over the wire
-      // using promises so that we don't get affected by fake timers.
-      void Promise.resolve().then(() => {
-        readable._triggerClose();
-      });
-    },
-  });
-
-  return { readable, writable };
-}
-
-function createRequestPipe<Req extends PayloadType>(): {
-  readable: Readable<Static<Req>, Static<typeof ReaderErrorSchema>>;
-  writable: Writable<Static<Req>>;
-} {
-  const readable = new ReadableImpl<
-    Static<Req>,
-    Static<typeof ReaderErrorSchema>
-  >();
-  const writable = new WritableImpl<Static<Req>>({
-    writeCb: (v) => {
-      readable._pushValue(Ok(v));
-    },
-    closeCb: () => {
-      // Make it async to simulate request going over the wire
-      // using promises so that we don't get affected by fake timers.
-      void Promise.resolve().then(() => {
-        readable._triggerClose();
-      });
-    },
-  });
-
-  return { readable, writable };
-}
-
-export function asClientStream<
-  State extends object,
-  Init extends PayloadType,
-  Req extends PayloadType,
-  Res extends PayloadType,
-  Err extends ProcedureErrorSchemaType,
->(
-  state: State,
-  proc: Procedure<State, 'stream', Init, Req, Res, Err>,
-  reqInit?: Static<Init>,
-  extendedContext?: Omit<ServiceContext, 'state'>,
-  session: Session<Connection> = dummySession(),
-): {
-  reqWritable: Writable<Static<Req>>;
-  resReadable: Readable<Static<Res>, Static<Err>>;
-} {
-  const requestPipe = createRequestPipe<Req>();
-  const responsePipe = createResponsePipe<Res, Err>();
-
-  void proc
-    .handler({
-      ctx: dummyCtx(state, session, extendedContext),
-      reqInit: reqInit ?? {},
-      reqReadable: requestPipe.readable,
-      resWritable: responsePipe.writable,
-    })
-    .catch((err: unknown) => responsePipe.writable.write(catchProcError(err)));
-
-  return {
-    reqWritable: requestPipe.writable,
-    resReadable: responsePipe.readable,
-  };
-}
-
-export function asClientSubscription<
-  State extends object,
-  Init extends PayloadType,
-  Res extends PayloadType,
-  Err extends ProcedureErrorSchemaType,
->(
-  state: State,
-  proc: Procedure<State, 'subscription', Init, null, Res, Err>,
-  extendedContext?: Omit<ServiceContext, 'state'>,
-  session: Session<Connection> = dummySession(),
-): (msg: Static<Init>) => {
-  resReadable: Readable<Static<Res>, Static<Err>>;
-} {
-  const responsePipe = createResponsePipe<Res, Err>();
-
-  return (msg: Static<Init>) => {
-    void proc
-      .handler({
-        ctx: dummyCtx(state, session, extendedContext),
-        reqInit: msg,
-        resWritable: responsePipe.writable,
-      })
-      .catch((err: unknown) =>
-        responsePipe.writable.write(catchProcError(err)),
-      );
-
-    return { resReadable: responsePipe.readable };
-  };
-}
-
-export function asClientUpload<
-  State extends object,
-  Init extends PayloadType,
-  Req extends PayloadType,
-  Res extends PayloadType,
-  Err extends ProcedureErrorSchemaType,
->(
-  state: State,
-  proc: Procedure<State, 'upload', Init, Req, Res, Err>,
-  reqInit?: Static<Init>,
-  extendedContext?: Omit<ServiceContext, 'state'>,
-  session: Session<Connection> = dummySession(),
-): {
-  reqWritable: Writable<Static<Req>>;
-  finalize: () => Promise<Result<Static<Res>, Static<Err>>>;
-} {
-  const requestPipe = createRequestPipe<Req>();
-  const result = proc
-    .handler({
-      ctx: dummyCtx(state, session, extendedContext),
-      reqInit: reqInit ?? {},
-      reqReadable: requestPipe.readable,
-    })
-    .catch(catchProcError);
-
-  return { reqWritable: requestPipe.writable, finalize: () => result };
 }
 
 export function getTransportConnections<ConnType extends Connection>(

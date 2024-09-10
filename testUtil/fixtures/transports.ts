@@ -1,32 +1,31 @@
-import {
-  ClientTransport,
-  Connection,
-  ServerTransport,
-  TransportClientId,
-} from '../../transport';
 import http from 'node:http';
 import {
   createLocalWebSocketClient,
   createWebSocketServer,
   getTransportConnections,
   onWsServerReady,
-} from '../../util/testHelpers';
-import {
-  ClientTransportOptions,
-  ServerTransportOptions,
-} from '../../transport';
+} from '..';
 import { WebSocketClientTransport } from '../../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../../transport/impls/ws/server';
 import {
   ClientHandshakeOptions,
   ServerHandshakeOptions,
 } from '../../router/handshake';
+import { createMockTransportNetwork } from './mockTransport';
+import {
+  ProvidedClientTransportOptions,
+  ProvidedServerTransportOptions,
+} from '../../transport/options';
+import { TransportClientId } from '../../transport/message';
+import { ClientTransport } from '../../transport/client';
+import { Connection } from '../../transport/connection';
+import { ServerTransport } from '../../transport/server';
 
-export type ValidTransports = 'ws';
+export type ValidTransports = 'ws' | 'mock';
 
 export interface TestTransportOptions {
-  client?: ClientTransportOptions;
-  server?: ServerTransportOptions;
+  client?: ProvidedClientTransportOptions;
+  server?: ProvidedServerTransportOptions;
 }
 
 export interface TestSetupHelpers {
@@ -35,6 +34,7 @@ export interface TestSetupHelpers {
     handshakeOptions?: ClientHandshakeOptions,
   ) => ClientTransport<Connection>;
   getServerTransport: (
+    id?: TransportClientId,
     handshakeOptions?: ServerHandshakeOptions,
   ) => ServerTransport<Connection>;
   simulatePhantomDisconnect: () => void;
@@ -91,10 +91,10 @@ export const transports: Array<TransportMatrixEntry> = [
 
           return clientTransport;
         },
-        getServerTransport(handshakeOptions) {
+        getServerTransport(id = 'SERVER', handshakeOptions) {
           const serverTransport = new WebSocketServerTransport(
             wss,
-            'SERVER',
+            id,
             opts?.server,
           );
 
@@ -135,6 +135,14 @@ export const transports: Array<TransportMatrixEntry> = [
           server.close();
         },
       };
+    },
+  },
+  {
+    name: 'mock',
+    setup: async (opts) => {
+      const network = createMockTransportNetwork(opts);
+
+      return network;
     },
   },
 ];

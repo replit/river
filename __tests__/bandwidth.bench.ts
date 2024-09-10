@@ -1,9 +1,9 @@
 import { afterAll, assert, bench, describe } from 'vitest';
-import { getClientSendFn, waitForMessage } from '../util/testHelpers';
-import { TestServiceSchema } from './fixtures/services';
+import { getClientSendFn, waitForMessage } from '../testUtil';
+import { TestServiceSchema } from '../testUtil/fixtures/services';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
-import { transports } from './fixtures/transports';
+import { transports } from '../testUtil/fixtures/transports';
 import { nanoid } from 'nanoid';
 
 let n = 0;
@@ -19,7 +19,7 @@ const dummyPayloadSmall = () => ({
 // give time for v8 to warm up
 const BENCH_DURATION = 10_000;
 describe('bandwidth', async () => {
-  for (const { name, setup } of transports) {
+  for (const { name, setup } of transports.filter((t) => t.name !== 'mock')) {
     const { getClientTransport, getServerTransport, cleanup } = await setup();
     afterAll(cleanup);
 
@@ -57,11 +57,12 @@ describe('bandwidth', async () => {
     );
 
     const { reqWritable, resReadable } = client.test.echo.stream({});
+    const resIter = resReadable[Symbol.asyncIterator]();
     bench(
       `${name} -- stream`,
       async () => {
         reqWritable.write({ msg: nanoid(), ignore: false });
-        const result = await resReadable[Symbol.asyncIterator]().next();
+        const result = await resIter.next();
         assert(result.value?.ok);
       },
       { time: BENCH_DURATION },
