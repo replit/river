@@ -59,6 +59,14 @@ interface BidiConnection {
   handled: boolean;
 }
 
+// we construct a network of transports connected by node streams here
+// so that we can test the transport layer without needing to actually
+// use real network/websocket connections
+// this is useful for testing the transport layer in isolation
+// and allows us to control network conditions in a way that would be
+// difficult with real network connections (e.g. simulating a phantom
+// disconnect, .pause() vs .removeAllListeners('data'), congestion,
+// latency, differences in ws implementations between node and browsers, etc.)
 export function createMockTransportNetwork(opts?: TestTransportOptions): {
   getClientTransport: (
     id: TransportClientId,
