@@ -1,6 +1,6 @@
 import { trace, context, propagation, Span } from '@opentelemetry/api';
 import { describe, test, expect, vi, assert, beforeEach } from 'vitest';
-import { dummySession } from '../util/testHelpers';
+import { dummySession } from '../testUtil';
 
 import {
   BasicTracerProvider,

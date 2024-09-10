@@ -1,4 +1,4 @@
-import { isReadableDone, readNextResult } from '../util/testHelpers';
+import { isReadableDone, readNextResult } from '../testUtil';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import {
   DIV_BY_ZERO,

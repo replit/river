@@ -4,7 +4,7 @@ import {
   isReadableDone,
   numberOfConnections,
   readNextResult,
-} from '../util/testHelpers';
+} from '../testUtil';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import {

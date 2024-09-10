@@ -11,7 +11,7 @@ import { AnyServiceSchemaMap } from '../../router/services';
 import {
   numberOfConnections,
   testingSessionOptions,
-} from '../../util/testHelpers';
+} from '../../testUtil';
 import { Value } from '@sinclair/typebox/value';
 import { ControlMessageAckSchema } from '../../transport/message';
 

@@ -20,7 +20,7 @@ import { INVALID_REQUEST_CODE } from '../router/errors';
 import { ControlFlags } from '../transport/message';
 import { TestSetupHelpers } from './fixtures/transports';
 import { nanoid } from 'nanoid';
-import { getClientSendFn } from '../util/testHelpers';
+import { getClientSendFn } from '../testUtil';
 
 describe('cancels invalid request', () => {
   const { transport, codec } = testMatrix()[0];

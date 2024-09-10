@@ -5,7 +5,7 @@ import {
   isReadableDone,
   numberOfConnections,
   getClientSendFn,
-} from '../util/testHelpers';
+} from '../testUtil';
 import {
   SubscribableServiceSchema,
   TestServiceSchema,

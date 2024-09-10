@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 import {
   payloadToTransportMessage,
   testingSessionOptions,
-} from '../../util/testHelpers';
+} from '../../testUtil';
 import { waitFor } from '../../__tests__/fixtures/cleanup';
 import {
   ControlFlags,

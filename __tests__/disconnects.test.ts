@@ -4,7 +4,7 @@ import {
   isReadableDone,
   numberOfConnections,
   readNextResult,
-} from '../util/testHelpers';
+} from '../testUtil';
 import {
   SubscribableServiceSchema,
   TestServiceSchema,

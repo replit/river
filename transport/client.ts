@@ -15,7 +15,7 @@ import {
 } from './options';
 import { LeakyBucketRateLimit } from './rateLimit';
 import { Transport } from './transport';
-import { coerceErrorString } from '../util/stringify';
+import { coerceErrorString } from './stringifyError';
 import { ProtocolError } from './events';
 import { Value } from '@sinclair/typebox/value';
 import tracer, { getPropagationContext } from '../tracing';

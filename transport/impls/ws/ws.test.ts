@@ -11,7 +11,7 @@ import {
   getTransportConnections,
   getClientSendFn,
   getServerSendFn,
-} from '../../../util/testHelpers';
+} from '../../../testUtil';
 import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
 import {

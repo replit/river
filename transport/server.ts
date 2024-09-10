@@ -18,7 +18,7 @@ import {
   defaultServerTransportOptions,
 } from './options';
 import { DeleteSessionOptions, Transport } from './transport';
-import { coerceErrorString } from '../util/stringify';
+import { coerceErrorString } from './stringifyError';
 import { Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { ProtocolError } from './events';

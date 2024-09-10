@@ -13,7 +13,7 @@ import {
   unwrapOrThrow,
 } from '../router/result';
 import { TestServiceSchema } from './fixtures/services';
-import { readNextResult } from '../util/testHelpers';
+import { readNextResult } from '../testUtil';
 import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,

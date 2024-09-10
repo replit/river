@@ -10,7 +10,7 @@ import {
   createWebSocketServer,
   getTransportConnections,
   onWsServerReady,
-} from '../../util/testHelpers';
+} from '../../testUtil';
 import {
   ClientTransportOptions,
   ServerTransportOptions,

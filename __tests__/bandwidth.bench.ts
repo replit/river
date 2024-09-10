@@ -1,5 +1,5 @@
 import { afterAll, assert, bench, describe } from 'vitest';
-import { getClientSendFn, waitForMessage } from '../util/testHelpers';
+import { getClientSendFn, waitForMessage } from '../testUtil';
 import { TestServiceSchema } from './fixtures/services';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';

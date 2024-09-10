@@ -37,8 +37,8 @@
       "require": "./dist/transport/impls/uds/server.cjs"
     },
     "./test-util": {
-      "import": "./dist/util/testHelpers.js",
-      "require": "./dist/util/testHelpers.cjs"
+      "import": "./dist/testUtil/index.js",
+      "require": "./dist/testUtil/index.cjs"
     }
   },
   "sideEffects": [

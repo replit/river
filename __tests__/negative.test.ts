@@ -10,7 +10,7 @@ import {
   createWebSocketServer,
   numberOfConnections,
   onWsServerReady,
-} from '../util/testHelpers';
+} from '../testUtil';
 import { WebSocketServerTransport } from '../transport/impls/ws/server';
 import {
   ControlFlags,

@@ -9,7 +9,7 @@ import {
   testingClientSessionOptions,
   getClientSendFn,
   getServerSendFn,
-} from '../util/testHelpers';
+} from '../testUtil';
 import { EventMap, ProtocolError } from '../transport/events';
 import {
   advanceFakeTimersByConnectionBackoff,
