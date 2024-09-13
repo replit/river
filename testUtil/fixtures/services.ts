@@ -313,3 +313,33 @@ export const NonObjectSchemas = ServiceSchema.define({
     },
   }),
 });
+
+export function SchemaWithDisposableState(dispose: () => void) {
+  return ServiceSchema.define(
+    { initializeState: () => ({ [Symbol.dispose]: dispose }) },
+    {
+      add: Procedure.rpc({
+        requestInit: Type.Number(),
+        responseData: Type.Number(),
+        async handler({ reqInit }) {
+          return Ok(reqInit + 1);
+        },
+      }),
+    },
+  );
+}
+
+export function SchemaWithAsyncDisposableState(dispose: () => Promise<void>) {
+  return ServiceSchema.define(
+    { initializeState: () => ({ [Symbol.asyncDispose]: dispose }) },
+    {
+      add: Procedure.rpc({
+        requestInit: Type.Number(),
+        responseData: Type.Number(),
+        async handler({ reqInit }) {
+          return Ok(reqInit + 1);
+        },
+      }),
+    },
+  );
+}

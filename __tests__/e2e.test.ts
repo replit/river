@@ -17,6 +17,7 @@ import {
   UploadableServiceSchema,
   OrderingServiceSchema,
   NonObjectSchemas,
+  SchemaWithDisposableState,
 } from '../testUtil/fixtures/services';
 import {
   advanceFakeTimersBySessionGrace,
@@ -814,6 +815,33 @@ describe.each(testMatrix())(
       const result = await resultPromise;
       expect(result).toStrictEqual({ ok: true, payload: { result: 4 } });
 
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('calls service dispose methods on cleanup', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const dispose = vi.fn();
+      const asyncDispose = vi.fn();
+      const services = {
+        disposable: SchemaWithDisposableState(dispose),
+        asyncDisposable: SchemaWithDisposableState(asyncDispose),
+      };
+
+      const server = createServer(serverTransport, services);
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // test
+      await server.close();
+      expect(dispose).toBeCalledTimes(1);
+      expect(asyncDispose).toBeCalledTimes(1);
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
