@@ -329,17 +329,22 @@ export function SchemaWithDisposableState(dispose: () => void) {
   );
 }
 
-export function SchemaWithAsyncDisposableState(dispose: () => Promise<void>) {
-  return ServiceSchema.define(
-    { initializeState: () => ({ [Symbol.asyncDispose]: dispose }) },
-    {
-      add: Procedure.rpc({
-        requestInit: Type.Number(),
-        responseData: Type.Number(),
-        async handler({ reqInit }) {
-          return Ok(reqInit + 1);
-        },
-      }),
-    },
-  );
+export function SchemaWithAsyncDisposableStateAndScaffold(
+  dispose: () => Promise<void>,
+) {
+  const scaffold = ServiceSchema.scaffold({
+    initializeState: () => ({ [Symbol.asyncDispose]: dispose }),
+  });
+
+  const procs = scaffold.procedures({
+    add: Procedure.rpc({
+      requestInit: Type.Number(),
+      responseData: Type.Number(),
+      async handler({ reqInit }) {
+        return Ok(reqInit + 1);
+      },
+    }),
+  });
+
+  return scaffold.finalize(procs);
 }

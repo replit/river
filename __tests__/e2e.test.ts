@@ -18,6 +18,7 @@ import {
   OrderingServiceSchema,
   NonObjectSchemas,
   SchemaWithDisposableState,
+  SchemaWithAsyncDisposableStateAndScaffold,
 } from '../testUtil/fixtures/services';
 import {
   advanceFakeTimersBySessionGrace,
@@ -830,7 +831,8 @@ describe.each(testMatrix())(
       const asyncDispose = vi.fn();
       const services = {
         disposable: SchemaWithDisposableState(dispose),
-        asyncDisposable: SchemaWithDisposableState(asyncDispose),
+        asyncDisposable:
+          SchemaWithAsyncDisposableStateAndScaffold(asyncDispose),
       };
 
       const server = createServer(serverTransport, services);
