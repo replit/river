@@ -24,6 +24,7 @@ export interface Service<
 > {
   readonly state: State;
   readonly procedures: Procs;
+  [Symbol.asyncDispose]: () => Promise<void>;
 }
 
 /**
@@ -124,6 +125,11 @@ export type ProcType<
  */
 type BrandedProcedureMap<State> = Record<string, Branded<AnyProcedure<State>>>;
 
+type MaybeDisposable<State extends object> = State & {
+  [Symbol.asyncDispose]?: () => Promise<void>;
+  [Symbol.dispose]?: () => void;
+};
+
 /**
  * The configuration for a service.
  */
@@ -131,7 +137,7 @@ export interface ServiceConfiguration<State extends object> {
   /**
    * A factory function for creating a fresh state.
    */
-  initializeState: (extendedContext: ServiceContext) => State;
+  initializeState: (extendedContext: ServiceContext) => MaybeDisposable<State>;
 }
 
 // TODO remove once clients migrate to v2
@@ -253,7 +259,7 @@ export class ServiceSchema<
    */
   protected readonly initializeState: (
     extendedContext: ServiceContext,
-  ) => State;
+  ) => MaybeDisposable<State>;
 
   /**
    * The procedures for this service.
@@ -514,9 +520,16 @@ export class ServiceSchema<
    * for you.
    */
   instantiate(extendedContext: ServiceContext): Service<State, Procedures> {
+    const state = this.initializeState(extendedContext);
+    const dispose = async () => {
+      await state[Symbol.asyncDispose]?.();
+      state[Symbol.dispose]?.();
+    };
+
     return Object.freeze({
-      state: this.initializeState(extendedContext),
+      state,
       procedures: this.procedures,
+      [Symbol.asyncDispose]: dispose,
     });
   }
 }

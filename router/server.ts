@@ -70,6 +70,8 @@ export interface Server<Services extends AnyServiceSchemaMap> {
    * A set of stream ids that are currently open.
    */
   streams: Map<StreamId, ProcStream>;
+
+  close: () => Promise<void>;
 }
 
 type ProcHandlerReturn = Promise<(() => void) | void>;
@@ -128,11 +130,13 @@ class RiverServer<Services extends AnyServiceSchemaMap>
   public streams: Map<StreamId, ProcStream>;
   public services: InstantiatedServiceSchemaMap<Services>;
 
+  private unregisterTransportListeners: () => void;
+
   constructor(
     transport: ServerTransport<Connection>,
     services: Services,
     handshakeOptions?: ServerHandshakeOptions,
-    extendedContext?: Omit<ServiceContext, 'state'>,
+    extendedContext?: ServiceContext,
     maxCancelledStreamTombstonesPerSession = 200,
   ) {
     const instances: Record<string, AnyService> = {};
@@ -218,9 +222,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
       this.serverCancelledStreams.delete(disconnectedClientId);
     };
-
     const handleTransportStatus = (evt: EventMap['transportStatus']) => {
       if (evt.status !== 'closed') return;
+      this.unregisterTransportListeners();
+    };
+
+    this.unregisterTransportListeners = () => {
       this.transport.removeEventListener('message', handleCreatingNewStreams);
       this.transport.removeEventListener('sessionStatus', handleSessionStatus);
       this.transport.removeEventListener(
@@ -912,6 +919,15 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     const msg = cancelMessage(streamId, payload);
     sessionScopedSend(msg);
   }
+
+  async close() {
+    this.unregisterTransportListeners();
+
+    for (const serviceName of Object.keys(this.services)) {
+      const service = this.services[serviceName];
+      await service[Symbol.asyncDispose]();
+    }
+  }
 }
 
 class LRUSet<T> {
@@ -990,7 +1006,7 @@ export function createServer<Services extends AnyServiceSchemaMap>(
   services: Services,
   providedServerOptions?: Partial<{
     handshakeOptions?: ServerHandshakeOptions;
-    extendedContext?: Omit<ServiceContext, 'state'>;
+    extendedContext?: ServiceContext;
     /**
      * Maximum number of cancelled streams to keep track of to avoid
      * cascading stream errors.
