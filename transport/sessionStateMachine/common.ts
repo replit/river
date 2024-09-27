@@ -169,15 +169,12 @@ export abstract class CommonSession extends StateMachineState {
     }
 
     if (!Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
-      this.log?.error(
-        `received invalid msg: ${Buffer.from(msg).toString('base64')}`,
-        {
-          ...this.loggingMetadata,
-          validationErrors: [
-            ...Value.Errors(OpaqueTransportMessageSchema, parsedMsg),
-          ],
-        },
-      );
+      this.log?.error(`received invalid msg: ${JSON.stringify(parsedMsg)}`, {
+        ...this.loggingMetadata,
+        validationErrors: [
+          ...Value.Errors(OpaqueTransportMessageSchema, parsedMsg),
+        ],
+      });
 
       return null;
     }
