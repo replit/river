@@ -160,9 +160,8 @@ export abstract class CommonSession extends StateMachineState {
     const parsedMsg = this.options.codec.fromBuffer(msg);
 
     if (parsedMsg === null) {
-      const decodedBuffer = new TextDecoder().decode(Buffer.from(msg));
       this.log?.error(
-        `received malformed msg: ${decodedBuffer}`,
+        `received malformed msg: ${Buffer.from(msg).toString('base64')}`,
         this.loggingMetadata,
       );
 
@@ -170,12 +169,15 @@ export abstract class CommonSession extends StateMachineState {
     }
 
     if (!Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
-      this.log?.error(`received invalid msg: ${JSON.stringify(parsedMsg)}`, {
-        ...this.loggingMetadata,
-        validationErrors: [
-          ...Value.Errors(OpaqueTransportMessageSchema, parsedMsg),
-        ],
-      });
+      this.log?.error(
+        `received invalid msg: ${Buffer.from(msg).toString('base64')}`,
+        {
+          ...this.loggingMetadata,
+          validationErrors: [
+            ...Value.Errors(OpaqueTransportMessageSchema, parsedMsg),
+          ],
+        },
+      );
 
       return null;
     }
