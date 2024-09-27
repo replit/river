@@ -160,9 +160,8 @@ export abstract class CommonSession extends StateMachineState {
     const parsedMsg = this.options.codec.fromBuffer(msg);
 
     if (parsedMsg === null) {
-      const decodedBuffer = new TextDecoder().decode(Buffer.from(msg));
       this.log?.error(
-        `received malformed msg: ${decodedBuffer}`,
+        `received malformed msg: ${Buffer.from(msg).toString('base64')}`,
         this.loggingMetadata,
       );
 
