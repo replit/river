@@ -49,7 +49,7 @@ export abstract class ServerTransport<
    */
   sessionHandshakeMetadata = new Map<TransportClientId, ParsedMetadata>();
 
-  sessions = new Map<TransportClientId, ServerSession<ConnType>>();
+  _sessions = new Map<TransportClientId, ServerSession<ConnType>>();
   pendingSessions = new Set<SessionWaitingForHandshake<ConnType>>();
 
   constructor(
@@ -57,7 +57,7 @@ export abstract class ServerTransport<
     providedOptions?: ProvidedServerTransportOptions,
   ) {
     super(clientId, providedOptions);
-    this.sessions = new Map();
+    this._sessions = new Map();
     this.options = {
       ...defaultServerTransportOptions,
       ...providedOptions,
@@ -331,7 +331,7 @@ export abstract class ServerTransport<
       msg.payload.expectedSessionState.nextExpectedSeq;
     const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq;
 
-    let oldSession = this.sessions.get(msg.from);
+    let oldSession = this._sessions.get(msg.from);
     if (
       this.options.enableTransparentSessionReconnects &&
       oldSession &&

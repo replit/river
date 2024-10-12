@@ -41,7 +41,7 @@ export async function ensureTransportIsClean(t: Transport<Connection>) {
   await advanceFakeTimersBySessionGrace();
   await waitFor(() =>
     expect(
-      t.sessions,
+      t._sessions,
       `[post-test cleanup] transport ${t.clientId} should not have open sessions after the test`,
     ).toStrictEqual(new Map()),
   );
@@ -65,7 +65,7 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
   await waitFor(() =>
     expect(
       new Map(
-        [...t.sessions]
+        [...t._sessions]
           .map(([client, sess]) => {
             // get all messages that are not heartbeats
             const buff = sess.sendBuffer.filter((msg) => {

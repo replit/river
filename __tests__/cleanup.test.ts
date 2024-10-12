@@ -80,7 +80,7 @@ describe.each(testMatrix())(
       await advanceFakeTimersByHeartbeat();
       await waitFor(() =>
         expect(
-          serverTransport.sessions.get(clientTransport.clientId)?.sendBuffer
+          serverTransport._sessions.get(clientTransport.clientId)?.sendBuffer
             .length,
         ).toEqual(0),
       );
@@ -281,20 +281,20 @@ describe.each(testMatrix())(
       // wait for session timer to elapse and make sure there are not more sessions
       await advanceFakeTimersBySessionGrace();
       await waitFor(() => {
-        expect(serverTransport.sessions.size).toEqual(0);
-        expect(clientTransport.sessions.size).toEqual(0);
+        expect(serverTransport._sessions.size).toEqual(0);
+        expect(clientTransport._sessions.size).toEqual(0);
       });
 
       // close the req writable after the transport is closed
       // should not send message nor start a new session
       reqWritable.close();
-      expect(serverTransport.sessions.size).toEqual(0);
-      expect(clientTransport.sessions.size).toEqual(0);
+      expect(serverTransport._sessions.size).toEqual(0);
+      expect(clientTransport._sessions.size).toEqual(0);
 
       // same with abort
       abortController.abort();
-      expect(serverTransport.sessions.size).toEqual(0);
-      expect(clientTransport.sessions.size).toEqual(0);
+      expect(serverTransport._sessions.size).toEqual(0);
+      expect(clientTransport._sessions.size).toEqual(0);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],

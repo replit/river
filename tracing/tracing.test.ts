@@ -110,14 +110,14 @@ describe.each(testMatrix())(
       });
 
       await waitFor(() => {
-        expect(clientTransport.sessions.size).toBe(1);
-        expect(serverTransport.sessions.size).toBe(1);
+        expect(clientTransport._sessions.size).toBe(1);
+        expect(serverTransport._sessions.size).toBe(1);
       });
 
-      const clientSession = clientTransport.sessions.get(
+      const clientSession = clientTransport._sessions.get(
         serverTransport.clientId,
       );
-      const serverSession = serverTransport.sessions.get(
+      const serverSession = serverTransport._sessions.get(
         clientTransport.clientId,
       );
 

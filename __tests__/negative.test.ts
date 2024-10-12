@@ -55,7 +55,7 @@ describe('should handle incompatabilities', async () => {
     });
 
     clientTransport.connect(serverTransport.clientId);
-    const clientSession = clientTransport.sessions.get(
+    const clientSession = clientTransport._sessions.get(
       serverTransport.clientId,
     );
     assert(clientSession);
@@ -223,7 +223,7 @@ describe('should handle incompatabilities', async () => {
     ws.send(NaiveJsonCodec.toBuffer(msg));
 
     await waitFor(() => ws.readyState === ws.CLOSED);
-    expect(serverTransport.sessions.size).toBe(1);
+    expect(serverTransport._sessions.size).toBe(1);
 
     await testFinishesCleanly({
       clientTransports: [],

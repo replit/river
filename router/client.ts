@@ -235,7 +235,7 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
 
     const [init, callOptions] = opts.args;
 
-    if (clientOptions.connectOnInvoke && !transport.sessions.has(serverId)) {
+    if (clientOptions.connectOnInvoke && !transport._sessions.has(serverId)) {
       transport.connect(serverId);
     }
 
@@ -278,7 +278,7 @@ function handleProc(
   abortSignal?: AbortSignal,
 ): AnyProcReturn {
   const session =
-    transport.sessions.get(serverId) ??
+    transport._sessions.get(serverId) ??
     transport.createUnconnectedSession(serverId);
   const sessionScopedSend = transport.getSessionBoundSendFn(
     serverId,

@@ -49,7 +49,7 @@ abstract class StateMachineState {
    * You should never need to call this as a consumer.
    *
    * If you're looking to close the session from the client,
-   * use `.disconnect` on the client transport.
+   * use `.hardDisconnect` on the client transport.
    */
   close(): void {
     this._handleClose();
