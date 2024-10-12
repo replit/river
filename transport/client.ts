@@ -365,6 +365,17 @@ export abstract class ClientTransport<
     this.updateSession(backingOffSession);
   }
 
+  /**
+   * Manually kills all sessions to the server (including all pending state).
+   * This is useful for when you want to close all connections to a server
+   * and don't want to wait for the grace period to elapse.
+   */
+  hardDisconnect() {
+    for (const session of this.sessions.values()) {
+      this.deleteSession(session);
+    }
+  }
+
   protected onBackoffFinished(session: SessionBackingOff) {
     const connPromise = tracer.startActiveSpan('connect', async (span) => {
       try {

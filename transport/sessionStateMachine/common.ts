@@ -43,6 +43,14 @@ abstract class StateMachineState {
   // by consumers, the proxy will call this when .close is closed
   abstract _handleClose(): void;
 
+  /**
+   * Cleanup this state machine state and mark it as consumed.
+   * After calling close, it is an error to access any properties on the state.
+   * You should never need to call this as a consumer.
+   *
+   * If you're looking to close the session from the client,
+   * use `.disconnect` on the client transport.
+   */
   close(): void {
     this._handleClose();
   }
