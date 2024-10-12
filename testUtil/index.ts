@@ -194,7 +194,7 @@ export function getClientSendFn(
   serverTransport: ServerTransport<Connection>,
 ) {
   const session =
-    clientTransport._sessions.get(serverTransport.clientId) ??
+    clientTransport.sessions.get(serverTransport.clientId) ??
     clientTransport.createUnconnectedSession(serverTransport.clientId);
 
   return clientTransport.getSessionBoundSendFn(
@@ -207,7 +207,7 @@ export function getServerSendFn(
   serverTransport: ServerTransport<Connection>,
   clientTransport: ClientTransport<Connection>,
 ) {
-  const session = serverTransport._sessions.get(clientTransport.clientId);
+  const session = serverTransport.sessions.get(clientTransport.clientId);
   if (!session) {
     throw new Error('session not found');
   }
@@ -222,7 +222,7 @@ export function getTransportConnections<ConnType extends Connection>(
   transport: Transport<ConnType>,
 ): Array<ConnType> {
   const connections = [];
-  for (const session of transport._sessions.values()) {
+  for (const session of transport.sessions.values()) {
     if (session.state === SessionState.Connected) {
       connections.push(session.conn);
     }

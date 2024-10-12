@@ -85,7 +85,7 @@ export abstract class Transport<ConnType extends Connection> {
   protected options: TransportOptions;
   log?: Logger;
 
-  _sessions: Map<TransportClientId, Session<ConnType>>;
+  sessions: Map<TransportClientId, Session<ConnType>>;
 
   /**
    * Creates a new Transport instance.
@@ -100,7 +100,7 @@ export abstract class Transport<ConnType extends Connection> {
     this.eventDispatcher = new EventDispatcher();
     this.clientId = clientId;
     this.status = 'open';
-    this._sessions = new Map();
+    this.sessions = new Map();
   }
 
   bindLogger(fn: LogFn | Logger, level?: LoggingLevel) {
@@ -161,7 +161,7 @@ export abstract class Transport<ConnType extends Connection> {
   close() {
     this.status = 'closed';
 
-    for (const session of this._sessions.values()) {
+    for (const session of this.sessions.values()) {
       this.deleteSession(session);
     }
 
@@ -179,7 +179,7 @@ export abstract class Transport<ConnType extends Connection> {
 
   // state transitions
   protected createSession<S extends Session<ConnType>>(session: S): void {
-    const activeSession = this._sessions.get(session.to);
+    const activeSession = this.sessions.get(session.to);
     if (activeSession) {
       const msg = `attempt to create session for ${session.to} but active session (${activeSession.id}) already exists`;
       this.log?.error(msg, {
@@ -189,7 +189,7 @@ export abstract class Transport<ConnType extends Connection> {
       throw new Error(msg);
     }
 
-    this._sessions.set(session.to, session);
+    this.sessions.set(session.to, session);
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'connect',
       session: session,
@@ -202,7 +202,7 @@ export abstract class Transport<ConnType extends Connection> {
   }
 
   protected updateSession<S extends Session<ConnType>>(session: S): void {
-    const activeSession = this._sessions.get(session.to);
+    const activeSession = this.sessions.get(session.to);
     if (!activeSession) {
       const msg = `attempt to transition session for ${session.to} but no active session exists`;
       this.log?.error(msg, {
@@ -221,7 +221,7 @@ export abstract class Transport<ConnType extends Connection> {
       throw new Error(msg);
     }
 
-    this._sessions.set(session.to, session);
+    this.sessions.set(session.to, session);
     this.eventDispatcher.dispatchEvent('sessionTransition', {
       state: session.state,
       session: session,
@@ -248,7 +248,7 @@ export abstract class Transport<ConnType extends Connection> {
 
     const to = session.to;
     session.close();
-    this._sessions.delete(to);
+    this.sessions.delete(to);
   }
 
   // common listeners
@@ -320,7 +320,7 @@ export abstract class Transport<ConnType extends Connection> {
     }
 
     return (msg: PartialTransportMessage) => {
-      const session = this._sessions.get(to);
+      const session = this.sessions.get(to);
       if (!session) {
         throw new Error(
           `session scope for ${sessionId} has ended (close), can't send`,

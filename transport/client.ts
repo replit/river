@@ -55,14 +55,14 @@ export abstract class ClientTransport<
    */
   handshakeExtensions?: ClientHandshakeOptions;
 
-  _sessions: Map<TransportClientId, ClientSession<ConnType>>;
+  sessions: Map<TransportClientId, ClientSession<ConnType>>;
 
   constructor(
     clientId: TransportClientId,
     providedOptions?: ProvidedClientTransportOptions,
   ) {
     super(clientId, providedOptions);
-    this._sessions = new Map();
+    this.sessions = new Map();
     this.options = {
       ...defaultClientTransportOptions,
       ...providedOptions,
@@ -85,7 +85,7 @@ export abstract class ClientTransport<
   ): Promise<ConnType>;
 
   private tryReconnecting(to: TransportClientId) {
-    const oldSession = this._sessions.get(to);
+    const oldSession = this.sessions.get(to);
     if (!this.options.enableTransparentSessionReconnects && oldSession) {
       this.deleteSession(oldSession);
     }
@@ -316,7 +316,7 @@ export abstract class ClientTransport<
       return;
     }
 
-    const session = this._sessions.get(to) ?? this.createUnconnectedSession(to);
+    const session = this.sessions.get(to) ?? this.createUnconnectedSession(to);
     if (session.state !== SessionState.NoConnection) {
       // already trying to connect
       this.log?.debug(
@@ -371,7 +371,7 @@ export abstract class ClientTransport<
    * and don't want to wait for the grace period to elapse.
    */
   hardDisconnect() {
-    for (const session of this._sessions.values()) {
+    for (const session of this.sessions.values()) {
       this.deleteSession(session);
     }
   }

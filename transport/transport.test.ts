@@ -70,8 +70,8 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(msg1.payload);
 
       // make sure both sides agree on the session id.
-      const oldClientSessionId = serverTransport._sessions.get('client')?.id;
-      const oldServerSessionId = clientTransport._sessions.get('SERVER')?.id;
+      const oldClientSessionId = serverTransport.sessions.get('client')?.id;
+      const oldServerSessionId = clientTransport.sessions.get('SERVER')?.id;
       expect(oldServerSessionId).not.toBeUndefined();
       expect(oldClientSessionId).not.toBeUndefined();
       expect(oldClientSessionId).toBe(oldServerSessionId);
@@ -88,8 +88,8 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(msg2.payload);
 
       // make sure both sides still have the same sessions
-      const newClientSession = serverTransport._sessions.get('client');
-      const newServerSession = clientTransport._sessions.get('SERVER');
+      const newClientSession = serverTransport.sessions.get('client');
+      const newServerSession = clientTransport.sessions.get('SERVER');
       expect(newClientSession).not.toBeUndefined();
       expect(newServerSession).not.toBeUndefined();
       expect(newClientSession?.id).toBe(oldClientSessionId);
@@ -120,15 +120,15 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(msg1.payload);
 
       // make sure both sides agree on the session id.
-      const oldClientSessionId = clientTransport._sessions.get('SERVER')?.id;
-      const oldServerSessionId = serverTransport._sessions.get('client')?.id;
+      const oldClientSessionId = clientTransport.sessions.get('SERVER')?.id;
+      const oldServerSessionId = serverTransport.sessions.get('client')?.id;
       expect(oldServerSessionId).not.toBeUndefined();
       expect(oldClientSessionId).not.toBeUndefined();
       expect(oldClientSessionId).toBe(oldServerSessionId);
       expect(oldServerSessionId).toBe(oldClientSessionId);
 
       // make this client seem misbehaved by tweaking the seq number
-      const clientSession = clientTransport._sessions.get('SERVER');
+      const clientSession = clientTransport.sessions.get('SERVER');
       if (clientSession) {
         if (clientSession.sendBuffer.length > 0) {
           clientSession.sendBuffer[0].seq += 10;
@@ -155,8 +155,8 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(msg2.payload);
 
       // make sure both sides now have different sessions
-      const newClientSession = serverTransport._sessions.get('client');
-      const newServerSession = clientTransport._sessions.get('SERVER');
+      const newClientSession = serverTransport.sessions.get('client');
+      const newServerSession = clientTransport.sessions.get('SERVER');
       expect(newClientSession).not.toBeUndefined();
       expect(newServerSession).not.toBeUndefined();
       expect(newClientSession?.id).not.toBe(oldClientSessionId);
@@ -196,8 +196,8 @@ describe.each(testMatrix())(
         expect(numberOfConnections(clientTransport)).toBe(1);
       });
 
-      const oldClientSessionId = serverTransport._sessions.get('client')?.id;
-      const oldServerSessionId = clientTransport._sessions.get('SERVER')?.id;
+      const oldClientSessionId = serverTransport.sessions.get('client')?.id;
+      const oldServerSessionId = clientTransport.sessions.get('SERVER')?.id;
       expect(oldClientSessionId).not.toBeUndefined();
       expect(oldServerSessionId).not.toBeUndefined();
 
@@ -206,8 +206,8 @@ describe.each(testMatrix())(
         expect(numberOfConnections(serverTransport)).toBe(1);
         expect(numberOfConnections(clientTransport)).toBe(1);
       });
-      const newClientSessionId = serverTransport._sessions.get('client')?.id;
-      const newServerSessionId = clientTransport._sessions.get('SERVER')?.id;
+      const newClientSessionId = serverTransport.sessions.get('client')?.id;
+      const newServerSessionId = clientTransport.sessions.get('SERVER')?.id;
       expect(newClientSessionId).toBe(oldClientSessionId);
       expect(newServerSessionId).toBe(oldServerSessionId);
 
@@ -629,8 +629,8 @@ describe.each(testMatrix())(
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
 
-      const oldClientSessionId = serverTransport._sessions.get('client')?.id;
-      const oldServerSessionId = clientTransport._sessions.get('SERVER')?.id;
+      const oldClientSessionId = serverTransport.sessions.get('client')?.id;
+      const oldServerSessionId = clientTransport.sessions.get('SERVER')?.id;
       expect(oldClientSessionId).not.toBeUndefined();
       expect(oldServerSessionId).not.toBeUndefined();
       expect(oldClientSessionId).toBe(oldServerSessionId);
@@ -646,8 +646,8 @@ describe.each(testMatrix())(
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
 
       // expect new sessions to have been created
-      const newClientSessionId = serverTransport._sessions.get('client')?.id;
-      const newServerSessionId = clientTransport._sessions.get('SERVER')?.id;
+      const newClientSessionId = serverTransport.sessions.get('client')?.id;
+      const newServerSessionId = clientTransport.sessions.get('SERVER')?.id;
       expect(newClientSessionId).not.toBeUndefined();
       expect(newServerSessionId).not.toBeUndefined();
       expect(newClientSessionId).not.toBe(oldClientSessionId);
@@ -731,7 +731,7 @@ describe.each(testMatrix())(
       await vi.advanceTimersByTimeAsync(handshakeGrace + 1);
 
       // expect no server session/connection to have been established due to connection timeout
-      expect(serverTransport._sessions.size).toBe(0);
+      expect(serverTransport.sessions.size).toBe(0);
       expect(numberOfConnections(serverTransport)).toBe(0);
       // client should not have successfully established any connections
       expect(numberOfConnections(clientTransport)).toBe(0);
@@ -792,8 +792,8 @@ describe.each(testMatrix())(
         expect(numberOfConnections(serverTransport)).toEqual(1);
       });
 
-      const oldClientSessionId = serverTransport._sessions.get('client')?.id;
-      const oldServerSessionId = clientTransport._sessions.get('SERVER')?.id;
+      const oldClientSessionId = serverTransport.sessions.get('client')?.id;
+      const oldServerSessionId = clientTransport.sessions.get('SERVER')?.id;
       expect(oldClientSessionId).not.toBeUndefined();
       expect(oldServerSessionId).not.toBeUndefined();
 
@@ -807,8 +807,8 @@ describe.each(testMatrix())(
         expect(numberOfConnections(serverTransport)).toEqual(1);
       });
 
-      const newClientSessionId = serverTransport._sessions.get('client')?.id;
-      const newServerSessionId = clientTransport._sessions.get('SERVER')?.id;
+      const newClientSessionId = serverTransport.sessions.get('client')?.id;
+      const newServerSessionId = clientTransport.sessions.get('SERVER')?.id;
       expect(newClientSessionId).toBe(oldClientSessionId);
       expect(newServerSessionId).toBe(oldServerSessionId);
 
@@ -832,21 +832,21 @@ describe.each(testMatrix())(
         expect(numberOfConnections(serverTransport)).toBe(1);
       });
 
-      const oldClientSessionId = serverTransport._sessions.get('client')?.id;
-      const oldServerSessionId = clientTransport._sessions.get('SERVER')?.id;
+      const oldClientSessionId = serverTransport.sessions.get('client')?.id;
+      const oldServerSessionId = clientTransport.sessions.get('SERVER')?.id;
       expect(oldClientSessionId).not.toBeUndefined();
       expect(oldServerSessionId).not.toBeUndefined();
 
       clientTransport.hardDisconnect();
 
       expect(numberOfConnections(clientTransport)).toBe(0);
-      expect(clientTransport._sessions.size).toBe(0);
+      expect(clientTransport.sessions.size).toBe(0);
 
       await advanceFakeTimersByDisconnectGrace();
       await advanceFakeTimersBySessionGrace();
       await waitFor(() => {
         expect(numberOfConnections(serverTransport)).toBe(0);
-        expect(serverTransport._sessions.size).toBe(0);
+        expect(serverTransport.sessions.size).toBe(0);
       });
 
       await testFinishesCleanly({
@@ -1079,8 +1079,8 @@ describe.each(testMatrix())(
       await advanceFakeTimersByHeartbeat();
 
       // make sure both sides agree on the session id.
-      const oldClientSession = serverTransport._sessions.get('client');
-      const oldServerSession = clientTransport._sessions.get('SERVER');
+      const oldClientSession = serverTransport.sessions.get('client');
+      const oldServerSession = clientTransport.sessions.get('SERVER');
       expect(oldClientSession?.id).toBe(oldServerSession?.id);
       expect(oldServerSession?.id).toBe(oldClientSession?.id);
 
@@ -1105,7 +1105,7 @@ describe.each(testMatrix())(
       // kill old server and make a new transport with the new server
       await testHelpers.restartServer();
       serverTransport = testHelpers.getServerTransport();
-      expect(serverTransport._sessions.size).toBe(0);
+      expect(serverTransport.sessions.size).toBe(0);
 
       // eagerly reconnect client
       clientTransport.reconnectOnConnectionDrop = true;
@@ -1117,8 +1117,8 @@ describe.each(testMatrix())(
       clientSendFn = getClientSendFn(clientTransport, serverTransport);
 
       // make sure both sides agree on the session id after the reconnect
-      const newClientSession = serverTransport._sessions.get('client');
-      const newServerSession = clientTransport._sessions.get('SERVER');
+      const newClientSession = serverTransport.sessions.get('client');
+      const newServerSession = clientTransport.sessions.get('SERVER');
       expect(newClientSession?.id).not.toBe(oldClientSession?.id);
       expect(newServerSession?.id).not.toBe(oldServerSession?.id);
       expect(newClientSession?.id).toBe(newServerSession?.id);
@@ -1147,8 +1147,8 @@ describe.each(testMatrix())(
         expect(clientSessStart).toHaveBeenCalledTimes(2);
         expect(clientSessStop).toHaveBeenCalledTimes(1);
       });
-      const reconnectedClientSession = serverTransport._sessions.get('client');
-      const reconnectedServerSession = clientTransport._sessions.get('SERVER');
+      const reconnectedClientSession = serverTransport.sessions.get('client');
+      const reconnectedServerSession = clientTransport.sessions.get('SERVER');
       expect(reconnectedClientSession).not.toBeUndefined();
       expect(reconnectedServerSession).not.toBeUndefined();
       expect(reconnectedClientSession?.id).toBe(newClientSession?.id);
@@ -1311,12 +1311,12 @@ describe.each(testMatrix())(
       });
 
       await waitFor(() => {
-        expect(serverTransport._sessions.size).toBe(1);
+        expect(serverTransport.sessions.size).toBe(1);
         expect(get).toHaveBeenCalledTimes(1);
         expect(parse).toHaveBeenCalledTimes(1);
       });
 
-      const session = serverTransport._sessions.get(clientTransport.clientId);
+      const session = serverTransport.sessions.get(clientTransport.clientId);
       assert(session);
       expect(serverTransport.sessionHandshakeMetadata.get(session.to)).toEqual({
         kept: 'kept',
@@ -1479,7 +1479,7 @@ describe.each(testMatrix())(
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
-      await waitFor(() => expect(serverTransport._sessions.size).toBe(1));
+      await waitFor(() => expect(serverTransport.sessions.size).toBe(1));
       expect(construct).toHaveBeenCalledTimes(1);
       expect(validate).toHaveBeenCalledTimes(1);
       expect(validate).toHaveBeenCalledWith(
@@ -1490,7 +1490,7 @@ describe.each(testMatrix())(
         undefined,
       );
 
-      const session = serverTransport._sessions.get(clientTransport.clientId);
+      const session = serverTransport.sessions.get(clientTransport.clientId);
       assert(session);
       expect(serverTransport.sessionHandshakeMetadata.get(session.to)).toEqual({
         kept: 'kept',

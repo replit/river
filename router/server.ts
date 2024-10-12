@@ -684,7 +684,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
   ): StreamInitProps | null {
     // lifetime safety: this is a sync function so this session cant transition
     // to another state before we finish
-    const session = this.transport._sessions.get(initMessage.from);
+    const session = this.transport.sessions.get(initMessage.from);
     if (!session) {
       // this should be impossible, how did we receive a message from a session that doesn't exist?
       // log anyways

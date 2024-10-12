@@ -134,7 +134,7 @@ describe('sending and receiving across websockets works', async () => {
 
     // we never sent a handshake so there should be no connections or sessions
     expect(numberOfConnections(serverTransport)).toBe(0);
-    expect(serverTransport._sessions.size).toBe(0);
+    expect(serverTransport.sessions.size).toBe(0);
 
     // advance time past the grace period
     await advanceFakeTimersBySessionGrace();
@@ -142,7 +142,7 @@ describe('sending and receiving across websockets works', async () => {
     // the connection should have been cleaned up
     await waitFor(() => {
       expect(numberOfConnections(serverTransport)).toBe(0);
-      expect(serverTransport._sessions.size).toBe(0);
+      expect(serverTransport.sessions.size).toBe(0);
       expect(ws.readyState).toBe(ws.CLOSED);
     });
 
