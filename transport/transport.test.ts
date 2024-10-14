@@ -818,6 +818,43 @@ describe.each(testMatrix())(
       });
     });
 
+    test('client transport calling .hardDisconnect() immediately kills the session and updates bookkeeping', async () => {
+      const clientTransport = testHelpers.getClientTransport('client');
+      const serverTransport = testHelpers.getServerTransport();
+      clientTransport.connect(serverTransport.clientId);
+
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(numberOfConnections(clientTransport)).toBe(1);
+        expect(numberOfConnections(serverTransport)).toBe(1);
+      });
+
+      const oldClientSessionId = serverTransport.sessions.get('client')?.id;
+      const oldServerSessionId = clientTransport.sessions.get('SERVER')?.id;
+      expect(oldClientSessionId).not.toBeUndefined();
+      expect(oldServerSessionId).not.toBeUndefined();
+
+      clientTransport.hardDisconnect();
+
+      expect(numberOfConnections(clientTransport)).toBe(0);
+      expect(clientTransport.sessions.size).toBe(0);
+
+      await advanceFakeTimersByDisconnectGrace();
+      await advanceFakeTimersBySessionGrace();
+      await waitFor(() => {
+        expect(numberOfConnections(serverTransport)).toBe(0);
+        expect(serverTransport.sessions.size).toBe(0);
+      });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
     // make a custom auth thing that rejects all connections
     // session grace should elapse at some point despite retry loop
     test('session grace elapses during long reconnect loop', async () => {
