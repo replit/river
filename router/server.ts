@@ -539,11 +539,14 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       closeReadable();
     }
 
-    const handlerContext: ProcedureHandlerContext<object> = {
+    const handlerContextWithSpan: (
+      span: Span,
+    ) => ProcedureHandlerContext<object> = (span) => ({
       ...serviceContext,
       from: from,
       sessionId,
       metadata: sessionMetadata,
+      span,
       cancel: () => {
         onServerCancel({
           code: CANCEL_CODE,
@@ -551,7 +554,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         });
       },
       signal: finishedController.signal,
-    };
+    });
 
     switch (procedure.type) {
       case 'rpc':
@@ -564,7 +567,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           async (span): ProcHandlerReturn => {
             try {
               const responsePayload = await procedure.handler({
-                ctx: handlerContext,
+                ctx: handlerContextWithSpan(span),
                 reqInit: initPayload,
               });
 
@@ -592,7 +595,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           async (span): ProcHandlerReturn => {
             try {
               await procedure.handler({
-                ctx: handlerContext,
+                ctx: handlerContextWithSpan(span),
                 reqInit: initPayload,
                 reqReadable,
                 resWritable,
@@ -616,7 +619,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           async (span): ProcHandlerReturn => {
             try {
               await procedure.handler({
-                ctx: handlerContext,
+                ctx: handlerContextWithSpan(span),
                 reqInit: initPayload,
                 resWritable: resWritable,
               });
@@ -638,7 +641,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           async (span): ProcHandlerReturn => {
             try {
               const responsePayload = await procedure.handler({
-                ctx: handlerContext,
+                ctx: handlerContextWithSpan(span),
                 reqInit: initPayload,
                 reqReadable: reqReadable,
               });

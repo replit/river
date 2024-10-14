@@ -1,3 +1,4 @@
+import { Span } from '@opentelemetry/api';
 import { TransportClientId } from '../transport/message';
 import { SessionId } from '../transport/sessionStateMachine/common';
 
@@ -50,6 +51,11 @@ export type ProcedureHandlerContext<State> = ServiceContext & {
    * State for this service as defined by the service definition.
    */
   state: State;
+  /**
+   * The span for this procedure call. You can use this to add attributes, events, and
+   * links to the span.
+   */
+  span: Span;
   /**
    * Metadata parsed on the server. See {@link ParsedMetadata}
    */
