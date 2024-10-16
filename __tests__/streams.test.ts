@@ -200,6 +200,25 @@ describe('Readable unit', () => {
     expect(values).toEqual([1, 2].map(Ok));
   });
 
+  it('should allow calling next and then turning it into an asyncIterator', async () => {
+    const readable = new ReadableImpl<number, SomeError>();
+    const iterator = readable[Symbol.asyncIterator]();
+    const next = iterator.next();
+    readable._pushValue(Ok(1));
+    readable._pushValue(Ok(2));
+    readable._pushValue(Ok(3));
+    readable._triggerClose();
+    expect(await next).toEqual({ value: Ok(1), done: false });
+
+    let i = 0;
+    for await (const value of iterator) {
+      expect(value).toEqual(Ok(i + 2));
+      i++;
+    }
+
+    expect(await iterator.next()).toEqual({ value: undefined, done: true });
+  });
+
   it('should support for-await-of with break', async () => {
     const readable = new ReadableImpl<number, SomeError>();
 

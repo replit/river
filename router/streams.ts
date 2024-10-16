@@ -16,7 +16,7 @@ export type ReadableResult<T, E extends Static<BaseErrorSchemaType>> = Result<
 >;
 
 /**
- * A simple {@link AsyncIterator} used in {@link Readable}
+ * A simple {@link AsyncIterableIterator} used in {@link Readable}
  * that doesn't have a the extra "return" and "throw" methods, and
  * the doesn't have a "done value" (TReturn).
  */
@@ -31,6 +31,7 @@ export interface ReadableIterator<T, E extends Static<BaseErrorSchemaType>> {
         value: undefined;
       }
   >;
+  [Symbol.asyncIterator](): ReadableIterator<T, E>;
 }
 
 /**
@@ -246,6 +247,9 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
         const value = this.queue.shift()!;
 
         return { done: false, value } as const;
+      },
+      [Symbol.asyncIterator]() {
+        return this;
       },
       return: () => {
         this.break();
