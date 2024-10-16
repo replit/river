@@ -139,6 +139,8 @@ function createPromiseWithResolvers<T>(): PromiseWithResolvers<T> {
   };
 }
 
+export class MutualExclusionError extends Error {}
+
 /**
  * @internal
  *
@@ -186,7 +188,7 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
 
   public [Symbol.asyncIterator]() {
     if (this.locked) {
-      throw new TypeError('Readable is already locked');
+      throw new MutualExclusionError('Readable is already locked');
     }
 
     this.locked = true;
@@ -197,6 +199,12 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
      */
     let didSignalBreak = false;
 
+    /**
+     * This variable is used to keep track of how many pending next calls we have.
+     * This is used to prevent creating a new iterator while there are pending next calls.
+     */
+    let numPendingNextCalls = 0;
+
     return {
       next: async () => {
         if (didSignalBreak) {
@@ -205,6 +213,8 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
             value: undefined,
           } as const;
         }
+
+        numPendingNextCalls += 1;
 
         /**
          * In a normal iteration case the while loop can be structured as a couple of if statements,
@@ -226,6 +236,7 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
 
           if (this.broken) {
             didSignalBreak = true;
+            numPendingNextCalls -= 1;
 
             return {
               done: false,
@@ -245,10 +256,19 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
         // we already check for array length above anyway
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const value = this.queue.shift()!;
+        numPendingNextCalls -= 1;
 
         return { done: false, value } as const;
       },
       [Symbol.asyncIterator]() {
+        if (numPendingNextCalls > 0) {
+          throw new MutualExclusionError(
+            'Cannot create a new iterator while there are pending next calls',
+          );
+        }
+
+        numPendingNextCalls += 1;
+
         return this;
       },
       return: () => {

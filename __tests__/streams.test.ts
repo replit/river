@@ -3,6 +3,7 @@ import {
   ReadableImpl,
   WritableImpl,
   ReadableBrokenError,
+  MutualExclusionError,
 } from '../router/streams';
 import { Err, Ok } from '../router';
 import {
@@ -28,7 +29,9 @@ describe('Readable unit', () => {
     const readable = new ReadableImpl<number, SomeError>();
     readable[Symbol.asyncIterator]();
     expect(readable.isReadable()).toEqual(false);
-    expect(() => readable[Symbol.asyncIterator]()).toThrowError(TypeError);
+    expect(() => readable[Symbol.asyncIterator]()).toThrowError(
+      MutualExclusionError,
+    );
     readable._triggerClose();
   });
 
@@ -36,7 +39,9 @@ describe('Readable unit', () => {
     const readable = new ReadableImpl<number, SomeError>();
     void readable.collect();
     expect(readable.isReadable()).toEqual(false);
-    expect(() => readable[Symbol.asyncIterator]()).toThrowError(TypeError);
+    expect(() => readable[Symbol.asyncIterator]()).toThrowError(
+      MutualExclusionError,
+    );
     readable._triggerClose();
   });
 
@@ -44,7 +49,9 @@ describe('Readable unit', () => {
     const readable = new ReadableImpl<number, SomeError>();
     readable.break();
     expect(readable.isReadable()).toEqual(false);
-    expect(() => readable[Symbol.asyncIterator]()).toThrowError(TypeError);
+    expect(() => readable[Symbol.asyncIterator]()).toThrowError(
+      MutualExclusionError,
+    );
     readable._triggerClose();
   });
 
@@ -217,6 +224,63 @@ describe('Readable unit', () => {
     }
 
     expect(await iterator.next()).toEqual({ value: undefined, done: true });
+  });
+
+  it('should not allow concurrent asyncIterators', async () => {
+    const readable = new ReadableImpl<number, SomeError>();
+    readable[Symbol.asyncIterator]();
+    expect(() => readable[Symbol.asyncIterator]()).toThrowError(
+      MutualExclusionError,
+    );
+  });
+
+  it('should not allow getting the iterable on the iterator if there is a pending .next', async () => {
+    const readable = new ReadableImpl<number, SomeError>();
+    const iterator = readable[Symbol.asyncIterator]();
+    void iterator.next();
+
+    await expect(async () => {
+      for await (const _value of iterator) {
+        // noop
+      }
+    }).rejects.toThrowError(MutualExclusionError);
+  });
+
+  it('should allow getting the iterable on the iterator if there is a pending .next and it is resolved', async () => {
+    const readable = new ReadableImpl<number, SomeError>();
+    const iterator = readable[Symbol.asyncIterator]();
+    readable._pushValue(Ok(1));
+    readable._pushValue(Ok(2));
+    readable._pushValue(Ok(3));
+    readable._triggerClose();
+
+    const next = iterator.next();
+    expect(await next).toEqual({ value: Ok(1), done: false });
+
+    let i = 0;
+    for await (const value of iterator) {
+      expect(value).toEqual(Ok(i + 2));
+      i++;
+    }
+
+    expect(await iterator.next()).toEqual({ value: undefined, done: true });
+  });
+
+  it('should not allow multiple iterables on the iterator', async () => {
+    const readable = new ReadableImpl<number, SomeError>();
+    const iterator = readable[Symbol.asyncIterator]();
+
+    void (async () => {
+      for await (const _value of iterator) {
+        // noop
+      }
+    })();
+
+    await expect(async () => {
+      for await (const _value of iterator) {
+        // noop
+      }
+    }).rejects.toThrowError(MutualExclusionError);
   });
 
   it('should support for-await-of with break', async () => {
