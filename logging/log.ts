@@ -1,5 +1,6 @@
 import { ValueError } from '@sinclair/typebox/value';
 import { OpaqueTransportMessage, ProtocolVersion } from '../transport/message';
+import { context, trace } from '@opentelemetry/api';
 
 const LoggingLevels = {
   debug: -1,
@@ -27,6 +28,17 @@ export type Tags =
 
 const cleanedLogFn = (log: LogFn) => {
   return (msg: string, metadata?: MessageMetadata) => {
+    // try to infer telemetry
+    if (metadata && !metadata.telemetry) {
+      const span = trace.getSpan(context.active());
+      if (span) {
+        metadata.telemetry = {
+          traceId: span.spanContext().traceId,
+          spanId: span.spanContext().spanId,
+        };
+      }
+    }
+
     // skip cloning object if metadata has no transportMessage
     if (!metadata?.transportMessage) {
       log(msg, metadata);
@@ -37,6 +49,7 @@ const cleanedLogFn = (log: LogFn) => {
     // clone metadata and clean transportMessage
     const { payload, ...rest } = metadata.transportMessage;
     metadata.transportMessage = rest;
+
     log(msg, metadata);
   };
 };

@@ -18,9 +18,9 @@ export abstract class Connection {
 
   get loggingMetadata(): MessageMetadata {
     const metadata: MessageMetadata = { connId: this.id };
-    const spanContext = this.telemetry?.span.spanContext();
 
-    if (this.telemetry?.span.isRecording() && spanContext) {
+    if (this.telemetry?.span.isRecording()) {
+      const spanContext = this.telemetry.span.spanContext();
       metadata.telemetry = {
         traceId: spanContext.traceId,
         spanId: spanContext.spanId,
