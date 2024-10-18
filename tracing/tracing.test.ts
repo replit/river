@@ -26,6 +26,7 @@ import { FallibleServiceSchema } from '../testUtil/fixtures/services';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { UNCAUGHT_ERROR_CODE } from '../router';
+import { LogFn } from '../logging';
 
 describe('Basic tracing tests', () => {
   const provider = new BasicTracerProvider();
@@ -143,7 +144,11 @@ describe.each(testMatrix())(
     test('implicit telemetry gets picked up from handlers', async () => {
       // setup
       const clientTransport = getClientTransport('client');
+      const clientMockLogger = vi.fn<LogFn>();
+      clientTransport.bindLogger(clientMockLogger);
       const serverTransport = getServerTransport();
+      const serverMockLogger = vi.fn<LogFn>();
+      serverTransport.bindLogger(serverMockLogger);
       const services = {
         fallible: FallibleServiceSchema,
       };
@@ -158,12 +163,28 @@ describe.each(testMatrix())(
 
       // test
       const { reqWritable, resReadable } = client.fallible.echo.stream({});
+
       reqWritable.write({
         msg: 'abc',
         throwResult: false,
+        throwError: false,
+      });
+      let result = await readNextResult(resReadable);
+      expect(result).toStrictEqual({
+        ok: true,
+        payload: {
+          response: 'abc',
+        },
+      });
+
+      // this isn't the first message so doesn't have telemetry info on the message itself
+      reqWritable.write({
+        msg: 'def',
+        throwResult: false,
         throwError: true,
       });
-      const result = await readNextResult(resReadable);
+
+      result = await readNextResult(resReadable);
       expect(result).toStrictEqual({
         ok: false,
         payload: {
@@ -171,6 +192,19 @@ describe.each(testMatrix())(
           message: 'some message',
         },
       });
+
+      // expect that both client and server loggers logged the uncaught error with the correct telemetry info
+      const clientInvokeCall = clientMockLogger.mock.calls.find(
+        (call) => call[0] === 'invoked fallible.echo',
+      );
+      const serverInvokeFail = serverMockLogger.mock.calls.find(
+        (call) => call[0] === 'fallible.echo handler threw an uncaught error',
+      );
+      expect(clientInvokeCall?.[1]).toBeTruthy();
+      expect(serverInvokeFail?.[1]).toBeTruthy();
+      expect(clientInvokeCall?.[1]?.telemetry?.traceId).toStrictEqual(
+        serverInvokeFail?.[1]?.telemetry?.traceId,
+      );
 
       reqWritable.close();
       await testFinishesCleanly({

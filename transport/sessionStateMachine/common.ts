@@ -247,6 +247,14 @@ export abstract class IdentifiedSession extends CommonSession {
       sessionId: this.id,
     };
 
+    if (this.telemetry.span.isRecording()) {
+      const spanContext = this.telemetry.span.spanContext();
+      metadata.telemetry = {
+        traceId: spanContext.traceId,
+        spanId: spanContext.spanId,
+      };
+    }
+
     return metadata;
   }
 
