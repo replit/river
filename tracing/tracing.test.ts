@@ -1,6 +1,6 @@
 import { trace, context, propagation, Span } from '@opentelemetry/api';
 import { describe, test, expect, vi, assert, beforeEach } from 'vitest';
-import { dummySession } from '../testUtil';
+import { dummySession, readNextResult } from '../testUtil';
 
 import {
   BasicTracerProvider,
@@ -8,7 +8,7 @@ import {
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
-import { StackContextManager } from '@opentelemetry/sdk-trace-web';
+import { AsyncHooksContextManager } from '@opentelemetry/context-async-hooks';
 import tracer, {
   createSessionTelemetryInfo,
   getPropagationContext,
@@ -22,13 +22,17 @@ import {
 } from '../testUtil/fixtures/cleanup';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 import { createPostTestCleanups } from '../testUtil/fixtures/cleanup';
+import { FallibleServiceSchema } from '../testUtil/fixtures/services';
+import { createServer } from '../router/server';
+import { createClient } from '../router/client';
+import { UNCAUGHT_ERROR_CODE } from '../router';
 
 describe('Basic tracing tests', () => {
   const provider = new BasicTracerProvider();
   provider.addSpanProcessor(
     new SimpleSpanProcessor(new InMemorySpanExporter()),
   );
-  const contextManager = new StackContextManager();
+  const contextManager = new AsyncHooksContextManager();
   contextManager.enable();
   trace.setGlobalTracerProvider(provider);
   context.setGlobalContextManager(contextManager);
@@ -133,6 +137,46 @@ describe.each(testMatrix())(
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
+      });
+    });
+
+    test('implicit telemetry gets picked up from handlers', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = {
+        fallible: FallibleServiceSchema,
+      };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // test
+      const { reqWritable, resReadable } = client.fallible.echo.stream({});
+      reqWritable.write({
+        msg: 'abc',
+        throwResult: false,
+        throwError: true,
+      });
+      const result = await readNextResult(resReadable);
+      expect(result).toStrictEqual({
+        ok: false,
+        payload: {
+          code: UNCAUGHT_ERROR_CODE,
+          message: 'some message',
+        },
+      });
+
+      reqWritable.close();
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
       });
     });
   },

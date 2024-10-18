@@ -17,17 +17,7 @@ export abstract class Connection {
   }
 
   get loggingMetadata(): MessageMetadata {
-    const metadata: MessageMetadata = { connId: this.id };
-    const spanContext = this.telemetry?.span.spanContext();
-
-    if (this.telemetry?.span.isRecording() && spanContext) {
-      metadata.telemetry = {
-        traceId: spanContext.traceId,
-        spanId: spanContext.spanId,
-      };
-    }
-
-    return metadata;
+    return { connId: this.id };
   }
 
   // can't use event emitter because we need this to work in both node + browser

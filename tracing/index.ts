@@ -9,6 +9,7 @@ import {
 import { version as RIVER_VERSION } from '../package.json';
 import { ValidProcType } from '../router';
 import { ClientTransport, Connection } from '../transport';
+import { MessageMetadata } from '../logging';
 
 export interface PropagationContext {
   traceparent: string;
@@ -106,18 +107,15 @@ export function createProcTelemetryInfo(
   );
 
   const ctx = trace.setSpan(baseCtx, span);
-
-  transport.log?.info(`invoked ${serviceName}.${procedureName}`, {
+  const metadata: MessageMetadata = {
     clientId: transport.clientId,
     transportMessage: {
       procedureName,
       serviceName,
     },
-    telemetry: {
-      traceId: span.spanContext().traceId,
-      spanId: span.spanContext().spanId,
-    },
-  });
+  };
+
+  transport.log?.info(`invoked ${serviceName}.${procedureName}`, metadata);
 
   return { span, ctx };
 }

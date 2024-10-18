@@ -36,7 +36,7 @@ import { Value, ValueError } from '@sinclair/typebox/value';
 import { Err, Result, Ok, ErrResult } from './result';
 import { EventMap } from '../transport/events';
 import { coerceErrorString } from '../transport/stringifyError';
-import { Span, SpanStatusCode } from '@opentelemetry/api';
+import { Span, SpanStatusCode, context, trace } from '@opentelemetry/api';
 import { createHandlerSpan, PropagationContext } from '../tracing';
 import { ServerHandshakeOptions } from './handshake';
 import { Connection } from '../transport/connection';
