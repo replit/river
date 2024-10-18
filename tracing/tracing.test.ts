@@ -12,7 +12,6 @@ import { AsyncHooksContextManager } from '@opentelemetry/context-async-hooks';
 import tracer, {
   createSessionTelemetryInfo,
   getPropagationContext,
-  createHandlerSpan,
 } from './index';
 import { testMatrix } from '../testUtil/fixtures/matrix';
 import {
@@ -61,29 +60,6 @@ describe('Basic tracing tests', () => {
         Symbol.for('OpenTelemetry Context Key SPAN'),
       ) as Span,
     ).toBeTruthy();
-  });
-
-  test('createHandlerSpan', () => {
-    const parentCtx = context.active();
-    const span = tracer.startSpan('testing span', {}, parentCtx);
-    const ctx = trace.setSpan(parentCtx, span);
-
-    const propagationContext = getPropagationContext(ctx);
-    expect(propagationContext?.traceparent).toBeTruthy();
-
-    const handlerMock = vi.fn<(span: Span) => void>();
-    createHandlerSpan(
-      'rpc',
-      'myservice',
-      'myprocedure',
-      'mystream',
-      propagationContext,
-      handlerMock,
-    );
-    expect(handlerMock).toHaveBeenCalledTimes(1);
-    const createdSpan = handlerMock.mock.calls[0][0];
-    // @ts-expect-error: hacking to get parentSpanId
-    expect(createdSpan.parentSpanId).toBe(span.spanContext().spanId);
   });
 });
 

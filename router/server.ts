@@ -198,16 +198,14 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
       // if its not a cancelled stream, validate and create a new stream
       createHandlerSpan(
+        newStreamProps.initialSession,
         newStreamProps.procedure.type,
         newStreamProps.serviceName,
         newStreamProps.procedureName,
         newStreamProps.streamId,
         newStreamProps.tracingCtx,
         (span) => {
-          this.createNewProcStream(span, {
-            ...newStreamProps,
-            ...message,
-          });
+          this.createNewProcStream(span, newStreamProps);
         },
       );
     };

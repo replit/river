@@ -14,7 +14,11 @@ import {
   IdentifiedSessionWithGracePeriodProps,
   SessionOptions,
 } from './common';
-import { PropagationContext, createConnectionTelemetryInfo, createSessionTelemetryInfo } from '../../tracing';
+import {
+  PropagationContext,
+  createConnectionTelemetryInfo,
+  createSessionTelemetryInfo,
+} from '../../tracing';
 import {
   SessionWaitingForHandshake,
   SessionWaitingForHandshakeListeners,

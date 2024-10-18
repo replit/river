@@ -11,6 +11,7 @@ import { ValidProcType } from '../router';
 import { Connection } from '../transport';
 import { MessageMetadata } from '../logging';
 import { ClientSession } from '../transport/sessionStateMachine/transitions';
+import { IdentifiedSession } from '../transport/sessionStateMachine/common';
 
 export interface PropagationContext {
   traceparent: string;
@@ -102,6 +103,7 @@ export function createProcTelemetryInfo(
         'river.streamId': streamId,
         'span.kind': 'client',
       },
+      links: [{ context: session.telemetry.span.spanContext() }],
       kind: SpanKind.CLIENT,
     },
     baseCtx,
@@ -129,6 +131,7 @@ export function createProcTelemetryInfo(
 }
 
 export function createHandlerSpan<Fn extends (span: Span) => unknown>(
+  session: IdentifiedSession,
   kind: ValidProcType,
   serviceName: string,
   procedureName: string,
@@ -151,6 +154,7 @@ export function createHandlerSpan<Fn extends (span: Span) => unknown>(
         'river.streamId': streamId,
         'span.kind': 'server',
       },
+      links: [{ context: session.telemetry.span.spanContext() }],
       kind: SpanKind.SERVER,
     },
     ctx,
