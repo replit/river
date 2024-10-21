@@ -1,6 +1,6 @@
 import { trace, context, propagation, Span } from '@opentelemetry/api';
 import { describe, test, expect, vi, assert, beforeEach } from 'vitest';
-import { dummySession } from '../testUtil';
+import { dummySession, readNextResult } from '../testUtil';
 
 import {
   BasicTracerProvider,
@@ -8,11 +8,10 @@ import {
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
-import { StackContextManager } from '@opentelemetry/sdk-trace-web';
+import { AsyncHooksContextManager } from '@opentelemetry/context-async-hooks';
 import tracer, {
   createSessionTelemetryInfo,
   getPropagationContext,
-  createHandlerSpan,
 } from './index';
 import { testMatrix } from '../testUtil/fixtures/matrix';
 import {
@@ -22,13 +21,18 @@ import {
 } from '../testUtil/fixtures/cleanup';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 import { createPostTestCleanups } from '../testUtil/fixtures/cleanup';
+import { FallibleServiceSchema } from '../testUtil/fixtures/services';
+import { createServer } from '../router/server';
+import { createClient } from '../router/client';
+import { UNCAUGHT_ERROR_CODE } from '../router';
+import { LogFn } from '../logging';
 
 describe('Basic tracing tests', () => {
   const provider = new BasicTracerProvider();
   provider.addSpanProcessor(
     new SimpleSpanProcessor(new InMemorySpanExporter()),
   );
-  const contextManager = new StackContextManager();
+  const contextManager = new AsyncHooksContextManager();
   contextManager.enable();
   trace.setGlobalTracerProvider(provider);
   context.setGlobalContextManager(contextManager);
@@ -56,29 +60,6 @@ describe('Basic tracing tests', () => {
         Symbol.for('OpenTelemetry Context Key SPAN'),
       ) as Span,
     ).toBeTruthy();
-  });
-
-  test('createHandlerSpan', () => {
-    const parentCtx = context.active();
-    const span = tracer.startSpan('testing span', {}, parentCtx);
-    const ctx = trace.setSpan(parentCtx, span);
-
-    const propagationContext = getPropagationContext(ctx);
-    expect(propagationContext?.traceparent).toBeTruthy();
-
-    const handlerMock = vi.fn<(span: Span) => void>();
-    createHandlerSpan(
-      'rpc',
-      'myservice',
-      'myprocedure',
-      'mystream',
-      propagationContext,
-      handlerMock,
-    );
-    expect(handlerMock).toHaveBeenCalledTimes(1);
-    const createdSpan = handlerMock.mock.calls[0][0];
-    // @ts-expect-error: hacking to get parentSpanId
-    expect(createdSpan.parentSpanId).toBe(span.spanContext().spanId);
   });
 });
 
@@ -133,6 +114,79 @@ describe.each(testMatrix())(
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
+      });
+    });
+
+    test('implicit telemetry gets picked up from handlers', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const clientMockLogger = vi.fn<LogFn>();
+      clientTransport.bindLogger(clientMockLogger);
+      const serverTransport = getServerTransport();
+      const serverMockLogger = vi.fn<LogFn>();
+      serverTransport.bindLogger(serverMockLogger);
+      const services = {
+        fallible: FallibleServiceSchema,
+      };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // test
+      const { reqWritable, resReadable } = client.fallible.echo.stream({});
+
+      reqWritable.write({
+        msg: 'abc',
+        throwResult: false,
+        throwError: false,
+      });
+      let result = await readNextResult(resReadable);
+      expect(result).toStrictEqual({
+        ok: true,
+        payload: {
+          response: 'abc',
+        },
+      });
+
+      // this isn't the first message so doesn't have telemetry info on the message itself
+      reqWritable.write({
+        msg: 'def',
+        throwResult: false,
+        throwError: true,
+      });
+
+      result = await readNextResult(resReadable);
+      expect(result).toStrictEqual({
+        ok: false,
+        payload: {
+          code: UNCAUGHT_ERROR_CODE,
+          message: 'some message',
+        },
+      });
+
+      // expect that both client and server loggers logged the uncaught error with the correct telemetry info
+      const clientInvokeCall = clientMockLogger.mock.calls.find(
+        (call) => call[0] === 'invoked fallible.echo',
+      );
+      const serverInvokeFail = serverMockLogger.mock.calls.find(
+        (call) => call[0] === 'fallible.echo handler threw an uncaught error',
+      );
+      expect(clientInvokeCall?.[1]).toBeTruthy();
+      expect(serverInvokeFail?.[1]).toBeTruthy();
+      expect(clientInvokeCall?.[1]?.telemetry?.traceId).toStrictEqual(
+        serverInvokeFail?.[1]?.telemetry?.traceId,
+      );
+
+      reqWritable.close();
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
       });
     });
   },

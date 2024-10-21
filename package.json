@@ -1,7 +1,7 @@
 {
   "name": "@replit/river",
   "description": "It's like tRPC but... with JSON Schema Support, duplex streaming and support for service multiplexing. Transport agnostic!",
-  "version": "0.203.0",
+  "version": "0.203.1",
   "type": "module",
   "exports": {
     ".": {
@@ -57,9 +57,9 @@
     "@sinclair/typebox": "~0.32.8"
   },
   "devDependencies": {
+    "@opentelemetry/context-async-hooks": "^1.26.0",
     "@opentelemetry/core": "^1.7.0",
     "@opentelemetry/sdk-trace-base": "^1.24.1",
-    "@opentelemetry/sdk-trace-web": "^1.24.1",
     "@stylistic/eslint-plugin": "^2.6.4",
     "@types/ws": "^8.5.5",
     "@typescript-eslint/eslint-plugin": "^7.8.0",

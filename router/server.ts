@@ -74,8 +74,6 @@ export interface Server<Services extends AnyServiceSchemaMap> {
   close: () => Promise<void>;
 }
 
-type ProcHandlerReturn = Promise<(() => void) | void>;
-
 interface StreamInitProps {
   // msg derived
   streamId: StreamId;
@@ -199,10 +197,17 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       // if its not a cancelled stream, validate and create a new stream
-      this.createNewProcStream({
-        ...newStreamProps,
-        ...message,
-      });
+      createHandlerSpan(
+        newStreamProps.initialSession,
+        newStreamProps.procedure.type,
+        newStreamProps.serviceName,
+        newStreamProps.procedureName,
+        newStreamProps.streamId,
+        newStreamProps.tracingCtx,
+        (span) => {
+          this.createNewProcStream(span, newStreamProps);
+        },
+      );
     };
 
     const handleSessionStatus = (evt: EventMap['sessionStatus']) => {
@@ -241,7 +246,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     this.transport.addEventListener('transportStatus', handleTransportStatus);
   }
 
-  private createNewProcStream(props: StreamInitProps) {
+  private createNewProcStream(span: Span, props: StreamInitProps) {
     const {
       streamId,
       initialSession,
@@ -251,7 +256,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       sessionMetadata,
       serviceContext,
       initPayload,
-      tracingCtx,
       procClosesWithInit,
       passInitAsDataForBackwardsCompat,
     } = props;
@@ -262,6 +266,12 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       protocolVersion,
       id: sessionId,
     } = initialSession;
+
+    // dont use the session span here, we want to create a new span for the procedure
+    loggingMetadata.telemetry = {
+      traceId: span.spanContext().traceId,
+      spanId: span.spanContext().spanId,
+    };
 
     let cleanClose = true;
     const onMessage = (msg: OpaqueTransportMessage) => {
@@ -558,108 +568,78 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
     switch (procedure.type) {
       case 'rpc':
-        void createHandlerSpan(
-          procedure.type,
-          serviceName,
-          procedureName,
-          streamId,
-          tracingCtx,
-          async (span): ProcHandlerReturn => {
-            try {
-              const responsePayload = await procedure.handler({
-                ctx: handlerContextWithSpan(span),
-                reqInit: initPayload,
-              });
+        void (async () => {
+          try {
+            const responsePayload = await procedure.handler({
+              ctx: handlerContextWithSpan(span),
+              reqInit: initPayload,
+            });
 
-              if (resWritable.isClosed()) {
-                // A disconnect happened
-                return;
-              }
-
-              resWritable.write(responsePayload);
-            } catch (err) {
-              onHandlerError(err, span);
-            } finally {
-              span.end();
+            if (resWritable.isClosed()) {
+              // A disconnect happened
+              return;
             }
-          },
-        );
+
+            resWritable.write(responsePayload);
+          } catch (err) {
+            onHandlerError(err, span);
+          } finally {
+            span.end();
+          }
+        })();
         break;
       case 'stream':
-        void createHandlerSpan(
-          procedure.type,
-          serviceName,
-          procedureName,
-          streamId,
-          tracingCtx,
-          async (span): ProcHandlerReturn => {
-            try {
-              await procedure.handler({
-                ctx: handlerContextWithSpan(span),
-                reqInit: initPayload,
-                reqReadable,
-                resWritable,
-              });
-            } catch (err) {
-              onHandlerError(err, span);
-            } finally {
-              span.end();
-            }
-          },
-        );
-
+        void (async () => {
+          try {
+            await procedure.handler({
+              ctx: handlerContextWithSpan(span),
+              reqInit: initPayload,
+              reqReadable,
+              resWritable,
+            });
+          } catch (err) {
+            onHandlerError(err, span);
+          } finally {
+            span.end();
+          }
+        })();
         break;
       case 'subscription':
-        void createHandlerSpan(
-          procedure.type,
-          serviceName,
-          procedureName,
-          streamId,
-          tracingCtx,
-          async (span): ProcHandlerReturn => {
-            try {
-              await procedure.handler({
-                ctx: handlerContextWithSpan(span),
-                reqInit: initPayload,
-                resWritable: resWritable,
-              });
-            } catch (err) {
-              onHandlerError(err, span);
-            } finally {
-              span.end();
-            }
-          },
-        );
+        void (async () => {
+          try {
+            await procedure.handler({
+              ctx: handlerContextWithSpan(span),
+              reqInit: initPayload,
+              resWritable: resWritable,
+            });
+          } catch (err) {
+            onHandlerError(err, span);
+          } finally {
+            span.end();
+          }
+        })();
         break;
       case 'upload':
-        void createHandlerSpan(
-          procedure.type,
-          serviceName,
-          procedureName,
-          streamId,
-          tracingCtx,
-          async (span): ProcHandlerReturn => {
-            try {
-              const responsePayload = await procedure.handler({
-                ctx: handlerContextWithSpan(span),
-                reqInit: initPayload,
-                reqReadable: reqReadable,
-              });
+        void (async () => {
+          try {
+            const responsePayload = await procedure.handler({
+              ctx: handlerContextWithSpan(span),
+              reqInit: initPayload,
+              reqReadable: reqReadable,
+            });
 
-              if (resWritable.isClosed()) {
-                // A disconnect happened
-                return;
-              }
-
-              resWritable.write(responsePayload);
-            } catch (err) {
-              onHandlerError(err, span);
-            } finally {
-              span.end();
+            if (resWritable.isClosed()) {
+              // A disconnect happened
+              return;
             }
-          },
-        );
 
+            resWritable.write(responsePayload);
+          } catch (err) {
+            onHandlerError(err, span);
+          } finally {
+            span.end();
+          }
+        })();
         break;
     }
 

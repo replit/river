@@ -241,8 +241,6 @@ export abstract class IdentifiedSession extends CommonSession {
   }
 
   get loggingMetadata(): MessageMetadata {
-    const spanContext = this.telemetry.span.spanContext();
-
     const metadata: MessageMetadata = {
       clientId: this.from,
       connectedTo: this.to,
@@ -250,6 +248,7 @@ export abstract class IdentifiedSession extends CommonSession {
     };
 
     if (this.telemetry.span.isRecording()) {
+      const spanContext = this.telemetry.span.spanContext();
       metadata.telemetry = {
         traceId: spanContext.traceId,
         spanId: spanContext.spanId,

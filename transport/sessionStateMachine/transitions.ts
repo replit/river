@@ -14,7 +14,11 @@ import {
   IdentifiedSessionWithGracePeriodProps,
   SessionOptions,
 } from './common';
-import { PropagationContext, createSessionTelemetryInfo } from '../../tracing';
+import {
+  PropagationContext,
+  createConnectionTelemetryInfo,
+  createSessionTelemetryInfo,
+} from '../../tracing';
 import {
   SessionWaitingForHandshake,
   SessionWaitingForHandshakeListeners,
@@ -187,6 +191,7 @@ export const SessionStateGraph = {
         ...carriedState,
       });
 
+      conn.telemetry = createConnectionTelemetryInfo(conn, session.telemetry);
       session.log?.info(
         `session ${session.id} transition from Connecting to Handshaking`,
         {
@@ -262,6 +267,8 @@ export const SessionStateGraph = {
         listeners,
         ...carriedState,
       });
+
+      conn.telemetry = createConnectionTelemetryInfo(conn, session.telemetry);
       session.log?.info(
         `session ${session.id} transition from WaitingForHandshake to Connected`,
         {

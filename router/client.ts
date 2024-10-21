@@ -288,7 +288,7 @@ function handleProc(
   const procClosesWithInit = procType === 'rpc' || procType === 'subscription';
   const streamId = generateId();
   const { span, ctx } = createProcTelemetryInfo(
-    transport,
+    session,
     procType,
     serviceName,
     procedureName,
@@ -535,7 +535,7 @@ function handleProc(
 
 /**
  * Waits for a message in the response AND the server to close.
- * Logs an error if we receive  multiple messages.
+ * Logs an error if we receive multiple messages.
  * Used in RPC and Upload.
  */
 async function getSingleMessage(
