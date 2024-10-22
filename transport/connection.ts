@@ -47,6 +47,26 @@ export abstract class Connection {
     return [...this._errorListeners];
   }
 
+  onData(msg: Uint8Array) {
+    for (const cb of this._dataListeners) {
+      cb(msg);
+    }
+  }
+
+  onError(err: Error) {
+    for (const cb of this._errorListeners) {
+      cb(err);
+    }
+  }
+
+  onClose() {
+    for (const cb of this._closeListeners) {
+      cb();
+    }
+
+    this.telemetry?.span.end();
+  }
+
   /**
    * Handle adding a callback for when a message is received.
    * @param msg The message that was received.
