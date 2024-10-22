@@ -40,20 +40,14 @@ export class WebSocketConnection extends Connection {
           `websocket closed with code and reason: ${code} - ${reason}`,
         );
 
-        for (const cb of this.errorListeners) {
-          cb(err);
-        }
+        this.onError(err);
       }
 
-      for (const cb of this.closeListeners) {
-        cb();
-      }
+      this.onClose();
     };
 
     this.ws.onmessage = (msg) => {
-      for (const cb of this.dataListeners) {
-        cb(msg.data as Uint8Array);
-      }
+      this.onData(msg.data as Uint8Array);
     };
   }
 
