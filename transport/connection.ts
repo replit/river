@@ -48,19 +48,19 @@ export abstract class Connection {
   }
 
   onData(msg: Uint8Array) {
-    for (const cb of this._dataListeners) {
+    for (const cb of this.dataListeners) {
       cb(msg);
     }
   }
 
   onError(err: Error) {
-    for (const cb of this._errorListeners) {
+    for (const cb of this.errorListeners) {
       cb(err);
     }
   }
 
   onClose() {
-    for (const cb of this._closeListeners) {
+    for (const cb of this.closeListeners) {
       cb();
     }
 
