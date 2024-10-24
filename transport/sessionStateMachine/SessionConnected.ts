@@ -49,11 +49,11 @@ export class SessionConnected<
   }
 
   send(msg: PartialTransportMessage): string {
-    const constructedMsg = this.constructMsg(msg);
-    this.sendBuffer.push(constructedMsg);
-    this.conn.send(this.options.codec.toBuffer(constructedMsg));
+    const encodedMsg = this.encodeMsg(msg);
+    this.sendBuffer.push(encodedMsg);
+    this.conn.send(encodedMsg.data);
 
-    return constructedMsg.id;
+    return encodedMsg.id;
   }
 
   constructor(props: SessionConnectedProps<ConnType>) {
@@ -75,7 +75,7 @@ export class SessionConnected<
       );
 
       for (const msg of this.sendBuffer) {
-        this.conn.send(this.options.codec.toBuffer(msg));
+        this.conn.send(msg.data);
       }
     }
 

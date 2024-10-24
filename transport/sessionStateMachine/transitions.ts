@@ -1,4 +1,3 @@
-import { OpaqueTransportMessage, TransportClientId } from '..';
 import {
   SessionConnecting,
   SessionConnectingListeners,
@@ -38,7 +37,11 @@ import {
   SessionBackingOff,
   SessionBackingOffListeners,
 } from './SessionBackingOff';
-import { ProtocolVersion } from '../message';
+import {
+  EncodedTransportMessage,
+  ProtocolVersion,
+  TransportClientId,
+} from '../message';
 
 function inheritSharedSession(
   session: IdentifiedSession,
@@ -78,7 +81,7 @@ export const SessionStateGraph = {
     ) => {
       const id = `session-${generateId()}`;
       const telemetry = createSessionTelemetryInfo(id, to, from);
-      const sendBuffer: Array<OpaqueTransportMessage> = [];
+      const sendBuffer: Array<EncodedTransportMessage> = [];
 
       const session = new SessionNoConnection({
         listeners,

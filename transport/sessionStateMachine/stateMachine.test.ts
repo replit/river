@@ -1891,8 +1891,8 @@ describe('session state machine', () => {
       expect(onConnectionClosed).not.toHaveBeenCalled();
       expect(onConnectionErrored).not.toHaveBeenCalled();
 
-      const msg = session.constructMsg(payloadToTransportMessage('hello'));
-      session.conn.emitData(session.options.codec.toBuffer(msg));
+      const msg = session.encodeMsg(payloadToTransportMessage('hello'));
+      session.conn.emitData(msg.data);
 
       await waitFor(async () => {
         expect(onMessage).toHaveBeenCalledTimes(1);
@@ -1940,15 +1940,13 @@ describe('session state machine', () => {
 
       // send a heartbeat
       conn.emitData(
-        session.options.codec.toBuffer(
-          session.constructMsg({
-            streamId: 'heartbeat',
-            controlFlags: ControlFlags.AckBit,
-            payload: {
-              type: 'ACK',
-            } satisfies Static<typeof ControlMessageAckSchema>,
-          }),
-        ),
+        session.encodeMsg({
+          streamId: 'heartbeat',
+          controlFlags: ControlFlags.AckBit,
+          payload: {
+            type: 'ACK',
+          } satisfies Static<typeof ControlMessageAckSchema>,
+        }).data,
       );
 
       // make sure the session acks the heartbeat
@@ -1962,15 +1960,13 @@ describe('session state machine', () => {
 
       // send a heartbeat
       conn.emitData(
-        session.options.codec.toBuffer(
-          session.constructMsg({
-            streamId: 'heartbeat',
-            controlFlags: ControlFlags.AckBit,
-            payload: {
-              type: 'ACK',
-            } satisfies Static<typeof ControlMessageAckSchema>,
-          }),
-        ),
+        session.encodeMsg({
+          streamId: 'heartbeat',
+          controlFlags: ControlFlags.AckBit,
+          payload: {
+            type: 'ACK',
+          } satisfies Static<typeof ControlMessageAckSchema>,
+        }).data,
       );
 
       expect(sessionHandle.onMessage).not.toHaveBeenCalled();
