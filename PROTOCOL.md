@@ -162,7 +162,7 @@ All messages MUST have no control flags set (i.e., the `controlFlags` field is `
   - The payload MUST be `{ type: 'ACK' }`.
   - Because this is a control message that is not associated with a specific stream, you MUST NOT set `serviceName` or `procedureName` and `streamId` can be something arbitrary (e.g. `heartbeat`).
 
-There are 4 error payloads that are defined in the protocol sent from server to client, these codes are reserved:
+There are 5 error payloads that are defined in the protocol sent from server to client, these codes are reserved:
 
 ```ts
 // When a client sends a malformed request. This can be
@@ -187,11 +187,22 @@ interface CancelError extends BaseError {
   message: string;
 }
 
+// This occurrs when a client or server attempts to send a message that is
+// larger than the configurable max payload size.
+interface MaxPayloadSizeExceededError extends BaseError {
+  code: 'MAX_PAYLOAD_SIZE_EXCEEDED';
+  message: string;
+}
+
 // This is sent when the server encounters an internal error
 // i.e. an invariant has been violated
 interface;
 
-type ProtocolError = UncaughtError | InvalidRequestError | CancelError;
+type ProtocolError =
+  | UncaughtError
+  | InvalidRequestError
+  | CancelError
+  | MaxPayloadSizeExceededError;
 ```
 
 `ProtocolError`s, just like service-level errors, are wrapped with a `Result`, which is further wrapped with `TransportMessage` and MUST have a `StreamCancelBit` flag. Please note that these are separate from user-defined errors, which should be treated just like any response message.
@@ -672,3 +683,23 @@ This explicit ack serves three purposes:
 1. It keeps the connection alive by preventing the underlying transport from timing out.
 2. It allows the session to detect when the underlying transport has been lost, even in cases where the transport does not emit a close event.
 3. It provides an upper bound on how many messages the session buffers in the case of a reconnection (consider the case where an upload procedure is really long-lived and the server doesn't send any messages until the upload is finished. Without these explicit heartbeats, the client will buffer everything!).
+
+#### Maximum payload size handling
+
+It is desirable to set a maximum allowed payload size to prevent clients or servers from sending payloads that are too large for the underlying transport. Some transports may enforce a maximum payload size and close the connection if that is exceeded. This would cause the entire river session to become broken as this payload cannot be transmitted. It is better to catch this before sending the message on the transport and only fail the single procedure call that was attempting to send the large payload.
+
+Payload size is calculated after encoding the message with the configured codec.
+
+##### Client handling
+
+###### Init Message
+
+If the init message of a procedure exceeds the maximum payload size, the client must inject a `MAX_PAYLOAD_SIZE_EXCEEDED` error and fail the procedure. In this case no message is ever sent to the server and is handled entirely client-side.
+
+###### Non-init message
+
+If the client attempts to send a message after a procedure has been started which exceeds the maximum payload size. The client must throw an error inside the `write` call and inject a `MAX_PAYLOAD_SIZE_EXCEEDED` error in the procedure read stream. The client must also send a cancel request to the server so the server-side resources can be cleaned up.
+
+##### Server handling
+
+If the server attempts to send a message after a procedure has been started which exceeds the maximum payload size, the server must reply with a `MAX_PAYLOAD_SIZE_EXCEEDED` error and close down the procedure.

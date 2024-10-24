@@ -36,7 +36,9 @@ import {
   CANCEL_CODE,
   ReaderErrorSchema,
   UNEXPECTED_DISCONNECT_CODE,
+  MAX_PAYLOAD_SIZE_EXCEEDED_CODE,
 } from './errors';
+import { MaxPayloadSizeExceeded } from '../transport/sessionStateMachine/common';
 
 const ReaderErrResultSchema = ErrResultSchema(ReaderErrorSchema);
 
@@ -297,11 +299,42 @@ function handleProc(
   let cleanClose = true;
   const reqWritable = new WritableImpl<Static<PayloadType>>({
     writeCb: (rawIn) => {
-      sessionScopedSend({
-        streamId,
-        payload: rawIn,
-        controlFlags: 0,
-      });
+      try {
+        sessionScopedSend({
+          streamId,
+          payload: rawIn,
+          controlFlags: 0,
+        });
+      } catch (e) {
+        if (!(e instanceof MaxPayloadSizeExceeded)) {
+          throw e;
+        }
+
+        cleanClose = false;
+        if (!resReadable.isClosed()) {
+          resReadable._pushValue(
+            Err({
+              code: MAX_PAYLOAD_SIZE_EXCEEDED_CODE,
+              message: `client: ${e.message}`,
+            }),
+          );
+          closeReadable();
+        }
+
+        reqWritable.close();
+        // TODO: Is this the right error to send to the server?
+        sessionScopedSend(
+          cancelMessage(
+            streamId,
+            Err({
+              code: CANCEL_CODE,
+              message: 'cancelled by client',
+            }),
+          ),
+        );
+
+        throw e;
+      }
     },
     // close callback
     closeCb: () => {
@@ -480,16 +513,33 @@ function handleProc(
   transport.addEventListener('message', onMessage);
   transport.addEventListener('sessionStatus', onSessionStatus);
 
-  sessionScopedSend({
-    streamId,
-    serviceName,
-    procedureName,
-    tracing: getPropagationContext(ctx),
-    payload: init,
-    controlFlags: procClosesWithInit
-      ? ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit
-      : ControlFlags.StreamOpenBit,
-  });
+  try {
+    sessionScopedSend({
+      streamId,
+      serviceName,
+      procedureName,
+      tracing: getPropagationContext(ctx),
+      payload: init,
+      controlFlags: procClosesWithInit
+        ? ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit
+        : ControlFlags.StreamOpenBit,
+    });
+  } catch (e) {
+    if (!(e instanceof MaxPayloadSizeExceeded)) {
+      throw e;
+    }
+
+    cleanClose = false;
+    resReadable._pushValue(
+      Err({
+        code: MAX_PAYLOAD_SIZE_EXCEEDED_CODE,
+        message: `client: ${e.message}`,
+      }),
+    );
+    closeReadable();
+
+    reqWritable.close();
+  }
 
   if (procClosesWithInit) {
     reqWritable.close();

@@ -27,6 +27,10 @@ export const INVALID_REQUEST_CODE = 'INVALID_REQUEST';
  * {@link CANCEL_CODE} is the code used when either server or client cancels the stream.
  */
 export const CANCEL_CODE = 'CANCEL';
+/**
+ * {@link MAX_PAYLOAD_SIZE_EXCEEDED_CODE} is the code used when a request's payload exceeds the maximum allowed size.
+ */
+export const MAX_PAYLOAD_SIZE_EXCEEDED_CODE = 'MAX_PAYLOAD_SIZE_EXCEEDED';
 
 type TLiteralString = TLiteral<string>;
 
@@ -70,6 +74,10 @@ export const ReaderErrorSchema = Type.Union([
   }),
   Type.Object({
     code: Type.Literal(CANCEL_CODE),
+    message: Type.String(),
+  }),
+  Type.Object({
+    code: Type.Literal(MAX_PAYLOAD_SIZE_EXCEEDED_CODE),
     message: Type.String(),
   }),
 ]) satisfies ProcedureErrorSchemaType;

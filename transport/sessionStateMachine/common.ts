@@ -141,6 +141,15 @@ export interface SessionOptions {
    * The codec to use for encoding/decoding messages over the wire
    */
   codec: Codec;
+  /**
+   * The maximum payload size that is allowed to be sent to the peer.
+   * This does not enforce max payload side when receiving messages,
+   * only when sending them.
+   *
+   * If the max payload size is exceeded an error with code {@link MAX_PAYLOAD_SIZE_EXCEEDED}
+   * will be returned and the procedure will be canceled.
+   */
+  maxPayloadSizeBytes: number;
 }
 
 // all session states have a from and options
@@ -209,6 +218,12 @@ export interface IdentifiedSessionProps extends CommonSessionProps {
   protocolVersion: ProtocolVersion;
 }
 
+export class MaxPayloadSizeExceeded extends Error {
+  constructor(size: number, max: number) {
+    super(`payload exceeded maximum payload size size=${size} max=${max}`);
+  }
+}
+
 export abstract class IdentifiedSession extends CommonSession {
   readonly id: SessionId;
   readonly telemetry: TelemetryInfo;
@@ -275,6 +290,13 @@ export abstract class IdentifiedSession extends CommonSession {
       seq: msg.seq,
       data: this.options.codec.toBuffer(msg),
     };
+
+    if (encodedMsg.data.byteLength > this.options.maxPayloadSizeBytes) {
+      throw new MaxPayloadSizeExceeded(
+        encodedMsg.data.byteLength,
+        this.options.maxPayloadSizeBytes,
+      );
+    }
 
     this.seq++;
 
