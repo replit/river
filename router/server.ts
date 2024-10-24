@@ -8,6 +8,7 @@ import {
   INVALID_REQUEST_CODE,
   BaseErrorSchemaType,
   ErrResultSchema,
+  MAX_PAYLOAD_SIZE_EXCEEDED_CODE,
 } from './errors';
 import {
   AnyService,
@@ -42,7 +43,10 @@ import { ServerHandshakeOptions } from './handshake';
 import { Connection } from '../transport/connection';
 import { ServerTransport } from '../transport/server';
 import { ReadableImpl, WritableImpl } from './streams';
-import { IdentifiedSession } from '../transport/sessionStateMachine/common';
+import {
+  IdentifiedSession,
+  MaxPayloadSizeExceeded,
+} from '../transport/sessionStateMachine/common';
 import { SessionBoundSendFn } from '../transport/transport';
 
 type StreamId = string;
@@ -520,6 +524,15 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
       span.recordException(err instanceof Error ? err : new Error(errorMsg));
       span.setStatus({ code: SpanStatusCode.ERROR });
+
+      if (err instanceof MaxPayloadSizeExceeded) {
+        onServerCancel({
+          code: MAX_PAYLOAD_SIZE_EXCEEDED_CODE,
+          message: `server: ${err.message}`,
+        });
+
+        return;
+      }
 
       this.log?.error(
         `${serviceName}.${procedureName} handler threw an uncaught error`,

@@ -83,6 +83,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                 ],
                 "type": "object",
               },
+              {
+                "properties": {
+                  "code": {
+                    "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
             ],
           },
           "init": {
@@ -176,6 +192,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                 ],
                 "type": "object",
               },
+              {
+                "properties": {
+                  "code": {
+                    "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
             ],
           },
           "init": {
@@ -252,6 +284,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                 "properties": {
                   "code": {
                     "const": "CANCEL",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
                     "type": "string",
                   },
                   "message": {
@@ -356,6 +404,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                 ],
                 "type": "object",
               },
+              {
+                "properties": {
+                  "code": {
+                    "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
             ],
           },
           "init": {
@@ -446,6 +510,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                 "properties": {
                   "code": {
                     "const": "CANCEL",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
                     "type": "string",
                   },
                   "message": {
@@ -589,6 +669,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                 ],
                 "type": "object",
               },
+              {
+                "properties": {
+                  "code": {
+                    "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
             ],
           },
           "init": {
@@ -697,6 +793,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                 ],
                 "type": "object",
               },
+              {
+                "properties": {
+                  "code": {
+                    "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
             ],
           },
           "init": {
@@ -764,6 +876,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                 "properties": {
                   "code": {
                     "const": "CANCEL",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
+                    "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
                     "type": "string",
                   },
                   "message": {
@@ -868,6 +996,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
             ],
             "type": "object",
           },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
         ],
       },
       "input": {
@@ -961,6 +1105,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
             ],
             "type": "object",
           },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
         ],
       },
       "input": {
@@ -1037,6 +1197,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
             "properties": {
               "code": {
                 "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
                 "type": "string",
               },
               "message": {
@@ -1141,6 +1317,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
             ],
             "type": "object",
           },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
         ],
       },
       "init": {
@@ -1231,6 +1423,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
             "properties": {
               "code": {
                 "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
                 "type": "string",
               },
               "message": {
@@ -1374,6 +1582,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
             ],
             "type": "object",
           },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
         ],
       },
       "init": {
@@ -1482,6 +1706,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
             ],
             "type": "object",
           },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
         ],
       },
       "input": {
@@ -1549,6 +1789,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
             "properties": {
               "code": {
                 "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
                 "type": "string",
               },
               "message": {
@@ -1651,6 +1907,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
             ],
             "type": "object",
           },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
         ],
       },
       "init": {
@@ -1744,6 +2016,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
             ],
             "type": "object",
           },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
         ],
       },
       "init": {
@@ -1820,6 +2108,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
             "properties": {
               "code": {
                 "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
                 "type": "string",
               },
               "message": {
@@ -1924,6 +2228,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
             ],
             "type": "object",
           },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
         ],
       },
       "init": {
@@ -2014,6 +2334,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
             "properties": {
               "code": {
                 "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
                 "type": "string",
               },
               "message": {
@@ -2157,6 +2493,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
             ],
             "type": "object",
           },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
         ],
       },
       "init": {
@@ -2265,6 +2617,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
             ],
             "type": "object",
           },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
         ],
       },
       "init": {
@@ -2332,6 +2700,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
             "properties": {
               "code": {
                 "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
                 "type": "string",
               },
               "message": {
@@ -2422,6 +2806,22 @@ exports[`serialize service to jsonschema > serialize service with binary 1`] = `
             "properties": {
               "code": {
                 "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
                 "type": "string",
               },
               "message": {
@@ -2578,6 +2978,22 @@ exports[`serialize service to jsonschema > serialize service with errors 1`] = `
             ],
             "type": "object",
           },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
         ],
       },
       "init": {
@@ -2679,6 +3095,22 @@ exports[`serialize service to jsonschema > serialize service with errors 1`] = `
             "properties": {
               "code": {
                 "const": "CANCEL",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "MAX_PAYLOAD_SIZE_EXCEEDED",
                 "type": "string",
               },
               "message": {
