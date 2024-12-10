@@ -49,7 +49,7 @@
   ],
   "dependencies": {
     "@msgpack/msgpack": "^3.0.0-beta2",
-    "nanoid": "^4.0.2",
+    "nanoid": "^5.0.9",
     "ws": "^8.17.0"
   },
   "peerDependencies": {
