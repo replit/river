@@ -1,12 +1,12 @@
 import { Logger, MessageMetadata } from '../../logging';
 import { TelemetryInfo } from '../../tracing';
 import {
+  EncodedTransportMessage,
   OpaqueTransportMessage,
   OpaqueTransportMessageSchema,
   PartialTransportMessage,
   ProtocolVersion,
   TransportClientId,
-  TransportMessage,
 } from '../message';
 import { Value } from '@sinclair/typebox/value';
 import { Codec } from '../../codec';
@@ -204,7 +204,7 @@ export interface IdentifiedSessionProps extends CommonSessionProps {
   to: TransportClientId;
   seq: number;
   ack: number;
-  sendBuffer: Array<OpaqueTransportMessage>;
+  sendBuffer: Array<EncodedTransportMessage>;
   telemetry: TelemetryInfo;
   protocolVersion: ProtocolVersion;
 }
@@ -224,7 +224,7 @@ export abstract class IdentifiedSession extends CommonSession {
    * Number of unique messages we've received this session (excluding handshake)
    */
   ack: number;
-  sendBuffer: Array<OpaqueTransportMessage>;
+  sendBuffer: Array<EncodedTransportMessage>;
 
   constructor(props: IdentifiedSessionProps) {
     const { id, to, seq, ack, sendBuffer, telemetry, log, protocolVersion } =
@@ -258,9 +258,9 @@ export abstract class IdentifiedSession extends CommonSession {
     return metadata;
   }
 
-  constructMsg<Payload>(
+  encodeMsg<Payload>(
     partialMsg: PartialTransportMessage<Payload>,
-  ): TransportMessage<Payload> {
+  ): EncodedTransportMessage {
     const msg = {
       ...partialMsg,
       id: generateId(),
@@ -270,9 +270,15 @@ export abstract class IdentifiedSession extends CommonSession {
       ack: this.ack,
     };
 
+    const encodedMsg = {
+      id: msg.id,
+      seq: msg.seq,
+      data: this.options.codec.toBuffer(msg),
+    };
+
     this.seq++;
 
-    return msg;
+    return encodedMsg;
   }
 
   nextSeq(): number {
@@ -280,7 +286,7 @@ export abstract class IdentifiedSession extends CommonSession {
   }
 
   send(msg: PartialTransportMessage): string {
-    const constructedMsg = this.constructMsg(msg);
+    const constructedMsg = this.encodeMsg(msg);
     this.sendBuffer.push(constructedMsg);
 
     return constructedMsg.id;

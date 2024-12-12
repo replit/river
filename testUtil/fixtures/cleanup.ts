@@ -1,4 +1,4 @@
-import { expect, vi } from 'vitest';
+import { assert, expect, vi } from 'vitest';
 import {
   ClientTransport,
   Connection,
@@ -68,9 +68,16 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
         [...t.sessions]
           .map(([client, sess]) => {
             // get all messages that are not heartbeats
-            const buff = sess.sendBuffer.filter((msg) => {
-              return !Value.Check(ControlMessageAckSchema, msg.payload);
-            });
+            const buff = sess.sendBuffer
+              .map((encodedMsg) => {
+                const msg = sess.parseMsg(encodedMsg.data);
+                assert(msg);
+
+                return msg;
+              })
+              .filter(
+                (msg) => !Value.Check(ControlMessageAckSchema, msg.payload),
+              );
 
             return [client, buff] as [
               string,

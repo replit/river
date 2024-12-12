@@ -38,9 +38,7 @@ export interface DeleteSessionOptions {
   unhealthy: boolean;
 }
 
-export type SessionBoundSendFn = (
-  msg: PartialTransportMessage,
-) => string | undefined;
+export type SessionBoundSendFn = (msg: PartialTransportMessage) => string;
 
 /**
  * Transports manage the lifecycle (creation/deletion) of sessions
