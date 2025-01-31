@@ -11,6 +11,7 @@ import {
 import { Value } from '@sinclair/typebox/value';
 import { Codec } from '../../codec';
 import { generateId } from '../id';
+import { Tracer } from '@opentelemetry/api';
 
 export const enum SessionState {
   NoConnection = 'NoConnection',
@@ -147,6 +148,7 @@ export interface SessionOptions {
 export interface CommonSessionProps {
   from: TransportClientId;
   options: SessionOptions;
+  tracer: Tracer;
   log: Logger | undefined;
 }
 
@@ -154,14 +156,16 @@ export abstract class CommonSession extends StateMachineState {
   readonly from: TransportClientId;
   readonly options: SessionOptions;
 
+  tracer: Tracer;
   log?: Logger;
   abstract get loggingMetadata(): MessageMetadata;
 
-  constructor({ from, options, log }: CommonSessionProps) {
+  constructor({ from, options, log, tracer }: CommonSessionProps) {
     super();
     this.from = from;
     this.options = options;
     this.log = log;
+    this.tracer = tracer;
   }
 
   parseMsg(msg: Uint8Array): OpaqueTransportMessage | null {

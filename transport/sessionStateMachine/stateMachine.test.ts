@@ -35,6 +35,7 @@ import {
   SessionBackingOff,
   SessionBackingOffListeners,
 } from './SessionBackingOff';
+import { getTracer } from '../../tracing';
 
 function persistedSessionState(session: IdentifiedSession) {
   return {
@@ -145,6 +146,7 @@ function createSessionNoConnection() {
     listeners,
     testingSessionOptions,
     currentProtocolVersion,
+    getTracer(),
   );
 
   return { session, ...listeners };
@@ -221,6 +223,7 @@ function createSessionWaitingForHandshake() {
     conn,
     listeners,
     testingSessionOptions,
+    getTracer(),
   );
 
   return { session, ...listeners };

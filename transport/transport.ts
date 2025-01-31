@@ -26,6 +26,8 @@ import {
 import { Connection } from './connection';
 import { Session, SessionStateGraph } from './sessionStateMachine/transitions';
 import { SessionId } from './sessionStateMachine/common';
+import { Tracer } from '@opentelemetry/api';
+import { getTracer } from '../tracing';
 
 /**
  * Represents the possible states of a transport.
@@ -84,6 +86,7 @@ export abstract class Transport<ConnType extends Connection> {
    */
   protected options: TransportOptions;
   log?: Logger;
+  tracer: Tracer;
 
   sessions: Map<TransportClientId, Session<ConnType>>;
 
@@ -101,6 +104,7 @@ export abstract class Transport<ConnType extends Connection> {
     this.clientId = clientId;
     this.status = 'open';
     this.sessions = new Map();
+    this.tracer = getTracer();
   }
 
   bindLogger(fn: LogFn | Logger, level?: LoggingLevel) {

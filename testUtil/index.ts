@@ -19,6 +19,7 @@ import { SessionStateGraph } from '../transport/sessionStateMachine/transitions'
 import { BaseErrorSchemaType } from '../router/errors';
 import { ClientTransport } from '../transport/client';
 import { ServerTransport } from '../transport/server';
+import { getTracer } from '../tracing';
 
 export {
   createMockTransportNetwork,
@@ -186,6 +187,7 @@ export function dummySession() {
     },
     testingSessionOptions,
     currentProtocolVersion,
+    getTracer(),
   );
 }
 

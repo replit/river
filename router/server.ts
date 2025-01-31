@@ -36,8 +36,12 @@ import { Value, ValueError } from '@sinclair/typebox/value';
 import { Err, Result, Ok, ErrResult } from './result';
 import { EventMap } from '../transport/events';
 import { coerceErrorString } from '../transport/stringifyError';
-import { Span, SpanStatusCode } from '@opentelemetry/api';
-import { createHandlerSpan, PropagationContext } from '../tracing';
+import { Span } from '@opentelemetry/api';
+import {
+  createHandlerSpan,
+  PropagationContext,
+  recordRiverError,
+} from '../tracing';
 import { ServerHandshakeOptions } from './handshake';
 import { Connection } from '../transport/connection';
 import { ServerTransport } from '../transport/server';
@@ -198,6 +202,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
       // if its not a cancelled stream, validate and create a new stream
       createHandlerSpan(
+        transport.tracer,
         newStreamProps.initialSession,
         newStreamProps.procedure.type,
         newStreamProps.serviceName,
@@ -423,6 +428,8 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     };
 
     const onServerCancel = (e: Static<typeof ReaderErrorSchema>) => {
+      recordRiverError(span, e);
+
       if (reqReadable.isClosed() && resWritable.isClosed()) {
         // Everything already closed, no-op.
         return;
@@ -476,6 +483,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       Result<Static<PayloadType>, Static<BaseErrorSchemaType>>
     >({
       writeCb: (response) => {
+        if (!response.ok) {
+          recordRiverError(span, response.payload);
+        }
+
         sessionScopedSend({
           streamId,
           controlFlags: procClosesWithResponse
@@ -519,7 +530,6 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       const errorMsg = coerceErrorString(err);
 
       span.recordException(err instanceof Error ? err : new Error(errorMsg));
-      span.setStatus({ code: SpanStatusCode.ERROR });
 
       this.log?.error(
         `${serviceName}.${procedureName} handler threw an uncaught error`,

@@ -18,7 +18,7 @@ import { Transport } from './transport';
 import { coerceErrorString } from './stringifyError';
 import { ProtocolError } from './events';
 import { Value } from '@sinclair/typebox/value';
-import tracer, { getPropagationContext } from '../tracing';
+import { getPropagationContext } from '../tracing';
 import { Connection } from './connection';
 import { MessageMetadata } from '../logging';
 import { SessionConnecting } from './sessionStateMachine/SessionConnecting';
@@ -110,6 +110,7 @@ export abstract class ClientTransport<
       },
       this.options,
       currentProtocolVersion,
+      this.tracer,
       this.log,
     );
 
@@ -377,20 +378,23 @@ export abstract class ClientTransport<
   }
 
   protected onBackoffFinished(session: SessionBackingOff) {
-    const connPromise = tracer.startActiveSpan('connect', async (span) => {
-      try {
-        return await this.createNewOutgoingConnection(session.to);
-      } catch (err) {
-        // rethrow the error so that the promise is rejected
-        // as it was before we wrapped it in a span
-        const errStr = coerceErrorString(err);
-        span.recordException(errStr);
-        span.setStatus({ code: SpanStatusCode.ERROR });
-        throw err;
-      } finally {
-        span.end();
-      }
-    });
+    const connPromise = session.tracer.startActiveSpan(
+      'connect',
+      async (span) => {
+        try {
+          return await this.createNewOutgoingConnection(session.to);
+        } catch (err) {
+          // rethrow the error so that the promise is rejected
+          // as it was before we wrapped it in a span
+          const errStr = coerceErrorString(err);
+          span.recordException(errStr);
+          span.setStatus({ code: SpanStatusCode.ERROR });
+          throw err;
+        } finally {
+          span.end();
+        }
+      },
+    );
 
     // transition to connecting
     const connectingSession =
