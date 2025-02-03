@@ -1,4 +1,10 @@
-import { trace, context, propagation, Span } from '@opentelemetry/api';
+import {
+  trace,
+  context,
+  propagation,
+  Span,
+  SpanStatusCode,
+} from '@opentelemetry/api';
 import { describe, test, expect, vi, assert, beforeEach } from 'vitest';
 import { dummySession, readNextResult } from '../testUtil';
 
@@ -9,10 +15,7 @@ import {
 } from '@opentelemetry/sdk-trace-base';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { AsyncHooksContextManager } from '@opentelemetry/context-async-hooks';
-import tracer, {
-  createSessionTelemetryInfo,
-  getPropagationContext,
-} from './index';
+import { createSessionTelemetryInfo, getPropagationContext } from './index';
 import { testMatrix } from '../testUtil/fixtures/matrix';
 import {
   cleanupTransports,
@@ -27,19 +30,19 @@ import { createClient } from '../router/client';
 import { UNCAUGHT_ERROR_CODE } from '../router';
 import { LogFn } from '../logging';
 
-describe('Basic tracing tests', () => {
-  const provider = new BasicTracerProvider();
-  provider.addSpanProcessor(
-    new SimpleSpanProcessor(new InMemorySpanExporter()),
-  );
-  const contextManager = new AsyncHooksContextManager();
-  contextManager.enable();
-  trace.setGlobalTracerProvider(provider);
-  context.setGlobalContextManager(contextManager);
-  propagation.setGlobalPropagator(new W3CTraceContextPropagator());
+const provider = new BasicTracerProvider();
+const spanExporter = new InMemorySpanExporter();
+provider.addSpanProcessor(new SimpleSpanProcessor(spanExporter));
+const contextManager = new AsyncHooksContextManager();
+contextManager.enable();
+trace.setGlobalTracerProvider(provider);
+context.setGlobalContextManager(contextManager);
+propagation.setGlobalPropagator(new W3CTraceContextPropagator());
 
+describe('Basic tracing tests', () => {
   test('createSessionTelemetryInfo', () => {
     const parentCtx = context.active();
+    const tracer = trace.getTracer('test');
     const span = tracer.startSpan('empty span', {}, parentCtx);
     const ctx = trace.setSpan(parentCtx, span);
 
@@ -47,6 +50,7 @@ describe('Basic tracing tests', () => {
     expect(propCtx?.traceparent).toBeTruthy();
     const session = dummySession();
     const teleInfo = createSessionTelemetryInfo(
+      tracer,
       session.id,
       session.to,
       session.from,
@@ -75,6 +79,7 @@ describe.each(testMatrix())(
       const setup = await transport.setup({ client: opts, server: opts });
       getClientTransport = setup.getClientTransport;
       getServerTransport = setup.getServerTransport;
+      spanExporter.reset();
 
       return async () => {
         await postTestCleanup();
@@ -183,6 +188,75 @@ describe.each(testMatrix())(
       );
 
       reqWritable.close();
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('river errors are recorded on handler spans', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const clientMockLogger = vi.fn<LogFn>();
+      clientTransport.bindLogger(clientMockLogger);
+      const serverTransport = getServerTransport();
+      const serverMockLogger = vi.fn<LogFn>();
+      serverTransport.bindLogger(serverMockLogger);
+      const services = {
+        fallible: FallibleServiceSchema,
+      };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      const { reqWritable, resReadable } = client.fallible.echo.stream({});
+
+      reqWritable.write({
+        msg: 'abc',
+        throwResult: false,
+        throwError: false,
+      });
+      let result = await readNextResult(resReadable);
+      expect(result).toStrictEqual({
+        ok: true,
+        payload: {
+          response: 'abc',
+        },
+      });
+
+      // this isn't the first message so doesn't have telemetry info on the message itself
+      reqWritable.write({
+        msg: 'def',
+        throwResult: false,
+        throwError: true,
+      });
+
+      result = await readNextResult(resReadable);
+      expect(result).toStrictEqual({
+        ok: false,
+        payload: {
+          code: UNCAUGHT_ERROR_CODE,
+          message: 'some message',
+        },
+      });
+
+      const spans = spanExporter.getFinishedSpans();
+
+      const errSpan = spans.find(
+        (span) =>
+          span.name === 'river.server.fallible.echo' &&
+          span.status.code === SpanStatusCode.ERROR,
+      );
+      expect(errSpan).toBeTruthy();
+      expect(errSpan?.attributes['river.error_code']).toBe(UNCAUGHT_ERROR_CODE);
+      expect(errSpan?.attributes['river.error_message']).toBe('some message');
+
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,

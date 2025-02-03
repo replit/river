@@ -2,16 +2,18 @@ import {
   Context,
   Span,
   SpanKind,
+  SpanStatusCode,
   context,
   propagation,
   trace,
+  Tracer,
 } from '@opentelemetry/api';
-import { version as RIVER_VERSION } from '../package.json';
-import { ValidProcType } from '../router';
+import { BaseErrorSchemaType, RIVER_VERSION, ValidProcType } from '../router';
 import { Connection } from '../transport';
 import { MessageMetadata } from '../logging';
 import { ClientSession } from '../transport/sessionStateMachine/transitions';
 import { IdentifiedSession } from '../transport/sessionStateMachine/common';
+import { Static } from '@sinclair/typebox';
 
 export interface PropagationContext {
   traceparent: string;
@@ -36,6 +38,7 @@ export function getPropagationContext(
 }
 
 export function createSessionTelemetryInfo(
+  tracer: Tracer,
   sessionId: string,
   to: string,
   from: string,
@@ -46,7 +49,7 @@ export function createSessionTelemetryInfo(
     : context.active();
 
   const span = tracer.startSpan(
-    `session ${sessionId}`,
+    `river.session.${sessionId}`,
     {
       attributes: {
         component: 'river',
@@ -64,6 +67,7 @@ export function createSessionTelemetryInfo(
 }
 
 export function createConnectionTelemetryInfo(
+  tracer: Tracer,
   connection: Connection,
   info: TelemetryInfo,
 ): TelemetryInfo {
@@ -85,6 +89,7 @@ export function createConnectionTelemetryInfo(
 }
 
 export function createProcTelemetryInfo(
+  tracer: Tracer,
   session: ClientSession<Connection>,
   kind: ValidProcType,
   serviceName: string,
@@ -93,7 +98,7 @@ export function createProcTelemetryInfo(
 ): TelemetryInfo {
   const baseCtx = context.active();
   const span = tracer.startSpan(
-    `procedure call ${serviceName}.${procedureName}`,
+    `river.client.${serviceName}.${procedureName}`,
     {
       attributes: {
         component: 'river',
@@ -131,6 +136,7 @@ export function createProcTelemetryInfo(
 }
 
 export function createHandlerSpan<Fn extends (span: Span) => unknown>(
+  tracer: Tracer,
   session: IdentifiedSession,
   kind: ValidProcType,
   serviceName: string,
@@ -144,7 +150,7 @@ export function createHandlerSpan<Fn extends (span: Span) => unknown>(
     : context.active();
 
   return tracer.startActiveSpan<Fn>(
-    `procedure handler ${serviceName}.${procedureName}`,
+    `river.server.${serviceName}.${procedureName}`,
     {
       attributes: {
         component: 'river',
@@ -162,5 +168,20 @@ export function createHandlerSpan<Fn extends (span: Span) => unknown>(
   );
 }
 
-const tracer = trace.getTracer('river', RIVER_VERSION);
-export default tracer;
+export function recordRiverError(
+  span: Span,
+  error: Static<BaseErrorSchemaType>,
+): void {
+  span.setStatus({
+    code: SpanStatusCode.ERROR,
+    message: error.message,
+  });
+  span.setAttributes({
+    'river.error_code': error.code,
+    'river.error_message': error.message,
+  });
+}
+
+export function getTracer(): Tracer {
+  return trace.getTracer('river', RIVER_VERSION);
+}

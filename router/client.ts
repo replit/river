@@ -288,6 +288,7 @@ function handleProc(
   const procClosesWithInit = procType === 'rpc' || procType === 'subscription';
   const streamId = generateId();
   const { span, ctx } = createProcTelemetryInfo(
+    transport.tracer,
     session,
     procType,
     serviceName,

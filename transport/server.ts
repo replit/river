@@ -164,6 +164,7 @@ export abstract class ServerTransport<
         },
       },
       this.options,
+      this.tracer,
       this.log,
     );
 

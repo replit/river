@@ -39,6 +39,7 @@ import {
   SessionBackingOffListeners,
 } from './SessionBackingOff';
 import { ProtocolVersion } from '../message';
+import { Tracer } from '@opentelemetry/api';
 
 function inheritSharedSession(
   session: IdentifiedSession,
@@ -53,6 +54,7 @@ function inheritSharedSession(
     telemetry: session.telemetry,
     options: session.options,
     log: session.log,
+    tracer: session.tracer,
     protocolVersion: session.protocolVersion,
   };
 }
@@ -74,10 +76,11 @@ export const SessionStateGraph = {
       listeners: SessionNoConnectionListeners,
       options: SessionOptions,
       protocolVersion: ProtocolVersion,
+      tracer: Tracer,
       log?: Logger,
     ) => {
       const id = `session-${generateId()}`;
-      const telemetry = createSessionTelemetryInfo(id, to, from);
+      const telemetry = createSessionTelemetryInfo(tracer, id, to, from);
       const sendBuffer: Array<OpaqueTransportMessage> = [];
 
       const session = new SessionNoConnection({
@@ -92,6 +95,7 @@ export const SessionStateGraph = {
         telemetry,
         options,
         protocolVersion,
+        tracer,
         log,
       });
 
@@ -107,6 +111,7 @@ export const SessionStateGraph = {
       conn: ConnType,
       listeners: SessionWaitingForHandshakeListeners,
       options: SessionOptions,
+      tracer: Tracer,
       log?: Logger,
     ): SessionWaitingForHandshake<ConnType> => {
       const session = new SessionWaitingForHandshake({
@@ -114,6 +119,7 @@ export const SessionStateGraph = {
         listeners,
         from,
         options,
+        tracer,
         log,
       });
 
@@ -191,7 +197,11 @@ export const SessionStateGraph = {
         ...carriedState,
       });
 
-      conn.telemetry = createConnectionTelemetryInfo(conn, session.telemetry);
+      conn.telemetry = createConnectionTelemetryInfo(
+        session.tracer,
+        conn,
+        session.telemetry,
+      );
       session.log?.info(
         `session ${session.id} transition from Connecting to Handshaking`,
         {
@@ -249,12 +259,14 @@ export const SessionStateGraph = {
             ack: 0,
             sendBuffer: [],
             telemetry: createSessionTelemetryInfo(
+              pendingSession.tracer,
               sessionId,
               to,
               from,
               propagationCtx,
             ),
             options,
+            tracer: pendingSession.tracer,
             log: pendingSession.log,
             protocolVersion,
           };
@@ -268,7 +280,11 @@ export const SessionStateGraph = {
         ...carriedState,
       });
 
-      conn.telemetry = createConnectionTelemetryInfo(conn, session.telemetry);
+      conn.telemetry = createConnectionTelemetryInfo(
+        session.tracer,
+        conn,
+        session.telemetry,
+      );
       session.log?.info(
         `session ${session.id} transition from WaitingForHandshake to Connected`,
         {
