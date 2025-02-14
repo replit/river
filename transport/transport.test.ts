@@ -254,7 +254,7 @@ describe.each(testMatrix())(
       const msg = createDummyTransportMessage();
       const msgPromise = waitForMessage(serverTransport);
       const sendHandle = (evt: EventMap['sessionStatus']) => {
-        if (evt.status === 'connect') {
+        if (evt.status === 'created') {
           getClientSendFn(clientTransport, serverTransport)(msg);
         }
       };
@@ -354,7 +354,7 @@ describe.each(testMatrix())(
       });
     });
 
-    test('both client and server transport get connect/disconnect notifs', async () => {
+    test('both client and server transport get session created/closing/closed notifs', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
       const clientConnStart = vi.fn();
@@ -367,13 +367,17 @@ describe.each(testMatrix())(
       };
 
       const clientSessStart = vi.fn();
+      const clientSessStopping = vi.fn();
       const clientSessStop = vi.fn();
       const clientSessHandler = (evt: EventMap['sessionStatus']) => {
         switch (evt.status) {
-          case 'connect':
+          case 'created':
             clientSessStart();
             break;
-          case 'disconnect':
+          case 'closing':
+            clientSessStopping();
+            break;
+          case 'closed':
             clientSessStop();
             break;
         }
@@ -389,13 +393,17 @@ describe.each(testMatrix())(
       };
 
       const serverSessStart = vi.fn();
+      const serverSessStopping = vi.fn();
       const serverSessStop = vi.fn();
       const serverSessHandler = (evt: EventMap['sessionStatus']) => {
         switch (evt.status) {
-          case 'connect':
+          case 'created':
             serverSessStart();
             break;
-          case 'disconnect':
+          case 'closing':
+            serverSessStopping();
+            break;
+          case 'closed':
             serverSessStop();
             break;
         }
@@ -438,6 +446,8 @@ describe.each(testMatrix())(
       expect(serverSessStart).toHaveBeenCalledTimes(0);
       expect(clientSessStop).toHaveBeenCalledTimes(0);
       expect(serverSessStop).toHaveBeenCalledTimes(0);
+      expect(clientSessStopping).toHaveBeenCalledTimes(0);
+      expect(serverSessStopping).toHaveBeenCalledTimes(0);
 
       clientTransport.connect(serverTransport.clientId);
       const clientSendFn = getClientSendFn(clientTransport, serverTransport);
@@ -455,6 +465,8 @@ describe.each(testMatrix())(
       expect(serverSessStart).toHaveBeenCalledTimes(1);
       expect(clientSessStop).toHaveBeenCalledTimes(0);
       expect(serverSessStop).toHaveBeenCalledTimes(0);
+      expect(clientSessStopping).toHaveBeenCalledTimes(0);
+      expect(serverSessStopping).toHaveBeenCalledTimes(0);
 
       // clean disconnect + reconnect within grace period
       closeAllConnections(clientTransport);
@@ -471,6 +483,8 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverSessStart).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(0));
       await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(0));
+      await waitFor(() => expect(clientSessStopping).toHaveBeenCalledTimes(0));
+      await waitFor(() => expect(serverSessStopping).toHaveBeenCalledTimes(0));
 
       // by this point the client should have reconnected
       // session    >  c----------| (connected)
@@ -486,6 +500,8 @@ describe.each(testMatrix())(
       expect(clientSessStop).toHaveBeenCalledTimes(0);
       expect(serverSessStart).toHaveBeenCalledTimes(1);
       expect(serverSessStop).toHaveBeenCalledTimes(0);
+      expect(clientSessStopping).toHaveBeenCalledTimes(0);
+      expect(serverSessStopping).toHaveBeenCalledTimes(0);
 
       // disconnect session entirely
       // session    >  c------------x  | (disconnected)
@@ -500,6 +516,8 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverSessStart).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(clientSessStopping).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(serverSessStopping).toHaveBeenCalledTimes(1));
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],
@@ -588,6 +606,57 @@ describe.each(testMatrix())(
 
       await testFinishesCleanly({
         clientTransports: [client1Transport, client2Transport],
+        serverTransport,
+      });
+    });
+
+    test('listening on session disconnect and manually reconnecting works', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      clientTransport.connect(serverTransport.clientId);
+
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
+
+      const onSessionDisconnect = vi.fn();
+      const onSessionConnect = vi.fn();
+      const sessionStatusListener = (evt: EventMap['sessionStatus']) => {
+        if (evt.status === 'created') {
+          onSessionConnect();
+        }
+
+        if (evt.status === 'closed') {
+          onSessionDisconnect();
+          clientTransport.connect(serverTransport.clientId);
+        }
+      };
+
+      clientTransport.addEventListener('sessionStatus', sessionStatusListener);
+      addPostTestCleanup(async () => {
+        clientTransport.removeEventListener(
+          'sessionStatus',
+          sessionStatusListener,
+        );
+      });
+
+      expect(onSessionDisconnect).toHaveBeenCalledTimes(0);
+      expect(onSessionDisconnect).toHaveBeenCalledTimes(0);
+
+      // cause a session disconnect
+      clientTransport.hardDisconnect();
+
+      await waitFor(() => expect(onSessionDisconnect).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(onSessionConnect).toHaveBeenCalledTimes(1));
+
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
         serverTransport,
       });
     });
@@ -883,7 +952,7 @@ describe.each(testMatrix())(
 
       const onSessionDisconnect = vi.fn();
       const sessionStatusListener = (evt: EventMap['sessionStatus']) => {
-        if (evt.status === 'disconnect') {
+        if (evt.status === 'closed') {
           onSessionDisconnect();
         }
       };
@@ -953,10 +1022,10 @@ describe.each(testMatrix())(
       const serverSessStop = vi.fn();
       const serverSessHandler = (evt: EventMap['sessionStatus']) => {
         switch (evt.status) {
-          case 'connect':
+          case 'created':
             serverSessStart();
             break;
-          case 'disconnect':
+          case 'closed':
             serverSessStop();
             break;
         }
@@ -1045,10 +1114,10 @@ describe.each(testMatrix())(
       const clientSessStop = vi.fn();
       const clientSessHandler = (evt: EventMap['sessionStatus']) => {
         switch (evt.status) {
-          case 'connect':
+          case 'created':
             clientSessStart();
             break;
-          case 'disconnect':
+          case 'closed':
             clientSessStop();
             break;
         }
@@ -1177,10 +1246,10 @@ describe.each(testMatrix())(
       const clientSessStop = vi.fn();
       const clientSessHandler = (evt: EventMap['sessionStatus']) => {
         switch (evt.status) {
-          case 'connect':
+          case 'created':
             clientSessStart();
             break;
-          case 'disconnect':
+          case 'closed':
             clientSessStop();
             break;
         }
@@ -1190,10 +1259,10 @@ describe.each(testMatrix())(
       const serverSessStop = vi.fn();
       const serverSessHandler = (evt: EventMap['sessionStatus']) => {
         switch (evt.status) {
-          case 'connect':
+          case 'created':
             serverSessStart();
             break;
-          case 'disconnect':
+          case 'closed':
             serverSessStop();
             break;
         }

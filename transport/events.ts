@@ -16,10 +16,15 @@ export type ProtocolErrorType =
 
 export interface EventMap {
   message: OpaqueTransportMessage;
-  sessionStatus: {
-    status: 'connect' | 'disconnect';
-    session: Session<Connection>;
-  };
+  sessionStatus:
+    | {
+        status: 'created' | 'closing';
+        session: Session<Connection>;
+      }
+    | {
+        status: 'closed';
+        session: Pick<Session<Connection>, 'id' | 'to'>;
+      };
   sessionTransition:
     | { state: SessionState.Connected }
     | { state: SessionState.Handshaking }

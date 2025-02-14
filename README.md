@@ -189,10 +189,14 @@ If your application is stateful on either the server or the client, the service 
 
 ```ts
 transport.addEventListener('sessionStatus', (evt) => {
-  if (evt.status === 'connect') {
+  if (evt.status === 'created') {
     // do something
-  } else if (evt.status === 'disconnect') {
-    // do something else
+  } else if (evt.status === 'closing') {
+    // do other things
+  } else if (evt.status === 'closed') {
+    // note that evt.session only has id + to
+    // this is useful for doing things like creating a new session if
+    // a session just got yanked
   }
 });
 

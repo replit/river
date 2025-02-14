@@ -456,7 +456,7 @@ function handleProc(
 
   function onSessionStatus(evt: EventMap['sessionStatus']) {
     if (
-      evt.status !== 'disconnect' ||
+      evt.status !== 'closing' ||
       evt.session.to !== serverId ||
       session.id !== evt.session.id
     ) {

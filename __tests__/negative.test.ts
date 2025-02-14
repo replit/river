@@ -205,7 +205,7 @@ describe('should handle incompatabilities', async () => {
     expect(errMock).toHaveBeenCalledTimes(0);
     expect(spy).toHaveBeenCalledWith(
       expect.objectContaining({
-        status: 'connect',
+        status: 'created',
       }),
     );
 

@@ -165,7 +165,8 @@ export abstract class Transport<ConnType extends Connection> {
   close() {
     this.status = 'closed';
 
-    for (const session of this.sessions.values()) {
+    const sessions = Array.from(this.sessions.values());
+    for (const session of sessions) {
       this.deleteSession(session);
     }
 
@@ -195,7 +196,7 @@ export abstract class Transport<ConnType extends Connection> {
 
     this.sessions.set(session.to, session);
     this.eventDispatcher.dispatchEvent('sessionStatus', {
-      status: 'connect',
+      status: 'created',
       session: session,
     });
 
@@ -246,13 +247,17 @@ export abstract class Transport<ConnType extends Connection> {
 
     session.log?.info(`closing session ${session.id}`, loggingMetadata);
     this.eventDispatcher.dispatchEvent('sessionStatus', {
-      status: 'disconnect',
+      status: 'closing',
       session: session,
     });
 
     const to = session.to;
     session.close();
     this.sessions.delete(to);
+    this.eventDispatcher.dispatchEvent('sessionStatus', {
+      status: 'closed',
+      session: { id: session.id, to: to },
+    });
   }
 
   // common listeners
