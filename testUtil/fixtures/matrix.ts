@@ -31,7 +31,9 @@ export const testMatrix = (selector?: Selector): Array<TestMatrixEntry> =>
     .map((transport) =>
       // If a selector is provided, filter transport + codecs to match the selector; otherwise, use all codecs.
       (selector
-        ? codecs.filter((codec) => selector[1] === codec.name)
+        ? codecs.filter((codec) => {
+            return selector[0] === transport.name && selector[1] === codec.name;
+          })
         : codecs
       ).map((codec) => ({
         transport,

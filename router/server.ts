@@ -216,7 +216,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     };
 
     const handleSessionStatus = (evt: EventMap['sessionStatus']) => {
-      if (evt.status !== 'disconnect') return;
+      if (evt.status !== 'closing') return;
 
       const disconnectedClientId = evt.session.to;
       this.log?.info(

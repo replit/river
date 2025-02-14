@@ -372,7 +372,9 @@ export abstract class ClientTransport<
    * and don't want to wait for the grace period to elapse.
    */
   hardDisconnect() {
-    for (const session of this.sessions.values()) {
+    // create a copy of the sessions to avoid modifying the map while iterating
+    const sessions = Array.from(this.sessions.values());
+    for (const session of sessions) {
       this.deleteSession(session);
     }
   }
