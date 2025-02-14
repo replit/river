@@ -1,5 +1,7 @@
 # River
 
+⚠️ Not production ready, while Replit is using parts of River in production, we are still going through rapid breaking changes. First production ready version will be `1.x.x` ⚠️
+
 River allows multiple clients to connect to and make remote procedure calls to a remote server as if they were local procedures.
 
 ## Long-lived streaming remote procedure calls
@@ -187,10 +189,14 @@ If your application is stateful on either the server or the client, the service 
 
 ```ts
 transport.addEventListener('sessionStatus', (evt) => {
-  if (evt.status === 'connect') {
+  if (evt.status === 'created') {
     // do something
-  } else if (evt.status === 'disconnect') {
-    // do something else
+  } else if (evt.status === 'closing') {
+    // do other things
+  } else if (evt.status === 'closed') {
+    // note that evt.session only has id + to 
+    // this is useful for doing things like creating a new session if
+    // a session just got yanked
   }
 });
 
