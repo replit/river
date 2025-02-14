@@ -194,7 +194,7 @@ transport.addEventListener('sessionStatus', (evt) => {
   } else if (evt.status === 'closing') {
     // do other things
   } else if (evt.status === 'closed') {
-    // note that evt.session only has id + to 
+    // note that evt.session only has id + to
     // this is useful for doing things like creating a new session if
     // a session just got yanked
   }
