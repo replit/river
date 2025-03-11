@@ -268,4 +268,4 @@ You can find more service examples in the [E2E test fixtures](https://github.com
 - `npm run check` -- lint
 - `npm run format` -- format
 - `npm run test` -- run tests
-- `npm run publish` -- cut a new release (should bump version in package.json first)
+- `npm run release` -- cut a new release (should bump version in package.json first)
