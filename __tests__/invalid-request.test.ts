@@ -16,7 +16,7 @@ import {
   waitFor,
 } from '../testUtil/fixtures/cleanup';
 import { EventMap } from '../transport';
-import { INVALID_REQUEST_CODE } from '../router/errors';
+import { INVALID_REQUEST_CODE, ValidationErrors } from '../router/errors';
 import { ControlFlags } from '../transport/message';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 import { nanoid } from 'nanoid';
@@ -391,10 +391,15 @@ describe('cancels invalid request', () => {
         streamId,
         payload: Err({
           code: INVALID_REQUEST_CODE,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          message: expect.stringContaining(
-            'expected requestData or control payload',
-          ),
+          message: 'message in requestData position did not match schema',
+          extras: {
+            totalErrors: 2,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            firstValidationErrors: expect.arrayContaining([
+              { path: '/mustSendThings', message: 'Required property' },
+              { path: '/mustSendThings', message: 'Expected string' },
+            ]),
+          },
         }),
       }),
     );
@@ -451,8 +456,14 @@ describe('cancels invalid request', () => {
           streamId,
           payload: Err({
             code: INVALID_REQUEST_CODE,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            message: expect.stringContaining('control payload'),
+            message: 'message in control payload position did not match schema',
+            extras: {
+              totalErrors: 1,
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              firstValidationErrors: expect.arrayContaining([
+                { path: '', message: 'Expected union value' },
+              ]),
+            },
           }),
         }),
       );
@@ -578,8 +589,16 @@ describe('cancels invalid request', () => {
         code: INVALID_REQUEST_CODE,
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         message: expect.stringContaining(
-          'expected requestData or control payload',
+          'message in requestData position did not match schema',
         ),
+        extras: {
+          totalErrors: 2,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          firstValidationErrors: expect.arrayContaining([
+            { path: '/newRequiredField', message: 'Required property' },
+            { path: '/newRequiredField', message: 'Expected string' },
+          ]),
+        },
       }),
     ]);
   });

@@ -61,7 +61,7 @@ export type MessageMetadata = Partial<{
   sessionId: string;
   connId: string;
   transportMessage: Partial<OpaqueTransportMessage>;
-  validationErrors: Array<ValueError>;
+  validationErrors: Array<{ path: string; message: string }>;
   tags: Array<Tags>;
   telemetry: {
     traceId: string;

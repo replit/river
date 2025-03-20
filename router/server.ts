@@ -8,6 +8,8 @@ import {
   INVALID_REQUEST_CODE,
   BaseErrorSchemaType,
   ErrResultSchema,
+  ValidationErrors,
+  castTypeboxValueErrors,
 } from './errors';
 import {
   AnyService,
@@ -363,30 +365,37 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       // We couldn't make sense of the message, it's probably a bad request
-      let validationErrors: Array<ValueError>;
+      let validationErrors: Static<typeof ValidationErrors>;
       let errMessage: string;
       if ('requestData' in procedure) {
-        errMessage = 'expected requestData or control payload';
-        validationErrors = [
-          ...Value.Errors(procedure.responseData, msg.payload),
-        ];
+        errMessage = 'message in requestData position did not match schema';
+        validationErrors = castTypeboxValueErrors(
+          Value.Errors(procedure.requestData, msg.payload),
+        );
       } else {
-        validationErrors = [
-          ...Value.Errors(ControlMessagePayloadSchema, msg.payload),
-        ];
-        errMessage = 'expected control payload';
+        validationErrors = castTypeboxValueErrors(
+          Value.Errors(ControlMessagePayloadSchema, msg.payload),
+        );
+        errMessage = 'message in control payload position did not match schema';
       }
 
       this.log?.warn(errMessage, {
         ...loggingMetadata,
         transportMessage: msg,
-        validationErrors,
+        validationErrors: validationErrors.map((error) => ({
+          path: error.path,
+          message: error.message,
+        })),
         tags: ['invalid-request'],
       });
 
       onServerCancel({
         code: INVALID_REQUEST_CODE,
         message: errMessage,
+        extras: {
+          totalErrors: validationErrors.length,
+          firstValidationErrors: validationErrors.slice(0, 5),
+        },
       });
     };
 

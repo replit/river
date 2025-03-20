@@ -1,5 +1,6 @@
 import {
   Kind,
+  Static,
   TLiteral,
   TNever,
   TObject,
@@ -8,6 +9,7 @@ import {
   TUnion,
   Type,
 } from '@sinclair/typebox';
+import { ValueErrorIterator } from '@sinclair/typebox/errors';
 
 /**
  * {@link UNCAUGHT_ERROR_CODE} is the code that is used when an error is thrown
@@ -50,6 +52,26 @@ export const ErrResultSchema = <T extends ProcedureErrorSchemaType>(t: T) =>
     payload: t,
   });
 
+const ValidationErrorDetails = Type.Object({
+  path: Type.String(),
+  message: Type.String(),
+});
+
+export const ValidationErrors = Type.Array(ValidationErrorDetails);
+export function castTypeboxValueErrors(
+  errors: ValueErrorIterator,
+): Static<typeof ValidationErrors> {
+  const result = [];
+  for (const error of errors) {
+    result.push({
+      path: error.path,
+      message: error.message,
+    });
+  }
+
+  return result;
+}
+
 /**
  * {@link ReaderErrorSchema} is the schema for all the built-in river errors that
  * can be emitted to a reader (request reader on the server, and response reader
@@ -67,6 +89,12 @@ export const ReaderErrorSchema = Type.Union([
   Type.Object({
     code: Type.Literal(INVALID_REQUEST_CODE),
     message: Type.String(),
+    extras: Type.Optional(
+      Type.Object({
+        firstValidationErrors: Type.Array(ValidationErrorDetails),
+        totalErrors: Type.Number(),
+      }),
+    ),
   }),
   Type.Object({
     code: Type.Literal(CANCEL_CODE),
