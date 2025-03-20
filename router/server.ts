@@ -34,7 +34,7 @@ import {
   ParsedMetadata,
 } from './context';
 import { Logger } from '../logging/log';
-import { Value, ValueError } from '@sinclair/typebox/value';
+import { Value } from '@sinclair/typebox/value';
 import { Err, Result, Ok, ErrResult } from './result';
 import { EventMap } from '../transport/events';
 import { coerceErrorString } from '../transport/stringifyError';

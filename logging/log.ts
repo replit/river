@@ -1,4 +1,3 @@
-import { ValueError } from '@sinclair/typebox/value';
 import { OpaqueTransportMessage, ProtocolVersion } from '../transport/message';
 import { context, trace } from '@opentelemetry/api';
 
