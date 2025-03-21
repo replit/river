@@ -1,4 +1,3 @@
-import { ValueError } from '@sinclair/typebox/value';
 import { OpaqueTransportMessage, ProtocolVersion } from '../transport/message';
 import { context, trace } from '@opentelemetry/api';
 
@@ -61,7 +60,7 @@ export type MessageMetadata = Partial<{
   sessionId: string;
   connId: string;
   transportMessage: Partial<OpaqueTransportMessage>;
-  validationErrors: Array<ValueError>;
+  validationErrors: Array<{ path: string; message: string }>;
   tags: Array<Tags>;
   telemetry: {
     traceId: string;

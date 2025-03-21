@@ -57,6 +57,36 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                     "const": "INVALID_REQUEST",
                     "type": "string",
                   },
+                  "extras": {
+                    "properties": {
+                      "firstValidationErrors": {
+                        "items": {
+                          "properties": {
+                            "message": {
+                              "type": "string",
+                            },
+                            "path": {
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "path",
+                            "message",
+                          ],
+                          "type": "object",
+                        },
+                        "type": "array",
+                      },
+                      "totalErrors": {
+                        "type": "number",
+                      },
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors",
+                    ],
+                    "type": "object",
+                  },
                   "message": {
                     "type": "string",
                   },
@@ -150,6 +180,36 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                     "const": "INVALID_REQUEST",
                     "type": "string",
                   },
+                  "extras": {
+                    "properties": {
+                      "firstValidationErrors": {
+                        "items": {
+                          "properties": {
+                            "message": {
+                              "type": "string",
+                            },
+                            "path": {
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "path",
+                            "message",
+                          ],
+                          "type": "object",
+                        },
+                        "type": "array",
+                      },
+                      "totalErrors": {
+                        "type": "number",
+                      },
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors",
+                    ],
+                    "type": "object",
+                  },
                   "message": {
                     "type": "string",
                   },
@@ -237,6 +297,36 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                   "code": {
                     "const": "INVALID_REQUEST",
                     "type": "string",
+                  },
+                  "extras": {
+                    "properties": {
+                      "firstValidationErrors": {
+                        "items": {
+                          "properties": {
+                            "message": {
+                              "type": "string",
+                            },
+                            "path": {
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "path",
+                            "message",
+                          ],
+                          "type": "object",
+                        },
+                        "type": "array",
+                      },
+                      "totalErrors": {
+                        "type": "number",
+                      },
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors",
+                    ],
+                    "type": "object",
                   },
                   "message": {
                     "type": "string",
@@ -329,6 +419,36 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                   "code": {
                     "const": "INVALID_REQUEST",
                     "type": "string",
+                  },
+                  "extras": {
+                    "properties": {
+                      "firstValidationErrors": {
+                        "items": {
+                          "properties": {
+                            "message": {
+                              "type": "string",
+                            },
+                            "path": {
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "path",
+                            "message",
+                          ],
+                          "type": "object",
+                        },
+                        "type": "array",
+                      },
+                      "totalErrors": {
+                        "type": "number",
+                      },
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors",
+                    ],
+                    "type": "object",
                   },
                   "message": {
                     "type": "string",
@@ -431,6 +551,36 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                   "code": {
                     "const": "INVALID_REQUEST",
                     "type": "string",
+                  },
+                  "extras": {
+                    "properties": {
+                      "firstValidationErrors": {
+                        "items": {
+                          "properties": {
+                            "message": {
+                              "type": "string",
+                            },
+                            "path": {
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "path",
+                            "message",
+                          ],
+                          "type": "object",
+                        },
+                        "type": "array",
+                      },
+                      "totalErrors": {
+                        "type": "number",
+                      },
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors",
+                    ],
+                    "type": "object",
                   },
                   "message": {
                     "type": "string",
@@ -563,6 +713,36 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                     "const": "INVALID_REQUEST",
                     "type": "string",
                   },
+                  "extras": {
+                    "properties": {
+                      "firstValidationErrors": {
+                        "items": {
+                          "properties": {
+                            "message": {
+                              "type": "string",
+                            },
+                            "path": {
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "path",
+                            "message",
+                          ],
+                          "type": "object",
+                        },
+                        "type": "array",
+                      },
+                      "totalErrors": {
+                        "type": "number",
+                      },
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors",
+                    ],
+                    "type": "object",
+                  },
                   "message": {
                     "type": "string",
                   },
@@ -671,6 +851,36 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                     "const": "INVALID_REQUEST",
                     "type": "string",
                   },
+                  "extras": {
+                    "properties": {
+                      "firstValidationErrors": {
+                        "items": {
+                          "properties": {
+                            "message": {
+                              "type": "string",
+                            },
+                            "path": {
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "path",
+                            "message",
+                          ],
+                          "type": "object",
+                        },
+                        "type": "array",
+                      },
+                      "totalErrors": {
+                        "type": "number",
+                      },
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors",
+                    ],
+                    "type": "object",
+                  },
                   "message": {
                     "type": "string",
                   },
@@ -749,6 +959,36 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
                   "code": {
                     "const": "INVALID_REQUEST",
                     "type": "string",
+                  },
+                  "extras": {
+                    "properties": {
+                      "firstValidationErrors": {
+                        "items": {
+                          "properties": {
+                            "message": {
+                              "type": "string",
+                            },
+                            "path": {
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "path",
+                            "message",
+                          ],
+                          "type": "object",
+                        },
+                        "type": "array",
+                      },
+                      "totalErrors": {
+                        "type": "number",
+                      },
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors",
+                    ],
+                    "type": "object",
                   },
                   "message": {
                     "type": "string",
@@ -842,6 +1082,36 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
                 "const": "INVALID_REQUEST",
                 "type": "string",
               },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
+              },
               "message": {
                 "type": "string",
               },
@@ -935,6 +1205,36 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
                 "const": "INVALID_REQUEST",
                 "type": "string",
               },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
+              },
               "message": {
                 "type": "string",
               },
@@ -1022,6 +1322,36 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
               "code": {
                 "const": "INVALID_REQUEST",
                 "type": "string",
+              },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
               },
               "message": {
                 "type": "string",
@@ -1114,6 +1444,36 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
               "code": {
                 "const": "INVALID_REQUEST",
                 "type": "string",
+              },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
               },
               "message": {
                 "type": "string",
@@ -1216,6 +1576,36 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
               "code": {
                 "const": "INVALID_REQUEST",
                 "type": "string",
+              },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
               },
               "message": {
                 "type": "string",
@@ -1348,6 +1738,36 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
                 "const": "INVALID_REQUEST",
                 "type": "string",
               },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
+              },
               "message": {
                 "type": "string",
               },
@@ -1456,6 +1876,36 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
                 "const": "INVALID_REQUEST",
                 "type": "string",
               },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
+              },
               "message": {
                 "type": "string",
               },
@@ -1534,6 +1984,36 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
               "code": {
                 "const": "INVALID_REQUEST",
                 "type": "string",
+              },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
               },
               "message": {
                 "type": "string",
@@ -1625,6 +2105,36 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
                 "const": "INVALID_REQUEST",
                 "type": "string",
               },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
+              },
               "message": {
                 "type": "string",
               },
@@ -1718,6 +2228,36 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
                 "const": "INVALID_REQUEST",
                 "type": "string",
               },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
+              },
               "message": {
                 "type": "string",
               },
@@ -1805,6 +2345,36 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
               "code": {
                 "const": "INVALID_REQUEST",
                 "type": "string",
+              },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
               },
               "message": {
                 "type": "string",
@@ -1897,6 +2467,36 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
               "code": {
                 "const": "INVALID_REQUEST",
                 "type": "string",
+              },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
               },
               "message": {
                 "type": "string",
@@ -1999,6 +2599,36 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
               "code": {
                 "const": "INVALID_REQUEST",
                 "type": "string",
+              },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
               },
               "message": {
                 "type": "string",
@@ -2131,6 +2761,36 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
                 "const": "INVALID_REQUEST",
                 "type": "string",
               },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
+              },
               "message": {
                 "type": "string",
               },
@@ -2239,6 +2899,36 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
                 "const": "INVALID_REQUEST",
                 "type": "string",
               },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
+              },
               "message": {
                 "type": "string",
               },
@@ -2317,6 +3007,36 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
               "code": {
                 "const": "INVALID_REQUEST",
                 "type": "string",
+              },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
               },
               "message": {
                 "type": "string",
@@ -2407,6 +3127,36 @@ exports[`serialize service to jsonschema > serialize service with binary 1`] = `
               "code": {
                 "const": "INVALID_REQUEST",
                 "type": "string",
+              },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
               },
               "message": {
                 "type": "string",
@@ -2552,6 +3302,36 @@ exports[`serialize service to jsonschema > serialize service with errors 1`] = `
                 "const": "INVALID_REQUEST",
                 "type": "string",
               },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
+              },
               "message": {
                 "type": "string",
               },
@@ -2664,6 +3444,36 @@ exports[`serialize service to jsonschema > serialize service with errors 1`] = `
               "code": {
                 "const": "INVALID_REQUEST",
                 "type": "string",
+              },
+              "extras": {
+                "properties": {
+                  "firstValidationErrors": {
+                    "items": {
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                        },
+                        "path": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "path",
+                        "message",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "totalErrors": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "firstValidationErrors",
+                  "totalErrors",
+                ],
+                "type": "object",
               },
               "message": {
                 "type": "string",
