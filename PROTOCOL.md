@@ -253,7 +253,7 @@ type Control =
 ## Streams
 
 Streams tie together a series of messages into a single logical 'stream' of communication associated with a single remote procedure invocation.
-For example, in the case of a `stream` RPC, the client will send a series of messages with the same `streamId`, and the server must respond with a series of messages with the same `streamId`.
+For example, in the case of a `stream` procedure type, the client will send a series of messages with the same `streamId`, and the server must respond with a series of messages with the same `streamId`.
 
 ### Starting streams
 
