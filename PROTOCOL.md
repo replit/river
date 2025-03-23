@@ -548,11 +548,11 @@ The process differs slightly between the client and server:
                            │  connect success  ──────────────┤ connect failure
                            ▼                                 │
                            3. SessionHandshaking             │
-                           │  handshake success       ┌──────┤ connection drop
+                           │  handshake success       ┌──────╪─ connection drop
  5. WaitingForHandshake    │  handshake failure  ─────┤      │
  │  handshake success      ▼                          │      │ connection drop
  ├───────────────────────► 4. SessionConnected        │      │ heartbeat misses
- │                         │  invalid message  ───────┼──────┘
+ │                         │  invalid message  ───────╫──────┘
  │                         ▼                          │
  └───────────────────────► x. Destroy Session   ◄─────┘
    handshake failure
