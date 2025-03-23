@@ -212,7 +212,7 @@ interface ControlAck {
 
 interface ControlHandshakeRequest {
   type: 'HANDSHAKE_REQ';
-  protocolVersion: 'v2.0';
+  protocolVersion: 'v0' | 'v1' | 'v1.1' | 'v2.0';
   sessionId: string;
   expectedSessionState: {
     nextExpectedSeq: number; // integer
@@ -223,7 +223,22 @@ interface ControlHandshakeRequest {
 
 interface ControlHandshakeResponse {
   type: 'HANDSHAKE_RESP';
-  status: { ok: true; sessionId: string } | { ok: false; reason: string };
+  status:
+    | {
+        ok: true;
+        sessionId: string;
+      }
+    | {
+        ok: false;
+        reason: string;
+        code: // retriable
+        | 'SESSION_STATE_MISMATCH'
+          // fatal
+          | 'MALFORMED_HANDSHAKE_META'
+          | 'MALFORMED_HANDSHAKE'
+          | 'PROTOCOL_VERSION_MISMATCH'
+          | 'REJECTED_BY_CUSTOM_HANDLER';
+      };
 }
 
 type Control =
@@ -555,43 +570,7 @@ Handshake messages are identical to normal transport messages except with:
 2. `ack: 0`
 3. no control flags
 
-The handshake request payload schema is the following:
-
-```ts
-type HandshakeRequest = {
-  type: 'HANDSHAKE_REQ';
-  protocolVersion: 'v0' | 'v1' | 'v1.1' | 'v2.0';
-  sessionId: string;
-  expectedSessionState: {
-    nextExpectedSeq: number;
-    nextSentSeq: number;
-  };
-};
-```
-
-The handshake response payload schema is the following:
-
-```ts
-type HandshakeResponse = {
-  type: 'HANDSHAKE_RESP';
-  status:
-    | {
-        ok: true;
-        sessionId: string;
-      }
-    | {
-        ok: false;
-        reason: string;
-        code: // retriable
-        | 'SESSION_STATE_MISMATCH'
-          // fatal
-          | 'MALFORMED_HANDSHAKE_META'
-          | 'MALFORMED_HANDSHAKE'
-          | 'PROTOCOL_VERSION_MISMATCH'
-          | 'REJECTED_BY_CUSTOM_HANDLER';
-      };
-};
-```
+The full handshake request and response payload schemas are defined above in the `Control` payload documentation.
 
 The server will send an error response if either:
 
