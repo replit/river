@@ -322,7 +322,7 @@ Then, depending on whether this is a client or server, the message must undergo 
 For an incoming message to be considered valid on the client, the transport message MUST fulfill the following criteria:
 
 - It should have a `streamId` that the client recognizes. That is, there MUST already be a message listener waiting for messages on the `streamId` of the original request message (recall that streams are only initiated by clients).
-- If a server sends an `ProtocolError` message the client MUST NOT send any further messages to the server for that stream including a control messages.
+- If a server sends a `ProtocolError` message the client MUST NOT send any further messages to the server for that stream including a control message.
 
 If the message is invalid, the client MUST silently discard the message.
 Otherwise, this is a normal message. Unwrap the payload and return it to the caller of the original procedure.
@@ -595,7 +595,7 @@ Though this is very [TCP](https://jzhao.xyz/thoughts/TCP) inspired, River has th
 The send buffer is a queue of messages that have been sent but not yet acknowledged by the other side.
 When a message is sent (including `Control` messages like explicit acks), it is added to the send buffer.
 
-All messages have an `ack` and the `ack` corresponds to the number of messages the other side has processed.
+All messages have an `ack` field, and the `ack` value corresponds to the number of messages the other side has processed.
 When receiving message a valid message (see the 'Handling Messages for Streams' section for the definition of 'valid'), sessions should ensure that the incoming message `msg.seq` MUST match the session's `session.ack`.
 This helps to ensure exactly once delivery and ensures that duplicate and out-of-order messages don't mistakingly update the session's bookkeeping.
 
@@ -620,7 +620,7 @@ The client and server should both have a grace period `sessionDisconnectGraceMs`
 
 It is important to note that this implies that there are two types of 'reconnects' in River:
 
-1. Transparent reconnects: the connection dropped and reconnected but the session metadata is in-tact so resending the buffered messages will restore order. At the application level, nothing happened.
+1. Transparent reconnects: the connection dropped and reconnected but the session metadata is intact so resending the buffered messages will restore order. At the application level, nothing happened.
 2. Hard reconnect: the other transport has lost all state and current transport should invalidate all state and start from scratch.
 
 The TypeScript implementation of the transport explicitly emits `connectionStatus` events for transparent reconnects and `sessionStatus` events for hard reconnects which the client and server can listen to.
