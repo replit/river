@@ -2,6 +2,7 @@ import { type Static } from '@sinclair/typebox';
 import { Connection } from './connection';
 import { OpaqueTransportMessage, HandshakeErrorResponseCodes } from './message';
 import { Session, SessionState } from './sessionStateMachine';
+import { SessionId } from './sessionStateMachine/common';
 import { TransportStatus } from './transport';
 
 export const ProtocolError = {
@@ -26,11 +27,11 @@ export interface EventMap {
         session: Pick<Session<Connection>, 'id' | 'to'>;
       };
   sessionTransition:
-    | { state: SessionState.Connected }
-    | { state: SessionState.Handshaking }
-    | { state: SessionState.Connecting }
-    | { state: SessionState.BackingOff }
-    | { state: SessionState.NoConnection };
+    | { state: SessionState.Connected; id: SessionId }
+    | { state: SessionState.Handshaking; id: SessionId }
+    | { state: SessionState.Connecting; id: SessionId }
+    | { state: SessionState.BackingOff; id: SessionId }
+    | { state: SessionState.NoConnection; id: SessionId };
   protocolError:
     | {
         type: (typeof ProtocolError)['HandshakeFailed'];

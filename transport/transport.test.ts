@@ -3,7 +3,6 @@ import {
   createDummyTransportMessage,
   payloadToTransportMessage,
   waitForMessage,
-  getTransportConnections,
   closeAllConnections,
   numberOfConnections,
   testingClientSessionOptions,
@@ -314,9 +313,7 @@ describe.each(testMatrix())(
       ).resolves.toStrictEqual(first90.slice(0, 30).map((msg) => msg.payload));
 
       clientTransport.reconnectOnConnectionDrop = false;
-      for (const conn of getTransportConnections(clientTransport)) {
-        conn.close();
-      }
+      closeAllConnections(clientTransport);
 
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
@@ -347,6 +344,125 @@ describe.each(testMatrix())(
       await expect(
         Promise.all([...first90Promises, ...last10Promises]),
       ).resolves.toStrictEqual(clientMsgs.map((msg) => msg.payload));
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
+    test('buffering messages during reconnect doesnt cause a crash', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      clientTransport.bindLogger(console.log, 'debug');
+      serverTransport.bindLogger(console.log, 'debug');
+      clientTransport.connect(serverTransport.clientId);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
+
+      const clientSendFn = getClientSendFn(clientTransport, serverTransport);
+      const serverSendFn = getServerSendFn(serverTransport, clientTransport);
+
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      function sendToServer(num: number) {
+        const msgs = Array.from({ length: num }, () =>
+          createDummyTransportMessage(),
+        );
+        const ids = msgs.map((msg) => clientSendFn(msg));
+        const promises = ids.map((id) =>
+          waitForMessage(serverTransport, (recv) => recv.id === id),
+        );
+        return { msgs, promise: Promise.all(promises) };
+      }
+
+      function sendToClient(num: number) {
+        const msgs = Array.from({ length: num }, () =>
+          createDummyTransportMessage(),
+        );
+        const ids = msgs.map((msg) => serverSendFn(msg));
+        const promises = ids.map((id) =>
+          waitForMessage(clientTransport, (recv) => recv.id === id),
+        );
+        return { msgs, promise: Promise.all(promises) };
+      }
+
+      // Send initial messages to establish sequence numbers
+      const { promise: initialToServer } = sendToServer(5);
+      const { promise: initialToClient } = sendToClient(5);
+      await Promise.all([initialToServer, initialToClient]);
+
+      // wait for one heartbeat to elapse
+      await advanceFakeTimersByHeartbeat();
+
+      // Disconnect client and prevent auto-reconnect
+      clientTransport.reconnectOnConnectionDrop = false;
+      closeAllConnections(clientTransport);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+
+      // Buffer some messages while disconnected in both directions
+      const {
+        msgs: bufferedMsgsToServer,
+        promise: bufferedMsgsToServerPromises,
+      } = sendToServer(5);
+      const {
+        msgs: bufferedMsgsToClient,
+        promise: bufferedMsgsToClientPromises,
+      } = sendToClient(5);
+
+      // Reconnect client
+      clientTransport.reconnectOnConnectionDrop = true;
+      clientTransport.connect(serverTransport.clientId);
+
+      // Send some while still connecting in both directions
+      const {
+        msgs: connectingMsgsToServer,
+        promise: connectingMsgsToServerPromises,
+      } = sendToServer(5);
+      const {
+        msgs: connectingMsgsToClient,
+        promise: connectingMsgsToClientPromises,
+      } = sendToClient(5);
+
+      // Wait for reconnection
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
+
+      // Send some new messages after reconnection in both directions
+      const { msgs: newMsgsToServer, promise: newMsgPromiseToServer } =
+        sendToServer(5);
+      const { msgs: newMsgsToClient, promise: newMsgPromiseToClient } =
+        sendToClient(5);
+
+      // Wait for all messages to be received in correct order
+      // First verify client->server messages
+      await expect(
+        Promise.all([
+          bufferedMsgsToServerPromises,
+          connectingMsgsToServerPromises,
+          newMsgPromiseToServer,
+        ]),
+      ).resolves.toStrictEqual([
+        bufferedMsgsToServer.map((msg) => msg.payload),
+        connectingMsgsToServer.map((msg) => msg.payload),
+        newMsgsToServer.map((msg) => msg.payload),
+      ]);
+
+      // Then verify server->client messages
+      await expect(
+        Promise.all([
+          bufferedMsgsToClientPromises,
+          connectingMsgsToClientPromises,
+          newMsgPromiseToClient,
+        ]),
+      ).resolves.toStrictEqual([
+        bufferedMsgsToClient.map((msg) => msg.payload),
+        connectingMsgsToClient.map((msg) => msg.payload),
+        newMsgsToClient.map((msg) => msg.payload),
+      ]);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],

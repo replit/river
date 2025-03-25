@@ -395,9 +395,8 @@ export abstract class ServerTransport<
           );
 
         oldSession = noConnectionSession;
+        this.updateSession(oldSession);
       }
-
-      this.updateSession(oldSession);
     } else if (oldSession) {
       connectCase = 'hard reconnection';
 
