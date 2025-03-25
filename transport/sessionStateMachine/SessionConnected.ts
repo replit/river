@@ -50,8 +50,8 @@ export class SessionConnected<
   }
 
   private assertSendOrdering(constructedMsg: TransportMessage) {
-    if (constructedMsg.seq > this.messagesSent) {
-      const msg = `invariant violation: would have sent out of order msg (seq: ${constructedMsg.seq}, expected: ${this.messagesSent})`;
+    if (constructedMsg.seq > this.seqSent + 1) {
+      const msg = `invariant violation: would have sent out of order msg (seq: ${constructedMsg.seq}, expected: ${this.seqSent} + 1)`;
       this.log?.error(msg, {
         ...this.loggingMetadata,
         transportMessage: constructedMsg,
@@ -67,7 +67,7 @@ export class SessionConnected<
     this.assertSendOrdering(constructedMsg);
     this.sendBuffer.push(constructedMsg);
     this.conn.send(this.options.codec.toBuffer(constructedMsg));
-    this.messagesSent++;
+    this.seqSent = constructedMsg.seq;
 
     return constructedMsg.id;
   }
@@ -93,7 +93,7 @@ export class SessionConnected<
       for (const msg of this.sendBuffer) {
         this.assertSendOrdering(msg);
         this.conn.send(this.options.codec.toBuffer(msg));
-        this.messagesSent++;
+        this.seqSent = msg.seq;
       }
     }
 
