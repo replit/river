@@ -373,6 +373,7 @@ describe.each(testMatrix())(
         const promises = ids.map((id) =>
           waitForMessage(serverTransport, (recv) => recv.id === id),
         );
+
         return { msgs, promise: Promise.all(promises) };
       }
 
@@ -384,6 +385,7 @@ describe.each(testMatrix())(
         const promises = ids.map((id) =>
           waitForMessage(clientTransport, (recv) => recv.id === id),
         );
+
         return { msgs, promise: Promise.all(promises) };
       }
 
