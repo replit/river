@@ -354,8 +354,6 @@ describe.each(testMatrix())(
     test('buffering messages during reconnect doesnt cause a crash', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();
-      clientTransport.bindLogger(console.log, 'debug');
-      serverTransport.bindLogger(console.log, 'debug');
       clientTransport.connect(serverTransport.clientId);
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
@@ -1423,8 +1421,20 @@ describe.each(testMatrix())(
       expect(clientSessStop).toHaveBeenCalledTimes(0);
       expect(serverSessStop).toHaveBeenCalledTimes(0);
 
+      // wait for one heartbeat to elapse
+      await advanceFakeTimersByHeartbeat();
+
       // now, let's wait until the connection is considered dead
       testHelpers.simulatePhantomDisconnect();
+
+      // sending messages here should eventually be received after recovering from disconnect grace
+      const msg2 = createDummyTransportMessage();
+      const msg2Id = clientSendFn(msg2);
+      const msg2Promise = waitForMessage(
+        serverTransport,
+        (recv) => recv.id === msg2Id,
+      );
+
       await advanceFakeTimersByDisconnectGrace();
 
       // should have reconnected by now
@@ -1436,12 +1446,17 @@ describe.each(testMatrix())(
       await waitFor(() => expect(clientSessStop).toHaveBeenCalledTimes(0));
       await waitFor(() => expect(serverSessStop).toHaveBeenCalledTimes(0));
 
+      // we finally get the message
+      expect(await msg2Promise).toStrictEqual(msg2.payload);
+
       // ensure sending across the connection still works
-      const msg2 = createDummyTransportMessage();
-      const msg2Id = clientSendFn(msg2);
-      await expect(
-        waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
-      ).resolves.toStrictEqual(msg2.payload);
+      const msg3 = createDummyTransportMessage();
+      const msg3Id = clientSendFn(msg3);
+      const msg3Promise = waitForMessage(
+        serverTransport,
+        (recv) => recv.id === msg3Id,
+      );
+      await expect(msg3Promise).resolves.toStrictEqual(msg3.payload);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],

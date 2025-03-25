@@ -50,6 +50,7 @@ function inheritSharedSession(
     to: session.to,
     seq: session.seq,
     ack: session.ack,
+    messagesSent: session.messagesSent,
     sendBuffer: session.sendBuffer,
     telemetry: session.telemetry,
     options: session.options,
@@ -90,6 +91,7 @@ export const SessionStateGraph = {
         to,
         seq: 0,
         ack: 0,
+        messagesSent: 0,
         graceExpiryTime: Date.now() + options.sessionDisconnectGraceMs,
         sendBuffer,
         telemetry,
@@ -251,12 +253,13 @@ export const SessionStateGraph = {
         ? // old session exists, inherit state
           inheritSharedSession(oldSession)
         : // old session does not exist, create new state
-          {
+          ({
             id: sessionId,
             from,
             to,
             seq: 0,
             ack: 0,
+            messagesSent: 0,
             sendBuffer: [],
             telemetry: createSessionTelemetryInfo(
               pendingSession.tracer,
@@ -269,7 +272,7 @@ export const SessionStateGraph = {
             tracer: pendingSession.tracer,
             log: pendingSession.log,
             protocolVersion,
-          };
+          } satisfies IdentifiedSessionProps);
 
       pendingSession._handleStateExit();
       oldSession?._handleStateExit();

@@ -4,6 +4,7 @@ import {
   ControlMessageAckSchema,
   OpaqueTransportMessage,
   PartialTransportMessage,
+  TransportMessage,
   isAck,
 } from '../message';
 import {
@@ -48,10 +49,25 @@ export class SessionConnected<
     this.heartbeatMisses = 0;
   }
 
+  private assertSendOrdering(constructedMsg: TransportMessage) {
+    if (constructedMsg.seq > this.messagesSent) {
+      const msg = `invariant violation: would have sent out of order msg (seq: ${constructedMsg.seq}, expected: ${this.messagesSent})`;
+      this.log?.error(msg, {
+        ...this.loggingMetadata,
+        transportMessage: constructedMsg,
+        tags: ['invariant-violation'],
+      });
+
+      throw new Error(msg);
+    }
+  }
+
   send(msg: PartialTransportMessage): string {
     const constructedMsg = this.constructMsg(msg);
+    this.assertSendOrdering(constructedMsg);
     this.sendBuffer.push(constructedMsg);
     this.conn.send(this.options.codec.toBuffer(constructedMsg));
+    this.messagesSent++;
 
     return constructedMsg.id;
   }
@@ -75,7 +91,9 @@ export class SessionConnected<
       );
 
       for (const msg of this.sendBuffer) {
+        this.assertSendOrdering(msg);
         this.conn.send(this.options.codec.toBuffer(msg));
+        this.messagesSent++;
       }
     }
 
@@ -165,7 +183,7 @@ export class SessionConnected<
         );
       } else {
         const reason = `received out-of-order msg, closing connection (got seq: ${parsedMsg.seq}, wanted seq: ${this.ack})`;
-        this.log?.warn(reason, {
+        this.log?.error(reason, {
           ...this.loggingMetadata,
           transportMessage: parsedMsg,
           tags: ['invariant-violation'],

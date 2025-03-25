@@ -15,6 +15,7 @@ export class InMemoryConnection extends Connection {
   constructor(pipe: Duplex) {
     super();
     this.conn = pipe;
+    this.conn.allowHalfOpen = false;
 
     this.conn.on('data', (data: Uint8Array) => {
       for (const cb of this.dataListeners) {
@@ -22,7 +23,7 @@ export class InMemoryConnection extends Connection {
       }
     });
 
-    this.conn.on('end', () => {
+    this.conn.on('close', () => {
       for (const cb of this.closeListeners) {
         cb();
       }
@@ -46,6 +47,7 @@ export class InMemoryConnection extends Connection {
   close(): void {
     setImmediate(() => {
       this.conn.end();
+      this.conn.emit('close');
     });
   }
 }
@@ -153,6 +155,7 @@ export function createMockTransportNetwork(
     simulatePhantomDisconnect() {
       for (const conn of Object.values(connections.get())) {
         conn.serverToClient.pause();
+        conn.clientToServer.pause();
       }
     },
     async restartServer() {
