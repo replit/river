@@ -530,6 +530,43 @@ describe.each(testMatrix())(
       });
     });
 
+    test('upload server cancel', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = {
+        uploadable: UploadableServiceSchema,
+      };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // test
+      const { reqWritable, finalize } = client.uploadable.cancellableAdd.upload(
+        {},
+      );
+      reqWritable.write({ n: 9 });
+      reqWritable.write({ n: 1 });
+
+      const result = await finalize();
+      expect(result).toStrictEqual({
+        ok: false,
+        payload: { code: CANCEL_CODE, message: "can't add more than 10" },
+      });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
     test('upload with init message', async () => {
       // setup
       const clientTransport = getClientTransport('client');

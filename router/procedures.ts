@@ -3,7 +3,11 @@ import { Static, TNever, TSchema, Type } from '@sinclair/typebox';
 import { ProcedureHandlerContext } from './context';
 import { Result } from './result';
 import { Readable, Writable } from './streams';
-import { ProcedureErrorSchemaType, ReaderErrorSchema } from './errors';
+import {
+  CancelResultSchema,
+  ProcedureErrorSchemaType,
+  ReaderErrorSchema,
+} from './errors';
 
 /**
  * Brands a type to prevent it from being directly constructed.
@@ -35,6 +39,8 @@ export type ValidProcType =
  */
 export type PayloadType = TSchema;
 
+export type Cancellable<T> = T | Static<typeof CancelResultSchema>;
+
 /**
  * Procedure for a single message in both directions (1:1).
  *
@@ -57,7 +63,7 @@ export interface RpcProcedure<
   handler(param: {
     ctx: ProcedureHandlerContext<State>;
     reqInit: Static<RequestInit>;
-  }): Promise<Result<Static<ResponseData>, Static<ResponseErr>>>;
+  }): Promise<Result<Static<ResponseData>, Cancellable<Static<ResponseErr>>>>;
 }
 
 /**
@@ -90,7 +96,7 @@ export interface UploadProcedure<
       Static<RequestData>,
       Static<typeof ReaderErrorSchema>
     >;
-  }): Promise<Result<Static<ResponseData>, Static<ResponseErr>>>;
+  }): Promise<Result<Static<ResponseData>, Cancellable<Static<ResponseErr>>>>;
 }
 
 /**
@@ -115,7 +121,9 @@ export interface SubscriptionProcedure<
   handler(param: {
     ctx: ProcedureHandlerContext<State>;
     reqInit: Static<RequestInit>;
-    resWritable: Writable<Result<Static<ResponseData>, Static<ResponseErr>>>;
+    resWritable: Writable<
+      Result<Static<ResponseData>, Cancellable<Static<ResponseErr>>>
+    >;
   }): Promise<void | undefined>;
 }
 
@@ -149,7 +157,9 @@ export interface StreamProcedure<
       Static<RequestData>,
       Static<typeof ReaderErrorSchema>
     >;
-    resWritable: Writable<Result<Static<ResponseData>, Static<ResponseErr>>>;
+    resWritable: Writable<
+      Result<Static<ResponseData>, Cancellable<Static<ResponseErr>>>
+    >;
   }): Promise<void | undefined>;
 }
 

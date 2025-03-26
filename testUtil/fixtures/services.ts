@@ -287,6 +287,25 @@ export const UploadableServiceSchema = ServiceSchema.define({
       return Ok({ result: `${reqInit.prefix} ${result}` });
     },
   }),
+
+  cancellableAdd: Procedure.upload({
+    requestInit: Type.Object({}),
+    requestData: Type.Object({ n: Type.Number() }),
+    responseData: Type.Object({ result: Type.Number() }),
+    async handler({ ctx, reqReadable }) {
+      let result = 0;
+      for await (const req of reqReadable) {
+        const n = unwrapOrThrow(req).n;
+        if (result + n >= 10) {
+          return ctx.cancel("can't add more than 10");
+        }
+
+        result += n;
+      }
+
+      return Ok({ result: result });
+    },
+  }),
 });
 
 const RecursivePayload = Type.Recursive((This) =>

@@ -1,6 +1,9 @@
 import { Span } from '@opentelemetry/api';
 import { TransportClientId } from '../transport/message';
 import { SessionId } from '../transport/sessionStateMachine/common';
+import { ErrResult } from './result';
+import { CancelResultSchema } from './errors';
+import { Static } from '@sinclair/typebox';
 
 /**
  * ServiceContext exist for the purpose of declaration merging
@@ -75,7 +78,7 @@ export type ProcedureHandlerContext<State> = ServiceContext & {
    * Cancelling is not the same as closing procedure calls gracefully, please refer to
    * the river documentation to understand the difference between the two concepts.
    */
-  cancel: () => void;
+  cancel: (message?: string) => ErrResult<Static<typeof CancelResultSchema>>;
   /**
    * This signal is a standard [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal)
    * triggered when the procedure invocation is done. This signal tracks the invocation/request finishing

@@ -1,4 +1,4 @@
-import { Static, Type } from '@sinclair/typebox';
+import { Static } from '@sinclair/typebox';
 import { PayloadType, AnyProcedure } from './procedures';
 import {
   ReaderErrorSchema,
@@ -7,9 +7,9 @@ import {
   CANCEL_CODE,
   INVALID_REQUEST_CODE,
   BaseErrorSchemaType,
-  ErrResultSchema,
   ValidationErrors,
   castTypeboxValueErrors,
+  CancelResultSchema,
 } from './errors';
 import {
   AnyService,
@@ -52,16 +52,6 @@ import { IdentifiedSession } from '../transport/sessionStateMachine/common';
 import { SessionBoundSendFn } from '../transport/transport';
 
 type StreamId = string;
-
-/**
- * A schema for cancel payloads sent from the client
- */
-const CancelResultSchema = ErrResultSchema(
-  Type.Object({
-    code: Type.Literal(CANCEL_CODE),
-    message: Type.String(),
-  }),
-);
 
 /**
  * Represents a server with a set of services. Use {@link createServer} to create it.
@@ -293,9 +283,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       if (isStreamCancelBackwardsCompat(msg.controlFlags, protocolVersion)) {
-        let cancelResult: Static<typeof CancelResultSchema>;
+        let cancelResult: ErrResult<Static<typeof CancelResultSchema>>;
         if (Value.Check(CancelResultSchema, msg.payload)) {
-          cancelResult = msg.payload;
+          cancelResult = Err(msg.payload);
         } else {
           // If the payload is unexpected, then we just construct our own cancel result
           cancelResult = Err({
@@ -576,11 +566,15 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       sessionId,
       metadata: sessionMetadata,
       span,
-      cancel: () => {
-        onServerCancel({
+      cancel: (message?: string) => {
+        const errRes = {
           code: CANCEL_CODE,
-          message: 'cancelled by server procedure handler',
-        });
+          message: message ?? 'cancelled by server procedure handler',
+        } as const;
+
+        onServerCancel(errRes);
+
+        return Err(errRes);
       },
       signal: finishedController.signal,
     });
