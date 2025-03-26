@@ -202,7 +202,7 @@ export abstract class Transport<ConnType extends Connection> {
 
     this.eventDispatcher.dispatchEvent('sessionTransition', {
       state: session.state,
-      session: session,
+      id: session.id,
     } as EventMap['sessionTransition']);
   }
 
@@ -229,7 +229,7 @@ export abstract class Transport<ConnType extends Connection> {
     this.sessions.set(session.to, session);
     this.eventDispatcher.dispatchEvent('sessionTransition', {
       state: session.state,
-      session: session,
+      id: session.id,
     } as EventMap['sessionTransition']);
   }
 
