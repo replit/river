@@ -234,7 +234,33 @@ const services = {
       requestInit: Type.Object({}),
       requestData: Type.Object({ n: Type.Number() }),
       responseData: Type.Object({ n: Type.Number() }),
-      async handler() {
+      responseError: flattenErrorType(
+        Type.Union([
+          Type.Object({
+            code: Type.Literal('ERROR1'),
+            message: Type.String(),
+          }),
+          Type.Object({
+            code: Type.Literal('ERROR2'),
+            message: Type.String(),
+          }),
+        ]),
+      ),
+      async handler({ ctx, reqReadable }) {
+        for await (const { ok, payload } of reqReadable) {
+          if (!ok) {
+            return ctx.cancel();
+          }
+
+          if (payload.n === 1) {
+            return Err({ code: 'ERROR1', message: 'n is 1' });
+          }
+
+          if (payload.n === 2) {
+            return Err({ code: 'ERROR2', message: 'n is 2' });
+          }
+        }
+
         return Ok({ n: 1 });
       },
     }),
