@@ -49,7 +49,7 @@ export type {
   ServiceContext,
   ProcedureHandlerContext,
 } from './context';
-export { Ok, Err, unwrapOrThrow } from './result';
+export { Ok, Err } from './result';
 export type {
   Result,
   ErrResult,
