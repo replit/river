@@ -1958,7 +1958,9 @@ describe('session state machine', () => {
       );
 
       // make sure the session acks the heartbeat
-      expect(conn.send).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(conn.send).toHaveBeenCalledTimes(1);
+      });
     });
 
     test('does not dispatch acks', async () => {
