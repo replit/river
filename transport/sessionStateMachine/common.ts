@@ -281,6 +281,10 @@ export abstract class IdentifiedSession extends CommonSession {
   constructMsg<Payload>(
     partialMsg: PartialTransportMessage<Payload>,
   ): TransportMessage<Payload> {
+    if (this._isConsumed) {
+      throw new Error(ERR_CONSUMED);
+    }
+
     const msg = {
       ...partialMsg,
       id: generateId(),

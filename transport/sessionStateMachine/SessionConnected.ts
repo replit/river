@@ -226,7 +226,13 @@ export class SessionConnected<
     // if we are not actively heartbeating, we are in passive
     // heartbeat mode and should send a response to the ack
     if (!this.isActivelyHeartbeating) {
-      this.sendHeartbeat();
+      // purposefully make this async to avoid weird browser behavior
+      // where _some_ browsers will decide that it is ok to interrupt fully
+      // synchronous code execution (e.g. an existing .send) to receive a
+      // websocket message and hit this codepath
+      void Promise.resolve().then(() => {
+        this.sendHeartbeat();
+      });
     }
   };
 
