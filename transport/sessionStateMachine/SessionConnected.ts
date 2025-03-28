@@ -43,14 +43,6 @@ export class SessionConnected<
   private heartbeatMisses = 0;
   isActivelyHeartbeating: boolean;
 
-  private lastConstructedMsgs: Array<OpaqueTransportMessage> = [];
-  private pushLastConstructedMsgs = (msg: OpaqueTransportMessage) => {
-    this.lastConstructedMsgs.push(msg);
-    if (this.lastConstructedMsgs.length > 10) {
-      this.lastConstructedMsgs.shift();
-    }
-  };
-
   updateBookkeeping(ack: number, seq: number) {
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
     this.ack = seq + 1;
@@ -64,13 +56,6 @@ export class SessionConnected<
         ...this.loggingMetadata,
         transportMessage: constructedMsg,
         tags: ['invariant-violation'],
-        extras: {
-          lastConstructedMsgs: this.lastConstructedMsgs.map((msg) => ({
-            id: msg.id,
-            seq: msg.seq,
-            streamId: msg.streamId,
-          })),
-        },
       });
 
       throw new Error(msg);
@@ -79,7 +64,6 @@ export class SessionConnected<
 
   send(msg: PartialTransportMessage): string {
     const constructedMsg = this.constructMsg(msg);
-    this.pushLastConstructedMsgs(constructedMsg);
     this.assertSendOrdering(constructedMsg);
     this.sendBuffer.push(constructedMsg);
     this.conn.send(this.options.codec.toBuffer(constructedMsg));
@@ -242,7 +226,10 @@ export class SessionConnected<
     // if we are not actively heartbeating, we are in passive
     // heartbeat mode and should send a response to the ack
     if (!this.isActivelyHeartbeating) {
-      this.sendHeartbeat();
+      // purposefully make this async to avoid weird browser behavior
+      void Promise.resolve().then(() => {
+        this.sendHeartbeat();
+      });
     }
   };
 
