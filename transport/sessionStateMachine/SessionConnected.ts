@@ -84,8 +84,7 @@ export class SessionConnected<
     // send any buffered messages
     if (this.sendBuffer.length > 0) {
       this.log?.info(
-        `sending ${
-          this.sendBuffer.length
+        `sending ${this.sendBuffer.length
         } buffered messages, starting at seq ${this.nextSeq()}`,
         this.loggingMetadata,
       );
@@ -227,6 +226,9 @@ export class SessionConnected<
     // heartbeat mode and should send a response to the ack
     if (!this.isActivelyHeartbeating) {
       // purposefully make this async to avoid weird browser behavior
+      // where _some_ browsers will decide that it is ok to interrupt fully
+      // synchronous code execution (e.g. an existing .send) to receive a
+      // websocket message and hit this codepath
       void Promise.resolve().then(() => {
         this.sendHeartbeat();
       });
