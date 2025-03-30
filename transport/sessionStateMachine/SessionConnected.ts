@@ -121,7 +121,7 @@ export class SessionConnected<
       for (const msg of this.sendBuffer) {
         this.assertSendOrdering(msg);
         this.conn.send(this.options.codec.toBuffer(msg));
-        this.seqSent = Math.max(msg.seq, this.seqSent);
+        this.seqSent = msg.seq;
       }
     }
 
