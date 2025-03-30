@@ -84,7 +84,6 @@ export class SessionConnected<
         },
       });
 
-      this.closeConnection();
       throw new Error(msg);
     }
   }
@@ -147,7 +146,7 @@ export class SessionConnected<
         // this just helps us in cases where we have a proxying setup where the server has closed
         // the connection but the proxy hasn't synchronized the server-side close to the client so
         // the client isn't stuck with a pseudo-dead connection forever
-        this.closeConnection();
+        this.conn.close();
         clearInterval(this.heartbeatHandle);
         this.heartbeatHandle = undefined;
 
@@ -184,13 +183,6 @@ export class SessionConnected<
     });
   }
 
-  closeConnection() {
-    this.conn.removeDataListener(this.onMessageData);
-    this.conn.removeCloseListener(this.listeners.onConnectionClosed);
-    this.conn.removeErrorListener(this.listeners.onConnectionErrored);
-    this.conn.close();
-  }
-
   onMessageData = (msg: Uint8Array) => {
     const parsedMsg = this.parseMsg(msg);
     if (parsedMsg === null) {
@@ -224,7 +216,7 @@ export class SessionConnected<
 
         // try to recover by closing the connection and re-handshaking
         // with the session intact
-        this.closeConnection();
+        this.conn.close();
       }
 
       return;
