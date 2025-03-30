@@ -28,6 +28,13 @@ export interface SessionConnectedProps<ConnType extends Connection>
   listeners: SessionConnectedListeners;
 }
 
+interface TrackedMsg {
+  id: string;
+  seq: number;
+  streamId: string;
+  stack?: string;
+}
+
 /*
  * A session that is connected and can send and receive messages.
  * See transitions.ts for valid transitions.
@@ -43,6 +50,22 @@ export class SessionConnected<
   private heartbeatMisses = 0;
   isActivelyHeartbeating: boolean;
 
+  private lastConstructedMsgs: Array<TrackedMsg> = [];
+  private pushLastConstructedMsgs = (msg: OpaqueTransportMessage) => {
+    const trackedMsg = {
+      id: msg.id,
+      seq: msg.seq,
+      streamId: msg.streamId,
+      stack: new Error().stack,
+    };
+
+    this.lastConstructedMsgs.push(trackedMsg);
+
+    if (this.lastConstructedMsgs.length > 10) {
+      this.lastConstructedMsgs.shift();
+    }
+  };
+
   updateBookkeeping(ack: number, seq: number) {
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
     this.ack = seq + 1;
@@ -56,14 +79,19 @@ export class SessionConnected<
         ...this.loggingMetadata,
         transportMessage: constructedMsg,
         tags: ['invariant-violation'],
+        extras: {
+          lastConstructedMsgs: this.lastConstructedMsgs,
+        },
       });
 
+      this.closeConnection();
       throw new Error(msg);
     }
   }
 
   send(msg: PartialTransportMessage): string {
     const constructedMsg = this.constructMsg(msg);
+    this.pushLastConstructedMsgs(constructedMsg);
     this.assertSendOrdering(constructedMsg);
     this.sendBuffer.push(constructedMsg);
     this.conn.send(this.options.codec.toBuffer(constructedMsg));
@@ -93,7 +121,7 @@ export class SessionConnected<
       for (const msg of this.sendBuffer) {
         this.assertSendOrdering(msg);
         this.conn.send(this.options.codec.toBuffer(msg));
-        this.seqSent = msg.seq;
+        this.seqSent = Math.max(msg.seq, this.seqSent);
       }
     }
 
@@ -119,7 +147,7 @@ export class SessionConnected<
         // this just helps us in cases where we have a proxying setup where the server has closed
         // the connection but the proxy hasn't synchronized the server-side close to the client so
         // the client isn't stuck with a pseudo-dead connection forever
-        this.conn.close();
+        this.closeConnection();
         clearInterval(this.heartbeatHandle);
         this.heartbeatHandle = undefined;
 
