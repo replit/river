@@ -185,17 +185,27 @@ export abstract class ServerTransport<
 
     this.log?.warn(reason, metadata);
 
-    session.sendHandshake(
-      handshakeResponseMessage({
-        from: this.clientId,
-        to,
-        status: {
-          ok: false,
-          code,
-          reason,
-        },
-      }),
-    );
+    const responseMsg = handshakeResponseMessage({
+      from: this.clientId,
+      to,
+      status: {
+        ok: false,
+        code,
+        reason,
+      },
+    });
+
+    const res = session.sendHandshake(responseMsg);
+    if (!res.ok) {
+      this.log?.error(`failed to send handshake response: ${res.value.code}`, {
+        ...session.loggingMetadata,
+        transportMessage: responseMsg,
+      });
+
+      this.deletePendingSession(session);
+
+      return;
+    }
 
     this.protocolError({
       type: ProtocolError.HandshakeFailed,
@@ -456,7 +466,17 @@ export abstract class ServerTransport<
       },
     });
 
-    session.sendHandshake(responseMsg);
+    const res = session.sendHandshake(responseMsg);
+    if (!res.ok) {
+      this.log?.error(`failed to send handshake response: ${res.value.code}`, {
+        ...session.loggingMetadata,
+        transportMessage: responseMsg,
+      });
+
+      this.deletePendingSession(session);
+
+      return;
+    }
 
     // transition
     const connectedSession =
@@ -487,15 +507,43 @@ export abstract class ServerTransport<
             this.handleMsg(msg);
           },
           onInvalidMessage: (reason) => {
+            this.log?.error(`invalid message: ${reason}`, {
+              ...connectedSession.loggingMetadata,
+              transportMessage: msg,
+            });
+
             this.protocolError({
               type: ProtocolError.InvalidMessage,
               message: reason,
             });
             this.deleteSession(connectedSession, { unhealthy: true });
           },
+          onMessageSendFailure: (msg, code) => {
+            this.log?.error(`failed to send message: ${code}`, {
+              ...connectedSession.loggingMetadata,
+              transportMessage: msg,
+            });
+
+            this.deleteSession(connectedSession, { unhealthy: true });
+          },
         },
         gotVersion,
       );
+
+    const bufferSendRes = connectedSession.sendBufferedMessages();
+    if (bufferSendRes && !bufferSendRes.ok) {
+      this.log?.error(
+        `failed to send buffered messages: ${bufferSendRes.value.code}`,
+        {
+          ...connectedSession.loggingMetadata,
+          transportMessage: msg,
+        },
+      );
+
+      this.deleteSession(connectedSession, { unhealthy: true });
+
+      return;
+    }
 
     this.sessionHandshakeMetadata.set(connectedSession.to, parsedMetadata);
     if (oldSession) {

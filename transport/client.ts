@@ -292,13 +292,38 @@ export abstract class ClientTransport<
           this.handleMsg(msg);
         },
         onInvalidMessage: (reason) => {
+          this.log?.error(`invalid message: ${reason}`, {
+            ...connectedSession.loggingMetadata,
+            transportMessage: msg,
+          });
+
           this.deleteSession(connectedSession, { unhealthy: true });
           this.protocolError({
             type: ProtocolError.InvalidMessage,
             message: reason,
           });
         },
+        onMessageSendFailure: (msg, code) => {
+          this.log?.error(`failed to send message: ${code}`, {
+            ...connectedSession.loggingMetadata,
+            transportMessage: msg,
+          });
+
+          this.deleteSession(connectedSession, { unhealthy: true });
+        },
       });
+
+    const res = connectedSession.sendBufferedMessages();
+    if (res && !res.ok) {
+      this.log?.error(`failed to send buffered messages: ${res.value.code}`, {
+        ...connectedSession.loggingMetadata,
+        transportMessage: msg,
+      });
+
+      this.deleteSession(connectedSession, { unhealthy: true });
+
+      return;
+    }
 
     this.updateSession(connectedSession);
     this.retryBudget.startRestoringBudget();
@@ -471,7 +496,15 @@ export abstract class ClientTransport<
       transportMessage: requestMsg,
     });
 
-    session.sendHandshake(requestMsg);
+    const res = session.sendHandshake(requestMsg);
+    if (!res.ok) {
+      this.log?.error(`failed to send handshake request: ${res.value.code}`, {
+        ...session.loggingMetadata,
+        transportMessage: requestMsg,
+      });
+
+      this.deleteSession(session, { unhealthy: true });
+    }
   }
 
   close() {

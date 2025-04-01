@@ -2,16 +2,16 @@ import { Logger, MessageMetadata } from '../../logging';
 import { TelemetryInfo } from '../../tracing';
 import {
   OpaqueTransportMessage,
-  OpaqueTransportMessageSchema,
   PartialTransportMessage,
   ProtocolVersion,
   TransportClientId,
   TransportMessage,
 } from '../message';
-import { Value } from '@sinclair/typebox/value';
-import { Codec } from '../../codec';
+import { Codec, CodecMessageAdapter } from '../../codec';
 import { generateId } from '../id';
 import { Tracer } from '@opentelemetry/api';
+import { SendResult } from '../results';
+import { Connection } from '../connection';
 
 export const enum SessionState {
   NoConnection = 'NoConnection',
@@ -148,6 +148,7 @@ export interface SessionOptions {
 export interface CommonSessionProps {
   from: TransportClientId;
   options: SessionOptions;
+  codec: CodecMessageAdapter;
   tracer: Tracer;
   log: Logger | undefined;
 }
@@ -156,42 +157,18 @@ export abstract class CommonSession extends StateMachineState {
   readonly from: TransportClientId;
   readonly options: SessionOptions;
 
+  readonly codec: CodecMessageAdapter;
   tracer: Tracer;
   log?: Logger;
   abstract get loggingMetadata(): MessageMetadata;
 
-  constructor({ from, options, log, tracer }: CommonSessionProps) {
+  constructor({ from, options, log, tracer, codec }: CommonSessionProps) {
     super();
     this.from = from;
     this.options = options;
     this.log = log;
     this.tracer = tracer;
-  }
-
-  parseMsg(msg: Uint8Array): OpaqueTransportMessage | null {
-    const parsedMsg = this.options.codec.fromBuffer(msg);
-
-    if (parsedMsg === null) {
-      this.log?.error(
-        `received malformed msg: ${Buffer.from(msg).toString('base64')}`,
-        this.loggingMetadata,
-      );
-
-      return null;
-    }
-
-    if (!Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
-      this.log?.error(`received invalid msg: ${JSON.stringify(parsedMsg)}`, {
-        ...this.loggingMetadata,
-        validationErrors: [
-          ...Value.Errors(OpaqueTransportMessageSchema, parsedMsg),
-        ],
-      });
-
-      return null;
-    }
-
-    return parsedMsg;
+    this.codec = codec;
   }
 }
 
@@ -299,11 +276,14 @@ export abstract class IdentifiedSession extends CommonSession {
     return this.sendBuffer.length > 0 ? this.sendBuffer[0].seq : this.seq;
   }
 
-  send(msg: PartialTransportMessage): string {
+  send(msg: PartialTransportMessage): SendResult {
     const constructedMsg = this.constructMsg(msg);
     this.sendBuffer.push(constructedMsg);
 
-    return constructedMsg.id;
+    return {
+      ok: true,
+      value: constructedMsg.id,
+    };
   }
 
   _handleStateExit(): void {
@@ -355,4 +335,31 @@ export abstract class IdentifiedSessionWithGracePeriod extends IdentifiedSession
   _handleClose(): void {
     super._handleClose();
   }
+}
+
+export function sendMessage(
+  conn: Connection,
+  codec: CodecMessageAdapter,
+  msg: TransportMessage,
+): SendResult {
+  const buff = codec.toBuffer(msg);
+  if (!buff.ok) {
+    return buff;
+  }
+
+  const sent = conn.send(buff.value);
+  if (!sent) {
+    return {
+      ok: false,
+      value: {
+        code: 'send_error',
+        error: new Error('failed to send message'),
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    value: msg.id,
+  };
 }

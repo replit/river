@@ -41,10 +41,10 @@ describe.each(codecs)('codec -- $name', ({ codec }) => {
     expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
   });
 
-  test('invalid json returns null', () => {
-    expect(codec.fromBuffer(Buffer.from(''))).toBeNull();
-    expect(codec.fromBuffer(Buffer.from('['))).toBeNull();
-    expect(codec.fromBuffer(Buffer.from('[{}'))).toBeNull();
-    expect(codec.fromBuffer(Buffer.from('{"a":1}[]'))).toBeNull();
+  test('invalid json throws', () => {
+    expect(() => codec.fromBuffer(Buffer.from(''))).toThrow();
+    expect(() => codec.fromBuffer(Buffer.from('['))).toThrow();
+    expect(() => codec.fromBuffer(Buffer.from('[{}'))).toThrow();
+    expect(() => codec.fromBuffer(Buffer.from('{"a":1}[]'))).toThrow();
   });
 });

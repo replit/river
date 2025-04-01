@@ -135,6 +135,7 @@ function createSessionConnectedListeners(): SessionConnectedListeners {
     onConnectionClosed: vi.fn(),
     onConnectionErrored: vi.fn(),
     onInvalidMessage: vi.fn(),
+    onMessageSendFailure: vi.fn(),
   };
 }
 
@@ -483,7 +484,7 @@ describe('session state machine', () => {
         currentProtocolVersion,
       );
 
-      session.send(payloadToTransportMessage('foo'));
+      session.sendBufferedMessages();
       expect(session.sendBuffer.length).toBe(3);
       expect(session.seq).toBe(3);
       expect(session.ack).toBe(0);

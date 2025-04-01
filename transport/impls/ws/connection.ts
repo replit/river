@@ -57,7 +57,6 @@ export class WebSocketConnection extends Connection {
     }
 
     this.ws.send(payload);
-
     return true;
   }
 

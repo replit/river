@@ -40,6 +40,7 @@ import {
 } from './SessionBackingOff';
 import { ProtocolVersion } from '../message';
 import { Tracer } from '@opentelemetry/api';
+import { CodecMessageAdapter } from '../../codec';
 
 function inheritSharedSession(
   session: IdentifiedSession,
@@ -57,6 +58,7 @@ function inheritSharedSession(
     log: session.log,
     tracer: session.tracer,
     protocolVersion: session.protocolVersion,
+    codec: session.codec,
   };
 }
 
@@ -99,6 +101,7 @@ export const SessionStateGraph = {
         protocolVersion,
         tracer,
         log,
+        codec: new CodecMessageAdapter(options.codec),
       });
 
       session.log?.info(`session ${session.id} created in NoConnection state`, {
@@ -123,6 +126,7 @@ export const SessionStateGraph = {
         options,
         tracer,
         log,
+        codec: new CodecMessageAdapter(options.codec),
       });
 
       session.log?.info(`session created in WaitingForHandshake state`, {
@@ -272,6 +276,7 @@ export const SessionStateGraph = {
             tracer: pendingSession.tracer,
             log: pendingSession.log,
             protocolVersion,
+            codec: new CodecMessageAdapter(options.codec),
           } satisfies IdentifiedSessionProps);
 
       pendingSession._handleStateExit();

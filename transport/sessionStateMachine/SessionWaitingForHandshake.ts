@@ -5,7 +5,13 @@ import {
   OpaqueTransportMessage,
   TransportMessage,
 } from '../message';
-import { CommonSession, CommonSessionProps, SessionState } from './common';
+import {
+  CommonSession,
+  CommonSessionProps,
+  sendMessage,
+  SessionState,
+} from './common';
+import { SendResult } from '../results';
 
 export interface SessionWaitingForHandshakeListeners {
   onConnectionErrored: (err: unknown) => void;
@@ -62,10 +68,10 @@ export class SessionWaitingForHandshake<
   }
 
   onHandshakeData = (msg: Uint8Array) => {
-    const parsedMsg = this.parseMsg(msg);
-    if (parsedMsg === null) {
+    const parsedMsgRes = this.codec.fromBuffer(msg);
+    if (!parsedMsgRes.ok) {
       this.listeners.onInvalidHandshake(
-        'could not parse message',
+        `could not parse handshake message: ${parsedMsgRes.value.error.message}`,
         'MALFORMED_HANDSHAKE',
       );
 
@@ -74,11 +80,11 @@ export class SessionWaitingForHandshake<
 
     // after this fires, the listener is responsible for transitioning the session
     // and thus removing the handshake timeout
-    this.listeners.onHandshake(parsedMsg);
+    this.listeners.onHandshake(parsedMsgRes.value);
   };
 
-  sendHandshake(msg: TransportMessage): boolean {
-    return this.conn.send(this.options.codec.toBuffer(msg));
+  sendHandshake(msg: TransportMessage): SendResult {
+    return sendMessage(this.conn, this.codec, msg);
   }
 
   _handleStateExit(): void {

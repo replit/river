@@ -48,23 +48,21 @@ export const NaiveJsonCodec: Codec = {
     );
   },
   fromBuffer: (buff: Uint8Array) => {
-    try {
-      const parsed = JSON.parse(
-        decoder.decode(buff),
-        function reviver(_key, val: unknown) {
-          if ((val as Base64EncodedValue | undefined)?.$t) {
-            return base64ToUint8Array((val as Base64EncodedValue).$t);
-          } else {
-            return val;
-          }
-        },
-      ) as unknown;
+    const parsed = JSON.parse(
+      decoder.decode(buff),
+      function reviver(_key, val: unknown) {
+        if ((val as Base64EncodedValue | undefined)?.$t) {
+          return base64ToUint8Array((val as Base64EncodedValue).$t);
+        } else {
+          return val;
+        }
+      },
+    ) as unknown;
 
-      if (typeof parsed === 'object') return parsed;
-
-      return null;
-    } catch {
-      return null;
+    if (typeof parsed !== 'object' || parsed === null) {
+      throw new Error('unpacked msg is not an object');
     }
+
+    return parsed;
   },
 };

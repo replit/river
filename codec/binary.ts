@@ -10,15 +10,11 @@ export const BinaryCodec: Codec = {
     return encode(obj, { ignoreUndefined: true });
   },
   fromBuffer: (buff: Uint8Array) => {
-    try {
-      const res = decode(buff);
-      if (typeof res !== 'object') {
-        return null;
-      }
-
-      return res;
-    } catch {
-      return null;
+    const res = decode(buff);
+    if (typeof res !== 'object' || res === null) {
+      throw new Error('unpacked msg is not an object');
     }
+
+    return res;
   },
 };
