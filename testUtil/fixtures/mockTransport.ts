@@ -166,14 +166,14 @@ export function createMockTransportNetwork(
 
       // kill all connections while we're at it
       for (const conn of Object.values(connections.get())) {
-        conn.serverToClient.end();
-        conn.clientToServer.end();
+        conn.serverToClient.destroy();
+        conn.clientToServer.destroy();
       }
     },
     cleanup() {
       for (const conn of Object.values(connections.get())) {
-        conn.serverToClient.end();
-        conn.clientToServer.end();
+        conn.serverToClient.destroy();
+        conn.clientToServer.destroy();
       }
     },
   };

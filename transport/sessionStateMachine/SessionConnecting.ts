@@ -83,7 +83,6 @@ export class SessionConnecting<
 
   _handleStateExit(): void {
     super._handleStateExit();
-
     if (this.connectionTimeout) {
       clearTimeout(this.connectionTimeout);
       this.connectionTimeout = undefined;
@@ -91,8 +90,9 @@ export class SessionConnecting<
   }
 
   _handleClose(): void {
+    super._handleClose();
+
     // close the pending connection if it resolves
     this.bestEffortClose();
-    super._handleClose();
   }
 }
