@@ -484,7 +484,10 @@ describe('session state machine', () => {
         currentProtocolVersion,
       );
 
-      session.sendBufferedMessages();
+      const res = session.sendBufferedMessages();
+      expect(res).toBe(undefined);
+      expect(session.sendBuffer.length).toBe(2);
+      session.send(payloadToTransportMessage('foo'));
       expect(session.sendBuffer.length).toBe(3);
       expect(session.seq).toBe(3);
       expect(session.ack).toBe(0);

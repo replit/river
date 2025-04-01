@@ -52,12 +52,13 @@ export class WebSocketConnection extends Connection {
   }
 
   send(payload: Uint8Array) {
-    if (this.ws.readyState !== this.ws.OPEN) {
+    try {
+      this.ws.send(payload);
+
+      return true;
+    } catch {
       return false;
     }
-
-    this.ws.send(payload);
-    return true;
   }
 
   close() {
