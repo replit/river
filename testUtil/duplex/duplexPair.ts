@@ -56,6 +56,17 @@ export function duplexPair(): [DuplexSide, DuplexSide] {
   const side1 = new DuplexSide();
   side0[kInitOtherSide](side1);
   side1[kInitOtherSide](side0);
+  side0.on('close', () => {
+    setImmediate(() => {
+      side1.destroy();
+    });
+  });
+
+  side1.on('close', () => {
+    setImmediate(() => {
+      side0.destroy();
+    });
+  });
 
   return [side0, side1];
 }
