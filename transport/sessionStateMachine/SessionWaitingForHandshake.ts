@@ -71,7 +71,7 @@ export class SessionWaitingForHandshake<
     const parsedMsgRes = this.codec.fromBuffer(msg);
     if (!parsedMsgRes.ok) {
       this.listeners.onInvalidHandshake(
-        `could not parse handshake message: ${parsedMsgRes.value.error.message}`,
+        `could not parse handshake message: ${parsedMsgRes.reason}`,
         'MALFORMED_HANDSHAKE',
       );
 

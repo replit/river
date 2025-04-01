@@ -15,16 +15,13 @@ import {
 } from './common';
 import { Connection } from '../connection';
 import { SpanStatusCode } from '@opentelemetry/api';
-import { SendResult, SendErrorCode, SerializeErrorCode } from '../results';
+import { SendResult } from '../results';
 
 export interface SessionConnectedListeners {
   onConnectionErrored: (err: unknown) => void;
   onConnectionClosed: () => void;
   onMessage: (msg: OpaqueTransportMessage) => void;
-  onMessageSendFailure: (
-    msg: PartialTransportMessage,
-    code: SendErrorCode | SerializeErrorCode,
-  ) => void;
+  onMessageSendFailure: (msg: PartialTransportMessage, reason: string) => void;
   onInvalidMessage: (reason: string) => void;
 }
 
@@ -79,7 +76,7 @@ export class SessionConnected<
     this.sendBuffer.push(constructedMsg);
     const res = sendMessage(this.conn, this.codec, constructedMsg);
     if (!res.ok) {
-      this.listeners.onMessageSendFailure(constructedMsg, res.value.code);
+      this.listeners.onMessageSendFailure(constructedMsg, res.reason);
 
       return res;
     }
@@ -117,7 +114,7 @@ export class SessionConnected<
         this.assertSendOrdering(msg);
         const res = sendMessage(this.conn, this.codec, msg);
         if (!res.ok) {
-          this.listeners.onMessageSendFailure(msg, res.value.code);
+          this.listeners.onMessageSendFailure(msg, res.reason);
 
           return res;
         }
@@ -174,7 +171,7 @@ export class SessionConnected<
     const parsedMsgRes = this.codec.fromBuffer(msg);
     if (!parsedMsgRes.ok) {
       this.listeners.onInvalidMessage(
-        `could not parse message: ${parsedMsgRes.value.error.message}`,
+        `could not parse message: ${parsedMsgRes.reason}`,
       );
 
       return;

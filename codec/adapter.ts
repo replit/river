@@ -17,17 +17,9 @@ export class CodecMessageAdapter {
         value: this.codec.toBuffer(msg),
       };
     } catch (e) {
-      const error =
-        e instanceof Error
-          ? e
-          : new Error(`serialize error: ${coerceErrorString(e)}`);
-
       return {
         ok: false,
-        value: {
-          code: 'serialize_error',
-          error,
-        },
+        reason: coerceErrorString(e),
       };
     }
   }
@@ -38,10 +30,7 @@ export class CodecMessageAdapter {
       if (!Value.Check(OpaqueTransportMessageSchema, parsedMsg)) {
         return {
           ok: false,
-          value: {
-            code: 'deserialize_error',
-            error: new Error('transport message schema mismatch'),
-          },
+          reason: 'transport message schema mismatch',
         };
       }
 
@@ -50,17 +39,9 @@ export class CodecMessageAdapter {
         value: parsedMsg,
       };
     } catch (e) {
-      const error =
-        e instanceof Error
-          ? e
-          : new Error(`deserialize error: ${coerceErrorString(e)}`);
-
       return {
         ok: false,
-        value: {
-          code: 'deserialize_error',
-          error,
-        },
+        reason: coerceErrorString(e),
       };
     }
   }

@@ -351,10 +351,7 @@ export function sendMessage(
   if (sent === false) {
     return {
       ok: false,
-      value: {
-        code: 'send_error',
-        error: new Error('failed to send message'),
-      },
+      reason: 'failed to send message',
     };
   }
 

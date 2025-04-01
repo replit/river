@@ -197,11 +197,15 @@ export abstract class ServerTransport<
 
     const res = session.sendHandshake(responseMsg);
     if (!res.ok) {
-      this.log?.error(`failed to send handshake response: ${res.value.code}`, {
+      this.log?.error(`failed to send handshake response: ${res.reason}`, {
         ...session.loggingMetadata,
         transportMessage: responseMsg,
       });
 
+      this.protocolError({
+        type: ProtocolError.MessageSendFailure,
+        message: res.reason,
+      });
       this.deletePendingSession(session);
 
       return;
@@ -468,17 +472,22 @@ export abstract class ServerTransport<
 
     const res = session.sendHandshake(responseMsg);
     if (!res.ok) {
-      this.log?.error(`failed to send handshake response: ${res.value.code}`, {
+      this.log?.error(`failed to send handshake response: ${res.reason}`, {
         ...session.loggingMetadata,
         transportMessage: responseMsg,
       });
 
+      this.protocolError({
+        type: ProtocolError.MessageSendFailure,
+        message: res.reason,
+      });
       this.deletePendingSession(session);
 
       return;
     }
 
     // transition
+    this.pendingSessions.delete(session);
     const connectedSession =
       ServerSessionStateGraph.transition.WaitingForHandshakeToConnected(
         session,
@@ -518,12 +527,16 @@ export abstract class ServerTransport<
             });
             this.deleteSession(connectedSession, { unhealthy: true });
           },
-          onMessageSendFailure: (msg, code) => {
-            this.log?.error(`failed to send message: ${code}`, {
+          onMessageSendFailure: (msg, reason) => {
+            this.log?.error(`failed to send message: ${reason}`, {
               ...connectedSession.loggingMetadata,
               transportMessage: msg,
             });
 
+            this.protocolError({
+              type: ProtocolError.MessageSendFailure,
+              message: reason,
+            });
             this.deleteSession(connectedSession, { unhealthy: true });
           },
         },
@@ -533,13 +546,17 @@ export abstract class ServerTransport<
     const bufferSendRes = connectedSession.sendBufferedMessages();
     if (bufferSendRes && !bufferSendRes.ok) {
       this.log?.error(
-        `failed to send buffered messages: ${bufferSendRes.value.code}`,
+        `failed to send buffered messages: ${bufferSendRes.reason}`,
         {
           ...connectedSession.loggingMetadata,
           transportMessage: msg,
         },
       );
 
+      this.protocolError({
+        type: ProtocolError.MessageSendFailure,
+        message: bufferSendRes.reason,
+      });
       this.deleteSession(connectedSession, { unhealthy: true });
 
       return;
@@ -552,7 +569,6 @@ export abstract class ServerTransport<
       this.createSession(connectedSession);
     }
 
-    this.pendingSessions.delete(session);
     connectedSession.startActiveHeartbeat();
   }
 }

@@ -343,7 +343,7 @@ export abstract class Transport<ConnType extends Connection> {
 
       const res = session.send(msg);
       if (!res.ok) {
-        throw res.value.error;
+        throw new Error(res.reason);
       }
 
       return res.value;

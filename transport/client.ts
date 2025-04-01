@@ -297,29 +297,37 @@ export abstract class ClientTransport<
             transportMessage: msg,
           });
 
-          this.deleteSession(connectedSession, { unhealthy: true });
           this.protocolError({
             type: ProtocolError.InvalidMessage,
             message: reason,
           });
+          this.deleteSession(connectedSession, { unhealthy: true });
         },
-        onMessageSendFailure: (msg, code) => {
-          this.log?.error(`failed to send message: ${code}`, {
+        onMessageSendFailure: (msg, reason) => {
+          this.log?.error(`failed to send message: ${reason}`, {
             ...connectedSession.loggingMetadata,
             transportMessage: msg,
           });
 
+          this.protocolError({
+            type: ProtocolError.MessageSendFailure,
+            message: reason,
+          });
           this.deleteSession(connectedSession, { unhealthy: true });
         },
       });
 
     const res = connectedSession.sendBufferedMessages();
     if (res && !res.ok) {
-      this.log?.error(`failed to send buffered messages: ${res.value.code}`, {
+      this.log?.error(`failed to send buffered messages: ${res.reason}`, {
         ...connectedSession.loggingMetadata,
         transportMessage: msg,
       });
 
+      this.protocolError({
+        type: ProtocolError.MessageSendFailure,
+        message: res.reason,
+      });
       this.deleteSession(connectedSession, { unhealthy: true });
 
       return;
@@ -498,11 +506,15 @@ export abstract class ClientTransport<
 
     const res = session.sendHandshake(requestMsg);
     if (!res.ok) {
-      this.log?.error(`failed to send handshake request: ${res.value.code}`, {
+      this.log?.error(`failed to send handshake request: ${res.reason}`, {
         ...session.loggingMetadata,
         transportMessage: requestMsg,
       });
 
+      this.protocolError({
+        type: ProtocolError.MessageSendFailure,
+        message: res.reason,
+      });
       this.deleteSession(session, { unhealthy: true });
     }
   }
