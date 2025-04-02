@@ -51,7 +51,7 @@ function persistedSessionState(session: IdentifiedSession) {
 
 class MockConnection extends Connection {
   status: 'open' | 'closed' = 'open';
-  send = vi.fn();
+  send = vi.fn(() => true);
 
   close(): void {
     this.status = 'closed';
