@@ -318,7 +318,7 @@ export abstract class ClientTransport<
       });
 
     const res = connectedSession.sendBufferedMessages();
-    if (res && !res.ok) {
+    if (!res.ok) {
       this.log?.error(`failed to send buffered messages: ${res.reason}`, {
         ...connectedSession.loggingMetadata,
         transportMessage: msg,

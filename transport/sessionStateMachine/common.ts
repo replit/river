@@ -348,7 +348,7 @@ export function sendMessage(
   }
 
   const sent = conn.send(buff.value);
-  if (sent === false) {
+  if (!sent) {
     return {
       ok: false,
       reason: 'failed to send message',

@@ -116,7 +116,7 @@ export abstract class Connection {
    * @param msg The message to send.
    * @returns true if the message was sent, false otherwise.
    */
-  abstract send(msg: Uint8Array): boolean | void;
+  abstract send(msg: Uint8Array): boolean;
 
   /**
    * Closes the connection.

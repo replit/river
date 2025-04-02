@@ -1,7 +1,7 @@
 import { OpaqueTransportMessage } from './message';
 
 // internal use only, not to be used in public API
-type Result<T> =
+type SessionApiResult<T> =
   | {
       ok: true;
       value: T;
@@ -11,6 +11,7 @@ type Result<T> =
       reason: string;
     };
 
-export type SendResult = Result<string>;
-export type SerializeResult = Result<Uint8Array>;
-export type DeserializeResult = Result<OpaqueTransportMessage>;
+export type SendResult = SessionApiResult<string>;
+export type SendBufferResult = SessionApiResult<undefined>;
+export type SerializeResult = SessionApiResult<Uint8Array>;
+export type DeserializeResult = SessionApiResult<OpaqueTransportMessage>;

@@ -7,6 +7,11 @@ import { Codec } from './types';
 import { DeserializeResult, SerializeResult } from '../transport/results';
 import { coerceErrorString } from '../transport/stringifyError';
 
+/**
+ * Adapts a {@link Codec} to the {@link OpaqueTransportMessage} format,
+ * accounting for fallibility of toBuffer and fromBuffer and wrapping
+ * it with a Result type.
+ */
 export class CodecMessageAdapter {
   constructor(private readonly codec: Codec) {}
 

@@ -15,7 +15,7 @@ import {
 } from './common';
 import { Connection } from '../connection';
 import { SpanStatusCode } from '@opentelemetry/api';
-import { SendResult } from '../results';
+import { SendBufferResult, SendResult } from '../results';
 
 export interface SessionConnectedListeners {
   onConnectionErrored: (err: unknown) => void;
@@ -94,11 +94,9 @@ export class SessionConnected<
     this.conn.addDataListener(this.onMessageData);
     this.conn.addCloseListener(this.listeners.onConnectionClosed);
     this.conn.addErrorListener(this.listeners.onConnectionErrored);
-
-    this.startMissingHeartbeatTimeout();
   }
 
-  sendBufferedMessages(): void | SendResult {
+  sendBufferedMessages(): SendBufferResult {
     // send any buffered messages
     // dont explicity clear the buffer, we'll just filter out old messages
     // when we receive an ack
@@ -122,6 +120,8 @@ export class SessionConnected<
         this.seqSent = msg.seq;
       }
     }
+
+    return { ok: true, value: undefined };
   }
 
   get loggingMetadata() {

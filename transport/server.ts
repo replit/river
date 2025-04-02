@@ -544,7 +544,7 @@ export abstract class ServerTransport<
       );
 
     const bufferSendRes = connectedSession.sendBufferedMessages();
-    if (bufferSendRes && !bufferSendRes.ok) {
+    if (!bufferSendRes.ok) {
       this.log?.error(
         `failed to send buffered messages: ${bufferSendRes.reason}`,
         {

@@ -485,7 +485,7 @@ describe('session state machine', () => {
       );
 
       const res = session.sendBufferedMessages();
-      expect(res).toBe(undefined);
+      expect(res.ok).toBe(true);
       expect(session.sendBuffer.length).toBe(2);
       session.send(payloadToTransportMessage('foo'));
       expect(session.sendBuffer.length).toBe(3);
