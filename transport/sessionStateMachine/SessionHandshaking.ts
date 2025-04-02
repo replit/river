@@ -9,8 +9,10 @@ import {
   IdentifiedSessionWithGracePeriod,
   IdentifiedSessionWithGracePeriodListeners,
   IdentifiedSessionWithGracePeriodProps,
+  sendMessage,
   SessionState,
 } from './common';
+import { SendResult } from '../results';
 
 export interface SessionHandshakingListeners
   extends IdentifiedSessionWithGracePeriodListeners {
@@ -67,21 +69,21 @@ export class SessionHandshaking<
   }
 
   onHandshakeData = (msg: Uint8Array) => {
-    const parsedMsg = this.parseMsg(msg);
-    if (parsedMsg === null) {
+    const parsedMsgRes = this.codec.fromBuffer(msg);
+    if (!parsedMsgRes.ok) {
       this.listeners.onInvalidHandshake(
-        'could not parse message',
+        `could not parse handshake message: ${parsedMsgRes.reason}`,
         'MALFORMED_HANDSHAKE',
       );
 
       return;
     }
 
-    this.listeners.onHandshake(parsedMsg);
+    this.listeners.onHandshake(parsedMsgRes.value);
   };
 
-  sendHandshake(msg: TransportMessage): boolean {
-    return this.conn.send(this.options.codec.toBuffer(msg));
+  sendHandshake(msg: TransportMessage): SendResult {
+    return sendMessage(this.conn, this.codec, msg);
   }
 
   _handleStateExit(): void {

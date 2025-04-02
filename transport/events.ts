@@ -10,6 +10,7 @@ export const ProtocolError = {
   HandshakeFailed: 'handshake_failed',
   MessageOrderingViolated: 'message_ordering_violated',
   InvalidMessage: 'invalid_message',
+  MessageSendFailure: 'message_send_failure',
 } as const;
 
 export type ProtocolErrorType =

@@ -14,5 +14,5 @@ export interface Codec {
    * @param buf - The Uint8 buffer to decode.
    * @returns The decoded object, or null if decoding failed.
    */
-  fromBuffer(buf: Uint8Array): object | null;
+  fromBuffer(buf: Uint8Array): object;
 }

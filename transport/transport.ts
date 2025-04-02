@@ -40,9 +40,7 @@ export interface DeleteSessionOptions {
   unhealthy: boolean;
 }
 
-export type SessionBoundSendFn = (
-  msg: PartialTransportMessage,
-) => string | undefined;
+export type SessionBoundSendFn = (msg: PartialTransportMessage) => string;
 
 /**
  * Transports manage the lifecycle (creation/deletion) of sessions
@@ -337,13 +335,18 @@ export abstract class Transport<ConnType extends Connection> {
       }
 
       const sameSession = session.id === sessionId;
-      if (!sameSession) {
+      if (!sameSession || session._isConsumed) {
         throw new Error(
           `session scope for ${sessionId} has ended (transition), can't send`,
         );
       }
 
-      return session.send(msg);
+      const res = session.send(msg);
+      if (!res.ok) {
+        throw new Error(res.reason);
+      }
+
+      return res.value;
     };
   }
 }

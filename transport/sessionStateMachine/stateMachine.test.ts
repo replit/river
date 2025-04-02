@@ -51,7 +51,7 @@ function persistedSessionState(session: IdentifiedSession) {
 
 class MockConnection extends Connection {
   status: 'open' | 'closed' = 'open';
-  send = vi.fn();
+  send = vi.fn(() => true);
 
   close(): void {
     this.status = 'closed';
@@ -135,6 +135,7 @@ function createSessionConnectedListeners(): SessionConnectedListeners {
     onConnectionClosed: vi.fn(),
     onConnectionErrored: vi.fn(),
     onInvalidMessage: vi.fn(),
+    onMessageSendFailure: vi.fn(),
   };
 }
 
@@ -483,6 +484,9 @@ describe('session state machine', () => {
         currentProtocolVersion,
       );
 
+      const res = session.sendBufferedMessages();
+      expect(res.ok).toBe(true);
+      expect(session.sendBuffer.length).toBe(2);
       session.send(payloadToTransportMessage('foo'));
       expect(session.sendBuffer.length).toBe(3);
       expect(session.seq).toBe(3);

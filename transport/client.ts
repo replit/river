@@ -292,13 +292,46 @@ export abstract class ClientTransport<
           this.handleMsg(msg);
         },
         onInvalidMessage: (reason) => {
-          this.deleteSession(connectedSession, { unhealthy: true });
+          this.log?.error(`invalid message: ${reason}`, {
+            ...connectedSession.loggingMetadata,
+            transportMessage: msg,
+          });
+
           this.protocolError({
             type: ProtocolError.InvalidMessage,
             message: reason,
           });
+          this.deleteSession(connectedSession, { unhealthy: true });
+        },
+        onMessageSendFailure: (msg, reason) => {
+          this.log?.error(`failed to send message: ${reason}`, {
+            ...connectedSession.loggingMetadata,
+            transportMessage: msg,
+          });
+
+          this.protocolError({
+            type: ProtocolError.MessageSendFailure,
+            message: reason,
+          });
+          this.deleteSession(connectedSession, { unhealthy: true });
         },
       });
+
+    const res = connectedSession.sendBufferedMessages();
+    if (!res.ok) {
+      this.log?.error(`failed to send buffered messages: ${res.reason}`, {
+        ...connectedSession.loggingMetadata,
+        transportMessage: msg,
+      });
+
+      this.protocolError({
+        type: ProtocolError.MessageSendFailure,
+        message: res.reason,
+      });
+      this.deleteSession(connectedSession, { unhealthy: true });
+
+      return;
+    }
 
     this.updateSession(connectedSession);
     this.retryBudget.startRestoringBudget();
@@ -471,7 +504,19 @@ export abstract class ClientTransport<
       transportMessage: requestMsg,
     });
 
-    session.sendHandshake(requestMsg);
+    const res = session.sendHandshake(requestMsg);
+    if (!res.ok) {
+      this.log?.error(`failed to send handshake request: ${res.reason}`, {
+        ...session.loggingMetadata,
+        transportMessage: requestMsg,
+      });
+
+      this.protocolError({
+        type: ProtocolError.MessageSendFailure,
+        message: res.reason,
+      });
+      this.deleteSession(session, { unhealthy: true });
+    }
   }
 
   close() {

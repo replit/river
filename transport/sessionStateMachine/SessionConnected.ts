@@ -10,15 +10,18 @@ import {
 import {
   IdentifiedSession,
   IdentifiedSessionProps,
+  sendMessage,
   SessionState,
 } from './common';
 import { Connection } from '../connection';
 import { SpanStatusCode } from '@opentelemetry/api';
+import { SendBufferResult, SendResult } from '../results';
 
 export interface SessionConnectedListeners {
   onConnectionErrored: (err: unknown) => void;
   onConnectionClosed: () => void;
   onMessage: (msg: OpaqueTransportMessage) => void;
+  onMessageSendFailure: (msg: PartialTransportMessage, reason: string) => void;
   onInvalidMessage: (reason: string) => void;
 }
 
@@ -67,14 +70,20 @@ export class SessionConnected<
     }
   }
 
-  send(msg: PartialTransportMessage): string {
+  send(msg: PartialTransportMessage): SendResult {
     const constructedMsg = this.constructMsg(msg);
     this.assertSendOrdering(constructedMsg);
     this.sendBuffer.push(constructedMsg);
-    this.conn.send(this.options.codec.toBuffer(constructedMsg));
+    const res = sendMessage(this.conn, this.codec, constructedMsg);
+    if (!res.ok) {
+      this.listeners.onMessageSendFailure(constructedMsg, res.reason);
+
+      return res;
+    }
+
     this.seqSent = constructedMsg.seq;
 
-    return constructedMsg.id;
+    return res;
   }
 
   constructor(props: SessionConnectedProps<ConnType>) {
@@ -85,7 +94,9 @@ export class SessionConnected<
     this.conn.addDataListener(this.onMessageData);
     this.conn.addCloseListener(this.listeners.onConnectionClosed);
     this.conn.addErrorListener(this.listeners.onConnectionErrored);
+  }
 
+  sendBufferedMessages(): SendBufferResult {
     // send any buffered messages
     // dont explicity clear the buffer, we'll just filter out old messages
     // when we receive an ack
@@ -99,12 +110,18 @@ export class SessionConnected<
 
       for (const msg of this.sendBuffer) {
         this.assertSendOrdering(msg);
-        this.conn.send(this.options.codec.toBuffer(msg));
+        const res = sendMessage(this.conn, this.codec, msg);
+        if (!res.ok) {
+          this.listeners.onMessageSendFailure(msg, res.reason);
+
+          return res;
+        }
+
         this.seqSent = msg.seq;
       }
     }
 
-    this.startMissingHeartbeatTimeout();
+    return { ok: true, value: undefined };
   }
 
   get loggingMetadata() {
@@ -137,24 +154,30 @@ export class SessionConnected<
     }, this.options.heartbeatIntervalMs);
   }
 
-  private sendHeartbeat() {
+  private sendHeartbeat(): void {
     this.log?.debug('sending heartbeat', this.loggingMetadata);
-    this.send({
+    const heartbeat = {
       streamId: 'heartbeat',
       controlFlags: ControlFlags.AckBit,
       payload: {
         type: 'ACK',
       } satisfies Static<typeof ControlMessageAckSchema>,
-    });
+    } satisfies PartialTransportMessage;
+
+    this.send(heartbeat);
   }
 
   onMessageData = (msg: Uint8Array) => {
-    const parsedMsg = this.parseMsg(msg);
-    if (parsedMsg === null) {
-      this.listeners.onInvalidMessage('could not parse message');
+    const parsedMsgRes = this.codec.fromBuffer(msg);
+    if (!parsedMsgRes.ok) {
+      this.listeners.onInvalidMessage(
+        `could not parse message: ${parsedMsgRes.reason}`,
+      );
 
       return;
     }
+
+    const parsedMsg = parsedMsgRes.value;
 
     // check message ordering here
     if (parsedMsg.seq !== this.ack) {

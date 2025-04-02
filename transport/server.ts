@@ -185,17 +185,31 @@ export abstract class ServerTransport<
 
     this.log?.warn(reason, metadata);
 
-    session.sendHandshake(
-      handshakeResponseMessage({
-        from: this.clientId,
-        to,
-        status: {
-          ok: false,
-          code,
-          reason,
-        },
-      }),
-    );
+    const responseMsg = handshakeResponseMessage({
+      from: this.clientId,
+      to,
+      status: {
+        ok: false,
+        code,
+        reason,
+      },
+    });
+
+    const res = session.sendHandshake(responseMsg);
+    if (!res.ok) {
+      this.log?.error(`failed to send handshake response: ${res.reason}`, {
+        ...session.loggingMetadata,
+        transportMessage: responseMsg,
+      });
+
+      this.protocolError({
+        type: ProtocolError.MessageSendFailure,
+        message: res.reason,
+      });
+      this.deletePendingSession(session);
+
+      return;
+    }
 
     this.protocolError({
       type: ProtocolError.HandshakeFailed,
@@ -456,9 +470,24 @@ export abstract class ServerTransport<
       },
     });
 
-    session.sendHandshake(responseMsg);
+    const res = session.sendHandshake(responseMsg);
+    if (!res.ok) {
+      this.log?.error(`failed to send handshake response: ${res.reason}`, {
+        ...session.loggingMetadata,
+        transportMessage: responseMsg,
+      });
+
+      this.protocolError({
+        type: ProtocolError.MessageSendFailure,
+        message: res.reason,
+      });
+      this.deletePendingSession(session);
+
+      return;
+    }
 
     // transition
+    this.pendingSessions.delete(session);
     const connectedSession =
       ServerSessionStateGraph.transition.WaitingForHandshakeToConnected(
         session,
@@ -487,8 +516,25 @@ export abstract class ServerTransport<
             this.handleMsg(msg);
           },
           onInvalidMessage: (reason) => {
+            this.log?.error(`invalid message: ${reason}`, {
+              ...connectedSession.loggingMetadata,
+              transportMessage: msg,
+            });
+
             this.protocolError({
               type: ProtocolError.InvalidMessage,
+              message: reason,
+            });
+            this.deleteSession(connectedSession, { unhealthy: true });
+          },
+          onMessageSendFailure: (msg, reason) => {
+            this.log?.error(`failed to send message: ${reason}`, {
+              ...connectedSession.loggingMetadata,
+              transportMessage: msg,
+            });
+
+            this.protocolError({
+              type: ProtocolError.MessageSendFailure,
               message: reason,
             });
             this.deleteSession(connectedSession, { unhealthy: true });
@@ -497,6 +543,25 @@ export abstract class ServerTransport<
         gotVersion,
       );
 
+    const bufferSendRes = connectedSession.sendBufferedMessages();
+    if (!bufferSendRes.ok) {
+      this.log?.error(
+        `failed to send buffered messages: ${bufferSendRes.reason}`,
+        {
+          ...connectedSession.loggingMetadata,
+          transportMessage: msg,
+        },
+      );
+
+      this.protocolError({
+        type: ProtocolError.MessageSendFailure,
+        message: bufferSendRes.reason,
+      });
+      this.deleteSession(connectedSession, { unhealthy: true });
+
+      return;
+    }
+
     this.sessionHandshakeMetadata.set(connectedSession.to, parsedMetadata);
     if (oldSession) {
       this.updateSession(connectedSession);
@@ -504,7 +569,6 @@ export abstract class ServerTransport<
       this.createSession(connectedSession);
     }
 
-    this.pendingSessions.delete(session);
     connectedSession.startActiveHeartbeat();
   }
 }
