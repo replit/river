@@ -283,9 +283,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
 
       if (isStreamCancelBackwardsCompat(msg.controlFlags, protocolVersion)) {
-        let cancelResult: ErrResult<Static<typeof CancelResultSchema>>;
+        let cancelResult: Static<typeof CancelResultSchema>;
         if (Value.Check(CancelResultSchema, msg.payload)) {
-          cancelResult = Err(msg.payload);
+          cancelResult = msg.payload;
         } else {
           // If the payload is unexpected, then we just construct our own cancel result
           cancelResult = Err({
