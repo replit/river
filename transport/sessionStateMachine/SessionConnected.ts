@@ -91,9 +91,9 @@ export class SessionConnected<
     this.conn = props.conn;
     this.listeners = props.listeners;
 
-    this.conn.addDataListener(this.onMessageData);
-    this.conn.addCloseListener(this.listeners.onConnectionClosed);
-    this.conn.addErrorListener(this.listeners.onConnectionErrored);
+    this.conn.setDataListener(this.onMessageData);
+    this.conn.setCloseListener(this.listeners.onConnectionClosed);
+    this.conn.setErrorListener(this.listeners.onConnectionErrored);
   }
 
   sendBufferedMessages(): SendBufferResult {
@@ -240,9 +240,9 @@ export class SessionConnected<
 
   _handleStateExit(): void {
     super._handleStateExit();
-    this.conn.removeDataListener(this.onMessageData);
-    this.conn.removeCloseListener(this.listeners.onConnectionClosed);
-    this.conn.removeErrorListener(this.listeners.onConnectionErrored);
+    this.conn.removeDataListener();
+    this.conn.removeCloseListener();
+    this.conn.removeErrorListener();
 
     if (this.heartbeatHandle) {
       clearInterval(this.heartbeatHandle);
