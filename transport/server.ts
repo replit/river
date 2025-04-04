@@ -545,20 +545,6 @@ export abstract class ServerTransport<
 
     const bufferSendRes = connectedSession.sendBufferedMessages();
     if (!bufferSendRes.ok) {
-      this.log?.error(
-        `failed to send buffered messages: ${bufferSendRes.reason}`,
-        {
-          ...connectedSession.loggingMetadata,
-          transportMessage: msg,
-        },
-      );
-
-      this.protocolError({
-        type: ProtocolError.MessageSendFailure,
-        message: bufferSendRes.reason,
-      });
-      this.deleteSession(connectedSession, { unhealthy: true });
-
       return;
     }
 

@@ -4,7 +4,7 @@ import { ProcedureHandlerContext } from './context';
 import { Result } from './result';
 import { Readable, Writable } from './streams';
 import {
-  CancelResultSchema,
+  CancelErrorSchema,
   ProcedureErrorSchemaType,
   ReaderErrorSchema,
 } from './errors';
@@ -39,7 +39,7 @@ export type ValidProcType =
  */
 export type PayloadType = TSchema;
 
-export type Cancellable<T> = T | Static<typeof CancelResultSchema>;
+export type Cancellable<T> = T | Static<typeof CancelErrorSchema>;
 
 /**
  * Procedure for a single message in both directions (1:1).

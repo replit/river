@@ -260,7 +260,7 @@ export abstract class Transport<ConnType extends Connection> {
 
   // common listeners
   protected onSessionGracePeriodElapsed(session: Session<ConnType>) {
-    this.log?.warn(
+    this.log?.info(
       `session to ${session.to} grace period elapsed, closing`,
       session.loggingMetadata,
     );

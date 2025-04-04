@@ -32,13 +32,10 @@ import { Value } from '@sinclair/typebox/value';
 import { PayloadType, ValidProcType } from './procedures';
 import {
   BaseErrorSchemaType,
-  ErrResultSchema,
   CANCEL_CODE,
-  ReaderErrorSchema,
+  ReaderErrorResultSchema,
   UNEXPECTED_DISCONNECT_CODE,
 } from './errors';
-
-const ReaderErrResultSchema = ErrResultSchema(ReaderErrorSchema);
 
 interface CallOptions {
   signal?: AbortSignal;
@@ -384,22 +381,22 @@ function handleProc(
       cleanClose = false;
 
       span.addEvent('received cancel');
-      let cancelResult: Static<typeof ReaderErrResultSchema>;
+      let cancelResult: Static<typeof ReaderErrorResultSchema>;
 
-      if (Value.Check(ReaderErrResultSchema, msg.payload)) {
+      if (Value.Check(ReaderErrorResultSchema, msg.payload)) {
         cancelResult = msg.payload;
       } else {
         cancelResult = Err({
           code: CANCEL_CODE,
           message: 'stream cancelled with invalid payload',
         });
-        transport.log?.error(
+        transport.log?.warn(
           'got stream cancel without a valid protocol error',
           {
             clientId: transport.clientId,
             transportMessage: msg,
             validationErrors: [
-              ...Value.Errors(ReaderErrResultSchema, msg.payload),
+              ...Value.Errors(ReaderErrorResultSchema, msg.payload),
             ],
           },
         );
