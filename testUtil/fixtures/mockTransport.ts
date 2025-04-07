@@ -18,21 +18,15 @@ export class InMemoryConnection extends Connection {
     this.conn.allowHalfOpen = false;
 
     this.conn.on('data', (data: Uint8Array) => {
-      for (const cb of this.dataListeners) {
-        cb(data);
-      }
+      this.dataListener?.(data);
     });
 
     this.conn.on('close', () => {
-      for (const cb of this.closeListeners) {
-        cb();
-      }
+      this.closeListener?.();
     });
 
     this.conn.on('error', (err) => {
-      for (const cb of this.errorListeners) {
-        cb(err);
-      }
+      this.errorListener?.(err);
     });
   }
 

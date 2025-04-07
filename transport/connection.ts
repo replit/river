@@ -4,9 +4,9 @@ import { generateId } from './id';
 
 /**
  * A connection is the actual raw underlying transport connection.
- * It’s responsible for dispatching to/from the actual connection itself
+ * It's responsible for dispatching to/from the actual connection itself
  * This should be instantiated as soon as the client/server has a connection
- * It’s tied to the lifecycle of the underlying transport connection (i.e. if the WS drops, this connection should be deleted)
+ * It's tied to the lifecycle of the underlying transport connection (i.e. if the WS drops, this connection should be deleted)
  */
 export abstract class Connection {
   id: string;
@@ -30,72 +30,52 @@ export abstract class Connection {
     return metadata;
   }
 
-  // can't use event emitter because we need this to work in both node + browser
-  private _dataListeners = new Set<(msg: Uint8Array) => void>();
-  private _closeListeners = new Set<() => void>();
-  private _errorListeners = new Set<(err: Error) => void>();
-
-  get dataListeners() {
-    return [...this._dataListeners];
-  }
-
-  get closeListeners() {
-    return [...this._closeListeners];
-  }
-
-  get errorListeners() {
-    return [...this._errorListeners];
-  }
+  dataListener?: (msg: Uint8Array) => void;
+  closeListener?: () => void;
+  errorListener?: (err: Error) => void;
 
   onData(msg: Uint8Array) {
-    for (const cb of this.dataListeners) {
-      cb(msg);
-    }
+    this.dataListener?.(msg);
   }
 
   onError(err: Error) {
-    for (const cb of this.errorListeners) {
-      cb(err);
-    }
+    this.errorListener?.(err);
   }
 
   onClose() {
-    for (const cb of this.closeListeners) {
-      cb();
-    }
-
+    this.closeListener?.();
     this.telemetry?.span.end();
   }
 
   /**
-   * Handle adding a callback for when a message is received.
-   * @param msg The message that was received.
+   * Set the callback for when a message is received.
+   * @param cb The message handler callback.
    */
-  addDataListener(cb: (msg: Uint8Array) => void) {
-    this._dataListeners.add(cb);
+  setDataListener(cb: (msg: Uint8Array) => void) {
+    this.dataListener = cb;
   }
 
-  removeDataListener(cb: (msg: Uint8Array) => void): void {
-    this._dataListeners.delete(cb);
+  removeDataListener() {
+    this.dataListener = undefined;
   }
 
   /**
-   * Handle adding a callback for when the connection is closed.
-   * This should also be called if an error happens and after notifying all the error listeners.
+   * Set the callback for when the connection is closed.
+   * This should also be called if an error happens and after notifying the error listener.
    * @param cb The callback to call when the connection is closed.
    */
-  addCloseListener(cb: () => void): void {
-    this._closeListeners.add(cb);
+  setCloseListener(cb: () => void): void {
+    this.closeListener = cb;
   }
 
-  removeCloseListener(cb: () => void): void {
-    this._closeListeners.delete(cb);
+  removeCloseListener(): void {
+    this.closeListener = undefined;
   }
 
   /**
-   * Handle adding a callback for when an error is received.
-   * This should only be used for this.logging errors, all cleanup
-   * should be delegated to addCloseListener.
+   * Set the callback for when an error is received.
+   * This should only be used for logging errors, all cleanup
+   * should be delegated to setCloseListener.
    *
    * The implementer should take care such that the implemented
    * connection will call both the close and error callbacks
@@ -103,12 +83,12 @@ export abstract class Connection {
    *
    * @param cb The callback to call when an error is received.
    */
-  addErrorListener(cb: (err: Error) => void): void {
-    this._errorListeners.add(cb);
+  setErrorListener(cb: (err: Error) => void): void {
+    this.errorListener = cb;
   }
 
-  removeErrorListener(cb: (err: Error) => void): void {
-    this._errorListeners.delete(cb);
+  removeErrorListener(): void {
+    this.errorListener = undefined;
   }
 
   /**

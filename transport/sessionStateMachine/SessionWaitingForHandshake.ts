@@ -54,9 +54,9 @@ export class SessionWaitingForHandshake<
       this.listeners.onHandshakeTimeout();
     }, this.options.handshakeTimeoutMs);
 
-    this.conn.addDataListener(this.onHandshakeData);
-    this.conn.addErrorListener(this.listeners.onConnectionErrored);
-    this.conn.addCloseListener(this.listeners.onConnectionClosed);
+    this.conn.setDataListener(this.onHandshakeData);
+    this.conn.setErrorListener(this.listeners.onConnectionErrored);
+    this.conn.setCloseListener(this.listeners.onConnectionClosed);
   }
 
   get loggingMetadata() {
@@ -88,9 +88,9 @@ export class SessionWaitingForHandshake<
   }
 
   _handleStateExit(): void {
-    this.conn.removeDataListener(this.onHandshakeData);
-    this.conn.removeErrorListener(this.listeners.onConnectionErrored);
-    this.conn.removeCloseListener(this.listeners.onConnectionClosed);
+    this.conn.removeDataListener();
+    this.conn.removeErrorListener();
+    this.conn.removeCloseListener();
     clearTimeout(this.handshakeTimeout);
     this.handshakeTimeout = undefined;
   }
