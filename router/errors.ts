@@ -75,10 +75,12 @@ export function castTypeboxValueErrors(
 /**
  * A schema for cancel payloads sent from the client
  */
-export const CancelResultSchema = Type.Object({
+export const CancelErrorSchema = Type.Object({
   code: Type.Literal(CANCEL_CODE),
   message: Type.String(),
 });
+
+export const CancelResultSchema = ErrResultSchema(CancelErrorSchema);
 
 /**
  * {@link ReaderErrorSchema} is the schema for all the built-in river errors that
@@ -104,8 +106,10 @@ export const ReaderErrorSchema = Type.Union([
       }),
     ),
   }),
-  CancelResultSchema,
+  CancelErrorSchema,
 ]) satisfies ProcedureErrorSchemaType;
+
+export const ReaderErrorResultSchema = ErrResultSchema(ReaderErrorSchema);
 
 /**
  * Represents an acceptable schema to pass to a procedure.
