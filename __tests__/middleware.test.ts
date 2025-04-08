@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { isReadableDone, readNextResult } from '../testUtil';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
