@@ -592,28 +592,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       serviceName,
     };
 
-    const applyMiddlewares = () => {
-      this.middlewares.reduceRight(
-        (next: () => void, middleware: Middleware) => {
-          return () => {
-            middleware({
-              ctx: middlewareContext,
-              reqInit: initPayload,
-              next,
-            });
-          };
-        },
-        () => {
-          // All middleware complete
-        },
-      )();
-    };
-
-    switch (procedure.type) {
-      case 'rpc':
-        void (async () => {
+    const runProcedureHandler = async () => {
+      switch (procedure.type) {
+        case 'rpc':
           try {
-            applyMiddlewares();
             const responsePayload = await procedure.handler({
               ctx: handlerContextWithSpan,
               reqInit: initPayload,
@@ -630,12 +612,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           } finally {
             span.end();
           }
-        })();
-        break;
-      case 'stream':
-        void (async () => {
+          break;
+        case 'stream':
           try {
-            applyMiddlewares();
             await procedure.handler({
               ctx: handlerContextWithSpan,
               reqInit: initPayload,
@@ -647,12 +626,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           } finally {
             span.end();
           }
-        })();
-        break;
-      case 'subscription':
-        void (async () => {
+          break;
+        case 'subscription':
           try {
-            applyMiddlewares();
             await procedure.handler({
               ctx: handlerContextWithSpan,
               reqInit: initPayload,
@@ -663,12 +639,9 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           } finally {
             span.end();
           }
-        })();
-        break;
-      case 'upload':
-        void (async () => {
+          break;
+        case 'upload':
           try {
-            applyMiddlewares();
             const responsePayload = await procedure.handler({
               ctx: handlerContextWithSpan,
               reqInit: initPayload,
@@ -686,9 +659,29 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           } finally {
             span.end();
           }
-        })();
-        break;
-    }
+          break;
+      }
+    };
+
+    const applyMiddlewares = (handlerToRun: () => Promise<void>) => {
+      this.middlewares.reduceRight(
+        (next: () => void, middleware: Middleware) => {
+          return () => {
+            middleware({
+              ctx: middlewareContext,
+              reqInit: initPayload,
+              next,
+            });
+          };
+        },
+        () => {
+          void handlerToRun();
+        },
+      )(); // Immediately invoke the generated middleware chain function
+    };
+
+    // Start the middleware chain, which will eventually call runProcedureHandler
+    applyMiddlewares(runProcedureHandler);
 
     if (!finishedController.signal.aborted) {
       this.streams.set(streamId, procStream);
@@ -1029,15 +1022,17 @@ interface MiddlewareContext
   readonly serviceName: string;
 }
 
+export interface MiddlewareParam {
+  readonly ctx: MiddlewareContext;
+  readonly reqInit: Static<PayloadType>;
+  next: () => void;
+}
+
 /**
  * Middleware is a function that can inspect requests as they are received.
  * For now modification of the request is not supported behavior.
  */
-type Middleware = (param: {
-  readonly ctx: MiddlewareContext;
-  readonly reqInit: Static<PayloadType>;
-  next: () => void;
-}) => void;
+export type Middleware = (param: MiddlewareParam) => void;
 
 /**
  * Creates a server instance that listens for incoming messages from a transport and routes them to the appropriate service and procedure.

@@ -8,6 +8,7 @@ import {
 } from '../testUtil/fixtures/services';
 import { createClient, createServer } from '../router';
 import { createMockTransportNetwork } from '../testUtil/fixtures/mockTransport';
+import { MiddlewareParam } from '../router/server';
 
 describe('middleware test', () => {
   let mockTransportNetwork: ReturnType<typeof createMockTransportNetwork>;
@@ -22,7 +23,7 @@ describe('middleware test', () => {
 
   test('apply read-only middleware to rpc', async () => {
     const services = { test: TestServiceSchema };
-    const middleware = vi.fn();
+    const middleware = vi.fn(({ next }: MiddlewareParam) => next());
     createServer(mockTransportNetwork.getServerTransport(), services, {
       middlewares: [middleware],
     });
@@ -55,7 +56,7 @@ describe('middleware test', () => {
 
   test('apply read-only middleware to stream', async () => {
     const services = { test: TestServiceSchema };
-    const middleware = vi.fn();
+    const middleware = vi.fn(({ next }: MiddlewareParam) => next());
     createServer(mockTransportNetwork.getServerTransport(), services, {
       middlewares: [middleware],
     });
@@ -98,7 +99,7 @@ describe('middleware test', () => {
 
   test('apply read-only middleware to subscriptions', async () => {
     const services = { test: SubscribableServiceSchema };
-    const middleware = vi.fn();
+    const middleware = vi.fn(({ next }: MiddlewareParam) => next());
     createServer(mockTransportNetwork.getServerTransport(), services, {
       middlewares: [middleware],
     });
@@ -155,7 +156,7 @@ describe('middleware test', () => {
 
   test('apply read-only middleware to uploads', async () => {
     const services = { test: UploadableServiceSchema };
-    const middleware = vi.fn();
+    const middleware = vi.fn(({ next }: MiddlewareParam) => next());
     createServer(mockTransportNetwork.getServerTransport(), services, {
       middlewares: [middleware],
     });
@@ -195,17 +196,20 @@ describe('middleware test', () => {
     const services = { test: TestServiceSchema };
     // counter for checking the call order
     let callOrder = 0;
-    const middleware1 = vi.fn(() => {
+    const middleware1 = vi.fn(({ next }: MiddlewareParam) => {
       callOrder++;
       expect(callOrder).toBe(1);
+      next();
     });
-    const middleware2 = vi.fn(() => {
+    const middleware2 = vi.fn(({ next }: MiddlewareParam) => {
       callOrder++;
       expect(callOrder).toBe(2);
+      next();
     });
-    const middleware3 = vi.fn(() => {
+    const middleware3 = vi.fn(({ next }: MiddlewareParam) => {
       callOrder++;
       expect(callOrder).toBe(3);
+      next();
     });
     createServer(mockTransportNetwork.getServerTransport(), services, {
       middlewares: [middleware1, middleware2, middleware3],
