@@ -133,9 +133,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     handshakeOptions?: ServerHandshakeOptions,
     extendedContext?: ServiceContext,
     maxCancelledStreamTombstonesPerSession = 200,
-    middlewares?: Array<Middleware> = [],
+    middlewares: Array<Middleware> = [],
   ) {
     const instances: Record<string, AnyService> = {};
+    this.middlewares = middlewares;
 
     this.services = instances as InstantiatedServiceSchemaMap<Services>;
     this.contextMap = new Map();
@@ -586,36 +587,37 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       metadata: sessionMetadata,
       span,
       signal: finishedController.signal,
+      streamId,
+      procedureName,
+      serviceName,
     };
 
-    const constructMiddlewareChain = <
-      Handler extends (
-        ...params: Parameters<Middleware>
-      ) => ReturnType<Middleware>,
-      R extends (...params: Parameters<Handler>) => ReturnType<Handler>,
-    >(
-      handler: Handler,
-    ): R =>
-      this.middlewares.reduceRight<R>(
-        (next, middleware) => () =>
-          middleware({
-            ctx: middlewareContext,
-            reqInit: initPayload,
-            next,
-          }),
-        handler,
-      );
+    const applyMiddlewares = () => {
+      this.middlewares.reduceRight(
+        (next: () => void, middleware: Middleware) => {
+          return () => {
+            middleware({
+              ctx: middlewareContext,
+              reqInit: initPayload,
+              next,
+            });
+          };
+        },
+        () => {
+          // All middleware complete
+        },
+      )();
+    };
 
     switch (procedure.type) {
       case 'rpc':
         void (async () => {
           try {
-            const responsePayload = await constructMiddlewareChain(() =>
-              procedure.handler({
-                ctx: handlerContextWithSpan,
-                reqInit: initPayload,
-              }),
-            )();
+            applyMiddlewares();
+            const responsePayload = await procedure.handler({
+              ctx: handlerContextWithSpan,
+              reqInit: initPayload,
+            });
 
             if (resWritable.isClosed()) {
               // A disconnect happened
@@ -633,6 +635,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       case 'stream':
         void (async () => {
           try {
+            applyMiddlewares();
             await procedure.handler({
               ctx: handlerContextWithSpan,
               reqInit: initPayload,
@@ -649,6 +652,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       case 'subscription':
         void (async () => {
           try {
+            applyMiddlewares();
             await procedure.handler({
               ctx: handlerContextWithSpan,
               reqInit: initPayload,
@@ -664,6 +668,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       case 'upload':
         void (async () => {
           try {
+            applyMiddlewares();
             const responsePayload = await procedure.handler({
               ctx: handlerContextWithSpan,
               reqInit: initPayload,
