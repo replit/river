@@ -49,7 +49,7 @@ export function createSessionTelemetryInfo(
     : context.active();
 
   const span = tracer.startSpan(
-    `river.session.${sessionId}`,
+    `river.session`,
     {
       attributes: {
         component: 'river',
@@ -72,7 +72,7 @@ export function createConnectionTelemetryInfo(
   info: TelemetryInfo,
 ): TelemetryInfo {
   const span = tracer.startSpan(
-    `connection ${connection.id}`,
+    `river.connection`,
     {
       attributes: {
         component: 'river',
