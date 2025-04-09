@@ -663,25 +663,21 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       }
     };
 
-    const applyMiddlewares = (handlerToRun: () => Promise<void>) => {
-      this.middlewares.reduceRight(
-        (next: () => void, middleware: Middleware) => {
-          return () => {
-            middleware({
-              ctx: middlewareContext,
-              reqInit: initPayload,
-              next,
-            });
-          };
-        },
-        () => {
-          void handlerToRun();
-        },
-      )(); // Immediately invoke the generated middleware chain function
-    };
-
     // Start the middleware chain, which will eventually call runProcedureHandler
-    applyMiddlewares(runProcedureHandler);
+    this.middlewares.reduceRight(
+      (next: () => void, middleware: Middleware) => {
+        return () => {
+          middleware({
+            ctx: middlewareContext,
+            reqInit: initPayload,
+            next,
+          });
+        };
+      },
+      () => {
+        void runProcedureHandler();
+      },
+    )();
 
     if (!finishedController.signal.aborted) {
       this.streams.set(streamId, procStream);

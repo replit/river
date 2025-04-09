@@ -194,21 +194,13 @@ describe('middleware test', () => {
 
   test('apply multiple middlewares in order', async () => {
     const services = { test: TestServiceSchema };
-    // counter for checking the call order
-    let callOrder = 0;
     const middleware1 = vi.fn(({ next }: MiddlewareParam) => {
-      callOrder++;
-      expect(callOrder).toBe(1);
       next();
     });
     const middleware2 = vi.fn(({ next }: MiddlewareParam) => {
-      callOrder++;
-      expect(callOrder).toBe(2);
       next();
     });
     const middleware3 = vi.fn(({ next }: MiddlewareParam) => {
-      callOrder++;
-      expect(callOrder).toBe(3);
       next();
     });
     createServer(mockTransportNetwork.getServerTransport(), services, {
@@ -220,6 +212,13 @@ describe('middleware test', () => {
     );
 
     const result = await client.test.add.rpc({ n: 3 });
+
+    expect(middleware1.mock.invocationCallOrder[0]).toBeLessThan(
+      middleware2.mock.invocationCallOrder[0],
+    );
+    expect(middleware2.mock.invocationCallOrder[0]).toBeLessThan(
+      middleware3.mock.invocationCallOrder[0],
+    );
     expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
   });
 });
