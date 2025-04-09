@@ -43,7 +43,12 @@ export {
 export { createClient } from './client';
 export type { Client } from './client';
 export { createServer } from './server';
-export type { Server, Middleware, MiddlewareParam } from './server';
+export type {
+  Server,
+  Middleware,
+  MiddlewareParam,
+  MiddlewareContext,
+} from './server';
 export type {
   ParsedMetadata,
   ServiceContext,

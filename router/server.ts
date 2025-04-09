@@ -1011,7 +1011,7 @@ function getStreamCloseBackwardsCompat(protocolVersion: ProtocolVersion) {
   return ControlFlags.StreamClosedBit;
 }
 
-interface MiddlewareContext
+export interface MiddlewareContext
   extends Readonly<Omit<ProcedureHandlerContext<unknown>, 'cancel'>> {
   readonly streamId: StreamId;
   readonly procedureName: string;

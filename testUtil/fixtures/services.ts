@@ -367,3 +367,17 @@ export function SchemaWithAsyncDisposableStateAndScaffold(
 
   return scaffold.finalize(procs);
 }
+
+export const AsyncStorageSchemas = ServiceSchema.define({
+  uncaughtPromise: Procedure.rpc({
+    requestInit: Type.Object({}),
+    responseData: Type.Object({}),
+    async handler() {
+      void new Promise((_, reject) => {
+        reject(new Error('Error from timeout'));
+      });
+
+      return Ok({});
+    },
+  }),
+});

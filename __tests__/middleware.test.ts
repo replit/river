@@ -1,14 +1,16 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import { AsyncLocalStorage } from 'async_hooks';
 import { isReadableDone, readNextResult } from '../testUtil';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   TestServiceSchema,
   SubscribableServiceSchema,
   UploadableServiceSchema,
+  AsyncStorageSchemas,
 } from '../testUtil/fixtures/services';
 import { createClient, createServer } from '../router';
 import { createMockTransportNetwork } from '../testUtil/fixtures/mockTransport';
-import { MiddlewareParam } from '../router/server';
+import { MiddlewareContext, MiddlewareParam } from '../router/server';
 
 describe('middleware test', () => {
   let mockTransportNetwork: ReturnType<typeof createMockTransportNetwork>;
@@ -220,5 +222,45 @@ describe('middleware test', () => {
       middleware3.mock.invocationCallOrder[0],
     );
     expect(result).toStrictEqual({ ok: true, payload: { result: 3 } });
+  });
+
+  test('can capture uncaught promise rejection with context', async () => {
+    const services = { test: AsyncStorageSchemas };
+    const asyncLocalStorage = new AsyncLocalStorage<MiddlewareContext>();
+
+    let capturedError: Error | null = null;
+    let capturedErrorCtx: MiddlewareContext | null = null;
+
+    const unhandledRejectionListener = (error: Error) => {
+      capturedError = error;
+      capturedErrorCtx = asyncLocalStorage.getStore() ?? null;
+    };
+
+    process.on('unhandledRejection', unhandledRejectionListener);
+
+    const middleware = vi.fn(({ ctx, next }: MiddlewareParam) => {
+      asyncLocalStorage.run(ctx, next);
+    });
+    createServer(mockTransportNetwork.getServerTransport(), services, {
+      middlewares: [middleware],
+    });
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
+    );
+
+    const result = await client.test.uncaughtPromise.rpc({});
+    expect(result.ok).toBe(true);
+
+    process.off('unhandledRejection', unhandledRejectionListener);
+
+    expect(capturedError).not.toBeNull();
+    expect(capturedErrorCtx).not.toBeNull();
+    expect((capturedErrorCtx as unknown as MiddlewareContext).serviceName).toBe(
+      'test',
+    );
+    expect(
+      (capturedErrorCtx as unknown as MiddlewareContext).procedureName,
+    ).toBe('uncaughtPromise');
   });
 });
