@@ -263,4 +263,94 @@ describe('middleware test', () => {
       (capturedErrorCtx as unknown as MiddlewareContext).procedureName,
     ).toBe('uncaughtPromise');
   });
+
+  test('can capture uncaught exception in middleware with context', async () => {
+    const services = { test: TestServiceSchema };
+    const asyncLocalStorage = new AsyncLocalStorage<MiddlewareContext>();
+
+    let capturedError: Error | null = null;
+    let capturedErrorCtx: MiddlewareContext | null = null;
+
+    const unhandledExceptionListener = (error: Error) => {
+      capturedError = error;
+      capturedErrorCtx = asyncLocalStorage.getStore() ?? null;
+    };
+
+    process.on('uncaughtException', unhandledExceptionListener);
+
+    const asyncStorageMiddleware = vi.fn(({ ctx, next }: MiddlewareParam) => {
+      asyncLocalStorage.enterWith(ctx);
+      // asyncLocalStorage.run(ctx, next);
+      next();
+    });
+    const errorMiddleware = vi.fn(() => {
+      throw new Error('error from middleware');
+    });
+    createServer(mockTransportNetwork.getServerTransport(), services, {
+      middlewares: [asyncStorageMiddleware, errorMiddleware],
+    });
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
+    );
+
+    void client.test.add.rpc({
+      n: 3,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(capturedError).not.toBeNull();
+    expect(capturedErrorCtx).not.toBeNull();
+    expect((capturedErrorCtx as unknown as MiddlewareContext).serviceName).toBe(
+      'test',
+    );
+    expect(
+      (capturedErrorCtx as unknown as MiddlewareContext).procedureName,
+    ).toBe('add');
+  });
+
+  test('can capture uncaught exception in middleware with context', async () => {
+    const services = { test: AsyncStorageSchemas };
+    const asyncLocalStorage = new AsyncLocalStorage<MiddlewareContext>();
+
+    let capturedError: Error | null = null;
+    let capturedErrorCtx: MiddlewareContext | null = null;
+
+    const unhandledExceptionListener = (error: Error) => {
+      capturedError = error;
+      capturedErrorCtx = asyncLocalStorage.getStore() ?? null;
+    };
+
+    process.on('uncaughtException', unhandledExceptionListener);
+
+    const asyncStorageMiddleware = vi.fn(({ ctx, next }: MiddlewareParam) => {
+      asyncLocalStorage.enterWith(ctx);
+      // asyncLocalStorage.run(ctx, next);
+      next();
+    });
+    const errorMiddleware = vi.fn(() => {
+      throw new Error('error from middleware');
+    });
+    createServer(mockTransportNetwork.getServerTransport(), services, {
+      middlewares: [asyncStorageMiddleware, errorMiddleware],
+    });
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
+    );
+
+    void client.test.throwErrorFromTimeout.rpc({});
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(capturedError).not.toBeNull();
+    expect(capturedErrorCtx).not.toBeNull();
+    expect((capturedErrorCtx as unknown as MiddlewareContext).serviceName).toBe(
+      'test',
+    );
+    expect(
+      (capturedErrorCtx as unknown as MiddlewareContext).procedureName,
+    ).toBe('throwErrorFromTimeout');
+  });
 });
