@@ -302,7 +302,7 @@ describe('middleware test', () => {
     // these extraneous looking middlewares are to make sure that different shapes of
     // middlewares running in the same context don't interfere with each other.
     const timeoutMiddleware = vi.fn<Middleware>(({ next }) => {
-      Promise.resolve().then(() => {
+      void Promise.resolve().then(() => {
         next();
       });
     });
