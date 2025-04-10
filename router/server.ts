@@ -110,6 +110,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
   private transport: ServerTransport<Connection>;
   private contextMap: Map<AnyService, ServiceContext & { state: object }>;
   private log?: Logger;
+  private middlewares: Array<Middleware>;
 
   /**
    * We create a tombstones for streams cancelled by the server
@@ -132,8 +133,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     handshakeOptions?: ServerHandshakeOptions,
     extendedContext?: ServiceContext,
     maxCancelledStreamTombstonesPerSession = 200,
+    middlewares: Array<Middleware> = [],
   ) {
     const instances: Record<string, AnyService> = {};
+    this.middlewares = middlewares;
 
     this.services = instances as InstantiatedServiceSchemaMap<Services>;
     this.contextMap = new Map();
@@ -558,9 +561,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
       closeReadable();
     }
 
-    const handlerContextWithSpan: (
-      span: Span,
-    ) => ProcedureHandlerContext<object> = (span) => ({
+    const handlerContextWithSpan: ProcedureHandlerContext<object> = {
       ...serviceContext,
       from: from,
       sessionId,
@@ -577,14 +578,26 @@ class RiverServer<Services extends AnyServiceSchemaMap>
         return Err(errRes);
       },
       signal: finishedController.signal,
-    });
+    };
 
-    switch (procedure.type) {
-      case 'rpc':
-        void (async () => {
+    const middlewareContext: MiddlewareContext = {
+      ...serviceContext,
+      sessionId,
+      from,
+      metadata: sessionMetadata,
+      span,
+      signal: finishedController.signal,
+      streamId,
+      procedureName,
+      serviceName,
+    };
+
+    const runProcedureHandler = async () => {
+      switch (procedure.type) {
+        case 'rpc':
           try {
             const responsePayload = await procedure.handler({
-              ctx: handlerContextWithSpan(span),
+              ctx: handlerContextWithSpan,
               reqInit: initPayload,
             });
 
@@ -599,13 +612,11 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           } finally {
             span.end();
           }
-        })();
-        break;
-      case 'stream':
-        void (async () => {
+          break;
+        case 'stream':
           try {
             await procedure.handler({
-              ctx: handlerContextWithSpan(span),
+              ctx: handlerContextWithSpan,
               reqInit: initPayload,
               reqReadable,
               resWritable,
@@ -615,13 +626,11 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           } finally {
             span.end();
           }
-        })();
-        break;
-      case 'subscription':
-        void (async () => {
+          break;
+        case 'subscription':
           try {
             await procedure.handler({
-              ctx: handlerContextWithSpan(span),
+              ctx: handlerContextWithSpan,
               reqInit: initPayload,
               resWritable: resWritable,
             });
@@ -630,13 +639,11 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           } finally {
             span.end();
           }
-        })();
-        break;
-      case 'upload':
-        void (async () => {
+          break;
+        case 'upload':
           try {
             const responsePayload = await procedure.handler({
-              ctx: handlerContextWithSpan(span),
+              ctx: handlerContextWithSpan,
               reqInit: initPayload,
               reqReadable: reqReadable,
             });
@@ -652,9 +659,25 @@ class RiverServer<Services extends AnyServiceSchemaMap>
           } finally {
             span.end();
           }
-        })();
-        break;
-    }
+          break;
+      }
+    };
+
+    // Start the middleware chain, which will eventually call runProcedureHandler
+    this.middlewares.reduceRight(
+      (next: () => void, middleware: Middleware) => {
+        return () => {
+          middleware({
+            ctx: middlewareContext,
+            reqInit: initPayload,
+            next,
+          });
+        };
+      },
+      () => {
+        void runProcedureHandler();
+      },
+    )();
 
     if (!finishedController.signal.aborted) {
       this.streams.set(streamId, procStream);
@@ -988,6 +1011,25 @@ function getStreamCloseBackwardsCompat(protocolVersion: ProtocolVersion) {
   return ControlFlags.StreamClosedBit;
 }
 
+export interface MiddlewareContext
+  extends Readonly<Omit<ProcedureHandlerContext<unknown>, 'cancel'>> {
+  readonly streamId: StreamId;
+  readonly procedureName: string;
+  readonly serviceName: string;
+}
+
+export interface MiddlewareParam {
+  readonly ctx: MiddlewareContext;
+  readonly reqInit: Static<PayloadType>;
+  next: () => void;
+}
+
+/**
+ * Middleware is a function that can inspect requests as they are received.
+ * For now modification of the request is not supported behavior.
+ */
+export type Middleware = (param: MiddlewareParam) => void;
+
 /**
  * Creates a server instance that listens for incoming messages from a transport and routes them to the appropriate service and procedure.
  * The server tracks the state of each service along with open streams and the extended context object.
@@ -1008,6 +1050,10 @@ export function createServer<Services extends AnyServiceSchemaMap>(
      * cascading stream errors.
      */
     maxCancelledStreamTombstonesPerSession?: number;
+    /**
+     * Middlewares run before procedure handlers allowing you to inspect requests and responses..
+     */
+    middlewares?: Array<Middleware>;
   }>,
 ): Server<Services> {
   return new RiverServer(
@@ -1016,5 +1062,6 @@ export function createServer<Services extends AnyServiceSchemaMap>(
     providedServerOptions?.handshakeOptions,
     providedServerOptions?.extendedContext,
     providedServerOptions?.maxCancelledStreamTombstonesPerSession,
+    providedServerOptions?.middlewares,
   );
 }
