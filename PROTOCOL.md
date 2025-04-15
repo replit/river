@@ -218,7 +218,7 @@ interface ControlHandshakeRequest {
     nextExpectedSeq: number; // integer
     nextSentSeq: number; // integer
   };
-  metdata?: unknown;
+  metadata?: unknown;
 }
 
 interface ControlHandshakeResponse {
@@ -639,7 +639,7 @@ To detect these phantom disconnects, the server SHOULD send an explicit heartbea
 This is because clients are usually browsers which means we cannot trust user-facing timers (due to various reasons like browser throttling, hibernation, etc.) so we rely purely on the server to track time.
 
 This message is a `ControlAck` message.
-The `seq` and `ack` of the message should match that of the session itself and otherwise be transmitted like a normal message (i.e. should stil increment bookkeeping like incrementing `seq`).
+The `seq` and `ack` of the message should match that of the session itself and otherwise be transmitted like a normal message (i.e. should still increment bookkeeping like incrementing `seq`).
 
 Clients SHOULD echo back a heartbeat in the same format as soon as it receives a server heartbeat.
 
