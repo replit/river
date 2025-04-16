@@ -51,7 +51,7 @@ export const NaiveJsonCodec: Codec = {
     const parsed = JSON.parse(
       decoder.decode(buff),
       function reviver(_key, val: unknown) {
-        if ((val as Base64EncodedValue | undefined)?.$t) {
+        if ((val as Base64EncodedValue | undefined)?.$t !== undefined) {
           return base64ToUint8Array((val as Base64EncodedValue).$t);
         } else {
           return val;
