@@ -17,6 +17,11 @@ describe.each(codecs)('codec -- $name', ({ codec }) => {
     expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
   });
 
+  test('encodes the empty buffer properly', () => {
+    const msg = { test: new Uint8Array(0) };
+    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
+  });
+
   test('skips optional fields', () => {
     const msg = { test: undefined };
     expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual({});
