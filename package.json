@@ -54,7 +54,7 @@
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.7.0",
-    "@sinclair/typebox": ">=0.32.8 <0.35.0"
+    "@sinclair/typebox": "~0.32.8 || ~0.34.0"
   },
   "devDependencies": {
     "@opentelemetry/context-async-hooks": "^1.26.0",
