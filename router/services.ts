@@ -160,6 +160,17 @@ export interface SerializedServerSchemaProtocolv1 {
   services: Record<string, SerializedServiceSchemaProtocolv1>;
 }
 
+export type TStrict<T extends TSchema> = T;
+
+/**
+ * Omits compositing symbols from this schema.
+ * The same approach that was previously used in the deprecated Type.Strict function.
+ * https://github.com/sinclairzx81/typebox/blob/5a5431439f7d5ca6b494d0d18fbfd7b1a356d67c/changelog/0.34.0.md#strict
+ */
+export function Strict<T extends TSchema>(schema: T): TStrict<T> {
+  return JSON.parse(JSON.stringify(schema)) as TStrict<T>;
+}
+
 // TODO remove once clients migrate to v2
 /**
  * Same as {@link serializeSchema} but with a format that is compatible with
@@ -183,7 +194,7 @@ export function serializeSchemaV1Compat(
   };
 
   if (handshakeSchema) {
-    schema.handshakeSchema = Type.Strict(handshakeSchema);
+    schema.handshakeSchema = Strict(handshakeSchema);
   }
 
   return schema;
@@ -226,7 +237,7 @@ export function serializeSchema(
   };
 
   if (handshakeSchema) {
-    schema.handshakeSchema = Type.Strict(handshakeSchema);
+    schema.handshakeSchema = Strict(handshakeSchema);
   }
 
   return schema;
@@ -439,8 +450,8 @@ export class ServiceSchema<
         Object.entries(this.procedures).map(([procName, procDef]) => [
           procName,
           {
-            init: Type.Strict(procDef.requestInit),
-            output: Type.Strict(procDef.responseData),
+            init: Strict(procDef.requestInit),
+            output: Strict(procDef.responseData),
             errors: getSerializedProcErrors(procDef),
             // Only add `description` field if the type declares it.
             ...('description' in procDef
@@ -450,7 +461,7 @@ export class ServiceSchema<
             // Only add the `input` field if the type declares it.
             ...('requestData' in procDef
               ? {
-                  input: Type.Strict(procDef.requestData),
+                  input: Strict(procDef.requestData),
                 }
               : {}),
           },
@@ -479,8 +490,8 @@ export class ServiceSchema<
                 {
                   // BACKWARDS COMPAT: map init to input for protocolv1
                   // this is the only change needed to make it compatible.
-                  input: Type.Strict(procDef.requestInit),
-                  output: Type.Strict(procDef.responseData),
+                  input: Strict(procDef.requestInit),
+                  output: Strict(procDef.responseData),
                   errors: getSerializedProcErrors(procDef),
                   // Only add `description` field if the type declares it.
                   ...('description' in procDef
@@ -496,15 +507,15 @@ export class ServiceSchema<
             return [
               procName,
               {
-                init: Type.Strict(procDef.requestInit),
-                output: Type.Strict(procDef.responseData),
+                init: Strict(procDef.requestInit),
+                output: Strict(procDef.responseData),
                 errors: getSerializedProcErrors(procDef),
                 // Only add `description` field if the type declares it.
                 ...('description' in procDef
                   ? { description: procDef.description }
                   : {}),
                 type: procDef.type,
-                input: Type.Strict(procDef.requestData),
+                input: Strict(procDef.requestData),
               },
             ];
           },
@@ -541,14 +552,14 @@ function getSerializedProcErrors(
     !('responseError' in procDef) ||
     procDef.responseError[Kind] === 'Never'
   ) {
-    return Type.Strict(ReaderErrorSchema);
+    return Strict(ReaderErrorSchema);
   }
 
   const withProtocolErrors = flattenErrorType(
     Type.Union([procDef.responseError, ReaderErrorSchema]),
   );
 
-  return Type.Strict(withProtocolErrors);
+  return Strict(withProtocolErrors);
 }
 
 /**

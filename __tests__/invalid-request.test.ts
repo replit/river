@@ -396,7 +396,10 @@ describe('cancels invalid request', () => {
             totalErrors: 2,
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             firstValidationErrors: expect.arrayContaining([
-              { path: '/mustSendThings', message: 'Required property' },
+              {
+                path: '/mustSendThings',
+                message: 'Expected required property',
+              },
               { path: '/mustSendThings', message: 'Expected string' },
             ]),
           },
@@ -595,7 +598,10 @@ describe('cancels invalid request', () => {
           totalErrors: 2,
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           firstValidationErrors: expect.arrayContaining([
-            { path: '/newRequiredField', message: 'Required property' },
+            {
+              path: '/newRequiredField',
+              message: 'Expected required property',
+            },
             { path: '/newRequiredField', message: 'Expected string' },
           ]),
         },
