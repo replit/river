@@ -165,7 +165,7 @@ export type TStrict<T extends TSchema> = T;
 /**
  * Omits compositing symbols from this schema.
  * The same approach that was previously used in the deprecated Type.Strict function.
- * https://github.com/sinclairzx81/typebox/blob/5a5431439f7d5ca6b494d0d18fbfd7b1a356d67c/changelog/0.34.0.md#strict
+ * https://github.com/sinclairzx81/typebox/blob/master/changelog/0.34.0.md#strict
  */
 export function Strict<T extends TSchema>(schema: T): TStrict<T> {
   return JSON.parse(JSON.stringify(schema)) as TStrict<T>;
