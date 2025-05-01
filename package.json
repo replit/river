@@ -57,9 +57,11 @@
     "@sinclair/typebox": "~0.34.0"
   },
   "devDependencies": {
+    "@opentelemetry/api": "^1.7.0",
     "@opentelemetry/context-async-hooks": "^1.26.0",
     "@opentelemetry/core": "^1.7.0",
     "@opentelemetry/sdk-trace-base": "^1.24.1",
+    "@sinclair/typebox": "~0.34.0",
     "@stylistic/eslint-plugin": "^2.6.4",
     "@types/ws": "^8.5.5",
     "@typescript-eslint/eslint-plugin": "^7.8.0",
