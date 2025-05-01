@@ -160,15 +160,13 @@ export interface SerializedServerSchemaProtocolv1 {
   services: Record<string, SerializedServiceSchemaProtocolv1>;
 }
 
-export type TStrict<T extends TSchema> = T;
-
 /**
  * Omits compositing symbols from this schema.
  * The same approach that was previously used in the deprecated Type.Strict function.
  * https://github.com/sinclairzx81/typebox/blob/master/changelog/0.34.0.md#strict
  */
-export function Strict<T extends TSchema>(schema: T): TStrict<T> {
-  return JSON.parse(JSON.stringify(schema)) as TStrict<T>;
+export function Strict<T extends TSchema>(schema: T): T {
+  return JSON.parse(JSON.stringify(schema)) as T;
 }
 
 // TODO remove once clients migrate to v2
