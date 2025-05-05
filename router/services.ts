@@ -1,4 +1,4 @@
-import { Type, TUnion, TSchema } from '@sinclair/typebox';
+import { TUnion, TSchema } from '@sinclair/typebox';
 import { RiverError, RiverUncaughtSchema } from './result';
 import {
   Branded,
@@ -155,6 +155,15 @@ export interface SerializedServerSchema {
   services: Record<string, SerializedServiceSchema>;
 }
 
+/**
+ * Omits compositing symbols from this schema.
+ * The same approach that was previously used in the deprecated Type.Strict function.
+ * https://github.com/sinclairzx81/typebox/blob/master/changelog/0.34.0.md#strict
+ */
+export function Strict<T extends TSchema>(schema: T): T {
+  return JSON.parse(JSON.stringify(schema)) as T;
+}
+
 export function serializeSchema(
   services: AnyServiceSchemaMap,
   handshakeSchema?: TSchema,
@@ -171,7 +180,7 @@ export function serializeSchema(
   };
 
   if (handshakeSchema) {
-    schema.handshakeSchema = Type.Strict(handshakeSchema);
+    schema.handshakeSchema = Strict(handshakeSchema);
   }
 
   return schema;
@@ -384,8 +393,8 @@ export class ServiceSchema<
         Object.entries(this.procedures).map(([procName, procDef]) => [
           procName,
           {
-            input: Type.Strict(procDef.input),
-            output: Type.Strict(procDef.output),
+            input: Strict(procDef.input),
+            output: Strict(procDef.output),
             // Only add `description` field if the type declares it.
             ...('description' in procDef
               ? { description: procDef.description }
@@ -393,14 +402,14 @@ export class ServiceSchema<
             // Only add the `errors` field if the type declares it.
             ...('errors' in procDef
               ? {
-                  errors: Type.Strict(procDef.errors),
+                  errors: Strict(procDef.errors),
                 }
               : {}),
             type: procDef.type,
             // Only add the `init` field if the type declares it.
             ...('init' in procDef
               ? {
-                  init: Type.Strict(procDef.init),
+                  init: Strict(procDef.init),
                 }
               : {}),
           },
