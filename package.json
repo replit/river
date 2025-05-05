@@ -55,7 +55,7 @@
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.7.0",
-    "@sinclair/typebox": "~0.32.8"
+    "@sinclair/typebox": "~0.34.0"
   },
   "devDependencies": {
     "@opentelemetry/sdk-trace-base": "^1.24.1",
