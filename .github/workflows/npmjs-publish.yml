@@ -1,0 +1,44 @@
+name: Build and Upload Package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'What version to use for the release'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Set release version
+        run: |
+          tag="${{ github.event.inputs.version }}"
+          if [ -z "$tag" ]; then
+            tag="${GITHUB_REF_NAME}"
+          fi
+          version="${tag#v}"  # Strip leading v
+
+          # Bump library tag
+          npm version --no-git-tag-version "$version"
+
+          git config user.name 'GitHub Actions'
+          git config user.email eng+github@repl.it
+
+          git commit -m 'Setting version' package.json
+
+      - name: Build and publish
+        run: |
+          npm set "//registry.npmjs.org/:_authToken" "${{ secrets.NPMJS_AUTH_TOKEN }}"
+          npm install --frozen-lockfile
+          npm run publish
