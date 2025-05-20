@@ -126,7 +126,7 @@ describe.each(testMatrix())(
       // setup
       const clientTransport = getClientTransport('client');
       const clientMockLogger = vi.fn<LogFn>();
-      clientTransport.bindLogger(clientMockLogger, 'debug');
+      clientTransport.bindLogger(clientMockLogger);
       const serverTransport = getServerTransport();
       const serverMockLogger = vi.fn<LogFn>();
       serverTransport.bindLogger(serverMockLogger);
