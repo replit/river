@@ -140,9 +140,12 @@ type ServiceClient<Service extends AnyService> = {
  * @template Srv - The type of the server.
  */
 export type Client<
-  Services extends AnyServiceSchemaMap,
-  IS extends
-    InstantiatedServiceSchemaMap<Services> = InstantiatedServiceSchemaMap<Services>,
+  ServiceContext extends object,
+  Services extends AnyServiceSchemaMap<ServiceContext>,
+  IS extends InstantiatedServiceSchemaMap<
+    ServiceContext,
+    Services
+  > = InstantiatedServiceSchemaMap<ServiceContext, Services>,
 > = {
   [SvcName in keyof IS]: ServiceClient<IS[SvcName]>;
 };
@@ -204,7 +207,10 @@ const defaultClientOptions: ClientOptions = {
  * @param {Partial<ClientOptions>} providedClientOptions - The options for the client.
  * @returns The client for the server.
  */
-export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
+export function createClient<
+  ServiceSchemaMap extends AnyServiceSchemaMap<ServiceContext>,
+  ServiceContext extends object = object,
+>(
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   providedClientOptions: Partial<
@@ -212,7 +218,7 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
       handshakeOptions: ClientHandshakeOptions;
     }
   > = {},
-): Client<ServiceSchemaMap> {
+): Client<ServiceContext, ServiceSchemaMap> {
   if (providedClientOptions.handshakeOptions) {
     transport.extendHandshake(providedClientOptions.handshakeOptions);
   }
@@ -256,7 +262,7 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
       procName,
       callOptions ? (callOptions as CallOptions).signal : undefined,
     );
-  }, []) as Client<ServiceSchemaMap>;
+  }, []) as Client<ServiceContext, ServiceSchemaMap>;
 }
 
 type AnyProcReturn =

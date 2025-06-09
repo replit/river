@@ -42,6 +42,9 @@ const responseError = Type.Union([
 
 const fnBody = Procedure.rpc<
   Record<string, never>,
+  {
+    db: string;
+  },
   typeof requestData,
   typeof responseData,
   typeof responseError
@@ -61,7 +64,7 @@ const fnBody = Procedure.rpc<
 // typescript is limited to max 50 constraints
 // see: https://github.com/microsoft/TypeScript/issues/33541
 // we should be able to support more than that due to how we make services
-const StupidlyLargeServiceSchema = ServiceSchema.define({
+const StupidlyLargeServiceSchema = ServiceSchema.defineWithContext()({
   f1: fnBody,
   f2: fnBody,
   f3: fnBody,
@@ -207,7 +210,7 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
 });
 
 const services = {
-  test: ServiceSchema.define({
+  test: ServiceSchema.defineWithContext()({
     rpc: Procedure.rpc({
       requestInit: Type.Object({ n: Type.Number() }),
       responseData: Type.Object({ n: Type.Number() }),

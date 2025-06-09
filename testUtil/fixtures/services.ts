@@ -127,7 +127,7 @@ export const TestServiceSchema = TestServiceScaffold.finalize({
   ...testServiceProcedures,
 });
 
-export const OrderingServiceSchema = ServiceSchema.define(
+export const OrderingServiceSchema = ServiceSchema.defineWithContext()(
   { initializeState: () => ({ msgs: [] as Array<number> }) },
   {
     add: Procedure.rpc({
@@ -150,7 +150,7 @@ export const OrderingServiceSchema = ServiceSchema.define(
   },
 );
 
-export const BinaryFileServiceSchema = ServiceSchema.define({
+export const BinaryFileServiceSchema = ServiceSchema.defineWithContext()({
   getFile: Procedure.rpc({
     requestInit: Type.Object({ file: Type.String() }),
     responseData: Type.Object({ contents: Type.Uint8Array() }),
@@ -165,7 +165,7 @@ export const BinaryFileServiceSchema = ServiceSchema.define({
 export const DIV_BY_ZERO = 'DIV_BY_ZERO';
 export const STREAM_ERROR = 'STREAM_ERROR';
 
-export const FallibleServiceSchema = ServiceSchema.define({
+export const FallibleServiceSchema = ServiceSchema.defineWithContext()({
   divide: Procedure.rpc({
     requestInit: Type.Object({ a: Type.Number(), b: Type.Number() }),
     responseData: Type.Object({ result: Type.Number() }),
@@ -232,7 +232,7 @@ export const FallibleServiceSchema = ServiceSchema.define({
   }),
 });
 
-export const SubscribableServiceSchema = ServiceSchema.define(
+export const SubscribableServiceSchema = ServiceSchema.defineWithContext()(
   { initializeState: () => ({ count: new Observable(0) }) },
   {
     add: Procedure.rpc({
@@ -259,7 +259,7 @@ export const SubscribableServiceSchema = ServiceSchema.define(
   },
 );
 
-export const UploadableServiceSchema = ServiceSchema.define({
+export const UploadableServiceSchema = ServiceSchema.defineWithContext()({
   addMultiple: Procedure.upload({
     requestInit: Type.Object({}),
     requestData: Type.Object({ n: Type.Number() }),
@@ -315,7 +315,26 @@ const RecursivePayload = Type.Recursive((This) =>
   }),
 );
 
-export const NonObjectSchemas = ServiceSchema.define({
+ServiceSchema.defineWithContext<{
+  db: string;
+}>()(
+  {
+    initializeState: () => ({ a: 'test' }),
+  },
+  {
+    add: Procedure.rpc({
+      requestInit: Type.Number(),
+      responseData: Type.Number(),
+      async handler({ ctx, reqInit }) {
+        ctx.db;
+
+        return Ok(reqInit + 1);
+      },
+    }),
+  },
+);
+
+export const NonObjectSchemas = ServiceSchema.defineWithContext()({
   add: Procedure.rpc({
     requestInit: Type.Number(),
     responseData: Type.Number(),
@@ -334,7 +353,7 @@ export const NonObjectSchemas = ServiceSchema.define({
 });
 
 export function SchemaWithDisposableState(dispose: () => void) {
-  return ServiceSchema.define(
+  return ServiceSchema.defineWithContext()(
     { initializeState: () => ({ [Symbol.dispose]: dispose }) },
     {
       add: Procedure.rpc({

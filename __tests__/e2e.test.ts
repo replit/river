@@ -949,7 +949,7 @@ describe.each(testMatrix())(
       });
 
       const services = {
-        test: ServiceSchema.define({
+        test: ServiceSchema.defineWithContext()({
           getData: Procedure.rpc({
             requestInit: Type.Object({}),
             responseData: Type.Object({

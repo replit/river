@@ -6,7 +6,6 @@ import {
   AnyProcedure,
   PayloadType,
 } from './procedures';
-import { ServiceContext } from './context';
 import {
   flattenErrorType,
   ProcedureErrorSchemaType,
@@ -19,8 +18,9 @@ import {
  * You shouldn't construct these directly, use {@link ServiceSchema} instead.
  */
 export interface Service<
+  Context,
   State extends object,
-  Procs extends ProcedureMap<State>,
+  Procs extends ProcedureMap<Context, State>,
 > {
   readonly state: State;
   readonly procedures: Procs;
@@ -30,17 +30,19 @@ export interface Service<
 /**
  * Represents any {@link Service} object.
  */
-export type AnyService = Service<object, ProcedureMap>;
+export type AnyService = Service<object, object, ProcedureMap>;
 
 /**
  * Represents any {@link ServiceSchema} object.
  */
-export type AnyServiceSchema = ServiceSchema<object, ProcedureMap>;
+export type AnyServiceSchema<ServiceContext extends object = object> =
+  ServiceSchema<ServiceContext, object, ProcedureMap>;
 
 /**
  * A dictionary of {@link ServiceSchema}s, where the key is the service name.
  */
-export type AnyServiceSchemaMap = Record<string, AnyServiceSchema>;
+export type AnyServiceSchemaMap<ServiceContext extends object = object> =
+  Record<string, AnyServiceSchema<ServiceContext>>;
 
 // This has the secret sauce to keep go to definition working, the structure is
 // somewhat delicate, so be careful when modifying it. Would be nice to add a
@@ -49,9 +51,12 @@ export type AnyServiceSchemaMap = Record<string, AnyServiceSchema>;
  * Takes a {@link AnyServiceSchemaMap} and returns a dictionary of instantiated
  * services.
  */
-export type InstantiatedServiceSchemaMap<T extends AnyServiceSchemaMap> = {
-  [K in keyof T]: T[K] extends ServiceSchema<infer S, infer P>
-    ? Service<S, P>
+export type InstantiatedServiceSchemaMap<
+  ServiceContext extends object,
+  T extends AnyServiceSchemaMap<ServiceContext>,
+> = {
+  [K in keyof T]: T[K] extends ServiceSchema<infer C, infer S, infer P>
+    ? Service<C, S, P>
     : never;
 };
 
@@ -123,7 +128,10 @@ export type ProcType<
  * A list of procedures where every procedure is "branded", as-in the procedure
  * was created via the {@link Procedure} constructors.
  */
-type BrandedProcedureMap<State> = Record<string, Branded<AnyProcedure<State>>>;
+type BrandedProcedureMap<Context, State> = Record<
+  string,
+  Branded<AnyProcedure<Context, State>>
+>;
 
 type MaybeDisposable<State extends object> = State & {
   [Symbol.asyncDispose]?: () => Promise<void>;
@@ -133,11 +141,14 @@ type MaybeDisposable<State extends object> = State & {
 /**
  * The configuration for a service.
  */
-export interface ServiceConfiguration<State extends object> {
+export interface ServiceConfiguration<
+  Context extends object,
+  State extends object,
+> {
   /**
    * A factory function for creating a fresh state.
    */
-  initializeState: (extendedContext: ServiceContext) => MaybeDisposable<State>;
+  initializeState: (extendedContext: Context) => MaybeDisposable<State>;
 }
 
 // TODO remove once clients migrate to v2
@@ -167,6 +178,27 @@ export interface SerializedServerSchemaProtocolv1 {
  */
 export function Strict<T extends TSchema>(schema: T): T {
   return JSON.parse(JSON.stringify(schema)) as T;
+}
+
+interface DefineWithContext<Context extends object> {
+  <
+    State extends object,
+    Procedures extends BrandedProcedureMap<Context, State>,
+  >(
+    config: ServiceConfiguration<Context, State>,
+    procedures: Procedures,
+  ): ServiceSchema<
+    Context,
+    State,
+    { [K in keyof Procedures]: Unbranded<Procedures[K]> }
+  >;
+  <Procedures extends BrandedProcedureMap<Context, object>>(
+    procedures: Procedures,
+  ): ServiceSchema<
+    Context,
+    object,
+    { [K in keyof Procedures]: Unbranded<Procedures[K]> }
+  >;
 }
 
 // TODO remove once clients migrate to v2
@@ -260,14 +292,15 @@ export function serializeSchema(
  * When defining procedures, use the {@link Procedure} constructors to create them.
  */
 export class ServiceSchema<
+  Context extends object,
   State extends object,
-  Procedures extends ProcedureMap<State>,
+  Procedures extends ProcedureMap<Context, State>,
 > {
   /**
    * Factory function for creating a fresh state.
    */
   protected readonly initializeState: (
-    extendedContext: ServiceContext,
+    extendedContext: Context,
   ) => MaybeDisposable<State>;
 
   /**
@@ -280,7 +313,7 @@ export class ServiceSchema<
    * @param procedures - The procedures for this service.
    */
   protected constructor(
-    config: ServiceConfiguration<State>,
+    config: ServiceConfiguration<Context, State>,
     procedures: Procedures,
   ) {
     this.initializeState = config.initializeState;
@@ -341,7 +374,9 @@ export class ServiceSchema<
    * Depending on your preferences, this may be a more appealing way to define
    * a schema versus using the {@link ServiceSchema.define} method.
    */
-  static scaffold<State extends object>(config: ServiceConfiguration<State>) {
+  static scaffold<Context extends object, State extends object>(
+    config: ServiceConfiguration<Context, State>,
+  ) {
     return new ServiceScaffold(config);
   }
 
@@ -374,12 +409,14 @@ export class ServiceSchema<
    * ```
    */
   static define<
+    Context extends object,
     State extends object,
-    Procedures extends BrandedProcedureMap<State>,
+    Procedures extends BrandedProcedureMap<Context, State>,
   >(
-    config: ServiceConfiguration<State>,
+    config: ServiceConfiguration<Context, State>,
     procedures: Procedures,
   ): ServiceSchema<
+    Context,
     State,
     { [K in keyof Procedures]: Unbranded<Procedures[K]> }
   >;
@@ -405,21 +442,26 @@ export class ServiceSchema<
    *   }),
    * });
    */
-  static define<Procedures extends BrandedProcedureMap<Record<string, never>>>(
+
+  static define<
+    Context extends object,
+    Procedures extends BrandedProcedureMap<Context, object>,
+  >(
     procedures: Procedures,
   ): ServiceSchema<
-    Record<string, never>,
+    Context,
+    object,
     { [K in keyof Procedures]: Unbranded<Procedures[K]> }
   >;
   // actual implementation
   static define(
     configOrProcedures:
-      | ServiceConfiguration<object>
-      | BrandedProcedureMap<object>,
-    maybeProcedures?: BrandedProcedureMap<object>,
-  ): ServiceSchema<object, ProcedureMap> {
-    let config: ServiceConfiguration<object>;
-    let procedures: BrandedProcedureMap<object>;
+      | ServiceConfiguration<object, object>
+      | BrandedProcedureMap<object, object>,
+    maybeProcedures?: BrandedProcedureMap<object, object>,
+  ): ServiceSchema<object, object, ProcedureMap> {
+    let config: ServiceConfiguration<object, object>;
+    let procedures: BrandedProcedureMap<object, object>;
 
     if (
       'initializeState' in configOrProcedures &&
@@ -429,14 +471,45 @@ export class ServiceSchema<
         throw new Error('Expected procedures to be defined');
       }
 
-      config = configOrProcedures as ServiceConfiguration<object>;
+      config = configOrProcedures as ServiceConfiguration<object, object>;
       procedures = maybeProcedures;
     } else {
       config = { initializeState: () => ({}) };
-      procedures = configOrProcedures as BrandedProcedureMap<object>;
+      procedures = configOrProcedures as BrandedProcedureMap<object, object>;
     }
 
     return new ServiceSchema(config, procedures);
+  }
+
+  static defineWithContext<
+    Context extends object = object,
+  >(): DefineWithContext<Context> {
+    return function (
+      configOrProcedures:
+        | ServiceConfiguration<Context, object>
+        | BrandedProcedureMap<Context, object>,
+      maybeProcedures?: BrandedProcedureMap<Context, object>,
+    ): ServiceSchema<Context, object, ProcedureMap<Context>> {
+      let config: ServiceConfiguration<Context, object>;
+      let procedures: BrandedProcedureMap<Context, object>;
+
+      if (
+        'initializeState' in configOrProcedures &&
+        typeof configOrProcedures.initializeState === 'function'
+      ) {
+        if (!maybeProcedures) {
+          throw new Error('Expected procedures to be defined');
+        }
+
+        config = configOrProcedures as ServiceConfiguration<Context, object>;
+        procedures = maybeProcedures;
+      } else {
+        config = { initializeState: () => ({}) };
+        procedures = configOrProcedures as BrandedProcedureMap<Context, object>;
+      }
+
+      return new ServiceSchema(config, procedures);
+    };
   }
 
   /**
@@ -528,7 +601,7 @@ export class ServiceSchema<
    * You probably don't need this, usually the River server will handle this
    * for you.
    */
-  instantiate(extendedContext: ServiceContext): Service<State, Procedures> {
+  instantiate(extendedContext: Context): Service<Context, State, Procedures> {
     const state = this.initializeState(extendedContext);
     const dispose = async () => {
       await state[Symbol.asyncDispose]?.();
@@ -566,16 +639,16 @@ function getSerializedProcErrors(
  * @see {@link ServiceSchema.scaffold}
  */
 // note that this isn't exported
-class ServiceScaffold<State extends object> {
+class ServiceScaffold<Context extends object, State extends object> {
   /**
    * The configuration for this service.
    */
-  protected readonly config: ServiceConfiguration<State>;
+  protected readonly config: ServiceConfiguration<Context, State>;
 
   /**
    * @param config - The configuration for this service.
    */
-  constructor(config: ServiceConfiguration<State>) {
+  constructor(config: ServiceConfiguration<Context, State>) {
     this.config = config;
   }
 
@@ -599,7 +672,7 @@ class ServiceScaffold<State extends object> {
    *
    * @param procedures - The procedures for this service.
    */
-  procedures<T extends BrandedProcedureMap<State>>(procedures: T): T {
+  procedures<T extends BrandedProcedureMap<Context, State>>(procedures: T): T {
     return procedures;
   }
 
@@ -621,9 +694,9 @@ class ServiceScaffold<State extends object> {
    * });
    * ```
    */
-  finalize<T extends BrandedProcedureMap<State>>(
+  finalize<T extends BrandedProcedureMap<Context, State>>(
     procedures: T,
-  ): ServiceSchema<State, { [K in keyof T]: Unbranded<T[K]> }> {
+  ): ServiceSchema<Context, State, { [K in keyof T]: Unbranded<T[K]> }> {
     return ServiceSchema.define(this.config, procedures);
   }
 }

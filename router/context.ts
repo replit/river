@@ -6,27 +6,6 @@ import { CancelErrorSchema } from './errors';
 import { Static } from '@sinclair/typebox';
 
 /**
- * ServiceContext exist for the purpose of declaration merging
- * to extend the context with additional properties.
- *
- * For example:
- *
- * ```ts
- * declare module '@replit/river' {
- *   interface ServiceContext {
- *     db: Database;
- *   }
- * }
- *
- * createServer(someTransport, myServices, { extendedContext: { db: myDb } });
- * ```
- *
- * Once you do this, your {@link ProcedureHandlerContext} will have `db` property on it.
- */
-/* eslint-disable-next-line @typescript-eslint/no-empty-interface */
-export interface ServiceContext {}
-
-/**
  * The parsed metadata schema for a service. This is the
  * return value of the {@link ServerHandshakeOptions.validate}
  * if the handshake extension is used.
@@ -49,7 +28,10 @@ export interface ParsedMetadata extends Record<string, unknown> {}
  * This is passed to every procedure handler and contains various context-level
  * information and utilities. This may be extended, see {@link ServiceContext}
  */
-export type ProcedureHandlerContext<State> = ServiceContext & {
+export type ProcedureHandlerContext<
+  State,
+  ServiceContext = object,
+> = ServiceContext & {
   /**
    * State for this service as defined by the service definition.
    */

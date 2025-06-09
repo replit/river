@@ -28,11 +28,7 @@ import {
   ProtocolVersion,
   TransportClientId,
 } from '../transport/message';
-import {
-  ServiceContext,
-  ProcedureHandlerContext,
-  ParsedMetadata,
-} from './context';
+import { ProcedureHandlerContext, ParsedMetadata } from './context';
 import { Logger } from '../logging/log';
 import { Value } from '@sinclair/typebox/value';
 import { Err, Result, Ok, ErrResult } from './result';
@@ -57,11 +53,14 @@ type StreamId = string;
  * Represents a server with a set of services. Use {@link createServer} to create it.
  * @template Services - The type of services provided by the server.
  */
-export interface Server<Services extends AnyServiceSchemaMap> {
+export interface Server<
+  ServiceContext extends object,
+  Services extends AnyServiceSchemaMap<ServiceContext>,
+> {
   /**
    * Services defined for this server.
    */
-  services: InstantiatedServiceSchemaMap<Services>;
+  services: InstantiatedServiceSchemaMap<ServiceContext, Services>;
   /**
    * A set of stream ids that are currently open.
    */
@@ -70,7 +69,7 @@ export interface Server<Services extends AnyServiceSchemaMap> {
   close: () => Promise<void>;
 }
 
-interface StreamInitProps {
+interface StreamInitProps<ServiceContext> {
   // msg derived
   streamId: StreamId;
   procedureName: string;
@@ -104,8 +103,10 @@ interface ProcStream {
   handleSessionDisconnect: () => void;
 }
 
-class RiverServer<Services extends AnyServiceSchemaMap>
-  implements Server<Services>
+class RiverServer<
+  ServiceContext extends object,
+  Services extends AnyServiceSchemaMap<ServiceContext>,
+> implements Server<ServiceContext, Services>
 {
   private transport: ServerTransport<Connection>;
   private contextMap: Map<AnyService, ServiceContext & { state: object }>;
@@ -123,7 +124,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
   private maxCancelledStreamTombstonesPerSession: number;
 
   public streams: Map<StreamId, ProcStream>;
-  public services: InstantiatedServiceSchemaMap<Services>;
+  public services: InstantiatedServiceSchemaMap<ServiceContext, Services>;
 
   private unregisterTransportListeners: () => void;
 
@@ -138,11 +139,16 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     const instances: Record<string, AnyService> = {};
     this.middlewares = middlewares;
 
-    this.services = instances as InstantiatedServiceSchemaMap<Services>;
+    this.services = instances as InstantiatedServiceSchemaMap<
+      ServiceContext,
+      Services
+    >;
     this.contextMap = new Map();
 
+    extendedContext = extendedContext ?? ({} as ServiceContext);
+
     for (const [name, service] of Object.entries(services)) {
-      const instance = service.instantiate(extendedContext ?? {});
+      const instance = service.instantiate(extendedContext);
       instances[name] = instance;
 
       this.contextMap.set(instance, {
@@ -246,7 +252,10 @@ class RiverServer<Services extends AnyServiceSchemaMap>
     this.transport.addEventListener('transportStatus', handleTransportStatus);
   }
 
-  private createNewProcStream(span: Span, props: StreamInitProps) {
+  private createNewProcStream(
+    span: Span,
+    props: StreamInitProps<ServiceContext>,
+  ) {
     const {
       streamId,
       initialSession,
@@ -700,7 +709,7 @@ class RiverServer<Services extends AnyServiceSchemaMap>
 
   private validateNewProcStream(
     initMessage: OpaqueTransportMessage,
-  ): StreamInitProps | null {
+  ): StreamInitProps<ServiceContext> | null {
     // lifetime safety: this is a sync function so this session cant transition
     // to another state before we finish
     const session = this.transport.sessions.get(initMessage.from);
@@ -1039,7 +1048,10 @@ export type Middleware = (param: MiddlewareParam) => void;
  * @param extendedContext - An optional object containing additional context to be passed to all services.
  * @returns A promise that resolves to a server instance with the registered services.
  */
-export function createServer<Services extends AnyServiceSchemaMap>(
+export function createServer<
+  ServiceContext extends object,
+  Services extends AnyServiceSchemaMap<ServiceContext>,
+>(
   transport: ServerTransport<Connection>,
   services: Services,
   providedServerOptions?: Partial<{
@@ -1055,7 +1067,7 @@ export function createServer<Services extends AnyServiceSchemaMap>(
      */
     middlewares?: Array<Middleware>;
   }>,
-): Server<Services> {
+): Server<ServiceContext, Services> {
   return new RiverServer(
     transport,
     services,

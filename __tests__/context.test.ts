@@ -40,23 +40,30 @@ describe('should handle incompatabilities', async () => {
     // setup
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
+
+    interface ExtendedContext {
+      testctx: string;
+    }
+    const extendedContext: ExtendedContext = {
+      testctx: Math.random().toString(),
+    };
+
     const services = {
-      testservice: ServiceSchema.define({
+      testservice: ServiceSchema.defineWithContext<ExtendedContext>()({
         testrpc: Procedure.rpc({
           requestInit: Type.Object({}),
           responseData: Type.String(),
           handler: async ({ ctx }) => {
-            return Ok((ctx as unknown as typeof extendedContext).testctx);
+            return Ok(ctx.testctx);
           },
         }),
       }),
     };
 
-    const extendedContext = { testctx: Math.random().toString() };
     createServer(serverTransport, services, {
       extendedContext,
     });
-    const client = createClient<typeof services>(
+    const client = createClient<typeof services, ExtendedContext>(
       clientTransport,
       serverTransport.clientId,
     );

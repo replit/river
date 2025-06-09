@@ -244,7 +244,7 @@ describe('middleware test', () => {
       readByMiddlewareSignal: boolean;
     }>();
 
-    const AsyncStorageSchemas = ServiceSchema.define({
+    const AsyncStorageSchemas = ServiceSchema.defineWithContext()({
       gimmeStore: Procedure.rpc({
         requestInit: Type.Object({}),
         responseData: Type.Object({}),

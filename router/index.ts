@@ -49,11 +49,7 @@ export type {
   MiddlewareParam,
   MiddlewareContext,
 } from './server';
-export type {
-  ParsedMetadata,
-  ServiceContext,
-  ProcedureHandlerContext,
-} from './context';
+export type { ParsedMetadata, ProcedureHandlerContext } from './context';
 export { Ok, Err } from './result';
 export type {
   Result,

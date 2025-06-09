@@ -509,7 +509,7 @@ describe('request finishing triggers signal onabort', async () => {
     const procedureName = procedureType;
 
     const services = {
-      [serviceName]: ServiceSchema.define({
+      [serviceName]: ServiceSchema.defineWithContext()({
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any
         [procedureType]: (Procedure[procedureType] as any)({
           requestInit: Type.Object({}),
