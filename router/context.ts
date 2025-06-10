@@ -26,12 +26,9 @@ export interface ParsedMetadata extends Record<string, unknown> {}
 
 /**
  * This is passed to every procedure handler and contains various context-level
- * information and utilities. This may be extended, see {@link ServiceContext}
+ * information and utilities.
  */
-export type ProcedureHandlerContext<
-  State,
-  ServiceContext = object,
-> = ServiceContext & {
+export type ProcedureHandlerContext<State, Context> = Context & {
   /**
    * State for this service as defined by the service definition.
    */

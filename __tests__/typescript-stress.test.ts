@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { Procedure } from '../router/procedures';
-import { ServiceSchema } from '../router/services';
+import { createServiceSchema } from '../router/services';
 import { Type } from '@sinclair/typebox';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
@@ -64,7 +64,7 @@ const fnBody = Procedure.rpc<
 // typescript is limited to max 50 constraints
 // see: https://github.com/microsoft/TypeScript/issues/33541
 // we should be able to support more than that due to how we make services
-const StupidlyLargeServiceSchema = ServiceSchema.defineWithContext()({
+const StupidlyLargeServiceSchema = createServiceSchema().define({
   f1: fnBody,
   f2: fnBody,
   f3: fnBody,
@@ -210,7 +210,7 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
 });
 
 const services = {
-  test: ServiceSchema.defineWithContext()({
+  test: createServiceSchema().define({
     rpc: Procedure.rpc({
       requestInit: Type.Object({ n: Type.Number() }),
       responseData: Type.Object({ n: Type.Number() }),

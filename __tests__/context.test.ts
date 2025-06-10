@@ -5,14 +5,9 @@ import {
 } from '../testUtil/fixtures/cleanup';
 import { testMatrix } from '../testUtil/fixtures/matrix';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
-import {
-  Ok,
-  Procedure,
-  ServiceSchema,
-  createClient,
-  createServer,
-} from '../router';
+import { Ok, Procedure, createClient, createServer } from '../router';
 import { Type } from '@sinclair/typebox';
+import { createServiceSchema } from '../router/services';
 
 describe('should handle incompatabilities', async () => {
   const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
@@ -48,8 +43,10 @@ describe('should handle incompatabilities', async () => {
       testctx: Math.random().toString(),
     };
 
+    const serviceSchema = createServiceSchema<ExtendedContext>();
+
     const services = {
-      testservice: ServiceSchema.defineWithContext<ExtendedContext>()({
+      testservice: serviceSchema.define({
         testrpc: Procedure.rpc({
           requestInit: Type.Object({}),
           responseData: Type.String(),
@@ -63,7 +60,7 @@ describe('should handle incompatabilities', async () => {
     createServer(serverTransport, services, {
       extendedContext,
     });
-    const client = createClient<typeof services, ExtendedContext>(
+    const client = createClient<typeof services>(
       clientTransport,
       serverTransport.clientId,
     );
@@ -81,9 +78,15 @@ describe('should handle incompatabilities', async () => {
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
 
-    const TestServiceScaffold = ServiceSchema.scaffold({
+    interface ExtendedContext {
+      testctx: string;
+    }
+
+    const serviceSchema = createServiceSchema<ExtendedContext>();
+
+    const TestServiceScaffold = serviceSchema.scaffold({
       initializeState: (ctx) => ({
-        fromctx: (ctx as unknown as typeof extendedContext).testctx,
+        fromctx: ctx.testctx,
       }),
     });
     const services = {

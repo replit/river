@@ -140,12 +140,20 @@ type ServiceClient<Service extends AnyService> = {
  * @template Srv - The type of the server.
  */
 export type Client<
-  ServiceContext extends object,
-  Services extends AnyServiceSchemaMap<ServiceContext>,
+  // Context is a server-side implementation detail that doesn't affect the client interface
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Services extends AnyServiceSchemaMap<any>,
   IS extends InstantiatedServiceSchemaMap<
-    ServiceContext,
+    // Context is a server-side implementation detail that doesn't affect the client interface
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    any,
     Services
-  > = InstantiatedServiceSchemaMap<ServiceContext, Services>,
+  > = InstantiatedServiceSchemaMap<
+    // Context is a server-side implementation detail that doesn't affect the client interface
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    any,
+    Services
+  >,
 > = {
   [SvcName in keyof IS]: ServiceClient<IS[SvcName]>;
 };
@@ -207,10 +215,10 @@ const defaultClientOptions: ClientOptions = {
  * @param {Partial<ClientOptions>} providedClientOptions - The options for the client.
  * @returns The client for the server.
  */
-export function createClient<
-  ServiceSchemaMap extends AnyServiceSchemaMap<ServiceContext>,
-  ServiceContext extends object = object,
->(
+// We are using any here because the ServiceContext is a server-side implementation
+// detail that doesn't affect the client interface
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap<any>>(
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   providedClientOptions: Partial<
@@ -218,7 +226,7 @@ export function createClient<
       handshakeOptions: ClientHandshakeOptions;
     }
   > = {},
-): Client<ServiceContext, ServiceSchemaMap> {
+): Client<ServiceSchemaMap> {
   if (providedClientOptions.handshakeOptions) {
     transport.extendHandshake(providedClientOptions.handshakeOptions);
   }
@@ -262,7 +270,7 @@ export function createClient<
       procName,
       callOptions ? (callOptions as CallOptions).signal : undefined,
     );
-  }, []) as Client<ServiceContext, ServiceSchemaMap>;
+  }, []) as Client<ServiceSchemaMap>;
 }
 
 type AnyProcReturn =

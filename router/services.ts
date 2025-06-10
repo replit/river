@@ -35,14 +35,17 @@ export type AnyService = Service<object, object, ProcedureMap>;
 /**
  * Represents any {@link ServiceSchema} object.
  */
-export type AnyServiceSchema<ServiceContext extends object = object> =
-  ServiceSchema<ServiceContext, object, ProcedureMap>;
+export type AnyServiceSchema<Context extends object = object> = InstanceType<
+  ReturnType<typeof createServiceSchema<Context>>
+>;
 
 /**
  * A dictionary of {@link ServiceSchema}s, where the key is the service name.
  */
-export type AnyServiceSchemaMap<ServiceContext extends object = object> =
-  Record<string, AnyServiceSchema<ServiceContext>>;
+export type AnyServiceSchemaMap<Context extends object = object> = Record<
+  string,
+  AnyServiceSchema<Context>
+>;
 
 // This has the secret sauce to keep go to definition working, the structure is
 // somewhat delicate, so be careful when modifying it. Would be nice to add a
@@ -52,11 +55,22 @@ export type AnyServiceSchemaMap<ServiceContext extends object = object> =
  * services.
  */
 export type InstantiatedServiceSchemaMap<
-  ServiceContext extends object,
-  T extends AnyServiceSchemaMap<ServiceContext>,
+  Context extends object,
+  T extends AnyServiceSchemaMap<Context>,
 > = {
-  [K in keyof T]: T[K] extends ServiceSchema<infer C, infer S, infer P>
-    ? Service<C, S, P>
+  [K in keyof T]: T[K] extends AnyServiceSchema<Context>
+    ? T[K] extends {
+        initializeState: (ctx: Context) => infer S;
+        procedures: infer P;
+      }
+      ? Service<
+          Context,
+          S extends object ? S : object,
+          P extends ProcedureMap<Context, S extends object ? S : object>
+            ? P
+            : ProcedureMap
+        >
+      : never
     : never;
 };
 
@@ -180,27 +194,6 @@ export function Strict<T extends TSchema>(schema: T): T {
   return JSON.parse(JSON.stringify(schema)) as T;
 }
 
-interface DefineWithContext<Context extends object> {
-  <
-    State extends object,
-    Procedures extends BrandedProcedureMap<Context, State>,
-  >(
-    config: ServiceConfiguration<Context, State>,
-    procedures: Procedures,
-  ): ServiceSchema<
-    Context,
-    State,
-    { [K in keyof Procedures]: Unbranded<Procedures[K]> }
-  >;
-  <Procedures extends BrandedProcedureMap<Context, object>>(
-    procedures: Procedures,
-  ): ServiceSchema<
-    Context,
-    object,
-    { [K in keyof Procedures]: Unbranded<Procedures[K]> }
-  >;
-}
-
 // TODO remove once clients migrate to v2
 /**
  * Same as {@link serializeSchema} but with a format that is compatible with
@@ -273,223 +266,187 @@ export function serializeSchema(
   return schema;
 }
 
-/**
- * The schema for a {@link Service}. This is used to define a service, specifically
- * its initial state and procedures.
- *
- * There are two ways to define a service:
- * 1. the {@link ServiceSchema.define} static method, which takes a configuration and
- *    a list of procedures directly. Use this to ergonomically define a service schema
- *    in one go. Good for smaller services, especially if they're stateless.
- * 2. the {@link ServiceSchema.scaffold} static method, which creates a scaffold that
- *    can be used to define procedures separately from the configuration. Use this to
- *    better organize your service's definition, especially if it's a large service.
- *    You can also use it in a builder pattern to define the service in a more
- *    fluent way.
- *
- * See the static methods for more information and examples.
- *
- * When defining procedures, use the {@link Procedure} constructors to create them.
- */
-export class ServiceSchema<
-  Context extends object,
-  State extends object,
-  Procedures extends ProcedureMap<Context, State>,
-> {
+export function createServiceSchema<Context extends object>() {
   /**
-   * Factory function for creating a fresh state.
+   * The schema for a {@link Service}. This is used to define a service, specifically
+   * its initial state and procedures.
+   *
+   * There are two ways to define a service:
+   * 1. the {@link ServiceSchema.define} static method, which takes a configuration and
+   *    a list of procedures directly. Use this to ergonomically define a service schema
+   *    in one go. Good for smaller services, especially if they're stateless.
+   * 2. the {@link ServiceSchema.scaffold} static method, which creates a scaffold that
+   *    can be used to define procedures separately from the configuration. Use this to
+   *    better organize your service's definition, especially if it's a large service.
+   *    You can also use it in a builder pattern to define the service in a more
+   *    fluent way.
+   *
+   * See the static methods for more information and examples.
+   *
+   * When defining procedures, use the {@link Procedure} constructors to create them.
    */
-  protected readonly initializeState: (
-    extendedContext: Context,
-  ) => MaybeDisposable<State>;
-
-  /**
-   * The procedures for this service.
-   */
-  readonly procedures: Procedures;
-
-  /**
-   * @param config - The configuration for this service.
-   * @param procedures - The procedures for this service.
-   */
-  protected constructor(
-    config: ServiceConfiguration<Context, State>,
-    procedures: Procedures,
-  ) {
-    this.initializeState = config.initializeState;
-    this.procedures = procedures;
-  }
-
-  /**
-   * Creates a {@link ServiceScaffold}, which can be used to define procedures
-   * that can then be merged into a {@link ServiceSchema}, via the scaffold's
-   * `finalize` method.
-   *
-   * There are two patterns that work well with this method. The first is using
-   * it to separate the definition of procedures from the definition of the
-   * service's configuration:
-   * ```ts
-   * const MyServiceScaffold = ServiceSchema.scaffold({
-   *   initializeState: () => ({ count: 0 }),
-   * });
-   *
-   * const incrementProcedures = MyServiceScaffold.procedures({
-   *   increment: Procedure.rpc({
-   *     requestInit: Type.Object({ amount: Type.Number() }),
-   *     responseData: Type.Object({ current: Type.Number() }),
-   *     async handler(ctx, init) {
-   *       ctx.state.count += init.amount;
-   *       return Ok({ current: ctx.state.count });
-   *     }
-   *   }),
-   * })
-   *
-   * const MyService = MyServiceScaffold.finalize({
-   *   ...incrementProcedures,
-   *   // you can also directly define procedures here
-   * });
-   * ```
-   * This might be really handy if you have a very large service and you're
-   * wanting to split it over multiple files. You can define the scaffold
-   * in one file, and then import that scaffold in other files where you
-   * define procedures - and then finally import the scaffolds and your
-   * procedure objects in a final file where you finalize the scaffold into
-   * a service schema.
-   *
-   * The other way is to use it like in a builder pattern:
-   * ```ts
-   * const MyService = ServiceSchema
-   *   .scaffold({ initializeState: () => ({ count: 0 }) })
-   *   .finalize({
-   *     increment: Procedure.rpc({
-   *       requestInit: Type.Object({ amount: Type.Number() }),
-   *       responseData: Type.Object({ current: Type.Number() }),
-   *       async handler(ctx, init) {
-   *         ctx.state.count += init.amount;
-   *         return Ok({ current: ctx.state.count });
-   *       }
-   *     }),
-   *   })
-   * ```
-   * Depending on your preferences, this may be a more appealing way to define
-   * a schema versus using the {@link ServiceSchema.define} method.
-   */
-  static scaffold<Context extends object, State extends object>(
-    config: ServiceConfiguration<Context, State>,
-  ) {
-    return new ServiceScaffold(config);
-  }
-
-  /**
-   * Creates a new {@link ServiceSchema} with the given configuration and procedures.
-   *
-   * All procedures must be created with the {@link Procedure} constructors.
-   *
-   * NOTE: There is an overload that lets you just provide the procedures alone if your
-   * service has no state.
-   *
-   * @param config - The configuration for this service.
-   * @param procedures - The procedures for this service.
-   *
-   * @example
-   * ```
-   * const service = ServiceSchema.define(
-   *   { initializeState: () => ({ count: 0 }) },
-   *   {
-   *     increment: Procedure.rpc({
-   *       requestInit: Type.Object({ amount: Type.Number() }),
-   *       responseData: Type.Object({ current: Type.Number() }),
-   *       async handler(ctx, init) {
-   *         ctx.state.count += init.amount;
-   *         return Ok({ current: ctx.state.count });
-   *       }
-   *     }),
-   *   },
-   * );
-   * ```
-   */
-  static define<
-    Context extends object,
+  return class ServiceSchema<
     State extends object,
-    Procedures extends BrandedProcedureMap<Context, State>,
-  >(
-    config: ServiceConfiguration<Context, State>,
-    procedures: Procedures,
-  ): ServiceSchema<
-    Context,
-    State,
-    { [K in keyof Procedures]: Unbranded<Procedures[K]> }
-  >;
-  /**
-   * Creates a new {@link ServiceSchema} with the given procedures.
-   *
-   * All procedures must be created with the {@link Procedure} constructors.
-   *
-   * NOTE: There is an overload that lets you provide configuration as well,
-   * if your service has extra configuration like a state.
-   *
-   * @param procedures - The procedures for this service.
-   *
-   * @example
-   * ```
-   * const service = ServiceSchema.define({
-   *   add: Procedure.rpc({
-   *     requestInit: Type.Object({ a: Type.Number(), b: Type.Number() }),
-   *     responseData: Type.Object({ result: Type.Number() }),
-   *     async handler(ctx, init) {
-   *       return Ok({ result: init.a + init.b });
-   *     }
-   *   }),
-   * });
-   */
+    Procedures extends ProcedureMap<Context, State>,
+  > {
+    /**
+     * Factory function for creating a fresh state.
+     */
+    readonly initializeState: (
+      extendedContext: Context,
+    ) => MaybeDisposable<State>;
 
-  static define<
-    Context extends object,
-    Procedures extends BrandedProcedureMap<Context, object>,
-  >(
-    procedures: Procedures,
-  ): ServiceSchema<
-    Context,
-    object,
-    { [K in keyof Procedures]: Unbranded<Procedures[K]> }
-  >;
-  // actual implementation
-  static define(
-    configOrProcedures:
-      | ServiceConfiguration<object, object>
-      | BrandedProcedureMap<object, object>,
-    maybeProcedures?: BrandedProcedureMap<object, object>,
-  ): ServiceSchema<object, object, ProcedureMap> {
-    let config: ServiceConfiguration<object, object>;
-    let procedures: BrandedProcedureMap<object, object>;
+    /**
+     * The procedures for this service.
+     */
+    readonly procedures: Procedures;
 
-    if (
-      'initializeState' in configOrProcedures &&
-      typeof configOrProcedures.initializeState === 'function'
+    /**
+     * @param config - The configuration for this service.
+     * @param procedures - The procedures for this service.
+     */
+    constructor(
+      config: ServiceConfiguration<Context, State>,
+      procedures: Procedures,
     ) {
-      if (!maybeProcedures) {
-        throw new Error('Expected procedures to be defined');
-      }
-
-      config = configOrProcedures as ServiceConfiguration<object, object>;
-      procedures = maybeProcedures;
-    } else {
-      config = { initializeState: () => ({}) };
-      procedures = configOrProcedures as BrandedProcedureMap<object, object>;
+      this.initializeState = config.initializeState;
+      this.procedures = procedures;
     }
 
-    return new ServiceSchema(config, procedures);
-  }
+    /**
+     * Creates a {@link ServiceScaffold}, which can be used to define procedures
+     * that can then be merged into a {@link ServiceSchema}, via the scaffold's
+     * `finalize` method.
+     *
+     * There are two patterns that work well with this method. The first is using
+     * it to separate the definition of procedures from the definition of the
+     * service's configuration:
+     * ```ts
+     * const MyServiceScaffold = ServiceSchema.scaffold({
+     *   initializeState: () => ({ count: 0 }),
+     * });
+     *
+     * const incrementProcedures = MyServiceScaffold.procedures({
+     *   increment: Procedure.rpc({
+     *     requestInit: Type.Object({ amount: Type.Number() }),
+     *     responseData: Type.Object({ current: Type.Number() }),
+     *     async handler(ctx, init) {
+     *       ctx.state.count += init.amount;
+     *       return Ok({ current: ctx.state.count });
+     *     }
+     *   }),
+     * })
+     *
+     * const MyService = MyServiceScaffold.finalize({
+     *   ...incrementProcedures,
+     *   // you can also directly define procedures here
+     * });
+     * ```
+     * This might be really handy if you have a very large service and you're
+     * wanting to split it over multiple files. You can define the scaffold
+     * in one file, and then import that scaffold in other files where you
+     * define procedures - and then finally import the scaffolds and your
+     * procedure objects in a final file where you finalize the scaffold into
+     * a service schema.
+     *
+     * The other way is to use it like in a builder pattern:
+     * ```ts
+     * const MyService = ServiceSchema
+     *   .scaffold({ initializeState: () => ({ count: 0 }) })
+     *   .finalize({
+     *     increment: Procedure.rpc({
+     *       requestInit: Type.Object({ amount: Type.Number() }),
+     *       responseData: Type.Object({ current: Type.Number() }),
+     *       async handler(ctx, init) {
+     *         ctx.state.count += init.amount;
+     *         return Ok({ current: ctx.state.count });
+     *       }
+     *     }),
+     *   })
+     * ```
+     * Depending on your preferences, this may be a more appealing way to define
+     * a schema versus using the {@link ServiceSchema.define} method.
+     */
+    static scaffold<State extends object>(
+      config: ServiceConfiguration<Context, State>,
+    ) {
+      return new ServiceScaffold(config);
+    }
 
-  static defineWithContext<
-    Context extends object = object,
-  >(): DefineWithContext<Context> {
-    return function (
+    /**
+     * Creates a new {@link ServiceSchema} with the given configuration and procedures.
+     *
+     * All procedures must be created with the {@link Procedure} constructors.
+     *
+     * NOTE: There is an overload that lets you just provide the procedures alone if your
+     * service has no state.
+     *
+     * @param config - The configuration for this service.
+     * @param procedures - The procedures for this service.
+     *
+     * @example
+     * ```
+     * const service = ServiceSchema.define(
+     *   { initializeState: () => ({ count: 0 }) },
+     *   {
+     *     increment: Procedure.rpc({
+     *       requestInit: Type.Object({ amount: Type.Number() }),
+     *       responseData: Type.Object({ current: Type.Number() }),
+     *       async handler(ctx, init) {
+     *         ctx.state.count += init.amount;
+     *         return Ok({ current: ctx.state.count });
+     *       }
+     *     }),
+     *   },
+     * );
+     * ```
+     */
+    static define<
+      State extends object,
+      Procedures extends BrandedProcedureMap<Context, State>,
+    >(
+      config: ServiceConfiguration<Context, State>,
+      procedures: Procedures,
+    ): ServiceSchema<
+      State,
+      { [K in keyof Procedures]: Unbranded<Procedures[K]> }
+    >;
+    /**
+     * Creates a new {@link ServiceSchema} with the given procedures.
+     *
+     * All procedures must be created with the {@link Procedure} constructors.
+     *
+     * NOTE: There is an overload that lets you provide configuration as well,
+     * if your service has extra configuration like a state.
+     *
+     * @param procedures - The procedures for this service.
+     *
+     * @example
+     * ```
+     * const service = ServiceSchema.define({
+     *   add: Procedure.rpc({
+     *     requestInit: Type.Object({ a: Type.Number(), b: Type.Number() }),
+     *     responseData: Type.Object({ result: Type.Number() }),
+     *     async handler(ctx, init) {
+     *       return Ok({ result: init.a + init.b });
+     *     }
+     *   }),
+     * });
+     */
+
+    static define<Procedures extends BrandedProcedureMap<Context, object>>(
+      procedures: Procedures,
+    ): ServiceSchema<
+      object,
+      { [K in keyof Procedures]: Unbranded<Procedures[K]> }
+    >;
+    // actual implementation
+    static define(
       configOrProcedures:
         | ServiceConfiguration<Context, object>
         | BrandedProcedureMap<Context, object>,
       maybeProcedures?: BrandedProcedureMap<Context, object>,
-    ): ServiceSchema<Context, object, ProcedureMap<Context>> {
+    ): ServiceSchema<object, ProcedureMap> {
       let config: ServiceConfiguration<Context, object>;
       let procedures: BrandedProcedureMap<Context, object>;
 
@@ -509,59 +466,75 @@ export class ServiceSchema<
       }
 
       return new ServiceSchema(config, procedures);
-    };
-  }
+    }
 
-  /**
-   * Serializes this schema's procedures into a plain object that is JSON compatible.
-   */
-  serialize(): SerializedServiceSchema {
-    return {
-      procedures: Object.fromEntries(
-        Object.entries(this.procedures).map(([procName, procDef]) => [
-          procName,
-          {
-            init: Strict(procDef.requestInit),
-            output: Strict(procDef.responseData),
-            errors: getSerializedProcErrors(procDef),
-            // Only add `description` field if the type declares it.
-            ...('description' in procDef
-              ? { description: procDef.description }
-              : {}),
-            type: procDef.type,
-            // Only add the `input` field if the type declares it.
-            ...('requestData' in procDef
-              ? {
-                  input: Strict(procDef.requestData),
-                }
-              : {}),
-          },
-        ]),
-      ),
-    };
-  }
+    /**
+     * Serializes this schema's procedures into a plain object that is JSON compatible.
+     */
+    serialize(): SerializedServiceSchema {
+      return {
+        procedures: Object.fromEntries(
+          Object.entries(this.procedures).map(([procName, procDef]) => [
+            procName,
+            {
+              init: Strict(procDef.requestInit),
+              output: Strict(procDef.responseData),
+              errors: getSerializedProcErrors(procDef),
+              // Only add `description` field if the type declares it.
+              ...('description' in procDef
+                ? { description: procDef.description }
+                : {}),
+              type: procDef.type,
+              // Only add the `input` field if the type declares it.
+              ...('requestData' in procDef
+                ? {
+                    input: Strict(procDef.requestData),
+                  }
+                : {}),
+            },
+          ]),
+        ),
+      };
+    }
 
-  // TODO remove once clients migrate to v2
-  /**
-   * Same as {@link ServiceSchema.serialize}, but with a format that is compatible with
-   * protocol v1. This is useful to be able to continue to generate schemas for older
-   * clients as they are still supported.
-   */
-  serializeV1Compat(): SerializedServiceSchemaProtocolv1 {
-    return {
-      procedures: Object.fromEntries(
-        Object.entries(this.procedures).map(
-          ([procName, procDef]): [
-            string,
-            SerializedProcedureSchemaProtocolv1,
-          ] => {
-            if (procDef.type === 'rpc' || procDef.type === 'subscription') {
+    // TODO remove once clients migrate to v2
+    /**
+     * Same as {@link ServiceSchema.serialize}, but with a format that is compatible with
+     * protocol v1. This is useful to be able to continue to generate schemas for older
+     * clients as they are still supported.
+     */
+    serializeV1Compat(): SerializedServiceSchemaProtocolv1 {
+      return {
+        procedures: Object.fromEntries(
+          Object.entries(this.procedures).map(
+            ([procName, procDef]): [
+              string,
+              SerializedProcedureSchemaProtocolv1,
+            ] => {
+              if (procDef.type === 'rpc' || procDef.type === 'subscription') {
+                return [
+                  procName,
+                  {
+                    // BACKWARDS COMPAT: map init to input for protocolv1
+                    // this is the only change needed to make it compatible.
+                    input: Strict(procDef.requestInit),
+                    output: Strict(procDef.responseData),
+                    errors: getSerializedProcErrors(procDef),
+                    // Only add `description` field if the type declares it.
+                    ...('description' in procDef
+                      ? { description: procDef.description }
+                      : {}),
+                    type: procDef.type,
+                  },
+                ];
+              }
+
+              // No backwards compatibility needed for upload and stream types, as having an `init`
+              // all the time is compatible with protocol v1.
               return [
                 procName,
                 {
-                  // BACKWARDS COMPAT: map init to input for protocolv1
-                  // this is the only change needed to make it compatible.
-                  input: Strict(procDef.requestInit),
+                  init: Strict(procDef.requestInit),
                   output: Strict(procDef.responseData),
                   errors: getSerializedProcErrors(procDef),
                   // Only add `description` field if the type declares it.
@@ -569,54 +542,38 @@ export class ServiceSchema<
                     ? { description: procDef.description }
                     : {}),
                   type: procDef.type,
+                  input: Strict(procDef.requestData),
                 },
               ];
-            }
-
-            // No backwards compatibility needed for upload and stream types, as having an `init`
-            // all the time is compatible with protocol v1.
-            return [
-              procName,
-              {
-                init: Strict(procDef.requestInit),
-                output: Strict(procDef.responseData),
-                errors: getSerializedProcErrors(procDef),
-                // Only add `description` field if the type declares it.
-                ...('description' in procDef
-                  ? { description: procDef.description }
-                  : {}),
-                type: procDef.type,
-                input: Strict(procDef.requestData),
-              },
-            ];
-          },
+            },
+          ),
         ),
-      ),
-    };
-  }
+      };
+    }
 
-  /**
-   * Instantiates this schema into a {@link Service} object.
-   *
-   * You probably don't need this, usually the River server will handle this
-   * for you.
-   */
-  instantiate(extendedContext: Context): Service<Context, State, Procedures> {
-    const state = this.initializeState(extendedContext);
-    const dispose = async () => {
-      await state[Symbol.asyncDispose]?.();
-      state[Symbol.dispose]?.();
-    };
+    /**
+     * Instantiates this schema into a {@link Service} object.
+     *
+     * You probably don't need this, usually the River server will handle this
+     * for you.
+     */
+    instantiate(extendedContext: Context): Service<Context, State, Procedures> {
+      const state = this.initializeState(extendedContext);
+      const dispose = async () => {
+        await state[Symbol.asyncDispose]?.();
+        state[Symbol.dispose]?.();
+      };
 
-    return Object.freeze({
-      state,
-      procedures: this.procedures,
-      [Symbol.asyncDispose]: dispose,
-    });
-  }
+      return Object.freeze({
+        state,
+        procedures: this.procedures,
+        [Symbol.asyncDispose]: dispose,
+      });
+    }
+  };
 }
 
-function getSerializedProcErrors(
+export function getSerializedProcErrors(
   procDef: AnyProcedure,
 ): ProcedureErrorSchemaType {
   if (
@@ -694,9 +651,7 @@ class ServiceScaffold<Context extends object, State extends object> {
    * });
    * ```
    */
-  finalize<T extends BrandedProcedureMap<Context, State>>(
-    procedures: T,
-  ): ServiceSchema<Context, State, { [K in keyof T]: Unbranded<T[K]> }> {
-    return ServiceSchema.define(this.config, procedures);
+  finalize<T extends BrandedProcedureMap<Context, State>>(procedures: T) {
+    return createServiceSchema<Context>().define(this.config, procedures);
   }
 }

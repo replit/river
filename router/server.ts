@@ -54,13 +54,13 @@ type StreamId = string;
  * @template Services - The type of services provided by the server.
  */
 export interface Server<
-  ServiceContext extends object,
-  Services extends AnyServiceSchemaMap<ServiceContext>,
+  Context extends object,
+  Services extends AnyServiceSchemaMap<Context>,
 > {
   /**
    * Services defined for this server.
    */
-  services: InstantiatedServiceSchemaMap<ServiceContext, Services>;
+  services: InstantiatedServiceSchemaMap<Context, Services>;
   /**
    * A set of stream ids that are currently open.
    */
@@ -69,7 +69,7 @@ export interface Server<
   close: () => Promise<void>;
 }
 
-interface StreamInitProps<ServiceContext> {
+interface StreamInitProps<Context> {
   // msg derived
   streamId: StreamId;
   procedureName: string;
@@ -81,7 +81,7 @@ interface StreamInitProps<ServiceContext> {
   procClosesWithInit: boolean;
 
   // server level
-  serviceContext: ServiceContext & { state: object };
+  serviceContext: Context & { state: object };
   procedure: AnyProcedure;
   sessionMetadata: ParsedMetadata;
 
@@ -104,12 +104,12 @@ interface ProcStream {
 }
 
 class RiverServer<
-  ServiceContext extends object,
-  Services extends AnyServiceSchemaMap<ServiceContext>,
-> implements Server<ServiceContext, Services>
+  Context extends object,
+  Services extends AnyServiceSchemaMap<Context>,
+> implements Server<Context, Services>
 {
   private transport: ServerTransport<Connection>;
-  private contextMap: Map<AnyService, ServiceContext & { state: object }>;
+  private contextMap: Map<AnyService, Context & { state: object }>;
   private log?: Logger;
   private middlewares: Array<Middleware>;
 
@@ -124,7 +124,7 @@ class RiverServer<
   private maxCancelledStreamTombstonesPerSession: number;
 
   public streams: Map<StreamId, ProcStream>;
-  public services: InstantiatedServiceSchemaMap<ServiceContext, Services>;
+  public services: InstantiatedServiceSchemaMap<Context, Services>;
 
   private unregisterTransportListeners: () => void;
 
@@ -132,7 +132,7 @@ class RiverServer<
     transport: ServerTransport<Connection>,
     services: Services,
     handshakeOptions?: ServerHandshakeOptions,
-    extendedContext?: ServiceContext,
+    extendedContext?: Context,
     maxCancelledStreamTombstonesPerSession = 200,
     middlewares: Array<Middleware> = [],
   ) {
@@ -140,12 +140,12 @@ class RiverServer<
     this.middlewares = middlewares;
 
     this.services = instances as InstantiatedServiceSchemaMap<
-      ServiceContext,
+      Context,
       Services
     >;
     this.contextMap = new Map();
 
-    extendedContext = extendedContext ?? ({} as ServiceContext);
+    extendedContext = extendedContext ?? ({} as Context);
 
     for (const [name, service] of Object.entries(services)) {
       const instance = service.instantiate(extendedContext);
@@ -252,10 +252,7 @@ class RiverServer<
     this.transport.addEventListener('transportStatus', handleTransportStatus);
   }
 
-  private createNewProcStream(
-    span: Span,
-    props: StreamInitProps<ServiceContext>,
-  ) {
+  private createNewProcStream(span: Span, props: StreamInitProps<Context>) {
     const {
       streamId,
       initialSession,
@@ -570,7 +567,7 @@ class RiverServer<
       closeReadable();
     }
 
-    const handlerContextWithSpan: ProcedureHandlerContext<object> = {
+    const handlerContextWithSpan: ProcedureHandlerContext<object, object> = {
       ...serviceContext,
       from: from,
       sessionId,
@@ -709,7 +706,7 @@ class RiverServer<
 
   private validateNewProcStream(
     initMessage: OpaqueTransportMessage,
-  ): StreamInitProps<ServiceContext> | null {
+  ): StreamInitProps<Context> | null {
     // lifetime safety: this is a sync function so this session cant transition
     // to another state before we finish
     const session = this.transport.sessions.get(initMessage.from);
@@ -1021,7 +1018,7 @@ function getStreamCloseBackwardsCompat(protocolVersion: ProtocolVersion) {
 }
 
 export interface MiddlewareContext
-  extends Readonly<Omit<ProcedureHandlerContext<unknown>, 'cancel'>> {
+  extends Readonly<Omit<ProcedureHandlerContext<unknown, unknown>, 'cancel'>> {
   readonly streamId: StreamId;
   readonly procedureName: string;
   readonly serviceName: string;
@@ -1049,14 +1046,14 @@ export type Middleware = (param: MiddlewareParam) => void;
  * @returns A promise that resolves to a server instance with the registered services.
  */
 export function createServer<
-  ServiceContext extends object,
-  Services extends AnyServiceSchemaMap<ServiceContext>,
+  Context extends object,
+  Services extends AnyServiceSchemaMap<Context>,
 >(
   transport: ServerTransport<Connection>,
   services: Services,
   providedServerOptions?: Partial<{
     handshakeOptions?: ServerHandshakeOptions;
-    extendedContext?: ServiceContext;
+    extendedContext?: Context;
     /**
      * Maximum number of cancelled streams to keep track of to avoid
      * cascading stream errors.
@@ -1067,7 +1064,7 @@ export function createServer<
      */
     middlewares?: Array<Middleware>;
   }>,
-): Server<ServiceContext, Services> {
+): Server<Context, Services> {
   return new RiverServer(
     transport,
     services,

@@ -1,5 +1,5 @@
 import { Type } from '@sinclair/typebox';
-import { ServiceSchema } from '../../router/services';
+import { createServiceSchema } from '../../router/services';
 import { Err, Ok, unwrapOrThrow } from '../../router/result';
 import { Observable } from '../observable/observable';
 import { Procedure } from '../../router';
@@ -10,7 +10,7 @@ export const EchoRequest = Type.Object({
 });
 export const EchoResponse = Type.Object({ response: Type.String() });
 
-const TestServiceScaffold = ServiceSchema.scaffold({
+const TestServiceScaffold = createServiceSchema().scaffold({
   initializeState: () => ({ count: 0 }),
 });
 
@@ -127,8 +127,10 @@ export const TestServiceSchema = TestServiceScaffold.finalize({
   ...testServiceProcedures,
 });
 
-export const OrderingServiceSchema = ServiceSchema.defineWithContext()(
-  { initializeState: () => ({ msgs: [] as Array<number> }) },
+export const OrderingServiceSchema = createServiceSchema().define(
+  {
+    initializeState: () => ({ msgs: [] as Array<number> }),
+  },
   {
     add: Procedure.rpc({
       requestInit: Type.Object({ n: Type.Number() }),
@@ -139,7 +141,6 @@ export const OrderingServiceSchema = ServiceSchema.defineWithContext()(
         return Ok({ n });
       },
     }),
-
     getAll: Procedure.rpc({
       requestInit: Type.Object({}),
       responseData: Type.Object({ msgs: Type.Array(Type.Number()) }),
@@ -150,7 +151,7 @@ export const OrderingServiceSchema = ServiceSchema.defineWithContext()(
   },
 );
 
-export const BinaryFileServiceSchema = ServiceSchema.defineWithContext()({
+export const BinaryFileServiceSchema = createServiceSchema().define({
   getFile: Procedure.rpc({
     requestInit: Type.Object({ file: Type.String() }),
     responseData: Type.Object({ contents: Type.Uint8Array() }),
@@ -165,7 +166,7 @@ export const BinaryFileServiceSchema = ServiceSchema.defineWithContext()({
 export const DIV_BY_ZERO = 'DIV_BY_ZERO';
 export const STREAM_ERROR = 'STREAM_ERROR';
 
-export const FallibleServiceSchema = ServiceSchema.defineWithContext()({
+export const FallibleServiceSchema = createServiceSchema().define({
   divide: Procedure.rpc({
     requestInit: Type.Object({ a: Type.Number(), b: Type.Number() }),
     responseData: Type.Object({ result: Type.Number() }),
@@ -232,7 +233,7 @@ export const FallibleServiceSchema = ServiceSchema.defineWithContext()({
   }),
 });
 
-export const SubscribableServiceSchema = ServiceSchema.defineWithContext()(
+export const SubscribableServiceSchema = createServiceSchema().define(
   { initializeState: () => ({ count: new Observable(0) }) },
   {
     add: Procedure.rpc({
@@ -259,7 +260,7 @@ export const SubscribableServiceSchema = ServiceSchema.defineWithContext()(
   },
 );
 
-export const UploadableServiceSchema = ServiceSchema.defineWithContext()({
+export const UploadableServiceSchema = createServiceSchema().define({
   addMultiple: Procedure.upload({
     requestInit: Type.Object({}),
     requestData: Type.Object({ n: Type.Number() }),
@@ -315,26 +316,7 @@ const RecursivePayload = Type.Recursive((This) =>
   }),
 );
 
-ServiceSchema.defineWithContext<{
-  db: string;
-}>()(
-  {
-    initializeState: () => ({ a: 'test' }),
-  },
-  {
-    add: Procedure.rpc({
-      requestInit: Type.Number(),
-      responseData: Type.Number(),
-      async handler({ ctx, reqInit }) {
-        ctx.db;
-
-        return Ok(reqInit + 1);
-      },
-    }),
-  },
-);
-
-export const NonObjectSchemas = ServiceSchema.defineWithContext()({
+export const NonObjectSchemas = createServiceSchema().define({
   add: Procedure.rpc({
     requestInit: Type.Number(),
     responseData: Type.Number(),
@@ -353,7 +335,7 @@ export const NonObjectSchemas = ServiceSchema.defineWithContext()({
 });
 
 export function SchemaWithDisposableState(dispose: () => void) {
-  return ServiceSchema.defineWithContext()(
+  return createServiceSchema().define(
     { initializeState: () => ({ [Symbol.dispose]: dispose }) },
     {
       add: Procedure.rpc({
@@ -370,7 +352,7 @@ export function SchemaWithDisposableState(dispose: () => void) {
 export function SchemaWithAsyncDisposableStateAndScaffold(
   dispose: () => Promise<void>,
 ) {
-  const scaffold = ServiceSchema.scaffold({
+  const scaffold = createServiceSchema().scaffold({
     initializeState: () => ({ [Symbol.asyncDispose]: dispose }),
   });
 

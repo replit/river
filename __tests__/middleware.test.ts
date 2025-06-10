@@ -12,7 +12,7 @@ import {
   createServer,
   Ok,
   Procedure,
-  ServiceSchema,
+  createServiceSchema,
   Middleware,
 } from '../router';
 import { createMockTransportNetwork } from '../testUtil/fixtures/mockTransport';
@@ -244,7 +244,7 @@ describe('middleware test', () => {
       readByMiddlewareSignal: boolean;
     }>();
 
-    const AsyncStorageSchemas = ServiceSchema.defineWithContext()({
+    const AsyncStorageSchemas = createServiceSchema().define({
       gimmeStore: Procedure.rpc({
         requestInit: Type.Object({}),
         responseData: Type.Object({}),

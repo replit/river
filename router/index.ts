@@ -9,7 +9,7 @@ export type {
   ProcType,
 } from './services';
 export {
-  ServiceSchema,
+  createServiceSchema,
   serializeSchema,
   SerializedServerSchema,
   SerializedServiceSchema,
