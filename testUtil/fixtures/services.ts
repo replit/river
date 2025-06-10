@@ -4,13 +4,15 @@ import { Err, Ok, unwrapOrThrow } from '../../router/result';
 import { Observable } from '../observable/observable';
 import { Procedure } from '../../router';
 
+const ServiceSchema = createServiceSchema();
+
 export const EchoRequest = Type.Object({
   msg: Type.String(),
   ignore: Type.Boolean(),
 });
 export const EchoResponse = Type.Object({ response: Type.String() });
 
-const TestServiceScaffold = createServiceSchema().scaffold({
+const TestServiceScaffold = ServiceSchema.scaffold({
   initializeState: () => ({ count: 0 }),
 });
 
@@ -127,7 +129,7 @@ export const TestServiceSchema = TestServiceScaffold.finalize({
   ...testServiceProcedures,
 });
 
-export const OrderingServiceSchema = createServiceSchema().define(
+export const OrderingServiceSchema = ServiceSchema.define(
   {
     initializeState: () => ({ msgs: [] as Array<number> }),
   },
@@ -151,7 +153,7 @@ export const OrderingServiceSchema = createServiceSchema().define(
   },
 );
 
-export const BinaryFileServiceSchema = createServiceSchema().define({
+export const BinaryFileServiceSchema = ServiceSchema.define({
   getFile: Procedure.rpc({
     requestInit: Type.Object({ file: Type.String() }),
     responseData: Type.Object({ contents: Type.Uint8Array() }),
@@ -166,7 +168,7 @@ export const BinaryFileServiceSchema = createServiceSchema().define({
 export const DIV_BY_ZERO = 'DIV_BY_ZERO';
 export const STREAM_ERROR = 'STREAM_ERROR';
 
-export const FallibleServiceSchema = createServiceSchema().define({
+export const FallibleServiceSchema = ServiceSchema.define({
   divide: Procedure.rpc({
     requestInit: Type.Object({ a: Type.Number(), b: Type.Number() }),
     responseData: Type.Object({ result: Type.Number() }),
@@ -233,7 +235,7 @@ export const FallibleServiceSchema = createServiceSchema().define({
   }),
 });
 
-export const SubscribableServiceSchema = createServiceSchema().define(
+export const SubscribableServiceSchema = ServiceSchema.define(
   { initializeState: () => ({ count: new Observable(0) }) },
   {
     add: Procedure.rpc({
@@ -260,7 +262,7 @@ export const SubscribableServiceSchema = createServiceSchema().define(
   },
 );
 
-export const UploadableServiceSchema = createServiceSchema().define({
+export const UploadableServiceSchema = ServiceSchema.define({
   addMultiple: Procedure.upload({
     requestInit: Type.Object({}),
     requestData: Type.Object({ n: Type.Number() }),
@@ -316,7 +318,7 @@ const RecursivePayload = Type.Recursive((This) =>
   }),
 );
 
-export const NonObjectSchemas = createServiceSchema().define({
+export const NonObjectSchemas = ServiceSchema.define({
   add: Procedure.rpc({
     requestInit: Type.Number(),
     responseData: Type.Number(),
@@ -335,7 +337,7 @@ export const NonObjectSchemas = createServiceSchema().define({
 });
 
 export function SchemaWithDisposableState(dispose: () => void) {
-  return createServiceSchema().define(
+  return ServiceSchema.define(
     { initializeState: () => ({ [Symbol.dispose]: dispose }) },
     {
       add: Procedure.rpc({
@@ -352,7 +354,7 @@ export function SchemaWithDisposableState(dispose: () => void) {
 export function SchemaWithAsyncDisposableStateAndScaffold(
   dispose: () => Promise<void>,
 ) {
-  const scaffold = createServiceSchema().scaffold({
+  const scaffold = ServiceSchema.scaffold({
     initializeState: () => ({ [Symbol.asyncDispose]: dispose }),
   });
 
