@@ -43,10 +43,10 @@ describe('should handle incompatabilities', async () => {
       testctx: Math.random().toString(),
     };
 
-    const serviceSchema = createServiceSchema<ExtendedContext>();
+    const ServiceSchema = createServiceSchema<ExtendedContext>();
 
     const services = {
-      testservice: serviceSchema.define({
+      testservice: ServiceSchema.define({
         testrpc: Procedure.rpc({
           requestInit: Type.Object({}),
           responseData: Type.String(),
@@ -82,9 +82,9 @@ describe('should handle incompatabilities', async () => {
       testctx: string;
     }
 
-    const serviceSchema = createServiceSchema<ExtendedContext>();
+    const ServiceSchema = createServiceSchema<ExtendedContext>();
 
-    const TestServiceScaffold = serviceSchema.scaffold({
+    const TestServiceScaffold = ServiceSchema.scaffold({
       initializeState: (ctx) => ({
         fromctx: ctx.testctx,
       }),
