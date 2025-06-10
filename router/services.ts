@@ -301,7 +301,9 @@ export function serializeSchema(
  *
  * When defining procedures, always use the {@link Procedure} constructors to create them.
  */
-export function createServiceSchema<Context extends object>() {
+export function createServiceSchema<Context extends object>(
+  context = {} as Context,
+) {
   return class ServiceSchema<
     State extends object,
     Procedures extends ProcedureMap<Context, State>,
@@ -387,7 +389,7 @@ export function createServiceSchema<Context extends object>() {
     static scaffold<State extends object>(
       config: ServiceConfiguration<Context, State>,
     ) {
-      return new ServiceScaffold(config);
+      return new ServiceScaffold(config, context);
     }
 
     /**
@@ -619,11 +621,14 @@ class ServiceScaffold<Context extends object, State extends object> {
    */
   protected readonly config: ServiceConfiguration<Context, State>;
 
+  protected readonly context: Context;
+
   /**
    * @param config - The configuration for this service.
    */
-  constructor(config: ServiceConfiguration<Context, State>) {
+  constructor(config: ServiceConfiguration<Context, State>, context: Context) {
     this.config = config;
+    this.context = context;
   }
 
   /**
@@ -669,6 +674,6 @@ class ServiceScaffold<Context extends object, State extends object> {
    * ```
    */
   finalize<T extends BrandedProcedureMap<Context, State>>(procedures: T) {
-    return createServiceSchema<Context>().define(this.config, procedures);
+    return createServiceSchema(this.context).define(this.config, procedures);
   }
 }

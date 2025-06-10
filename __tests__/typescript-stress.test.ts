@@ -12,7 +12,10 @@ import {
   ResultUnwrapOk,
   unwrapOrThrow,
 } from '../router/result';
-import { TestServiceSchema } from '../testUtil/fixtures/services';
+import {
+  testContext,
+  TestServiceWithContextSchema,
+} from '../testUtil/fixtures/services';
 import { readNextResult } from '../testUtil';
 import {
   createClientHandshakeOptions,
@@ -41,7 +44,7 @@ const responseError = Type.Union([
 ]);
 
 const fnBody = Procedure.rpc<
-  Record<string, never>,
+  typeof testContext,
   {
     db: string;
   },
@@ -64,7 +67,7 @@ const fnBody = Procedure.rpc<
 // typescript is limited to max 50 constraints
 // see: https://github.com/microsoft/TypeScript/issues/33541
 // we should be able to support more than that due to how we make services
-const StupidlyLargeServiceSchema = createServiceSchema().define({
+const StupidlyLargeServiceSchema = createServiceSchema(testContext).define({
   f1: fnBody,
   f2: fnBody,
   f3: fnBody,
@@ -185,13 +188,16 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
       x1: StupidlyLargeServiceSchema,
       y1: StupidlyLargeServiceSchema,
       z1: StupidlyLargeServiceSchema,
-      test: TestServiceSchema,
+      test: TestServiceWithContextSchema,
     };
 
     const mockTransportNetwork = createMockTransportNetwork();
     const server = createServer(
       mockTransportNetwork.getServerTransport(),
       services,
+      {
+        extendedContext: testContext,
+      },
     );
 
     const client = createClient<typeof services>(

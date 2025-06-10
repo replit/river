@@ -129,6 +129,38 @@ export const TestServiceSchema = TestServiceScaffold.finalize({
   ...testServiceProcedures,
 });
 
+export const testContext = {
+  logger: {
+    info: (message: string) => {
+      console.log(message);
+    },
+  },
+};
+
+const TestServiceWithContextScaffold = createServiceSchema(
+  testContext,
+).scaffold({
+  initializeState: () => ({ count: 0 }),
+});
+
+const testServiceWithContextProcedures =
+  TestServiceWithContextScaffold.procedures({
+    add: Procedure.rpc({
+      requestInit: Type.Object({ n: Type.Number() }),
+      responseData: Type.Object({ result: Type.Number() }),
+      async handler({ ctx, reqInit: { n } }) {
+        ctx.state.count += n;
+
+        return Ok({ result: ctx.state.count });
+      },
+    }),
+  });
+
+export const TestServiceWithContextSchema =
+  TestServiceWithContextScaffold.finalize({
+    ...testServiceWithContextProcedures,
+  });
+
 export const OrderingServiceSchema = ServiceSchema.define(
   {
     initializeState: () => ({ msgs: [] as Array<number> }),
