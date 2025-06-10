@@ -113,4 +113,41 @@ describe('should handle incompatabilities', async () => {
 
     expect(res).toEqual({ ok: true, payload: extendedContext.testctx });
   });
+
+  test('should be able to access context in procedures', async () => {
+    // setup
+    const clientTransport = getClientTransport('client');
+    const serverTransport = getServerTransport();
+
+    const extendedContext = { testctx: Math.random().toString() };
+
+    const ServiceSchema = createServiceSchema(extendedContext);
+
+    const services = {
+      testservice: ServiceSchema.define({
+        testrpc: Procedure.rpc({
+          requestInit: Type.Object({}),
+          responseData: Type.String(),
+          handler: async ({ ctx }) => {
+            return Ok(ctx.testctx);
+          },
+        }),
+      }),
+    };
+
+    createServer(serverTransport, services, {
+      extendedContext,
+    });
+    const client = createClient<typeof services>(
+      clientTransport,
+      serverTransport.clientId,
+    );
+    addPostTestCleanup(async () => {
+      await cleanupTransports([clientTransport, serverTransport]);
+    });
+
+    const res = await client.testservice.testrpc.rpc({});
+
+    expect(res).toEqual({ ok: true, payload: extendedContext.testctx });
+  });
 });
