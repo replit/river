@@ -135,6 +135,7 @@ export const testContext = {
       console.log(message);
     },
   },
+  add: (a: number, b: number) => a + b,
 };
 
 const TestServiceWithContextScaffold = createServiceSchema(

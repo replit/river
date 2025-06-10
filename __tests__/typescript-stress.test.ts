@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { assert, describe, expect, test } from 'vitest';
 import { Procedure } from '../router/procedures';
 import { createServiceSchema } from '../router/services';
 import { Type } from '@sinclair/typebox';
@@ -28,6 +28,7 @@ import { createMockTransportNetwork } from '../testUtil/fixtures/mockTransport';
 const requestData = Type.Union([
   Type.Object({ a: Type.Number() }),
   Type.Object({ c: Type.String() }),
+  Type.Object({ d: Type.Number() }),
 ]);
 const responseData = Type.Object({
   b: Type.Union([Type.Number(), Type.String()]),
@@ -55,9 +56,11 @@ const fnBody = Procedure.rpc<
   requestInit: requestData,
   responseData,
   responseError,
-  async handler({ reqInit }) {
+  async handler({ reqInit, ctx }) {
     if ('c' in reqInit) {
       return Ok({ b: reqInit.c });
+    } else if ('d' in reqInit) {
+      return Ok({ b: ctx.add(reqInit.d, reqInit.d) });
     } else {
       return Ok({ b: reqInit.a });
     }
@@ -210,6 +213,38 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
     expect(client.a.f2.rpc({ c: 'abc' })).toBeTruthy();
     expect(client.test.add.rpc({ n: 1 })).toBeTruthy();
     expect(client.z1.f40.rpc({ a: 1 })).toBeTruthy();
+    expect(server).toBeTruthy();
+    expect(client).toBeTruthy();
+  });
+
+  test('service with context should be able to access context in procedures', async () => {
+    const services = {
+      a: StupidlyLargeServiceSchema,
+      b: StupidlyLargeServiceSchema,
+    };
+    const mockTransportNetwork = createMockTransportNetwork();
+    const server = createServer(
+      mockTransportNetwork.getServerTransport(),
+      services,
+      {
+        extendedContext: testContext,
+      },
+    );
+
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
+      { eagerlyConnect: false },
+    );
+
+    const res = await client.a.f2.rpc({ d: 1 });
+    assert(res.ok);
+    expect(res.payload.b).toBe(2);
+
+    const res2 = await client.b.f11.rpc({ d: 10 });
+    assert(res2.ok);
+    expect(res2.payload.b).toBe(20);
+
     expect(server).toBeTruthy();
     expect(client).toBeTruthy();
   });
