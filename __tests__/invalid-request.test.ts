@@ -22,6 +22,8 @@ import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 import { nanoid } from 'nanoid';
 import { getClientSendFn } from '../testUtil';
 
+const ServiceSchema = createServiceSchema();
+
 describe('cancels invalid request', () => {
   const { transport, codec } = testMatrix()[0];
   const opts = { codec: codec.codec };
@@ -49,7 +51,7 @@ describe('cancels invalid request', () => {
     const serverId = serverTransport.clientId;
 
     const services = {
-      service: createServiceSchema().define({
+      service: ServiceSchema.define({
         stream: Procedure.stream({
           requestInit: Type.Object({}),
           requestData: Type.Object({}),
@@ -99,7 +101,7 @@ describe('cancels invalid request', () => {
     const serverId = serverTransport.clientId;
 
     const services = {
-      service: createServiceSchema().define({
+      service: ServiceSchema.define({
         stream: Procedure.stream({
           requestInit: Type.Object({}),
           requestData: Type.Object({}),
@@ -148,7 +150,7 @@ describe('cancels invalid request', () => {
     const serverId = serverTransport.clientId;
 
     const services = {
-      service: createServiceSchema().define({
+      service: ServiceSchema.define({
         stream: Procedure.stream({
           requestInit: Type.Object({}),
           requestData: Type.Object({}),
@@ -197,7 +199,7 @@ describe('cancels invalid request', () => {
     const serverId = serverTransport.clientId;
 
     const services = {
-      service: createServiceSchema().define({
+      service: ServiceSchema.define({
         stream: Procedure.stream({
           requestInit: Type.Object({}),
           requestData: Type.Object({}),
@@ -247,7 +249,7 @@ describe('cancels invalid request', () => {
     const serverId = serverTransport.clientId;
 
     const services = {
-      service: createServiceSchema().define({
+      service: ServiceSchema.define({
         stream: Procedure.stream({
           requestInit: Type.Object({}),
           requestData: Type.Object({}),
@@ -299,7 +301,7 @@ describe('cancels invalid request', () => {
     const serverId = serverTransport.clientId;
 
     const services = {
-      service: createServiceSchema().define({
+      service: ServiceSchema.define({
         stream: Procedure.stream({
           requestInit: Type.Object({ mustSendThings: Type.String() }),
           requestData: Type.Object({}),
@@ -349,7 +351,7 @@ describe('cancels invalid request', () => {
     const serverId = serverTransport.clientId;
 
     const services = {
-      service: createServiceSchema().define({
+      service: ServiceSchema.define({
         stream: Procedure.stream({
           requestInit: Type.Object({}),
           requestData: Type.Object({ mustSendThings: Type.String() }),
@@ -417,7 +419,7 @@ describe('cancels invalid request', () => {
     const serverId = serverTransport.clientId;
 
     const services = {
-      service: createServiceSchema().define({
+      service: ServiceSchema.define({
         rpc: Procedure.rpc({
           requestInit: Type.Object({}),
           responseData: Type.Object({}),
@@ -484,7 +486,7 @@ describe('cancels invalid request', () => {
     const serverId = serverTransport.clientId;
 
     const services = {
-      service: createServiceSchema().define({
+      service: ServiceSchema.define({
         stream: Procedure.stream({
           requestInit: Type.Object({}),
           requestData: Type.Object({}),
@@ -548,7 +550,7 @@ describe('cancels invalid request', () => {
     const serverId = serverTransport.clientId;
 
     const services = {
-      service: createServiceSchema().define({
+      service: ServiceSchema.define({
         rpc: Procedure.rpc({
           requestInit: Type.Object({}),
           responseData: Type.Object({}),
@@ -619,7 +621,7 @@ describe('cancels invalid request', () => {
       const serverId = serverTransport.clientId;
 
       const services = {
-        service: createServiceSchema().define({
+        service: ServiceSchema.define({
           stream: Procedure.stream({
             requestInit: Type.Object({}),
             requestData: Type.Object({}),
@@ -706,7 +708,7 @@ describe('cancels invalid request', () => {
       const serverId = serverTransport.clientId;
 
       const services = {
-        service: createServiceSchema().define({
+        service: ServiceSchema.define({
           stream: Procedure.stream({
             requestInit: Type.Object({}),
             requestData: Type.Object({}),
@@ -804,7 +806,7 @@ describe('cancels invalid request', () => {
       const serverId = serverTransport.clientId;
 
       const services = {
-        service: createServiceSchema().define({
+        service: ServiceSchema.define({
           stream: Procedure.stream({
             requestInit: Type.Object({}),
             requestData: Type.Object({}),

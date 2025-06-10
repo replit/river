@@ -40,6 +40,8 @@ function makeMockHandler<T extends ValidProcType>(
   >(impl);
 }
 
+const ServiceSchema = createServiceSchema();
+
 describe.each(testMatrix())(
   'clean handler cancellation ($transport.name transport, $codec.name codec)',
 
@@ -67,7 +69,7 @@ describe.each(testMatrix())(
 
         const signalReceiver = vi.fn<(sig: AbortSignal) => void>();
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             rpc: Procedure.rpc({
               requestInit: Type.Object({}),
               responseData: Type.Object({}),
@@ -111,7 +113,7 @@ describe.each(testMatrix())(
 
         const signalReceiver = vi.fn<(sig: AbortSignal) => void>();
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             stream: Procedure.stream({
               requestInit: Type.Object({}),
               requestData: Type.Object({}),
@@ -165,7 +167,7 @@ describe.each(testMatrix())(
 
         const signalReceiver = vi.fn<(sig: AbortSignal) => void>();
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             upload: Procedure.upload({
               requestInit: Type.Object({}),
               requestData: Type.Object({}),
@@ -215,7 +217,7 @@ describe.each(testMatrix())(
 
         const signalReceiver = vi.fn<(sig: AbortSignal) => void>();
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             subscribe: Procedure.subscription({
               requestInit: Type.Object({}),
               responseData: Type.Object({}),
@@ -280,7 +282,7 @@ describe.each(testMatrix())(
         const serverTransport = getServerTransport();
         const handler = makeMockHandler('rpc');
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             rpc: Procedure.rpc({
               requestInit: Type.Object({}),
               responseData: Type.Object({}),
@@ -338,7 +340,7 @@ describe.each(testMatrix())(
 
         const handler = makeMockHandler('stream');
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             stream: Procedure.stream({
               requestInit: Type.Object({}),
               requestData: Type.Object({}),
@@ -412,7 +414,7 @@ describe.each(testMatrix())(
 
         const handler = makeMockHandler('upload');
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             upload: Procedure.upload({
               requestInit: Type.Object({}),
               requestData: Type.Object({}),
@@ -483,7 +485,7 @@ describe.each(testMatrix())(
 
         const handler = makeMockHandler('subscription');
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             subscribe: Procedure.subscription({
               requestInit: Type.Object({}),
               responseData: Type.Object({}),
@@ -570,7 +572,7 @@ describe.each(testMatrix())(
 
         const handler = makeMockHandler('rpc');
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             rpc: Procedure.rpc({
               requestInit: Type.Object({}),
               responseData: Type.Object({}),
@@ -624,7 +626,7 @@ describe.each(testMatrix())(
 
         const handler = makeMockHandler('stream');
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             stream: Procedure.stream({
               requestInit: Type.Object({}),
               requestData: Type.Object({}),
@@ -684,7 +686,7 @@ describe.each(testMatrix())(
 
         const handler = makeMockHandler('upload');
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             upload: Procedure.upload({
               requestInit: Type.Object({}),
               requestData: Type.Object({}),
@@ -743,7 +745,7 @@ describe.each(testMatrix())(
 
         const handler = makeMockHandler('subscription');
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             subscribe: Procedure.subscription({
               requestInit: Type.Object({}),
               responseData: Type.Object({}),
@@ -827,7 +829,7 @@ describe.each(testMatrix())(
         const rejectable = createRejectable();
         const handler = makeMockHandler('rpc', () => rejectable.promise);
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             rpc: Procedure.rpc({
               requestInit: Type.Object({}),
               responseData: Type.Object({}),
@@ -880,7 +882,7 @@ describe.each(testMatrix())(
         const rejectable = createRejectable();
         const handler = makeMockHandler('stream', () => rejectable.promise);
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             stream: Procedure.stream({
               requestInit: Type.Object({}),
               requestData: Type.Object({}),
@@ -942,7 +944,7 @@ describe.each(testMatrix())(
         const rejectable = createRejectable();
         const handler = makeMockHandler('upload', () => rejectable.promise);
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             upload: Procedure.upload({
               requestInit: Type.Object({}),
               requestData: Type.Object({}),
@@ -1007,7 +1009,7 @@ describe.each(testMatrix())(
           () => rejectable.promise,
         );
         const services = {
-          service: createServiceSchema().define({
+          service: ServiceSchema.define({
             subscribe: Procedure.subscription({
               requestInit: Type.Object({}),
               responseData: Type.Object({}),
