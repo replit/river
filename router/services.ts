@@ -266,25 +266,42 @@ export function serializeSchema(
   return schema;
 }
 
+/**
+ * Creates a ServiceSchema class that can be used to define services with their initial state and procedures.
+ * This is a factory function that returns a ServiceSchema class constructor bound to the specified Context type.
+ *
+ * @template Context - The context type that will be available to all procedures in services created with this schema.
+ * @returns A ServiceSchema class constructor with static methods for defining services.
+ *
+ * @example
+ * ```ts
+ * // Create a ServiceSchema class for your context type
+ * const ServiceSchema = createServiceSchema<{ userId: string }>();
+ *
+ * // Define a simple stateless service
+ * const mathService = ServiceSchema.define({
+ *   add: Procedure.rpc({
+ *     requestInit: Type.Object({ a: Type.Number(), b: Type.Number() }),
+ *     responseData: Type.Object({ result: Type.Number() }),
+ *     async handler(ctx, init) {
+ *       return Ok({ result: init.a + init.b });
+ *     }
+ *   }),
+ * });
+ * ```
+ *
+ * There are two main ways to define services with the returned ServiceSchema class:
+ *
+ * 1. **ServiceSchema.define()** - Takes a configuration and procedures directly.
+ *    Use this for smaller services or when you want to define everything in one place.
+ *
+ * 2. **ServiceSchema.scaffold()** - Creates a scaffold that can be used to define
+ *    procedures separately from the configuration. Use this for larger services or
+ *    when you want to organize procedures across multiple files.
+ *
+ * When defining procedures, always use the {@link Procedure} constructors to create them.
+ */
 export function createServiceSchema<Context extends object>() {
-  /**
-   * The schema for a {@link Service}. This is used to define a service, specifically
-   * its initial state and procedures.
-   *
-   * There are two ways to define a service:
-   * 1. the {@link ServiceSchema.define} static method, which takes a configuration and
-   *    a list of procedures directly. Use this to ergonomically define a service schema
-   *    in one go. Good for smaller services, especially if they're stateless.
-   * 2. the {@link ServiceSchema.scaffold} static method, which creates a scaffold that
-   *    can be used to define procedures separately from the configuration. Use this to
-   *    better organize your service's definition, especially if it's a large service.
-   *    You can also use it in a builder pattern to define the service in a more
-   *    fluent way.
-   *
-   * See the static methods for more information and examples.
-   *
-   * When defining procedures, use the {@link Procedure} constructors to create them.
-   */
   return class ServiceSchema<
     State extends object,
     Procedures extends ProcedureMap<Context, State>,
