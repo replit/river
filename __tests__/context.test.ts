@@ -36,14 +36,11 @@ describe('should handle incompatabilities', async () => {
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
 
-    interface ExtendedContext {
-      testctx: string;
-    }
-    const extendedContext: ExtendedContext = {
+    const extendedContext = {
       testctx: Math.random().toString(),
     };
 
-    const ServiceSchema = createServiceSchema<ExtendedContext>();
+    const ServiceSchema = createServiceSchema(extendedContext);
 
     const services = {
       testservice: ServiceSchema.define({
@@ -78,11 +75,9 @@ describe('should handle incompatabilities', async () => {
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
 
-    interface ExtendedContext {
-      testctx: string;
-    }
+    const extendedContext = { testctx: Math.random().toString() };
 
-    const ServiceSchema = createServiceSchema<ExtendedContext>();
+    const ServiceSchema = createServiceSchema(extendedContext);
 
     const TestServiceScaffold = ServiceSchema.scaffold({
       initializeState: (ctx) => ({
@@ -103,7 +98,6 @@ describe('should handle incompatabilities', async () => {
       }),
     };
 
-    const extendedContext = { testctx: Math.random().toString() };
     createServer(serverTransport, services, {
       extendedContext,
     });
