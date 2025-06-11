@@ -70,7 +70,9 @@ const fnBody = Procedure.rpc<
 // typescript is limited to max 50 constraints
 // see: https://github.com/microsoft/TypeScript/issues/33541
 // we should be able to support more than that due to how we make services
-const StupidlyLargeServiceSchema = createServiceSchema(testContext).define({
+const StupidlyLargeServiceSchema = createServiceSchema<
+  typeof testContext
+>().define({
   f1: fnBody,
   f2: fnBody,
   f3: fnBody,

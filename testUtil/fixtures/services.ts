@@ -138,9 +138,9 @@ export const testContext = {
   add: (a: number, b: number) => a + b,
 };
 
-const TestServiceWithContextScaffold = createServiceSchema(
-  testContext,
-).scaffold({
+const TestServiceWithContextScaffold = createServiceSchema<
+  typeof testContext
+>().scaffold({
   initializeState: () => ({ count: 0 }),
 });
 

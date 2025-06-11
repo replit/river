@@ -40,7 +40,7 @@ describe('should handle incompatabilities', async () => {
       testctx: Math.random().toString(),
     };
 
-    const ServiceSchema = createServiceSchema(extendedContext);
+    const ServiceSchema = createServiceSchema<typeof extendedContext>();
 
     const services = {
       testservice: ServiceSchema.define({
@@ -77,7 +77,7 @@ describe('should handle incompatabilities', async () => {
 
     const extendedContext = { testctx: Math.random().toString() };
 
-    const ServiceSchema = createServiceSchema(extendedContext);
+    const ServiceSchema = createServiceSchema<typeof extendedContext>();
 
     const TestServiceScaffold = ServiceSchema.scaffold({
       initializeState: (ctx) => ({
@@ -121,7 +121,7 @@ describe('should handle incompatabilities', async () => {
 
     const extendedContext = { testctx: Math.random().toString() };
 
-    const ServiceSchema = createServiceSchema(extendedContext);
+    const ServiceSchema = createServiceSchema<typeof extendedContext>();
 
     const services = {
       testservice: ServiceSchema.define({

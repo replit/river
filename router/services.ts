@@ -287,6 +287,13 @@ export function serializeSchema(
  *       return Ok({ result: init.a + init.b });
  *     }
  *   }),
+ *   getUserId: Procedure.rpc({
+ *     requestInit: Type.Object({}),
+ *     responseData: Type.Object({ id: Type.String() }),
+ *     async handler(ctx) {
+ *       return Ok({ id: ctx.userId });
+ *     }
+ *   }),
  * });
  * ```
  *
@@ -301,9 +308,7 @@ export function serializeSchema(
  *
  * When defining procedures, always use the {@link Procedure} constructors to create them.
  */
-export function createServiceSchema<Context extends object>(
-  context = {} as Context,
-) {
+export function createServiceSchema<Context extends object = object>() {
   return class ServiceSchema<
     State extends object,
     Procedures extends ProcedureMap<Context, State>,
@@ -389,7 +394,7 @@ export function createServiceSchema<Context extends object>(
     static scaffold<State extends object>(
       config: ServiceConfiguration<Context, State>,
     ) {
-      return new ServiceScaffold(config, context);
+      return new ServiceScaffold(config);
     }
 
     /**
@@ -621,14 +626,11 @@ class ServiceScaffold<Context extends object, State extends object> {
    */
   protected readonly config: ServiceConfiguration<Context, State>;
 
-  protected readonly context: Context;
-
   /**
    * @param config - The configuration for this service.
    */
-  constructor(config: ServiceConfiguration<Context, State>, context: Context) {
+  constructor(config: ServiceConfiguration<Context, State>) {
     this.config = config;
-    this.context = context;
   }
 
   /**
@@ -674,6 +676,6 @@ class ServiceScaffold<Context extends object, State extends object> {
    * ```
    */
   finalize<T extends BrandedProcedureMap<Context, State>>(procedures: T) {
-    return createServiceSchema(this.context).define(this.config, procedures);
+    return createServiceSchema<Context>().define(this.config, procedures);
   }
 }
