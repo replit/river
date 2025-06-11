@@ -398,7 +398,7 @@ describe('cancels invalid request', () => {
             firstValidationErrors: expect.arrayContaining([
               {
                 path: '/mustSendThings',
-                message: 'Required property',
+                message: 'Expected required property',
               },
               { path: '/mustSendThings', message: 'Expected string' },
             ]),
@@ -600,7 +600,7 @@ describe('cancels invalid request', () => {
           firstValidationErrors: expect.arrayContaining([
             {
               path: '/newRequiredField',
-              message: 'Required property',
+              message: 'Expected required property',
             },
             { path: '/newRequiredField', message: 'Expected string' },
           ]),
