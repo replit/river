@@ -274,6 +274,10 @@ function handleProc(
   procedureName: string,
   abortSignal?: AbortSignal,
 ): AnyProcReturn {
+  if (transport.getStatus() === 'closed') {
+    return getPreClosedReturnForProc(procType);
+  }
+
   const session =
     transport.sessions.get(serverId) ??
     transport.createUnconnectedSession(serverId);
@@ -493,6 +497,46 @@ function handleProc(
     reqWritable.close();
   }
 
+  return getReturnForProc(procType, resReadable, reqWritable, transport.log);
+}
+
+/**
+ * We want to make sure all the return types are valid even if the transport is closed.
+ * So we return a result that is already closed with `UNEXPECTED_DISCONNECT_CODE`.
+ */
+function getPreClosedReturnForProc(procType: ValidProcType): AnyProcReturn {
+  const readable = new ReadableImpl<unknown, Static<BaseErrorSchemaType>>();
+  const err = Err({
+    code: UNEXPECTED_DISCONNECT_CODE,
+    message: `transport is closed`,
+  });
+
+  readable._pushValue(err);
+  readable._triggerClose();
+
+  const writable = new WritableImpl<Static<PayloadType>>({
+    writeCb: () => {
+      // noop
+    },
+    closeCb: () => {
+      // noop
+    },
+  });
+
+  writable.close();
+
+  return getReturnForProc(procType, readable, writable);
+}
+
+/**
+ * Given a proc type, returns the appropriate return type for the proc.
+ */
+function getReturnForProc(
+  procType: ValidProcType,
+  resReadable: ReadableImpl<unknown, Static<BaseErrorSchemaType>>,
+  reqWritable: WritableImpl<Static<PayloadType>>,
+  log?: Logger,
+): AnyProcReturn {
   if (procType === 'subscription') {
     return {
       resReadable: resReadable,
@@ -500,7 +544,7 @@ function handleProc(
   }
 
   if (procType === 'rpc') {
-    return getSingleMessage(resReadable, transport.log);
+    return getSingleMessage(resReadable, log);
   }
 
   if (procType === 'upload') {
@@ -519,7 +563,7 @@ function handleProc(
           reqWritable.close();
         }
 
-        return getSingleMessage(resReadable, transport.log);
+        return getSingleMessage(resReadable, log);
       },
     };
   }
