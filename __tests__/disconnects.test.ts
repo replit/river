@@ -313,3 +313,170 @@ describe.each(testMatrix())(
     });
   },
 );
+
+describe.each(testMatrix())(
+  'procedures should handle calling a procedure on a closed transport ($transport.name transport, $codec.name codec)',
+  async ({ transport, codec }) => {
+    const opts = { codec: codec.codec };
+
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
+    let getClientTransport: TestSetupHelpers['getClientTransport'];
+    let getServerTransport: TestSetupHelpers['getServerTransport'];
+    beforeEach(async () => {
+      const setup = await transport.setup({ client: opts, server: opts });
+      getClientTransport = setup.getClientTransport;
+      getServerTransport = setup.getServerTransport;
+
+      return async () => {
+        await postTestCleanup();
+        await setup.cleanup();
+      };
+    });
+
+    test('rpc', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = { test: TestServiceSchema };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      clientTransport.close();
+
+      const result = await client.test.add.rpc({ n: 3 });
+      expect(result).toStrictEqual({
+        ok: false,
+        payload: {
+          code: UNEXPECTED_DISCONNECT_CODE,
+          message: 'transport is closed',
+        },
+      });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('stream', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = { test: TestServiceSchema };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      clientTransport.close();
+
+      const { reqWritable, resReadable } = client.test.echo.stream({});
+
+      const result = await readNextResult(resReadable);
+
+      expect(result).toStrictEqual({
+        ok: false,
+        payload: {
+          code: UNEXPECTED_DISCONNECT_CODE,
+          message: 'transport is closed',
+        },
+      });
+
+      expect(await isReadableDone(resReadable)).toEqual(true);
+
+      expect(reqWritable.isWritable()).toEqual(false);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('subscription', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = { test: TestServiceSchema };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      clientTransport.close();
+
+      const { resReadable } = client.test.unimplementedSubscription.subscribe(
+        {},
+      );
+
+      const result = await readNextResult(resReadable);
+      expect(result).toStrictEqual({
+        ok: false,
+        payload: {
+          code: UNEXPECTED_DISCONNECT_CODE,
+          message: 'transport is closed',
+        },
+      });
+
+      expect(await isReadableDone(resReadable)).toEqual(true);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('upload', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = { test: TestServiceSchema };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      clientTransport.close();
+
+      const { reqWritable, finalize } = client.test.unimplementedUpload.upload(
+        {},
+      );
+
+      expect(reqWritable.isWritable()).toEqual(false);
+
+      await expect(finalize()).resolves.toMatchObject({
+        ok: false,
+        payload: {
+          code: UNEXPECTED_DISCONNECT_CODE,
+          message: 'transport is closed',
+        },
+      });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+  },
+);
