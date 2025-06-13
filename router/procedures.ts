@@ -52,6 +52,7 @@ export type Cancellable<T> = T | Static<typeof CancelErrorSchema>;
 export interface RpcProcedure<
   Context,
   State,
+  ParsedMetadata,
   RequestInit extends PayloadType,
   ResponseData extends PayloadType,
   ResponseErr extends ProcedureErrorSchemaType,
@@ -62,7 +63,7 @@ export interface RpcProcedure<
   responseError: ResponseErr;
   description?: string;
   handler(param: {
-    ctx: ProcedureHandlerContext<State, Context>;
+    ctx: ProcedureHandlerContext<State, Context, ParsedMetadata>;
     reqInit: Static<RequestInit>;
   }): Promise<Result<Static<ResponseData>, Cancellable<Static<ResponseErr>>>>;
 }
@@ -80,6 +81,7 @@ export interface RpcProcedure<
 export interface UploadProcedure<
   Context,
   State,
+  ParsedMetadata,
   RequestInit extends PayloadType,
   RequestData extends PayloadType,
   ResponseData extends PayloadType,
@@ -92,7 +94,7 @@ export interface UploadProcedure<
   responseError: ResponseErr;
   description?: string;
   handler(param: {
-    ctx: ProcedureHandlerContext<State, Context>;
+    ctx: ProcedureHandlerContext<State, Context, ParsedMetadata>;
     reqInit: Static<RequestInit>;
     reqReadable: Readable<
       Static<RequestData>,
@@ -112,6 +114,7 @@ export interface UploadProcedure<
 export interface SubscriptionProcedure<
   Context,
   State,
+  ParsedMetadata,
   RequestInit extends PayloadType,
   ResponseData extends PayloadType,
   ResponseErr extends ProcedureErrorSchemaType,
@@ -122,7 +125,7 @@ export interface SubscriptionProcedure<
   responseError: ResponseErr;
   description?: string;
   handler(param: {
-    ctx: ProcedureHandlerContext<State, Context>;
+    ctx: ProcedureHandlerContext<State, Context, ParsedMetadata>;
     reqInit: Static<RequestInit>;
     resWritable: Writable<
       Result<Static<ResponseData>, Cancellable<Static<ResponseErr>>>
@@ -143,6 +146,7 @@ export interface SubscriptionProcedure<
 export interface StreamProcedure<
   Context,
   State,
+  ParsedMetadata,
   RequestInit extends PayloadType,
   RequestData extends PayloadType,
   ResponseData extends PayloadType,
@@ -155,7 +159,7 @@ export interface StreamProcedure<
   responseError: ResponseErr;
   description?: string;
   handler(param: {
-    ctx: ProcedureHandlerContext<State, Context>;
+    ctx: ProcedureHandlerContext<State, Context, ParsedMetadata>;
     reqInit: Static<RequestInit>;
     reqReadable: Readable<
       Static<RequestData>,
@@ -185,6 +189,7 @@ export interface StreamProcedure<
 export type Procedure<
   Context,
   State,
+  ParsedMetadata,
   Ty extends ValidProcType,
   RequestInit extends PayloadType,
   RequestData extends PayloadType | null,
@@ -195,6 +200,7 @@ export type Procedure<
     ? UploadProcedure<
         Context,
         State,
+        ParsedMetadata,
         RequestInit,
         RequestData,
         ResponseData,
@@ -204,6 +210,7 @@ export type Procedure<
     ? StreamProcedure<
         Context,
         State,
+        ParsedMetadata,
         RequestInit,
         RequestData,
         ResponseData,
@@ -211,11 +218,19 @@ export type Procedure<
       >
     : never
   : Ty extends 'rpc'
-  ? RpcProcedure<Context, State, RequestInit, ResponseData, ResponseErr>
+  ? RpcProcedure<
+      Context,
+      State,
+      ParsedMetadata,
+      RequestInit,
+      ResponseData,
+      ResponseErr
+    >
   : Ty extends 'subscription'
   ? SubscriptionProcedure<
       Context,
       State,
+      ParsedMetadata,
       RequestInit,
       ResponseData,
       ResponseErr
@@ -228,9 +243,14 @@ export type Procedure<
  * @template State - The context state object. You can provide this to constrain
  *                   the type of procedures.
  */
-export type AnyProcedure<Context = object, State = object> = Procedure<
+export type AnyProcedure<
+  Context = object,
+  State = object,
+  ParsedMetadata = object,
+> = Procedure<
   Context,
   State,
+  ParsedMetadata,
   ValidProcType,
   PayloadType,
   PayloadType | null,
@@ -244,10 +264,11 @@ export type AnyProcedure<Context = object, State = object> = Procedure<
  * @template State - The context state object. You can provide this to constrain
  *                   the type of procedures.
  */
-export type ProcedureMap<Context = object, State = object> = Record<
-  string,
-  AnyProcedure<Context, State>
->;
+export type ProcedureMap<
+  Context = object,
+  State = object,
+  ParsedMetadata = object,
+> = Record<string, AnyProcedure<Context, State, ParsedMetadata>>;
 
 // typescript is funky so with these upcoming procedure constructors, the overloads
 // which handle the `init` case _must_ come first, otherwise the `init` property
@@ -260,6 +281,7 @@ export type ProcedureMap<Context = object, State = object> = Record<
 function rpc<
   Context,
   State,
+  ParsedMetadata,
   RequestInit extends PayloadType,
   ResponseData extends PayloadType,
 >(def: {
@@ -270,16 +292,27 @@ function rpc<
   handler: RpcProcedure<
     Context,
     State,
+    ParsedMetadata,
     RequestInit,
     ResponseData,
     TNever
   >['handler'];
-}): Branded<RpcProcedure<Context, State, RequestInit, ResponseData, TNever>>;
+}): Branded<
+  RpcProcedure<
+    Context,
+    State,
+    ParsedMetadata,
+    RequestInit,
+    ResponseData,
+    TNever
+  >
+>;
 
 // signature: explicit errors
 function rpc<
   Context,
   State,
+  ParsedMetadata,
   RequestInit extends PayloadType,
   ResponseData extends PayloadType,
   ResponseErr extends ProcedureErrorSchemaType,
@@ -291,12 +324,20 @@ function rpc<
   handler: RpcProcedure<
     Context,
     State,
+    ParsedMetadata,
     RequestInit,
     ResponseData,
     ResponseErr
   >['handler'];
 }): Branded<
-  RpcProcedure<Context, State, RequestInit, ResponseData, ResponseErr>
+  RpcProcedure<
+    Context,
+    State,
+    ParsedMetadata,
+    RequestInit,
+    ResponseData,
+    ResponseErr
+  >
 >;
 
 // implementation
@@ -312,6 +353,7 @@ function rpc({
   responseError?: ProcedureErrorSchemaType;
   description?: string;
   handler: RpcProcedure<
+    object,
     object,
     object,
     PayloadType,
@@ -336,6 +378,7 @@ function rpc({
 function upload<
   Context,
   State,
+  ParsedMetadata,
   RequestInit extends PayloadType,
   RequestData extends PayloadType,
   ResponseData extends PayloadType,
@@ -348,6 +391,7 @@ function upload<
   handler: UploadProcedure<
     Context,
     State,
+    ParsedMetadata,
     RequestInit,
     RequestData,
     ResponseData,
@@ -357,6 +401,7 @@ function upload<
   UploadProcedure<
     Context,
     State,
+    ParsedMetadata,
     RequestInit,
     RequestData,
     ResponseData,
@@ -368,6 +413,7 @@ function upload<
 function upload<
   Context,
   State,
+  ParsedMetadata,
   RequestInit extends PayloadType,
   RequestData extends PayloadType,
   ResponseData extends PayloadType,
@@ -381,6 +427,7 @@ function upload<
   handler: UploadProcedure<
     Context,
     State,
+    ParsedMetadata,
     RequestInit,
     RequestData,
     ResponseData,
@@ -390,6 +437,7 @@ function upload<
   UploadProcedure<
     Context,
     State,
+    ParsedMetadata,
     RequestInit,
     RequestData,
     ResponseData,
@@ -412,6 +460,7 @@ function upload({
   responseError?: ProcedureErrorSchemaType;
   description?: string;
   handler: UploadProcedure<
+    object,
     object,
     object,
     PayloadType,
@@ -438,6 +487,7 @@ function upload({
 function subscription<
   Context,
   State,
+  ParsedMetadata,
   RequestInit extends PayloadType,
   ResponseData extends PayloadType,
 >(def: {
@@ -448,18 +498,27 @@ function subscription<
   handler: SubscriptionProcedure<
     Context,
     State,
+    ParsedMetadata,
     RequestInit,
     ResponseData,
     TNever
   >['handler'];
 }): Branded<
-  SubscriptionProcedure<Context, State, RequestInit, ResponseData, TNever>
+  SubscriptionProcedure<
+    Context,
+    State,
+    ParsedMetadata,
+    RequestInit,
+    ResponseData,
+    TNever
+  >
 >;
 
 // signature: explicit errors
 function subscription<
   Context,
   State,
+  ParsedMetadata,
   RequestInit extends PayloadType,
   ResponseData extends PayloadType,
   ResponseErr extends ProcedureErrorSchemaType,
@@ -471,12 +530,20 @@ function subscription<
   handler: SubscriptionProcedure<
     Context,
     State,
+    ParsedMetadata,
     RequestInit,
     ResponseData,
     ResponseErr
   >['handler'];
 }): Branded<
-  SubscriptionProcedure<Context, State, RequestInit, ResponseData, ResponseErr>
+  SubscriptionProcedure<
+    Context,
+    State,
+    ParsedMetadata,
+    RequestInit,
+    ResponseData,
+    ResponseErr
+  >
 >;
 
 // implementation
@@ -492,6 +559,7 @@ function subscription({
   responseError?: ProcedureErrorSchemaType;
   description?: string;
   handler: SubscriptionProcedure<
+    object,
     object,
     object,
     PayloadType,
@@ -516,6 +584,7 @@ function subscription({
 function stream<
   Context,
   State,
+  ParsedMetadata,
   RequestInit extends PayloadType,
   RequestData extends PayloadType,
   ResponseData extends PayloadType,
@@ -528,6 +597,7 @@ function stream<
   handler: StreamProcedure<
     Context,
     State,
+    ParsedMetadata,
     RequestInit,
     RequestData,
     ResponseData,
@@ -537,6 +607,7 @@ function stream<
   StreamProcedure<
     Context,
     State,
+    ParsedMetadata,
     RequestInit,
     RequestData,
     ResponseData,
@@ -548,6 +619,7 @@ function stream<
 function stream<
   Context,
   State,
+  ParsedMetadata,
   RequestInit extends PayloadType,
   RequestData extends PayloadType,
   ResponseData extends PayloadType,
@@ -561,6 +633,7 @@ function stream<
   handler: StreamProcedure<
     Context,
     State,
+    ParsedMetadata,
     RequestInit,
     RequestData,
     ResponseData,
@@ -570,6 +643,7 @@ function stream<
   StreamProcedure<
     Context,
     State,
+    ParsedMetadata,
     RequestInit,
     RequestData,
     ResponseData,
@@ -592,6 +666,7 @@ function stream({
   responseError?: ProcedureErrorSchemaType;
   description?: string;
   handler: StreamProcedure<
+    object,
     object,
     object,
     PayloadType,

@@ -20,6 +20,7 @@ import { TransportClientId } from '../../transport/message';
 import { ClientTransport } from '../../transport/client';
 import { Connection } from '../../transport/connection';
 import { ServerTransport } from '../../transport/server';
+import { TSchema } from '@sinclair/typebox';
 
 export type ValidTransports = 'ws' | 'mock';
 
@@ -33,10 +34,13 @@ export interface TestSetupHelpers {
     id: TransportClientId,
     handshakeOptions?: ClientHandshakeOptions,
   ) => ClientTransport<Connection>;
-  getServerTransport: (
+  getServerTransport: <
+    MetadataSchema extends TSchema = TSchema,
+    ParsedMetadata extends object = object,
+  >(
     id?: TransportClientId,
-    handshakeOptions?: ServerHandshakeOptions,
-  ) => ServerTransport<Connection>;
+    handshakeOptions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>,
+  ) => ServerTransport<Connection, MetadataSchema, ParsedMetadata>;
   simulatePhantomDisconnect: () => void;
   restartServer: () => Promise<void>;
   cleanup: () => Promise<void> | void;
@@ -56,7 +60,8 @@ export const transports: Array<TransportMatrixEntry> = [
       let wss = createWebSocketServer(server);
 
       const transports: Array<
-        WebSocketClientTransport | WebSocketServerTransport
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        WebSocketClientTransport | WebSocketServerTransport<any, any>
       > = [];
 
       return {
@@ -91,12 +96,19 @@ export const transports: Array<TransportMatrixEntry> = [
 
           return clientTransport;
         },
-        getServerTransport(id = 'SERVER', handshakeOptions) {
-          const serverTransport = new WebSocketServerTransport(
-            wss,
-            id,
-            opts?.server,
-          );
+        getServerTransport: <
+          MetadataSchema extends TSchema,
+          ParsedMetadata extends object,
+        >(
+          id = 'SERVER',
+          handshakeOptions:
+            | ServerHandshakeOptions<MetadataSchema, ParsedMetadata>
+            | undefined,
+        ) => {
+          const serverTransport = new WebSocketServerTransport<
+            MetadataSchema,
+            ParsedMetadata
+          >(wss, id, opts?.server);
 
           serverTransport.bindLogger((msg, ctx, level) => {
             if (ctx?.tags?.includes('invariant-violation')) {
@@ -113,7 +125,11 @@ export const transports: Array<TransportMatrixEntry> = [
 
           transports.push(serverTransport);
 
-          return serverTransport as ServerTransport<Connection>;
+          return serverTransport as ServerTransport<
+            Connection,
+            MetadataSchema,
+            ParsedMetadata
+          >;
         },
         async restartServer() {
           for (const transport of transports) {

@@ -29,7 +29,6 @@ import {
   ProvidedClientTransportOptions,
   ProvidedTransportOptions,
 } from './options';
-import { ParsedMetadata } from '../router';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
@@ -881,7 +880,7 @@ describe.each(testMatrix())(
       const get = vi.fn();
 
       const parse = vi.fn(() => {
-        const promise = new Promise<ParsedMetadata>(() => {
+        const promise = new Promise<object>(() => {
           // noop we never want this to return
         });
 
@@ -1492,10 +1491,13 @@ describe.each(testMatrix())(
         kept: Type.String(),
         discarded: Type.String(),
       });
+
+      interface Metadata {
+        kept: string;
+      }
+
       const get = vi.fn(async () => ({ kept: 'kept', discarded: 'discarded' }));
-      const parse = vi.fn(async (metadata: unknown) => ({
-        // @ts-expect-error - we haven't extended the global type here
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const parse = vi.fn(async (metadata: Metadata) => ({
         kept: metadata.kept,
       }));
 
@@ -1537,10 +1539,13 @@ describe.each(testMatrix())(
       const schema = Type.Object({
         foo: Type.String(),
       });
+
+      interface Metadata {
+        foo: string;
+      }
+
       const get = vi.fn(async () => ({ foo: false }));
-      const parse = vi.fn(async (metadata: unknown) => ({
-        // @ts-expect-error - we haven't extended the global type here
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const parse = vi.fn(async (metadata: Metadata) => ({
         foo: metadata.foo,
       }));
 
@@ -1593,10 +1598,12 @@ describe.each(testMatrix())(
         foo: Type.Boolean(),
       });
 
+      interface Metadata {
+        foo: boolean;
+      }
+
       const get = vi.fn(async () => ({ foo: 123 }));
-      const parse = vi.fn(async (metadata: unknown) => ({
-        // @ts-expect-error - we haven't extended the global type here
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const parse = vi.fn(async (metadata: Metadata) => ({
         foo: metadata.foo,
       }));
 
@@ -1661,11 +1668,16 @@ describe.each(testMatrix())(
         discarded: 'discarded',
       }));
 
-      const validate = vi.fn(async (metadata: unknown, _previous: unknown) => ({
-        // @ts-expect-error - we haven't extended the global type here
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        kept: metadata.kept,
-      }));
+      interface Metadata {
+        kept: string;
+        discarded: string;
+      }
+
+      const validate = vi.fn(
+        async (metadata: Metadata, _previous: unknown) => ({
+          kept: metadata.kept,
+        }),
+      );
 
       const serverTransport = getServerTransport('SERVER', {
         schema,

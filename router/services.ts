@@ -20,7 +20,8 @@ import {
 export interface Service<
   Context,
   State extends object,
-  Procs extends ProcedureMap<Context, State>,
+  ParsedMetadata,
+  Procs extends ProcedureMap<Context, State, ParsedMetadata>,
 > {
   readonly state: State;
   readonly procedures: Procs;
@@ -30,22 +31,25 @@ export interface Service<
 /**
  * Represents any {@link Service} object.
  */
-export type AnyService = Service<object, object, ProcedureMap>;
+export type AnyService = Service<object, object, object, ProcedureMap>;
 
 /**
  * Represents any {@link ServiceSchema} object.
  */
-export type AnyServiceSchema<Context extends object = object> = InstanceType<
-  ReturnType<typeof createServiceSchema<Context>>
+export type AnyServiceSchema<
+  Context extends object = object,
+  ParsedMetadata extends object = object,
+> = InstanceType<
+  ReturnType<typeof createServiceSchema<Context, ParsedMetadata>>
 >;
 
 /**
  * A dictionary of {@link ServiceSchema}s, where the key is the service name.
  */
-export type AnyServiceSchemaMap<Context extends object = object> = Record<
-  string,
-  AnyServiceSchema<Context>
->;
+export type AnyServiceSchemaMap<
+  Context extends object = object,
+  ParsedMetadata extends object = object,
+> = Record<string, AnyServiceSchema<Context, ParsedMetadata>>;
 
 // This has the secret sauce to keep go to definition working, the structure is
 // somewhat delicate, so be careful when modifying it. Would be nice to add a
@@ -56,9 +60,10 @@ export type AnyServiceSchemaMap<Context extends object = object> = Record<
  */
 export type InstantiatedServiceSchemaMap<
   Context extends object,
-  T extends AnyServiceSchemaMap<Context>,
+  ParsedMetadata extends object,
+  T extends AnyServiceSchemaMap<Context, ParsedMetadata>,
 > = {
-  [K in keyof T]: T[K] extends AnyServiceSchema<Context>
+  [K in keyof T]: T[K] extends AnyServiceSchema<Context, ParsedMetadata>
     ? T[K] extends {
         initializeState: (ctx: Context) => infer S;
         procedures: infer P;
@@ -66,7 +71,12 @@ export type InstantiatedServiceSchemaMap<
       ? Service<
           Context,
           S extends object ? S : object,
-          P extends ProcedureMap<Context, S extends object ? S : object>
+          ParsedMetadata,
+          P extends ProcedureMap<
+            Context,
+            S extends object ? S : object,
+            ParsedMetadata
+          >
             ? P
             : ProcedureMap
         >
@@ -142,9 +152,9 @@ export type ProcType<
  * A list of procedures where every procedure is "branded", as-in the procedure
  * was created via the {@link Procedure} constructors.
  */
-type BrandedProcedureMap<Context, State> = Record<
+type BrandedProcedureMap<Context, State, ParsedMetadata> = Record<
   string,
-  Branded<AnyProcedure<Context, State>>
+  Branded<AnyProcedure<Context, State, ParsedMetadata>>
 >;
 
 type MaybeDisposable<State extends object> = State & {
@@ -308,10 +318,13 @@ export function serializeSchema(
  *
  * When defining procedures, always use the {@link Procedure} constructors to create them.
  */
-export function createServiceSchema<Context extends object = object>() {
+export function createServiceSchema<
+  Context extends object = object,
+  ParsedMetadata extends object = object,
+>() {
   return class ServiceSchema<
     State extends object,
-    Procedures extends ProcedureMap<Context, State>,
+    Procedures extends ProcedureMap<Context, State, ParsedMetadata>,
   > {
     /**
      * Factory function for creating a fresh state.
@@ -427,7 +440,7 @@ export function createServiceSchema<Context extends object = object>() {
      */
     static define<
       State extends object,
-      Procedures extends BrandedProcedureMap<Context, State>,
+      Procedures extends BrandedProcedureMap<Context, State, ParsedMetadata>,
     >(
       config: ServiceConfiguration<Context, State>,
       procedures: Procedures,
@@ -458,7 +471,9 @@ export function createServiceSchema<Context extends object = object>() {
      * });
      */
 
-    static define<Procedures extends BrandedProcedureMap<Context, object>>(
+    static define<
+      Procedures extends BrandedProcedureMap<Context, object, ParsedMetadata>,
+    >(
       procedures: Procedures,
     ): ServiceSchema<
       object,
@@ -468,11 +483,11 @@ export function createServiceSchema<Context extends object = object>() {
     static define(
       configOrProcedures:
         | ServiceConfiguration<Context, object>
-        | BrandedProcedureMap<Context, object>,
-      maybeProcedures?: BrandedProcedureMap<Context, object>,
+        | BrandedProcedureMap<Context, object, ParsedMetadata>,
+      maybeProcedures?: BrandedProcedureMap<Context, object, ParsedMetadata>,
     ): ServiceSchema<object, ProcedureMap> {
       let config: ServiceConfiguration<Context, object>;
-      let procedures: BrandedProcedureMap<Context, object>;
+      let procedures: BrandedProcedureMap<Context, object, ParsedMetadata>;
 
       if (
         'initializeState' in configOrProcedures &&
@@ -486,7 +501,11 @@ export function createServiceSchema<Context extends object = object>() {
         procedures = maybeProcedures;
       } else {
         config = { initializeState: () => ({}) };
-        procedures = configOrProcedures as BrandedProcedureMap<Context, object>;
+        procedures = configOrProcedures as BrandedProcedureMap<
+          Context,
+          object,
+          ParsedMetadata
+        >;
       }
 
       return new ServiceSchema(config, procedures);
@@ -581,7 +600,9 @@ export function createServiceSchema<Context extends object = object>() {
      * You probably don't need this, usually the River server will handle this
      * for you.
      */
-    instantiate(extendedContext: Context): Service<Context, State, Procedures> {
+    instantiate(
+      extendedContext: Context,
+    ): Service<Context, State, ParsedMetadata, Procedures> {
       const state = this.initializeState(extendedContext);
       const dispose = async () => {
         await state[Symbol.asyncDispose]?.();
@@ -620,7 +641,11 @@ export function getSerializedProcErrors(
  * @see {@link ServiceSchema.scaffold}
  */
 // note that this isn't exported
-class ServiceScaffold<Context extends object, State extends object> {
+class ServiceScaffold<
+  Context extends object,
+  State extends object,
+  ParsedMetadata extends object,
+> {
   /**
    * The configuration for this service.
    */
@@ -653,7 +678,9 @@ class ServiceScaffold<Context extends object, State extends object> {
    *
    * @param procedures - The procedures for this service.
    */
-  procedures<T extends BrandedProcedureMap<Context, State>>(procedures: T): T {
+  procedures<T extends BrandedProcedureMap<Context, State, ParsedMetadata>>(
+    procedures: T,
+  ): T {
     return procedures;
   }
 
@@ -675,7 +702,12 @@ class ServiceScaffold<Context extends object, State extends object> {
    * });
    * ```
    */
-  finalize<T extends BrandedProcedureMap<Context, State>>(procedures: T) {
-    return createServiceSchema<Context>().define(this.config, procedures);
+  finalize<T extends BrandedProcedureMap<Context, State, ParsedMetadata>>(
+    procedures: T,
+  ) {
+    return createServiceSchema<Context, ParsedMetadata>().define(
+      this.config,
+      procedures,
+    );
   }
 }

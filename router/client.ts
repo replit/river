@@ -147,9 +147,13 @@ export type Client<
     // Context is a server-side implementation detail that doesn't affect the client interface
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    any,
     Services
   > = InstantiatedServiceSchemaMap<
     // Context is a server-side implementation detail that doesn't affect the client interface
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     any,
     Services

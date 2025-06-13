@@ -931,6 +931,12 @@ describe.each(testMatrix())(
       const requestSchema = Type.Object({
         data: Type.String(),
       });
+
+      interface ParsedMetadata {
+        data: string;
+        extra: number;
+      }
+
       const clientTransport = getClientTransport(
         'client',
         createClientHandshakeOptions(requestSchema, () => ({ data: 'foobar' })),
@@ -949,7 +955,7 @@ describe.each(testMatrix())(
       });
 
       const services = {
-        test: createServiceSchema().define({
+        test: createServiceSchema<object, ParsedMetadata>().define({
           getData: Procedure.rpc({
             requestInit: Type.Object({}),
             responseData: Type.Object({
@@ -957,9 +963,7 @@ describe.each(testMatrix())(
               extra: Type.Number(),
             }),
             handler: async ({ ctx }) => {
-              // we haven't extended the interface
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              return Ok({ ...ctx.metadata } as { data: string; extra: number });
+              return Ok({ ...ctx.metadata });
             },
           }),
         }),

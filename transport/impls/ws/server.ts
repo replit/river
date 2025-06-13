@@ -5,6 +5,7 @@ import { WsLike } from './wslike';
 import { ServerTransport } from '../../server';
 import { ProvidedServerTransportOptions } from '../../options';
 import { type IncomingMessage } from 'http';
+import { TSchema } from '@sinclair/typebox';
 
 function cleanHeaders(
   headers: IncomingMessage['headers'],
@@ -21,7 +22,10 @@ function cleanHeaders(
   return cleanedHeaders;
 }
 
-export class WebSocketServerTransport extends ServerTransport<WebSocketConnection> {
+export class WebSocketServerTransport<
+  MetadataSchema extends TSchema = TSchema,
+  ParsedMetadata extends object = object,
+> extends ServerTransport<WebSocketConnection, MetadataSchema, ParsedMetadata> {
   wss: WebSocketServer;
 
   constructor(
