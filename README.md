@@ -285,19 +285,22 @@ River uses an automated release process with [Release Drafter](https://github.co
    - Updates the draft release notes with PR titles
    - You can view the draft at [GitHub Releases](../../releases)
 
-2. **When ready to release**:
+2. **When ready to release, create a version bump PR**:
 
-   - Go to [Actions](../../actions/workflows/prepare-release.yml)
-   - Click "Run workflow" to open the configuration dialog
-   - Click "Run workflow" again to confirm and start the process (version is automatically determined from draft release)
+   - Create a PR that bumps the version in `package.json` and `package-lock.json`
+   - Use semantic versioning:
+     - `patch` - Bug fixes, small improvements (e.g., 0.208.4 → 0.208.5)
+     - `minor` - New features, backwards compatible (e.g., 0.208.4 → 0.209.0)
+     - `major` - Breaking changes (e.g., 0.208.4 → 1.0.0)
+   - Merge the PR to main
 
-   The version bump is automatically calculated based on PR labels:
+3. **Publish the GitHub release**:
 
-   - `patch` - Bug fixes, small improvements (e.g., 0.208.4 → 0.208.5)
-   - `minor` - New features, backwards compatible (e.g., 0.208.4 → 0.209.0)
-   - `major` - Breaking changes (e.g., 0.208.4 → 1.0.0)
+   - Go to [GitHub Releases](../../releases)
+   - Find the draft release and click "Edit"
+   - Update the tag to match your new version (e.g., `v0.209.0`)
+   - Click "Publish release"
 
-3. **Automation takes over**:
-   - The "Prepare Release" workflow bumps the version and creates a git tag
-   - The git tag automatically triggers the "Build and Publish" workflow
-   - The `river` package is published to NPM and the GitHub release is created
+4. **Automation takes over**:
+   - Publishing the release automatically triggers the "Build and Publish" workflow
+   - The `river` package is published to NPM
