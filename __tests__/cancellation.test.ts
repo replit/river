@@ -31,6 +31,7 @@ function makeMockHandler<T extends ValidProcType>(
     Procedure<
       object,
       object,
+      object,
       T,
       TObject,
       TObject | null,

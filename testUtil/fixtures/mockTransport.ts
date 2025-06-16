@@ -1,4 +1,4 @@
-import { TransportClientId } from '../../transport';
+import { Transport, TransportClientId } from '../../transport';
 import { ClientTransport } from '../../transport/client';
 import { Connection } from '../../transport/connection';
 import { ServerTransport } from '../../transport/server';
@@ -8,6 +8,8 @@ import { TestSetupHelpers, TestTransportOptions } from './transports';
 import { Duplex } from 'node:stream';
 import { duplexPair } from '../duplex/duplexPair';
 import { nanoid } from 'nanoid';
+import { TSchema } from '@sinclair/typebox';
+import { ServerHandshakeOptions } from '../../router/handshake';
 
 export class InMemoryConnection extends Connection {
   conn: Duplex;
@@ -69,7 +71,7 @@ export function createMockTransportNetwork(
   // conn id -> [client->server, server->client]
   const connections = new Observable<Record<string, BidiConnection>>({});
 
-  const transports: Array<MockClientTransport | MockServerTransport> = [];
+  const transports: Array<Transport<InMemoryConnection>> = [];
   class MockClientTransport extends ClientTransport<InMemoryConnection> {
     async createNewOutgoingConnection(
       to: TransportClientId,
@@ -94,7 +96,14 @@ export function createMockTransportNetwork(
     }
   }
 
-  class MockServerTransport extends ServerTransport<InMemoryConnection> {
+  class MockServerTransport<
+    MetadataSchema extends TSchema = TSchema,
+    ParsedMetadata extends object = object,
+  > extends ServerTransport<
+    InMemoryConnection,
+    MetadataSchema,
+    ParsedMetadata
+  > {
     subscribeCleanup: () => void;
 
     constructor(
@@ -136,8 +145,19 @@ export function createMockTransportNetwork(
 
       return clientTransport;
     },
-    getServerTransport: (id = 'SERVER', handshakeOptions) => {
-      const serverTransport = new MockServerTransport(id, opts?.server);
+    getServerTransport: <
+      MetadataSchema extends TSchema = TSchema,
+      ParsedMetadata extends object = object,
+    >(
+      id = 'SERVER',
+      handshakeOptions:
+        | ServerHandshakeOptions<MetadataSchema, ParsedMetadata>
+        | undefined,
+    ) => {
+      const serverTransport = new MockServerTransport<
+        MetadataSchema,
+        ParsedMetadata
+      >(id, opts?.server);
       if (handshakeOptions) {
         serverTransport.extendHandshake(handshakeOptions);
       }

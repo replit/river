@@ -49,6 +49,7 @@ const fnBody = Procedure.rpc<
   {
     db: string;
   },
+  object,
   typeof requestData,
   typeof responseData,
   typeof responseError
@@ -429,18 +430,22 @@ describe('Handshake', () => {
       },
     );
 
-    createServer(mockTransportNetwork.getServerTransport(), services, {
-      handshakeOptions: createServerHandshakeOptions(
-        schema,
-        (metadata, _prev) => {
-          if (metadata.token !== '123') {
-            return false;
-          }
+    createServer(
+      mockTransportNetwork.getServerTransport<typeof schema>(),
+      services,
+      {
+        handshakeOptions: createServerHandshakeOptions(
+          schema,
+          (metadata, _prev) => {
+            if (metadata.token !== '123') {
+              return false;
+            }
 
-          return {};
-        },
-      ),
-    });
+            return {};
+          },
+        ),
+      },
+    );
   });
 });
 

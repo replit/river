@@ -1,12 +1,11 @@
 import { Static, TSchema } from '@sinclair/typebox';
-import { ParsedMetadata } from './context';
 import { HandshakeErrorCustomHandlerFatalResponseCodes } from '../transport/message';
 
 type ConstructHandshake<T extends TSchema> = () =>
   | Static<T>
   | Promise<Static<T>>;
 
-type ValidateHandshake<T extends TSchema> = (
+type ValidateHandshake<T extends TSchema, ParsedMetadata> = (
   metadata: Static<T>,
   previousParsedMetadata?: ParsedMetadata,
 ) =>
@@ -34,6 +33,7 @@ export interface ClientHandshakeOptions<
 
 export interface ServerHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
+  ParsedMetadata extends object = object,
 > {
   /**
    * Schema for the metadata that the server receives from the client
@@ -52,7 +52,7 @@ export interface ServerHandshakeOptions<
    * @param isReconnect - Whether the client is reconnecting to the session,
    *                      or if this is a new session.
    */
-  validate: ValidateHandshake<MetadataSchema>;
+  validate: ValidateHandshake<MetadataSchema, ParsedMetadata>;
 }
 
 export function createClientHandshakeOptions<
@@ -66,9 +66,10 @@ export function createClientHandshakeOptions<
 
 export function createServerHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
+  ParsedMetadata extends object = object,
 >(
   schema: MetadataSchema,
-  validate: ValidateHandshake<MetadataSchema>,
-): ServerHandshakeOptions {
-  return { schema, validate: validate as ValidateHandshake<TSchema> };
+  validate: ValidateHandshake<MetadataSchema, ParsedMetadata>,
+): ServerHandshakeOptions<MetadataSchema, ParsedMetadata> {
+  return { schema, validate };
 }

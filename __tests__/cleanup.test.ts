@@ -504,7 +504,7 @@ describe('request finishing triggers signal onabort', async () => {
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
     const handler =
-      vi.fn<(ctx: ProcedureHandlerContext<object, object>) => void>();
+      vi.fn<(ctx: ProcedureHandlerContext<object, object, object>) => void>();
     const serverId = serverTransport.clientId;
     const serviceName = 'service';
     const procedureName = procedureType;
@@ -523,7 +523,7 @@ describe('request finishing triggers signal onabort', async () => {
           async handler({
             ctx,
           }: {
-            ctx: ProcedureHandlerContext<object, object>;
+            ctx: ProcedureHandlerContext<object, object, object>;
           }) {
             handler(ctx);
 

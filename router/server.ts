@@ -1,4 +1,4 @@
-import { Static } from '@sinclair/typebox';
+import { Static, TSchema } from '@sinclair/typebox';
 import { PayloadType, AnyProcedure } from './procedures';
 import {
   ReaderErrorSchema,
@@ -28,7 +28,7 @@ import {
   ProtocolVersion,
   TransportClientId,
 } from '../transport/message';
-import { ProcedureHandlerContext, ParsedMetadata } from './context';
+import { ProcedureHandlerContext } from './context';
 import { Logger } from '../logging/log';
 import { Value } from '@sinclair/typebox/value';
 import { Err, Result, Ok, ErrResult } from './result';
@@ -55,21 +55,22 @@ type StreamId = string;
  */
 export interface Server<
   Context extends object,
+  ParsedMetadata extends object,
   Services extends AnyServiceSchemaMap<Context>,
 > {
   /**
    * Services defined for this server.
    */
-  services: InstantiatedServiceSchemaMap<Context, Services>;
+  services: InstantiatedServiceSchemaMap<Context, ParsedMetadata, Services>;
   /**
    * A set of stream ids that are currently open.
    */
-  streams: Map<StreamId, ProcStream>;
+  streams: Map<StreamId, ProcStream<ParsedMetadata>>;
 
   close: () => Promise<void>;
 }
 
-interface StreamInitProps<Context> {
+interface StreamInitProps<Context, ParsedMetadata> {
   // msg derived
   streamId: StreamId;
   procedureName: string;
@@ -92,7 +93,7 @@ interface StreamInitProps<Context> {
   passInitAsDataForBackwardsCompat: boolean;
 }
 
-interface ProcStream {
+interface ProcStream<ParsedMetadata> {
   streamId: StreamId;
   from: TransportClientId;
   procedureName: string;
@@ -105,10 +106,17 @@ interface ProcStream {
 
 class RiverServer<
   Context extends object,
+  MetadataSchema extends TSchema,
+  ParsedMetadata extends object,
   Services extends AnyServiceSchemaMap<Context>,
-> implements Server<Context, Services>
+> implements Server<Context, ParsedMetadata, Services>
 {
-  private transport: ServerTransport<Connection>;
+  private transport: ServerTransport<
+    Connection,
+    MetadataSchema,
+    ParsedMetadata
+  >;
+
   private contextMap: Map<AnyService, Context & { state: object }>;
   private log?: Logger;
   private middlewares: Array<Middleware>;
@@ -123,15 +131,19 @@ class RiverServer<
   private serverCancelledStreams: Map<TransportClientId, LRUSet<StreamId>>;
   private maxCancelledStreamTombstonesPerSession: number;
 
-  public streams: Map<StreamId, ProcStream>;
-  public services: InstantiatedServiceSchemaMap<Context, Services>;
+  public streams: Map<StreamId, ProcStream<ParsedMetadata>>;
+  public services: InstantiatedServiceSchemaMap<
+    Context,
+    ParsedMetadata,
+    Services
+  >;
 
   private unregisterTransportListeners: () => void;
 
   constructor(
-    transport: ServerTransport<Connection>,
+    transport: ServerTransport<Connection, MetadataSchema, ParsedMetadata>,
     services: Services,
-    handshakeOptions?: ServerHandshakeOptions,
+    handshakeOptions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>,
     extendedContext?: Context,
     maxCancelledStreamTombstonesPerSession = 200,
     middlewares: Array<Middleware> = [],
@@ -141,6 +153,7 @@ class RiverServer<
 
     this.services = instances as InstantiatedServiceSchemaMap<
       Context,
+      ParsedMetadata,
       Services
     >;
     this.contextMap = new Map();
@@ -252,7 +265,10 @@ class RiverServer<
     this.transport.addEventListener('transportStatus', handleTransportStatus);
   }
 
-  private createNewProcStream(span: Span, props: StreamInitProps<Context>) {
+  private createNewProcStream(
+    span: Span,
+    props: StreamInitProps<Context, ParsedMetadata>,
+  ) {
     const {
       streamId,
       initialSession,
@@ -399,7 +415,7 @@ class RiverServer<
     };
 
     const finishedController = new AbortController();
-    const procStream: ProcStream = {
+    const procStream: ProcStream<ParsedMetadata> = {
       from: from,
       streamId,
       procedureName,
@@ -567,7 +583,11 @@ class RiverServer<
       closeReadable();
     }
 
-    const handlerContextWithSpan: ProcedureHandlerContext<object, object> = {
+    const handlerContextWithSpan: ProcedureHandlerContext<
+      object,
+      object,
+      ParsedMetadata
+    > = {
       ...serviceContext,
       from: from,
       sessionId,
@@ -706,7 +726,7 @@ class RiverServer<
 
   private validateNewProcStream(
     initMessage: OpaqueTransportMessage,
-  ): StreamInitProps<Context> | null {
+  ): StreamInitProps<Context, ParsedMetadata> | null {
     // lifetime safety: this is a sync function so this session cant transition
     // to another state before we finish
     const session = this.transport.sessions.get(initMessage.from);
@@ -914,7 +934,7 @@ class RiverServer<
       serviceName: initMessage.serviceName,
       tracingCtx: initMessage.tracing,
       initPayload: initMessage.payload,
-      sessionMetadata,
+      sessionMetadata: sessionMetadata,
       procedure,
       serviceContext,
       procClosesWithInit: isStreamCloseBackwardsCompat(
@@ -1018,7 +1038,9 @@ function getStreamCloseBackwardsCompat(protocolVersion: ProtocolVersion) {
 }
 
 export interface MiddlewareContext
-  extends Readonly<Omit<ProcedureHandlerContext<unknown, unknown>, 'cancel'>> {
+  extends Readonly<
+    Omit<ProcedureHandlerContext<unknown, unknown, unknown>, 'cancel'>
+  > {
   readonly streamId: StreamId;
   readonly procedureName: string;
   readonly serviceName: string;
@@ -1047,12 +1069,14 @@ export type Middleware = (param: MiddlewareParam) => void;
  */
 export function createServer<
   Context extends object,
+  MetadataSchema extends TSchema,
+  ParsedMetadata extends object,
   Services extends AnyServiceSchemaMap<Context>,
 >(
-  transport: ServerTransport<Connection>,
+  transport: ServerTransport<Connection, MetadataSchema, ParsedMetadata>,
   services: Services,
   providedServerOptions?: Partial<{
-    handshakeOptions?: ServerHandshakeOptions;
+    handshakeOptions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>;
     extendedContext?: Context;
     /**
      * Maximum number of cancelled streams to keep track of to avoid
@@ -1064,7 +1088,7 @@ export function createServer<
      */
     middlewares?: Array<Middleware>;
   }>,
-): Server<Context, Services> {
+): Server<Context, ParsedMetadata, Services> {
   return new RiverServer(
     transport,
     services,

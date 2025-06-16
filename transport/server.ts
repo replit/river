@@ -1,5 +1,4 @@
 import { SpanStatusCode } from '@opentelemetry/api';
-import { ParsedMetadata } from '../router/context';
 import { ServerHandshakeOptions } from '../router/handshake';
 import {
   ControlMessageHandshakeRequestSchema,
@@ -19,7 +18,7 @@ import {
 } from './options';
 import { DeleteSessionOptions, Transport } from './transport';
 import { coerceErrorString } from './stringifyError';
-import { Static } from '@sinclair/typebox';
+import { Static, TSchema } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { ProtocolError } from './events';
 import { Connection } from './connection';
@@ -33,6 +32,8 @@ import {
 
 export abstract class ServerTransport<
   ConnType extends Connection,
+  MetadataSchema extends TSchema = TSchema,
+  ParsedMetadata extends object = object,
 > extends Transport<ConnType> {
   /**
    * The options for this transport.
@@ -42,7 +43,7 @@ export abstract class ServerTransport<
   /**
    * Optional handshake options for the server.
    */
-  handshakeExtensions?: ServerHandshakeOptions;
+  handshakeExtensions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>;
 
   /**
    * A map of session handshake data for each session.
@@ -68,7 +69,9 @@ export abstract class ServerTransport<
     });
   }
 
-  extendHandshake(options: ServerHandshakeOptions) {
+  extendHandshake(
+    options: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>,
+  ) {
     this.handshakeExtensions = options;
   }
 
@@ -262,7 +265,7 @@ export abstract class ServerTransport<
     }
 
     // invariant: must pass custom validation if defined
-    let parsedMetadata: ParsedMetadata = {};
+    let parsedMetadata: ParsedMetadata = {} as ParsedMetadata;
     if (this.handshakeExtensions) {
       if (!Value.Check(this.handshakeExtensions.schema, msg.payload.metadata)) {
         this.rejectHandshakeRequest(
@@ -324,7 +327,7 @@ export abstract class ServerTransport<
       }
 
       // success!
-      parsedMetadata = parsedMetadataOrFailureCode;
+      parsedMetadata = parsedMetadataOrFailureCode as ParsedMetadata;
     }
 
     // 4 connect cases

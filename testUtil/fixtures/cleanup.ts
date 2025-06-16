@@ -85,7 +85,7 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
 }
 
 export async function ensureServerIsClean(
-  s: Server<object, AnyServiceSchemaMap>,
+  s: Server<object, object, AnyServiceSchemaMap>,
 ) {
   return waitFor(() =>
     expect(
@@ -112,8 +112,11 @@ export async function testFinishesCleanly({
   server,
 }: Partial<{
   clientTransports: Array<ClientTransport<Connection>>;
-  serverTransport: ServerTransport<Connection>;
-  server: Server<object, AnyServiceSchemaMap>;
+  // MetadataSchema and ParsedMetadata are not used in this test,
+  // so we can safely use any here
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  serverTransport: ServerTransport<Connection, any, any>;
+  server: Server<object, object, AnyServiceSchemaMap>;
 }>) {
   // pre-close invariants
   // invariant check servers first as heartbeats are authoritative on their side
