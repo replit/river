@@ -4,9 +4,9 @@ import {
   Err,
   Ok,
   Procedure,
-  ServiceSchema,
   ValidProcType,
   createClient,
+  createServiceSchema,
   createServer,
 } from '../router';
 import { testMatrix } from '../testUtil/fixtures/matrix';
@@ -29,7 +29,8 @@ function makeMockHandler<T extends ValidProcType>(
 ) {
   return vi.fn<
     Procedure<
-      Record<string, never>,
+      object,
+      object,
       T,
       TObject,
       TObject | null,
@@ -38,6 +39,8 @@ function makeMockHandler<T extends ValidProcType>(
     >['handler']
   >(impl);
 }
+
+const ServiceSchema = createServiceSchema();
 
 describe.each(testMatrix())(
   'clean handler cancellation ($transport.name transport, $codec.name codec)',

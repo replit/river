@@ -1,8 +1,10 @@
 import { Type } from '@sinclair/typebox';
-import { ServiceSchema } from '../../router/services';
+import { createServiceSchema } from '../../router/services';
 import { Err, Ok, unwrapOrThrow } from '../../router/result';
 import { Observable } from '../observable/observable';
 import { Procedure } from '../../router';
+
+const ServiceSchema = createServiceSchema();
 
 export const EchoRequest = Type.Object({
   msg: Type.String(),
@@ -127,8 +129,43 @@ export const TestServiceSchema = TestServiceScaffold.finalize({
   ...testServiceProcedures,
 });
 
+export const testContext = {
+  logger: {
+    info: (message: string) => {
+      console.log(message);
+    },
+  },
+  add: (a: number, b: number) => a + b,
+};
+
+const TestServiceWithContextScaffold = createServiceSchema<
+  typeof testContext
+>().scaffold({
+  initializeState: () => ({ count: 0 }),
+});
+
+const testServiceWithContextProcedures =
+  TestServiceWithContextScaffold.procedures({
+    add: Procedure.rpc({
+      requestInit: Type.Object({ n: Type.Number() }),
+      responseData: Type.Object({ result: Type.Number() }),
+      async handler({ ctx, reqInit: { n } }) {
+        ctx.state.count += n;
+
+        return Ok({ result: ctx.state.count });
+      },
+    }),
+  });
+
+export const TestServiceWithContextSchema =
+  TestServiceWithContextScaffold.finalize({
+    ...testServiceWithContextProcedures,
+  });
+
 export const OrderingServiceSchema = ServiceSchema.define(
-  { initializeState: () => ({ msgs: [] as Array<number> }) },
+  {
+    initializeState: () => ({ msgs: [] as Array<number> }),
+  },
   {
     add: Procedure.rpc({
       requestInit: Type.Object({ n: Type.Number() }),
@@ -139,7 +176,6 @@ export const OrderingServiceSchema = ServiceSchema.define(
         return Ok({ n });
       },
     }),
-
     getAll: Procedure.rpc({
       requestInit: Type.Object({}),
       responseData: Type.Object({ msgs: Type.Array(Type.Number()) }),

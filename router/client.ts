@@ -140,9 +140,20 @@ type ServiceClient<Service extends AnyService> = {
  * @template Srv - The type of the server.
  */
 export type Client<
-  Services extends AnyServiceSchemaMap,
-  IS extends
-    InstantiatedServiceSchemaMap<Services> = InstantiatedServiceSchemaMap<Services>,
+  // Context is a server-side implementation detail that doesn't affect the client interface
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Services extends AnyServiceSchemaMap<any>,
+  IS extends InstantiatedServiceSchemaMap<
+    // Context is a server-side implementation detail that doesn't affect the client interface
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    any,
+    Services
+  > = InstantiatedServiceSchemaMap<
+    // Context is a server-side implementation detail that doesn't affect the client interface
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    any,
+    Services
+  >,
 > = {
   [SvcName in keyof IS]: ServiceClient<IS[SvcName]>;
 };
@@ -204,7 +215,10 @@ const defaultClientOptions: ClientOptions = {
  * @param {Partial<ClientOptions>} providedClientOptions - The options for the client.
  * @returns The client for the server.
  */
-export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap>(
+// We are using any here because the ServiceContext is a server-side implementation
+// detail that doesn't affect the client interface
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap<any>>(
   transport: ClientTransport<Connection>,
   serverId: TransportClientId,
   providedClientOptions: Partial<

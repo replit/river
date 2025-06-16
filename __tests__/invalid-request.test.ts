@@ -5,8 +5,8 @@ import {
   Ok,
   OkResult,
   Procedure,
-  ServiceSchema,
   createClient,
+  createServiceSchema,
   createServer,
 } from '../router';
 import { testMatrix } from '../testUtil/fixtures/matrix';
@@ -21,6 +21,8 @@ import { ControlFlags } from '../transport/message';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 import { nanoid } from 'nanoid';
 import { getClientSendFn } from '../testUtil';
+
+const ServiceSchema = createServiceSchema();
 
 describe('cancels invalid request', () => {
   const { transport, codec } = testMatrix()[0];

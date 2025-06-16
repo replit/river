@@ -84,7 +84,9 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
   );
 }
 
-export async function ensureServerIsClean(s: Server<AnyServiceSchemaMap>) {
+export async function ensureServerIsClean(
+  s: Server<object, AnyServiceSchemaMap>,
+) {
   return waitFor(() =>
     expect(
       s.streams,
@@ -111,7 +113,7 @@ export async function testFinishesCleanly({
 }: Partial<{
   clientTransports: Array<ClientTransport<Connection>>;
   serverTransport: ServerTransport<Connection>;
-  server: Server<AnyServiceSchemaMap>;
+  server: Server<object, AnyServiceSchemaMap>;
 }>) {
   // pre-close invariants
   // invariant check servers first as heartbeats are authoritative on their side

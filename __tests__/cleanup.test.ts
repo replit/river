@@ -15,8 +15,8 @@ import {
   Ok,
   Procedure,
   ProcedureHandlerContext,
-  ServiceSchema,
   createClient,
+  createServiceSchema,
   createServer,
 } from '../router';
 import {
@@ -503,13 +503,14 @@ describe('request finishing triggers signal onabort', async () => {
   ] as const)('handler aborts $procedureType', async ({ procedureType }) => {
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
-    const handler = vi.fn<(ctx: ProcedureHandlerContext<object>) => void>();
+    const handler =
+      vi.fn<(ctx: ProcedureHandlerContext<object, object>) => void>();
     const serverId = serverTransport.clientId;
     const serviceName = 'service';
     const procedureName = procedureType;
 
     const services = {
-      [serviceName]: ServiceSchema.define({
+      [serviceName]: createServiceSchema().define({
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any
         [procedureType]: (Procedure[procedureType] as any)({
           requestInit: Type.Object({}),
@@ -519,7 +520,11 @@ describe('request finishing triggers signal onabort', async () => {
               }
             : {}),
           responseData: Type.Object({}),
-          async handler({ ctx }: { ctx: ProcedureHandlerContext<object> }) {
+          async handler({
+            ctx,
+          }: {
+            ctx: ProcedureHandlerContext<object, object>;
+          }) {
             handler(ctx);
 
             return new Promise(() => {

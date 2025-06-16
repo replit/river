@@ -5,14 +5,9 @@ import {
 } from '../testUtil/fixtures/cleanup';
 import { testMatrix } from '../testUtil/fixtures/matrix';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
-import {
-  Ok,
-  Procedure,
-  ServiceSchema,
-  createClient,
-  createServer,
-} from '../router';
+import { Ok, Procedure, createClient, createServer } from '../router';
 import { Type } from '@sinclair/typebox';
+import { createServiceSchema } from '../router/services';
 
 describe('should handle incompatabilities', async () => {
   const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
@@ -40,19 +35,25 @@ describe('should handle incompatabilities', async () => {
     // setup
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
+
+    const extendedContext = {
+      testctx: Math.random().toString(),
+    };
+
+    const ServiceSchema = createServiceSchema<typeof extendedContext>();
+
     const services = {
       testservice: ServiceSchema.define({
         testrpc: Procedure.rpc({
           requestInit: Type.Object({}),
           responseData: Type.String(),
           handler: async ({ ctx }) => {
-            return Ok((ctx as unknown as typeof extendedContext).testctx);
+            return Ok(ctx.testctx);
           },
         }),
       }),
     };
 
-    const extendedContext = { testctx: Math.random().toString() };
     createServer(serverTransport, services, {
       extendedContext,
     });
@@ -74,9 +75,13 @@ describe('should handle incompatabilities', async () => {
     const clientTransport = getClientTransport('client');
     const serverTransport = getServerTransport();
 
+    const extendedContext = { testctx: Math.random().toString() };
+
+    const ServiceSchema = createServiceSchema<typeof extendedContext>();
+
     const TestServiceScaffold = ServiceSchema.scaffold({
       initializeState: (ctx) => ({
-        fromctx: (ctx as unknown as typeof extendedContext).testctx,
+        fromctx: ctx.testctx,
       }),
     });
     const services = {
@@ -93,7 +98,43 @@ describe('should handle incompatabilities', async () => {
       }),
     };
 
+    createServer(serverTransport, services, {
+      extendedContext,
+    });
+    const client = createClient<typeof services>(
+      clientTransport,
+      serverTransport.clientId,
+    );
+    addPostTestCleanup(async () => {
+      await cleanupTransports([clientTransport, serverTransport]);
+    });
+
+    const res = await client.testservice.testrpc.rpc({});
+
+    expect(res).toEqual({ ok: true, payload: extendedContext.testctx });
+  });
+
+  test('should be able to access context in procedures', async () => {
+    // setup
+    const clientTransport = getClientTransport('client');
+    const serverTransport = getServerTransport();
+
     const extendedContext = { testctx: Math.random().toString() };
+
+    const ServiceSchema = createServiceSchema<typeof extendedContext>();
+
+    const services = {
+      testservice: ServiceSchema.define({
+        testrpc: Procedure.rpc({
+          requestInit: Type.Object({}),
+          responseData: Type.String(),
+          handler: async ({ ctx }) => {
+            return Ok(ctx.testctx);
+          },
+        }),
+      }),
+    };
+
     createServer(serverTransport, services, {
       extendedContext,
     });

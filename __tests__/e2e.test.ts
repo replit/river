@@ -31,7 +31,7 @@ import { testMatrix } from '../testUtil/fixtures/matrix';
 import { Type } from '@sinclair/typebox';
 import {
   Procedure,
-  ServiceSchema,
+  createServiceSchema,
   Ok,
   UNCAUGHT_ERROR_CODE,
   CANCEL_CODE,
@@ -949,7 +949,7 @@ describe.each(testMatrix())(
       });
 
       const services = {
-        test: ServiceSchema.define({
+        test: createServiceSchema().define({
           getData: Procedure.rpc({
             requestInit: Type.Object({}),
             responseData: Type.Object({

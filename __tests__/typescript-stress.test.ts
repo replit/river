@@ -1,6 +1,6 @@
-import { describe, expect, test } from 'vitest';
+import { assert, describe, expect, test } from 'vitest';
 import { Procedure } from '../router/procedures';
-import { ServiceSchema } from '../router/services';
+import { createServiceSchema } from '../router/services';
 import { Type } from '@sinclair/typebox';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
@@ -12,7 +12,10 @@ import {
   ResultUnwrapOk,
   unwrapOrThrow,
 } from '../router/result';
-import { TestServiceSchema } from '../testUtil/fixtures/services';
+import {
+  testContext,
+  TestServiceWithContextSchema,
+} from '../testUtil/fixtures/services';
 import { readNextResult } from '../testUtil';
 import {
   createClientHandshakeOptions,
@@ -25,6 +28,7 @@ import { createMockTransportNetwork } from '../testUtil/fixtures/mockTransport';
 const requestData = Type.Union([
   Type.Object({ a: Type.Number() }),
   Type.Object({ c: Type.String() }),
+  Type.Object({ d: Type.Number() }),
 ]);
 const responseData = Type.Object({
   b: Type.Union([Type.Number(), Type.String()]),
@@ -41,7 +45,10 @@ const responseError = Type.Union([
 ]);
 
 const fnBody = Procedure.rpc<
-  Record<string, never>,
+  typeof testContext,
+  {
+    db: string;
+  },
   typeof requestData,
   typeof responseData,
   typeof responseError
@@ -49,9 +56,11 @@ const fnBody = Procedure.rpc<
   requestInit: requestData,
   responseData,
   responseError,
-  async handler({ reqInit }) {
+  async handler({ reqInit, ctx }) {
     if ('c' in reqInit) {
       return Ok({ b: reqInit.c });
+    } else if ('d' in reqInit) {
+      return Ok({ b: ctx.add(reqInit.d, reqInit.d) });
     } else {
       return Ok({ b: reqInit.a });
     }
@@ -61,7 +70,9 @@ const fnBody = Procedure.rpc<
 // typescript is limited to max 50 constraints
 // see: https://github.com/microsoft/TypeScript/issues/33541
 // we should be able to support more than that due to how we make services
-const StupidlyLargeServiceSchema = ServiceSchema.define({
+const StupidlyLargeServiceSchema = createServiceSchema<
+  typeof testContext
+>().define({
   f1: fnBody,
   f2: fnBody,
   f3: fnBody,
@@ -182,13 +193,16 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
       x1: StupidlyLargeServiceSchema,
       y1: StupidlyLargeServiceSchema,
       z1: StupidlyLargeServiceSchema,
-      test: TestServiceSchema,
+      test: TestServiceWithContextSchema,
     };
 
     const mockTransportNetwork = createMockTransportNetwork();
     const server = createServer(
       mockTransportNetwork.getServerTransport(),
       services,
+      {
+        extendedContext: testContext,
+      },
     );
 
     const client = createClient<typeof services>(
@@ -204,10 +218,42 @@ describe("ensure typescript doesn't give up trying to infer the types for large 
     expect(server).toBeTruthy();
     expect(client).toBeTruthy();
   });
+
+  test('service with context should be able to access context in procedures', async () => {
+    const services = {
+      a: StupidlyLargeServiceSchema,
+      b: StupidlyLargeServiceSchema,
+    };
+    const mockTransportNetwork = createMockTransportNetwork();
+    const server = createServer(
+      mockTransportNetwork.getServerTransport(),
+      services,
+      {
+        extendedContext: testContext,
+      },
+    );
+
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
+      { eagerlyConnect: false },
+    );
+
+    const res = await client.a.f2.rpc({ d: 1 });
+    assert(res.ok);
+    expect(res.payload.b).toBe(2);
+
+    const res2 = await client.b.f11.rpc({ d: 10 });
+    assert(res2.ok);
+    expect(res2.payload.b).toBe(20);
+
+    expect(server).toBeTruthy();
+    expect(client).toBeTruthy();
+  });
 });
 
 const services = {
-  test: ServiceSchema.define({
+  test: createServiceSchema().define({
     rpc: Procedure.rpc({
       requestInit: Type.Object({ n: Type.Number() }),
       responseData: Type.Object({ n: Type.Number() }),
