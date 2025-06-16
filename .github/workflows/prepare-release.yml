@@ -7,8 +7,6 @@ jobs:
   tag-release:
     runs-on: ubuntu-latest
     permissions:
-      # We need contents: read to checkout the repo and read PRs/tags.
-      # We need contents: write to push the new version commit and tag.
       contents: write
       pull-requests: read
 
