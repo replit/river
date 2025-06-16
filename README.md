@@ -286,8 +286,8 @@ River uses an automated release process with [Release Drafter](https://github.co
 
 2. **When ready to release**:
    - Go to [Actions](../../actions/workflows/prepare-release.yml) 
-   - Click "Run workflow"
-   - Click "Run workflow" (version is automatically determined from draft release)
+   - Click "Run workflow" to open the configuration dialog
+   - Click "Run workflow" again to confirm and start the process (version is automatically determined from draft release)
    
    The version bump is automatically calculated based on PR labels:
    - `patch` - Bug fixes, small improvements (e.g., 0.208.4 → 0.208.5)
