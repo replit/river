@@ -304,3 +304,6 @@ River uses an automated release process with [Release Drafter](https://github.co
 4. **Automation takes over**:
    - Publishing the release automatically triggers the "Build and Publish" workflow
    - The `river` package is published to NPM
+
+5. **Manual npm release**:
+   - If the auto-publish workflow failed, you can run `npm run release` locally
