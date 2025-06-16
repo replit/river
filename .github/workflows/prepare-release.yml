@@ -2,22 +2,30 @@ name: Prepare Release
 
 on:
   workflow_dispatch:
-    inputs:
-      bump:
-        description: 'Version bump type (major, minor, or patch)'
-        required: true
-        type: choice
-        options:
-          - major
-          - minor
-          - patch
 
 jobs:
   tag-release:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    permissions:
+      # We need contents: read to checkout the repo and read PRs/tags.
+      # We need contents: write to push the new version commit and tag.
+      contents: write
+      pull-requests: read
 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Run release-drafter to determine the next version
+      - name: Determine next version from release-drafter
+        id: release_drafter
+        uses: release-drafter/release-drafter@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Use the output from the previous step to version the package
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -26,12 +34,20 @@ jobs:
       - name: Configure Git
         run: |
           git config user.name 'GitHub Actions'
-          git config user.email eng+github@repl.it
+          git config user.email 'eng+github@repl.it'
 
       - name: Bump version and create tag
         run: |
-          # This command updates package.json, creates a commit, and adds a tag
-          npm version ${{ github.event.inputs.bump }}
+          # Get the tag_name output from the release-drafter step
+          tag="${{ steps.release_drafter.outputs.tag_name }}"
+
+          # Strip the 'v' prefix to get the bare version number
+          version="${tag#v}"
+
+          echo "Next version calculated by release-drafter is: $version"
+
+          # Use the calculated version with npm version
+          npm version "$version"
 
       - name: Push changes and tags
         run: git push --follow-tags
