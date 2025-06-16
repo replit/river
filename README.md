@@ -302,6 +302,7 @@ River uses an automated release process with [Release Drafter](https://github.co
    - Click "Publish release"
 
 4. **Automation takes over**:
+
    - Publishing the release automatically triggers the "Build and Publish" workflow
    - The `river` package is published to NPM
 
