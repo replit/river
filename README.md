@@ -287,7 +287,7 @@ River uses an automated release process with [Release Drafter](https://github.co
 
 2. **When ready to release, create a version bump PR**:
 
-   - Create a PR that bumps the version in `package.json` and `package-lock.json`
+   - Create a PR that bumps the version in `package.json` and `package-lock.json`. You can run `pnpm version --no-git-tag-version <version>` to bump the version.
    - Use semantic versioning:
      - `patch` - Bug fixes, small improvements (e.g., 0.208.4 → 0.208.5)
      - `minor` - New features, backwards compatible (e.g., 0.208.4 → 0.209.0)
