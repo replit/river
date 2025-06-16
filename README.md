@@ -272,4 +272,37 @@ You can find more service examples in the [E2E test fixtures](https://github.com
 - `npm run check` -- lint
 - `npm run format` -- format
 - `npm run test` -- run tests
-- `npm run publish` -- cut a new release (should bump version in package.json first)
+- `npm run release` -- cut a new release (should bump version in package.json first)
+
+## Releasing
+
+River uses an automated release process with [Release Drafter](https://github.com/release-drafter/release-drafter) for version management and NPM publishing.
+
+### Automated Release Process (Recommended)
+
+1. **Label your PRs** with the appropriate version bump:
+
+   - `patch` - Bug fixes, small improvements (e.g., 0.208.4 → 0.208.5)
+   - `minor` - New features, backwards compatible (e.g., 0.208.4 → 0.209.0)
+   - `major` - Breaking changes (e.g., 0.208.4 → 1.0.0)
+
+2. **Merge PRs to main** - Release Drafter automatically:
+
+   - Creates/updates a draft release with the calculated version
+   - Generates release notes from PR titles
+   - Determines version bump based on the highest label used
+
+3. **Publish the release** when ready:
+   - Go to [GitHub Releases](../../releases)
+   - Review the draft release notes
+   - Click "Publish release"
+   - This automatically publishes to NPM
+
+### Manual Release (Alternative)
+
+For hotfixes or special cases, you can manually trigger a release:
+
+1. Go to [Actions](../../actions/workflows/npmjs-publish.yml)
+2. Click "Run workflow"
+3. Enter the desired version (e.g., `0.208.5`)
+4. Click "Run workflow"
