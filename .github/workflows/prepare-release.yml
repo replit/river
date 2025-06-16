@@ -1,0 +1,37 @@
+name: Prepare Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type (major, minor, or patch)'
+        required: true
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+
+jobs:
+  tag-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Configure Git
+        run: |
+          git config user.name 'GitHub Actions'
+          git config user.email eng+github@repl.it
+
+      - name: Bump version and create tag
+        run: |
+          # This command updates package.json, creates a commit, and adds a tag
+          npm version ${{ github.event.inputs.bump }}
+
+      - name: Push changes and tags
+        run: git push --follow-tags
