@@ -281,17 +281,20 @@ River uses an automated release process with [Release Drafter](https://github.co
 ### Automated Release Process (Recommended)
 
 1. **Merge PRs to main** - Release Drafter automatically:
+
    - Updates the draft release notes with PR titles
    - You can view the draft at [GitHub Releases](../../releases)
 
 2. **When ready to release**:
-   - Go to [Actions](../../actions/workflows/prepare-release.yml) 
+
+   - Go to [Actions](../../actions/workflows/prepare-release.yml)
    - Click "Run workflow" to open the configuration dialog
    - Click "Run workflow" again to confirm and start the process (version is automatically determined from draft release)
-   
+
    The version bump is automatically calculated based on PR labels:
+
    - `patch` - Bug fixes, small improvements (e.g., 0.208.4 → 0.208.5)
-   - `minor` - New features, backwards compatible (e.g., 0.208.4 → 0.209.0)  
+   - `minor` - New features, backwards compatible (e.g., 0.208.4 → 0.209.0)
    - `major` - Breaking changes (e.g., 0.208.4 → 1.0.0)
 
 3. **Automation takes over**:
