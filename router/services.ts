@@ -407,7 +407,7 @@ export function createServiceSchema<
     static scaffold<State extends object>(
       config: ServiceConfiguration<Context, State>,
     ) {
-      return new ServiceScaffold(config);
+      return new ServiceScaffold<Context, State, ParsedMetadata>(config);
     }
 
     /**
