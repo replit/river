@@ -2,9 +2,8 @@
 name: Build and Publish Package
 
 on:
-  push:
-    tags:
-      - 'v*' # Trigger on tags like v1.0.0, v2.3.4, etc.
+  release:
+    types: [published]
 
 jobs:
   build-and-publish:
