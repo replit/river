@@ -954,8 +954,14 @@ describe.each(testMatrix())(
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
+      const ServiceSchema = createServiceSchema<object, ParsedMetadata>();
+
+      const TestServiceScaffold = ServiceSchema.scaffold({
+        initializeState: () => ({}),
+      });
+
       const services = {
-        test: createServiceSchema<object, ParsedMetadata>().define({
+        test: ServiceSchema.define({
           getData: Procedure.rpc({
             requestInit: Type.Object({}),
             responseData: Type.Object({
@@ -965,6 +971,22 @@ describe.each(testMatrix())(
             handler: async ({ ctx }) => {
               return Ok({ ...ctx.metadata });
             },
+          }),
+        }),
+        testScaffold: TestServiceScaffold.finalize({
+          ...TestServiceScaffold.procedures({
+            testrpc: Procedure.rpc({
+              requestInit: Type.Object({}),
+              responseData: Type.Object({
+                data: Type.String(),
+                extra: Type.Number(),
+              }),
+              handler: async ({ ctx }) => {
+                return Ok({
+                  ...ctx.metadata,
+                });
+              },
+            }),
           }),
         }),
       };
@@ -977,6 +999,11 @@ describe.each(testMatrix())(
       // test
       const result = await client.test.getData.rpc({});
       expect(result).toStrictEqual({
+        ok: true,
+        payload: { data: 'foobar', extra: 42 },
+      });
+      const result2 = await client.testScaffold.testrpc.rpc({});
+      expect(result2).toStrictEqual({
         ok: true,
         payload: { data: 'foobar', extra: 42 },
       });
