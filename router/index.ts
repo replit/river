@@ -29,6 +29,11 @@ export type {
   StreamProcedure,
 } from './procedures';
 export type { Writable, Readable } from './streams';
+export {
+  ReadableBrokenError,
+  ReadableImpl as RawReadable,
+  WritableImpl as RawWritable,
+} from './streams';
 export { Procedure } from './procedures';
 export {
   ProcedureErrorSchemaType,
