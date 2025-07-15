@@ -139,11 +139,13 @@ function createPromiseWithResolvers<T>(): PromiseWithResolvers<T> {
 }
 
 /**
- * @internal
- *
  * Internal implementation of a {@link Readable}.
- * This won't be exposed as an interface to river
- * consumers directly.
+ * This should generally not be constructed directly by consumers
+ * of river, but rather through either the client or procedure handlers.
+ *
+ * There are rare cases where this is useful to construct in tests or
+ * to 'tee' a {@link Readable} to create a copy of the stream but
+ * this is not the common case.
  */
 export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
   implements Readable<T, E>
@@ -182,7 +184,6 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
    * should check for the next value.
    */
   private next: PromiseWithResolvers<void> | null = null;
-
   public [Symbol.asyncIterator]() {
     if (this.locked) {
       throw new TypeError('Readable is already locked');
@@ -255,6 +256,11 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
     };
   }
 
+  /**
+   * Collects all the values from the {@link Readable} into an array.
+   *
+   * @see {@link Readable}'s typedoc for more information
+   */
   public async collect(): Promise<Array<ReadableResult<T, E>>> {
     const array: Array<ReadableResult<T, E>> = [];
     for await (const value of this) {
@@ -264,6 +270,11 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
     return array;
   }
 
+  /**
+   * Breaks the {@link Readable} and signals an error to any iterators waiting for the next value.
+   *
+   * @see {@link Readable}'s typedoc for more information
+   */
   public break(): undefined {
     if (this.broken) {
       return;
@@ -278,13 +289,16 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
     this.next?.resolve();
   }
 
+  /**
+   * Whether the {@link Readable} is readable.
+   *
+   * @see {@link Readable}'s typedoc for more information
+   */
   public isReadable(): boolean {
     return !this.locked && !this.broken;
   }
 
   /**
-   * @internal meant for use within river, not exposed as a public API
-   *
    * Pushes a value to be read.
    */
   public _pushValue(value: Result<T, E>): undefined {
@@ -301,8 +315,6 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
   }
 
   /**
-   * @internal meant for use within river, not exposed as a public API
-   *
    * Triggers the close of the {@link Readable}. Make sure to push all remaining
    * values before calling this method.
    */
@@ -323,7 +335,7 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
   }
 
   /**
-   * @internal meant for use within river, not exposed as a public API
+   * Whether the {@link Readable} is closed.
    */
   public isClosed(): boolean {
     return this.closed;
