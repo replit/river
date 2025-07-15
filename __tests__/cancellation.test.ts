@@ -790,6 +790,242 @@ describe.each(testMatrix())(
   },
 );
 
+describe.each(testMatrix())('handler explicit uncaught error cancellation ($transport.name transport, $codec.name codec)',
+  async ({ transport, codec }) => {
+    const opts = { codec: codec.codec };
+
+    const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
+    let getClientTransport: TestSetupHelpers['getClientTransport'];
+    let getServerTransport: TestSetupHelpers['getServerTransport'];
+    beforeEach(async () => {
+      const setup = await transport.setup({ client: opts, server: opts });
+      getClientTransport = setup.getClientTransport;
+      getServerTransport = setup.getServerTransport;
+
+      return async () => {
+        await postTestCleanup();
+        await setup.cleanup();
+      };
+    });
+
+    describe('e2e', () => {
+      test('rpc', async () => {
+        const clientTransport = getClientTransport('client');
+        const serverTransport = getServerTransport();
+        addPostTestCleanup(async () => {
+          await cleanupTransports([clientTransport, serverTransport]);
+        });
+
+        const handler = makeMockHandler('rpc');
+        const services = {
+          service: ServiceSchema.define({
+            rpc: Procedure.rpc({
+              requestInit: Type.Object({}),
+              responseData: Type.Object({}),
+              handler,
+            }),
+          }),
+        };
+
+        const server = createServer(serverTransport, services);
+        const client = createClient<typeof services>(
+          clientTransport,
+          serverTransport.clientId,
+        );
+
+        const resP = client.service.rpc.rpc({});
+
+        await waitFor(() => {
+          expect(handler).toHaveBeenCalledTimes(1);
+        });
+
+        const [{ ctx }] = handler.mock.calls[0];
+        const onRequestFinished = vi.fn();
+        ctx.signal.addEventListener('abort', onRequestFinished);
+
+        const err = ctx.uncaught(new Error('test'));
+
+        expect(err).toEqual(
+          Err({
+            code: UNCAUGHT_ERROR_CODE,
+            message: 'test',
+          }),
+        );
+
+        await waitFor(() => {
+          expect(onRequestFinished).toHaveBeenCalled();
+        });
+        await expect(resP).resolves.toEqual(err);
+
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+
+      test('stream', async () => {
+        const clientTransport = getClientTransport('client');
+        const serverTransport = getServerTransport();
+        addPostTestCleanup(async () => {
+          await cleanupTransports([clientTransport, serverTransport]);
+        });
+
+        const handler = makeMockHandler('stream');
+        const services = {
+          service: ServiceSchema.define({
+            stream: Procedure.stream({
+              requestInit: Type.Object({}),
+              requestData: Type.Object({}),
+              responseData: Type.Object({}),
+              handler,
+            }),
+          }),
+        };
+
+        const server = createServer(serverTransport, services);
+        const client = createClient<typeof services>(
+          clientTransport,
+          serverTransport.clientId,
+        );
+
+        const { reqWritable, resReadable } = client.service.stream.stream({});
+
+        await waitFor(() => {
+          expect(handler).toHaveBeenCalledTimes(1);
+        });
+
+        const [{ ctx, reqReadable, resWritable }] = handler.mock.calls[0];
+
+        const err = ctx.uncaught(new Error('test'));
+
+        expect(err).toEqual(
+          Err({
+            code: UNCAUGHT_ERROR_CODE,
+            message: 'test',
+          }),
+        );
+
+        expect(await reqReadable.collect()).toEqual([err]);
+        expect(resWritable.isWritable()).toEqual(false);
+
+        expect(await resReadable.collect()).toEqual([err]);
+        expect(reqWritable.isWritable()).toEqual(false);
+
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+
+      test('upload', async () => {
+        const clientTransport = getClientTransport('client');
+        const serverTransport = getServerTransport();
+        addPostTestCleanup(async () => {
+          await cleanupTransports([clientTransport, serverTransport]);
+        });
+
+        const handler = makeMockHandler('upload');
+        const services = {
+          service: ServiceSchema.define({
+            upload: Procedure.upload({
+              requestInit: Type.Object({}),
+              requestData: Type.Object({}),
+              responseData: Type.Object({}),
+              handler,
+            }),
+          }),
+        };
+
+        const server = createServer(serverTransport, services);
+        const client = createClient<typeof services>(
+          clientTransport,
+          serverTransport.clientId,
+        );
+
+        const { reqWritable, finalize } = client.service.upload.upload({});
+
+        await waitFor(() => {
+          expect(handler).toHaveBeenCalledTimes(1);
+        });
+
+        const [{ ctx, reqReadable }] = handler.mock.calls[0];
+
+        const err = ctx.uncaught(new Error('test'));
+
+        expect(err).toEqual(
+          Err({
+            code: UNCAUGHT_ERROR_CODE,
+            message: 'test',
+          }),
+        );
+
+        expect(await finalize()).toEqual(err);
+        expect(reqWritable.isWritable()).toEqual(false);
+        expect(await reqReadable.collect()).toEqual([err]);
+
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+
+      test('subscribe', async () => {
+        const clientTransport = getClientTransport('client');
+        const serverTransport = getServerTransport();
+        addPostTestCleanup(async () => {
+          await cleanupTransports([clientTransport, serverTransport]);
+        });
+
+        const handler = makeMockHandler('subscription');
+        const services = {
+          service: ServiceSchema.define({
+            subscribe: Procedure.subscription({
+              requestInit: Type.Object({}),
+              responseData: Type.Object({}),
+              handler,
+            }),
+          }),
+        };
+
+        const server = createServer(serverTransport, services);
+        const client = createClient<typeof services>(
+          clientTransport,
+          serverTransport.clientId,
+        );
+
+        const { resReadable } = client.service.subscribe.subscribe({});
+
+        await waitFor(() => {
+          expect(handler).toHaveBeenCalledTimes(1);
+        });
+
+        const [{ ctx, resWritable }] = handler.mock.calls[0];
+
+        const err = ctx.uncaught(new Error('test'));
+
+        expect(err).toEqual(
+          Err({
+            code: UNCAUGHT_ERROR_CODE,
+            message: 'test',
+          }),
+        );
+
+        expect(await resReadable.collect()).toEqual([err]);
+        expect(resWritable.isWritable()).toEqual(false);
+
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+    });
+  },
+);
+
 const createRejectable = () => {
   let reject: (reason: Error) => void;
   const promise = new Promise<void>((_res, rej) => {

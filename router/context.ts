@@ -2,7 +2,7 @@ import { Span } from '@opentelemetry/api';
 import { TransportClientId } from '../transport/message';
 import { SessionId } from '../transport/sessionStateMachine/common';
 import { ErrResult } from './result';
-import { CancelErrorSchema } from './errors';
+import { CancelErrorSchema, UncaughtErrorSchema } from './errors';
 import { Static } from '@sinclair/typebox';
 
 /**
@@ -40,6 +40,15 @@ export type ProcedureHandlerContext<State, Context, ParsedMetadata> =
      * the river documentation to understand the difference between the two concepts.
      */
     cancel: (message?: string) => ErrResult<Static<typeof CancelErrorSchema>>;
+    /**
+     * This emits an uncaught error in the same way that throwing an error in a handler
+     * would. You should minimize the amount of work you do after calling this function
+     * as this will start a cleanup of the entire procedure call.
+     *
+     * You'll typically want to use this for streaming procedures, as in e.g. an RPC
+     * you can just throw instead.
+     */
+    uncaught: (err?: unknown) => ErrResult<Static<typeof UncaughtErrorSchema>>;
     /**
      * This signal is a standard [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal)
      * triggered when the procedure invocation is done. This signal tracks the invocation/request finishing

@@ -73,6 +73,16 @@ export function castTypeboxValueErrors(
 }
 
 /**
+ * A schema for unexpected errors in handlers
+ */
+export const UncaughtErrorSchema = Type.Object({
+  code: Type.Literal(UNCAUGHT_ERROR_CODE),
+  message: Type.String(),
+});
+
+export const UncaughtResultSchema = ErrResultSchema(UncaughtErrorSchema);
+
+/**
  * A schema for cancel payloads sent from the client
  */
 export const CancelErrorSchema = Type.Object({
@@ -88,6 +98,7 @@ export const CancelResultSchema = ErrResultSchema(CancelErrorSchema);
  * on the client).
  */
 export const ReaderErrorSchema = Type.Union([
+  UncaughtErrorSchema,
   Type.Object({
     code: Type.Literal(UNCAUGHT_ERROR_CODE),
     message: Type.String(),
