@@ -100,10 +100,6 @@ export const CancelResultSchema = ErrResultSchema(CancelErrorSchema);
 export const ReaderErrorSchema = Type.Union([
   UncaughtErrorSchema,
   Type.Object({
-    code: Type.Literal(UNCAUGHT_ERROR_CODE),
-    message: Type.String(),
-  }),
-  Type.Object({
     code: Type.Literal(UNEXPECTED_DISCONNECT_CODE),
     message: Type.String(),
   }),
