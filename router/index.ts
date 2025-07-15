@@ -28,7 +28,8 @@ export type {
   SubscriptionProcedure,
   StreamProcedure,
 } from './procedures';
-export type { Writable, Readable } from './streams';
+export type { Writable, Readable, ReadableResult } from './streams';
+export { ReadableBrokenError, ReadableImpl as RawReadable } from './streams';
 export { Procedure } from './procedures';
 export {
   ProcedureErrorSchemaType,
