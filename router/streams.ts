@@ -10,17 +10,18 @@ export const ReadableBrokenError = {
 /**
  * Similar to {@link Result} but with an extra error to handle cases where {@link Readable.break} is called
  */
-export type ReadableResult<T, E extends Static<BaseErrorSchemaType>> = Result<
+export type ReadableResult<
   T,
-  E | typeof ReadableBrokenError
->;
+  E extends Static<BaseErrorSchemaType> = Static<BaseErrorSchemaType>,
+> = Result<T, E | typeof ReadableBrokenError>;
 
 /**
  * A simple {@link AsyncIterator} used in {@link Readable}
  * that doesn't have a the extra "return" and "throw" methods, and
  * the doesn't have a "done value" (TReturn).
  */
-export interface ReadableIterator<T, E extends Static<BaseErrorSchemaType>> {
+export interface ReadableIterator<T, E extends Static<BaseErrorSchemaType>>
+  extends AsyncIterator<ReadableResult<T, E>> {
   next(): Promise<
     | {
         done: false;
@@ -184,7 +185,12 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
    * should check for the next value.
    */
   private next: PromiseWithResolvers<void> | null = null;
-  public [Symbol.asyncIterator]() {
+
+  /**
+   * Consumes the {@link Readable} and returns an {@link AsyncIterator} that can be used
+   * to iterate over the values in the {@link Readable}.
+   */
+  public [Symbol.asyncIterator](): ReadableIterator<T, E> {
     if (this.locked) {
       throw new TypeError('Readable is already locked');
     }
@@ -248,7 +254,7 @@ export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
 
         return { done: false, value } as const;
       },
-      return: () => {
+      return: async () => {
         this.break();
 
         return { done: true, value: undefined } as const;
