@@ -32,6 +32,18 @@ describe('Readable unit', () => {
     readable._triggerClose();
   });
 
+  it('should be able to use the raw iter from Symbol.asyncIterator', async () => {
+    const readable = new ReadableImpl<number, SomeError>();
+    const iter = readable[Symbol.asyncIterator]();
+
+    const iterNext = iter.next();
+    readable._pushValue(Ok(1));
+    expect(await iterNext).toEqual({ value: Ok(1), done: false });
+    const iterNext2 = iter.next();
+    readable._triggerClose();
+    expect(await iterNext2).toEqual({ value: undefined, done: true });
+  });
+
   it('should synchronously lock the stream when collect() is called', () => {
     const readable = new ReadableImpl<number, SomeError>();
     void readable.collect();
