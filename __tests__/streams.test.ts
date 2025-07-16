@@ -3,6 +3,7 @@ import {
   ReadableImpl,
   WritableImpl,
   ReadableBrokenError,
+  ReadableResult,
 } from '../router/streams';
 import { Err, Ok } from '../router';
 import {
@@ -34,7 +35,9 @@ describe('Readable unit', () => {
 
   it('should be able to use the raw iter from Symbol.asyncIterator', async () => {
     const readable = new ReadableImpl<number, SomeError>();
-    const iter = readable[Symbol.asyncIterator]();
+    const iter = readable[Symbol.asyncIterator]() satisfies AsyncIterator<
+      ReadableResult<number>
+    >;
 
     const iterNext = iter.next();
     readable._pushValue(Ok(1));

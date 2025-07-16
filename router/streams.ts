@@ -10,10 +10,10 @@ export const ReadableBrokenError = {
 /**
  * Similar to {@link Result} but with an extra error to handle cases where {@link Readable.break} is called
  */
-export type ReadableResult<T, E extends Static<BaseErrorSchemaType>> = Result<
+export type ReadableResult<
   T,
-  E | typeof ReadableBrokenError
->;
+  E extends Static<BaseErrorSchemaType> = Static<BaseErrorSchemaType>,
+> = Result<T, E | typeof ReadableBrokenError>;
 
 /**
  * A simple {@link AsyncIterator} used in {@link Readable}
