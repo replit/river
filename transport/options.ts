@@ -33,10 +33,18 @@ export const defaultClientTransportOptions: ClientTransportOptions = {
   ...defaultConnectionRetryOptions,
 };
 
-export type ServerTransportOptions = TransportOptions;
+export type ServerTransportOptions = TransportOptions & {
+  /**
+   * If `true` (the default), then the transport/server will parse input
+   * (non-control, user-provided) values strictly, meaning that the input value
+   * is expected to match the schema exactly without any processing.
+   */
+  strictInputParsing: boolean;
+};
 
 export type ProvidedServerTransportOptions = Partial<ServerTransportOptions>;
 
 export const defaultServerTransportOptions: ServerTransportOptions = {
   ...defaultTransportOptions,
+  strictInputParsing: true,
 };

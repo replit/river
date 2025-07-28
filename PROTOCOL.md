@@ -250,6 +250,42 @@ type Control =
 
 `Control` is a payload that is wrapped with `TransportMessage`.
 
+### Non-strict input parsing
+
+By default, River validates the input to procedure calls (`requestInit`, `requestData`, and so on) using a mundane type check via TypeBox. If we had a schema like so:
+
+```ts
+const schema = Type.Object({
+  a: Type.String(),
+  b: Type.Number(),
+});
+```
+
+Then the following input would fail to validate:
+
+```json
+{ "a": "foo" }
+```
+
+as the `b` property is not present.
+
+Optionally, separately on the server and transport you can set `strictInputParsing` to `false` which will make River be more liberal on what it considers valid - even up to defaulting values if this would make the input pass validation. The previous example input that failed would actually pass in non-strict mode, and it would be parsed and yielded to procedure handlers as:
+
+```json
+{ "a": "foo", "b": 0 }
+```
+
+Conceptually this is intended to be closest to [what proto3 has to do to enable wire-safe changes to schemas](https://protobuf.dev/programming-guides/proto3/#wire-safe-changes). It requires that procedure handlers do additional work in validating their input - but it makes it much safer to host River servers that are deployed separately from their consumers. Care must be taken still, as TypeBox is much more expressive and it's much harder to make the same guarantees as proto3 does.
+
+Non-strict parsing _only applies to user-provided values_. Everything else, typically control messages, are parsed strictly and must pass an immediate validation check. For servers, this means that `requestInit`, `requestData`, and any other procedure input objects are parsed non-strictly, and for transports the extended handshake input metadata is parsed non-strictly.
+
+Non-strict parsing should allow the following cases:
+
+- Adding an additional, non-optional field to a schema.
+- Extending an enum's value (the server should default to the first enum member for unknown cases)
+
+TODO
+
 ## Streams
 
 Streams tie together a series of messages into a single logical 'stream' of communication associated with a single remote procedure invocation.
