@@ -25,7 +25,7 @@ export interface Service<
 > {
   readonly state: State;
   readonly procedures: Procs;
-  [Symbol.asyncDispose]: () => Promise<void>;
+  [Symbol.asyncDispose]: () => PromiseLike<void>;
 }
 
 /**
@@ -158,7 +158,7 @@ type BrandedProcedureMap<Context, State, ParsedMetadata> = Record<
 >;
 
 type MaybeDisposable<State extends object> = State & {
-  [Symbol.asyncDispose]?: () => Promise<void>;
+  [Symbol.asyncDispose]?: () => PromiseLike<void>;
   [Symbol.dispose]?: () => void;
 };
 
