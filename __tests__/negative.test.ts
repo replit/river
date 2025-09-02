@@ -295,7 +295,9 @@ describe('should handle incompatabilities', async () => {
       }
     }
 
-    const createClientSpy = vi.fn(() => Promise.resolve(createLocalWebSocketClient(port)));
+    const createClientSpy = vi.fn(() =>
+      Promise.resolve(createLocalWebSocketClient(port)),
+    );
     const clientTransport = new WebSocketClientTransport(
       createClientSpy,
       'client',
@@ -313,13 +315,14 @@ describe('should handle incompatabilities', async () => {
     await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
     await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
 
-
     expect(clientTransport.reconnectOnConnectionDrop).toBe(true);
     const session = Array.from(clientTransport.sessions.values())[0];
     assert(session);
     assert(session.state === SessionState.Connected);
 
-    const fatalError = new FatalConnectionError('simulated fatal connection error');
+    const fatalError = new FatalConnectionError(
+      'simulated fatal connection error',
+    );
     session.conn.onError(fatalError);
     session.conn.onClose();
 
