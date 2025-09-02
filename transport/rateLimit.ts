@@ -38,6 +38,12 @@ export interface ConnectionRetryOptions {
    * After a successful connection attempt, how long to wait before we restore a single budget.
    */
   budgetRestoreIntervalMs: number;
+
+  /**
+   * A function to determine whether an error is fatal and should not be retried.
+   * If this function returns true, the client transport will not attempt to reconnect.
+   */
+  isFatalConnectionError: (err: Error) => boolean;
 }
 
 export class LeakyBucketRateLimit {

@@ -7,6 +7,17 @@ interface ConnectionInfoExtras extends Record<string, unknown> {
 
 const WS_HEALTHY_CLOSE_CODE = 1000;
 
+export class WebSocketCloseError extends Error {
+  code: number;
+  reason: string;
+
+  constructor(code: number, reason: string) {
+    super(`websocket closed with code and reason: ${code} - ${reason}`);
+    this.code = code;
+    this.reason = reason;
+  }
+}
+
 export class WebSocketConnection extends Connection {
   ws: WsLike;
   extras?: ConnectionInfoExtras;
@@ -36,10 +47,7 @@ export class WebSocketConnection extends Connection {
 
     this.ws.onclose = ({ code, reason }) => {
       if (didError) {
-        const err = new Error(
-          `websocket closed with code and reason: ${code} - ${reason}`,
-        );
-
+        const err = new WebSocketCloseError(code, reason);
         this.onError(err);
       }
 
