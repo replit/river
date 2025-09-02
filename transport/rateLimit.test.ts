@@ -3,9 +3,11 @@ import {
   ConnectionRetryOptions,
 } from '../transport/rateLimit';
 import { describe, test, expect, vi } from 'vitest';
+import { defaultClientTransportOptions } from './options';
 
 describe('LeakyBucketRateLimit', () => {
   const options: ConnectionRetryOptions = {
+    ...defaultClientTransportOptions,
     attemptBudgetCapacity: 10,
     budgetRestoreIntervalMs: 1000,
     baseIntervalMs: 100,

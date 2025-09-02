@@ -1,6 +1,7 @@
 import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 import http from 'node:http';
 import {
+  advanceFakeTimersBySessionGrace,
   cleanupTransports,
   testFinishesCleanly,
   waitFor,
@@ -25,6 +26,7 @@ import { ProtocolError } from '../transport/events';
 import NodeWs from 'ws';
 import { createPostTestCleanups } from '../testUtil/fixtures/cleanup';
 import { generateId } from '../transport/id';
+import { SessionState } from '../transport/sessionStateMachine/common';
 
 describe('should handle incompatabilities', async () => {
   let server: http.Server;
@@ -281,6 +283,57 @@ describe('should handle incompatabilities', async () => {
 
     await testFinishesCleanly({
       clientTransports: [],
+      serverTransport,
+    });
+  });
+
+  test('fatal connection error should prevent reconnection', async () => {
+    class FatalConnectionError extends Error {
+      constructor(message: string) {
+        super(message);
+        this.name = 'FatalConnectionError';
+      }
+    }
+
+    const createClientSpy = vi.fn(() =>
+      Promise.resolve(createLocalWebSocketClient(port)),
+    );
+    const clientTransport = new WebSocketClientTransport(
+      createClientSpy,
+      'client',
+      {
+        isFatalConnectionError: (err) => err instanceof FatalConnectionError,
+      },
+    );
+    const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
+
+    addPostTestCleanup(async () => {
+      await cleanupTransports([clientTransport, serverTransport]);
+    });
+
+    clientTransport.connect(serverTransport.clientId);
+    await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
+    await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
+
+    expect(clientTransport.reconnectOnConnectionDrop).toBe(true);
+    const session = Array.from(clientTransport.sessions.values())[0];
+    assert(session);
+    assert(session.state === SessionState.Connected);
+
+    const fatalError = new FatalConnectionError(
+      'simulated fatal connection error',
+    );
+    session.conn.onError(fatalError);
+    session.conn.onClose();
+
+    await advanceFakeTimersBySessionGrace();
+    expect(numberOfConnections(clientTransport)).toBe(0);
+    expect(clientTransport.reconnectOnConnectionDrop).toBe(false);
+    expect(clientTransport.sessions.size).toBe(0);
+    expect(createClientSpy).toHaveBeenCalledTimes(1);
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
       serverTransport,
     });
   });

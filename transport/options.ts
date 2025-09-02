@@ -26,6 +26,7 @@ const defaultConnectionRetryOptions: ConnectionRetryOptions = {
   maxBackoffMs: 32_000,
   attemptBudgetCapacity: 5,
   budgetRestoreIntervalMs: 200,
+  isFatalConnectionError: () => false,
 };
 
 export const defaultClientTransportOptions: ClientTransportOptions = {

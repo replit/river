@@ -276,10 +276,23 @@ export abstract class ClientTransport<
         onConnectionErrored: (err) => {
           // just log, when we error we also emit close
           const errStr = coerceErrorString(err);
-          this.log?.warn(
-            `connection to ${connectedSession.to} errored: ${errStr}`,
-            connectedSession.loggingMetadata,
-          );
+
+          if (
+            err instanceof Error &&
+            this.options.isFatalConnectionError(err)
+          ) {
+            this.log?.warn(
+              `connection to ${connectedSession.to} fatally errored: ${errStr}`,
+              connectedSession.loggingMetadata,
+            );
+
+            this.reconnectOnConnectionDrop = false;
+          } else {
+            this.log?.warn(
+              `connection to ${connectedSession.to} errored: ${errStr}`,
+              connectedSession.loggingMetadata,
+            );
+          }
         },
         onConnectionClosed: () => {
           this.log?.info(
