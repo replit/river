@@ -18,6 +18,10 @@ export {
 } from './sessionStateMachine';
 export { Connection } from './connection';
 export {
+  WebSocketCloseError,
+  WebSocketConnection,
+} from './impls/ws/connection';
+export {
   TransportMessageSchema,
   OpaqueTransportMessageSchema,
 } from './message';
