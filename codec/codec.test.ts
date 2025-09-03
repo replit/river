@@ -27,6 +27,11 @@ describe.each(codecs)('codec -- $name', ({ codec }) => {
     expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual({});
   });
 
+  test('encodes bigint properly', () => {
+    const msg = { big: BigInt(Number.MAX_SAFE_INTEGER) + BigInt(1) };
+    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
+  });
+
   test('deeply nested test', () => {
     const msg = {
       array: [{ object: true }],
