@@ -28,6 +28,10 @@ interface Base64EncodedValue {
   $t: string;
 }
 
+interface BigIntEncodedValue {
+  $b: string;
+}
+
 /**
  * Naive JSON codec implementation using JSON.stringify and JSON.parse.
  * @type {Codec}
@@ -41,6 +45,8 @@ export const NaiveJsonCodec: Codec = {
         const val = this[key];
         if (val instanceof Uint8Array) {
           return { $t: uint8ArrayToBase64(val) } satisfies Base64EncodedValue;
+        } else if (typeof val === 'bigint') {
+          return { $b: val.toString() } satisfies BigIntEncodedValue;
         } else {
           return val;
         }
@@ -53,12 +59,13 @@ export const NaiveJsonCodec: Codec = {
       function reviver(_key, val: unknown) {
         if ((val as Base64EncodedValue | undefined)?.$t !== undefined) {
           return base64ToUint8Array((val as Base64EncodedValue).$t);
+        } else if ((val as BigIntEncodedValue | undefined)?.$b !== undefined) {
+          return BigInt((val as BigIntEncodedValue).$b);
         } else {
           return val;
         }
       },
     ) as unknown;
-
     if (typeof parsed !== 'object' || parsed === null) {
       throw new Error('unpacked msg is not an object');
     }

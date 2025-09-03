@@ -35,10 +35,10 @@ extensionCodec.register({
  */
 export const BinaryCodec: Codec = {
   toBuffer(obj) {
-    return encode(obj, { ignoreUndefined: true });
+    return encode(obj, { ignoreUndefined: true, extensionCodec });
   },
   fromBuffer: (buff: Uint8Array) => {
-    const res = decode(buff);
+    const res = decode(buff, { extensionCodec });
     if (typeof res !== 'object' || res === null) {
       throw new Error('unpacked msg is not an object');
     }
