@@ -29,6 +29,7 @@ import {
   ServerSession,
   ServerSessionStateGraph,
 } from './sessionStateMachine/transitions';
+import { parseInput } from '../router/parsing';
 
 export abstract class ServerTransport<
   ConnType extends Connection,
@@ -267,7 +268,13 @@ export abstract class ServerTransport<
     // invariant: must pass custom validation if defined
     let parsedMetadata: ParsedMetadata = {} as ParsedMetadata;
     if (this.handshakeExtensions) {
-      if (!Value.Check(this.handshakeExtensions.schema, msg.payload.metadata)) {
+      const parseMetadataResult = parseInput({
+        strict: this.options.strictInputParsing,
+        schema: this.handshakeExtensions.schema,
+        input: msg.payload.metadata,
+      });
+
+      if (!parseMetadataResult?.ok) {
         this.rejectHandshakeRequest(
           session,
           msg.from,
@@ -276,12 +283,7 @@ export abstract class ServerTransport<
           {
             ...session.loggingMetadata,
             connectedTo: msg.from,
-            validationErrors: [
-              ...Value.Errors(
-                this.handshakeExtensions.schema,
-                msg.payload.metadata,
-              ),
-            ],
+            validationErrors: parseMetadataResult.errors,
           },
         );
 
@@ -294,7 +296,7 @@ export abstract class ServerTransport<
 
       const parsedMetadataOrFailureCode =
         await this.handshakeExtensions.validate(
-          msg.payload.metadata,
+          parseMetadataResult.value,
           previousParsedMetadata,
         );
 
@@ -304,7 +306,7 @@ export abstract class ServerTransport<
         return;
       }
 
-      // handler rejected the connection
+      // handler rejected the connection (the value is a special error string)
       if (
         Value.Check(
           HandshakeErrorCustomHandlerFatalResponseCodes,

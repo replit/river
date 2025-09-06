@@ -46,6 +46,7 @@ import { ServerTransport } from '../transport/server';
 import { ReadableImpl, WritableImpl } from './streams';
 import { IdentifiedSession } from '../transport/sessionStateMachine/common';
 import { SessionBoundSendFn } from '../transport/transport';
+import { parseInput } from './parsing';
 
 type StreamId = string;
 
@@ -122,6 +123,12 @@ class RiverServer<
   private middlewares: Array<Middleware>;
 
   /**
+   * If the server is configured to parse input strictly, or try to use
+   * more protobuf-like semantics (if `false`).
+   */
+  private readonly strictInputParsing: boolean;
+
+  /**
    * We create a tombstones for streams cancelled by the server
    * so that we don't hit errors when the client has inflight
    * requests it sent before it saw the cancel.
@@ -140,14 +147,23 @@ class RiverServer<
 
   private unregisterTransportListeners: () => void;
 
-  constructor(
-    transport: ServerTransport<Connection, MetadataSchema, ParsedMetadata>,
-    services: Services,
-    handshakeOptions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>,
-    extendedContext?: Context,
+  constructor({
+    transport,
+    services,
+    handshakeOptions,
+    extendedContext,
+    strictInputParsing = true,
     maxCancelledStreamTombstonesPerSession = 200,
-    middlewares: Array<Middleware> = [],
-  ) {
+    middlewares = [],
+  }: {
+    transport: ServerTransport<Connection, MetadataSchema, ParsedMetadata>;
+    services: Services;
+    handshakeOptions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>;
+    extendedContext?: Context;
+    strictInputParsing?: boolean;
+    maxCancelledStreamTombstonesPerSession?: number;
+    middlewares?: Array<Middleware>;
+  }) {
     const instances: Record<string, AnyService> = {};
     this.middlewares = middlewares;
 
@@ -180,6 +196,7 @@ class RiverServer<
     this.maxCancelledStreamTombstonesPerSession =
       maxCancelledStreamTombstonesPerSession;
     this.log = transport.log;
+    this.strictInputParsing = strictInputParsing;
 
     const handleCreatingNewStreams = (message: EventMap['message']) => {
       if (message.to !== this.transport.clientId) {
@@ -352,28 +369,37 @@ class RiverServer<
         return;
       }
 
-      // normal request data for upload or stream
-      if (
-        'requestData' in procedure &&
-        Value.Check(procedure.requestData, msg.payload)
-      ) {
-        reqReadable._pushValue(Ok(msg.payload));
+      // we may either be parsing some request data input, or this is a control
+      // message - we'll handle both cases at once.
+      const requestDataResult =
+        'requestData' in procedure
+          ? parseInput({
+              strict: this.strictInputParsing,
+              schema: procedure.requestData,
+              input: msg.payload,
+            })
+          : null;
 
+      // most expected case: requestData present, parse ok
+      // as an optimization, we check this case first
+      if (requestDataResult?.ok) {
+        reqReadable._pushValue(Ok(requestDataResult.value));
+
+        // It's atypical for any of our post-v1 clients to send a close with a
+        // request payload, but it's technically legal, so we'll handle it.
         if (isStreamCloseBackwardsCompat(msg.controlFlags, protocolVersion)) {
-          // It's atypical for any of our post-v1 clients to send a close with a
-          // request payload, but it's technically legal, so we'll handle it.
           closeReadable();
         }
 
         return;
       }
 
+      // less common expected case: the client is closing a stream or upload
+      // procedure after they're done (control message)
       if (
         Value.Check(ControlMessagePayloadSchema, msg.payload) &&
         isStreamCloseBackwardsCompat(msg.controlFlags, protocolVersion)
       ) {
-        // Clients typically send this shape of close for stream and upload
-        // after they're done.
         closeReadable();
 
         return;
@@ -382,16 +408,15 @@ class RiverServer<
       // We couldn't make sense of the message, it's probably a bad request
       let validationErrors: Static<typeof ValidationErrors>;
       let errMessage: string;
-      if ('requestData' in procedure) {
+
+      if (requestDataResult) {
         errMessage = 'message in requestData position did not match schema';
-        validationErrors = castTypeboxValueErrors(
-          Value.Errors(procedure.requestData, msg.payload),
-        );
+        validationErrors = requestDataResult.errors;
       } else {
+        errMessage = 'message in control payload position did not match schema';
         validationErrors = castTypeboxValueErrors(
           Value.Errors(ControlMessagePayloadSchema, msg.payload),
         );
-        errMessage = 'message in control payload position did not match schema';
       }
 
       this.log?.warn(errMessage, {
@@ -892,39 +917,62 @@ class RiverServer<
       return null;
     }
 
+    let initPayload: unknown;
     let passInitAsDataForBackwardsCompat = false;
+
+    // TODO remove once clients migrate to v2
+    // In v1.1 sometimes the first message is not `init`, but instead it's the `input`
+    // this backwards compatibility path requires procedures to define their `init` as
+    // an empty-object-compatible-schema (i.e. either actually empty or optional values)
+    // The reason we don't check if `init` is satisified here is because false positives
+    // are easy to hit, we'll err on the side of caution and treat it as a request, servers
+    // that expect v1.1 clients should handle this case themselves.
     if (
       session.protocolVersion === 'v1.1' &&
       (procedure.type === 'upload' || procedure.type === 'stream') &&
-      Value.Check(procedure.requestData, initMessage.payload) &&
       Value.Check(procedure.requestInit, {})
     ) {
-      // TODO remove once clients migrate to v2
-      // In v1.1 sometimes the first message is not `init`, but instead it's the `input`
-      // this backwards compatibility path requires procedures to define their `init` as
-      // an empty-object-compatible-schema (i.e. either actually empty or optional values)
-      // The reason we don't check if `init` is satisified here is because false positives
-      // are easy to hit, we'll err on the side of caution and treat it as a request, servers
-      // that expect v1.1 clients should handle this case themselves.
-      passInitAsDataForBackwardsCompat = true;
-    } else if (!Value.Check(procedure.requestInit, initMessage.payload)) {
-      const errMessage = `procedure init failed validation`;
-      this.log?.warn(errMessage, {
-        ...session.loggingMetadata,
-        clientId: this.transport.clientId,
-        transportMessage: initMessage,
-        tags: ['invalid-request'],
+      const requestDataResult = parseInput({
+        strict: this.strictInputParsing,
+        schema: procedure.requestData,
+        input: initMessage.payload,
       });
 
-      cancelStream(
-        initMessage.streamId,
-        Err({
-          code: INVALID_REQUEST_CODE,
-          message: errMessage,
-        }),
-      );
+      // we fallback to our usual logic if this fails
+      if (requestDataResult?.ok) {
+        initPayload = requestDataResult.value;
+        passInitAsDataForBackwardsCompat = true;
+      }
+    }
 
-      return null;
+    if (!passInitAsDataForBackwardsCompat) {
+      const requestInitResult = parseInput({
+        strict: this.strictInputParsing,
+        schema: procedure.requestInit,
+        input: initMessage.payload,
+      });
+
+      if (!requestInitResult?.ok) {
+        const errMessage = `procedure init failed validation`;
+        this.log?.warn(errMessage, {
+          ...session.loggingMetadata,
+          clientId: this.transport.clientId,
+          transportMessage: initMessage,
+          tags: ['invalid-request'],
+        });
+
+        cancelStream(
+          initMessage.streamId,
+          Err({
+            code: INVALID_REQUEST_CODE,
+            message: errMessage,
+          }),
+        );
+
+        return null;
+      }
+
+      initPayload = requestInitResult.value;
     }
 
     return {
@@ -933,7 +981,7 @@ class RiverServer<
       procedureName: initMessage.procedureName,
       serviceName: initMessage.serviceName,
       tracingCtx: initMessage.tracing,
-      initPayload: initMessage.payload,
+      initPayload,
       sessionMetadata: sessionMetadata,
       procedure,
       serviceContext,
@@ -1076,25 +1124,48 @@ export function createServer<
   transport: ServerTransport<Connection, MetadataSchema, ParsedMetadata>,
   services: Services,
   providedServerOptions?: Partial<{
+    /**
+     * An optional object containing additional handshake options to be
+     * passed to the transport.
+     */
     handshakeOptions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>;
+
+    /**
+     * An optional object containing additional context to be passed to all services.
+     */
     extendedContext?: Context;
+
+    /**
+     * If `true` (the default), then the server will parse input (non-control,
+     * user-provided) values strictly, meaning that the input value is expected
+     * to match the schema exactly without any processing.
+     *
+     * You should consider making sure your transport has this set as well if you
+     * change this value from its default. For transports, this mainly handles
+     * the handshake metadata parsing - while this is for procedures.
+     */
+    strictInputParsing?: boolean;
+
     /**
      * Maximum number of cancelled streams to keep track of to avoid
      * cascading stream errors.
      */
     maxCancelledStreamTombstonesPerSession?: number;
+
     /**
-     * Middlewares run before procedure handlers allowing you to inspect requests and responses..
+     * Middlewares run before procedure handlers allowing you to inspect requests and responses.
      */
     middlewares?: Array<Middleware>;
   }>,
 ): Server<Context, ParsedMetadata, Services> {
-  return new RiverServer(
+  return new RiverServer({
     transport,
     services,
-    providedServerOptions?.handshakeOptions,
-    providedServerOptions?.extendedContext,
-    providedServerOptions?.maxCancelledStreamTombstonesPerSession,
-    providedServerOptions?.middlewares,
-  );
+    handshakeOptions: providedServerOptions?.handshakeOptions,
+    extendedContext: providedServerOptions?.extendedContext,
+    strictInputParsing: providedServerOptions?.strictInputParsing,
+    maxCancelledStreamTombstonesPerSession:
+      providedServerOptions?.maxCancelledStreamTombstonesPerSession,
+    middlewares: providedServerOptions?.middlewares,
+  });
 }
