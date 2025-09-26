@@ -354,6 +354,23 @@ describe('Writable unit', () => {
     expect(closeCb).toHaveBeenCalledOnce();
   });
 
+  it('should support closing with value', () => {
+    const closeCb = vi.fn();
+    const writeCb = vi.fn();
+    const writable = new WritableImpl<number>({
+      writeCb,
+      closeCb,
+    });
+
+    expect(writable.isWritable()).toBeTruthy();
+
+    writable.close(42);
+    expect(writable.isWritable()).toBeFalsy();
+    expect(closeCb).toHaveBeenCalledOnce();
+    expect(writeCb).toHaveBeenCalledOnce();
+    expect(writeCb).toHaveBeenCalledWith(42);
+  });
+
   it('should allow calling close multiple times', () => {
     const closeCb = vi.fn();
     const writable = new WritableImpl<number>({

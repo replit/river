@@ -93,10 +93,12 @@ export interface Writable<T> {
   /**
    * {@link close} signals the closure of the {@link Writeable}, informing the {@link Readable} end that
    * all data has been transmitted and we've cleanly closed.
+   * Optionally a final value can be passed to {@link close}, which will be the last value
+   * to write before it closes.
    *
    * Calling {@link close} multiple times is a no-op.
    */
-  close(): undefined;
+  close(value?: T): undefined;
   /**
    * {@link isWritable} returns true if it's safe to call {@link write}, which
    * means that the {@link Writable} hasn't been closed due to {@link close} being called
@@ -362,7 +364,7 @@ export class WritableImpl<T> implements Writable<T> {
   /**
    * Passed via constructor to pass on calls to {@link close}
    */
-  private closeCb: () => void;
+  private closeCb: (value?: T) => void;
   /**
    * Whether {@link close} was called, and {@link Writable} is not writable anymore.
    */
@@ -385,9 +387,13 @@ export class WritableImpl<T> implements Writable<T> {
     return !this.closed;
   }
 
-  public close(): undefined {
+  public close(value?: T): undefined {
     if (this.closed) {
       return;
+    }
+
+    if (value !== undefined) {
+      this.writeCb(value);
     }
 
     this.closed = true;
