@@ -78,8 +78,10 @@ Before proceeding, ensure you have TypeScript 5 installed and configured appropr
 First, we create a service using `ServiceSchema`:
 
 ```ts
-import { ServiceSchema, Procedure, Ok } from '@replit/river';
+import { createServiceSchema, Procedure, Ok } from '@replit/river';
 import { Type } from '@sinclair/typebox';
+
+export const ServiceSchema = createServiceSchema()
 
 export const ExampleService = ServiceSchema.define(
   // configuration
@@ -118,9 +120,11 @@ const port = 3000;
 const wss = new WebSocketServer({ server: httpServer });
 const transport = new WebSocketServerTransport(wss, 'SERVER');
 
-export const server = createServer(transport, {
-  example: ExampleService,
-});
+export const services = {
+  example: ExampleServer
+}
+
+export const server = createServer(transport, services);
 
 export type ServiceSurface = typeof server;
 
@@ -139,7 +143,7 @@ const transport = new WebSocketClientTransport(
   'my-client-id',
 );
 
-const client = createClient(
+const client = createClient<typeof services>(
   transport,
   'SERVER', // transport id of the server in the previous step
   { eagerlyConnect: true }, // whether to eagerly connect to the server on creation (optional argument)
