@@ -333,7 +333,7 @@ const ExampleService = ServiceSchema.define({
       code: Type.Literal('INVALID_INPUT'),
       message: Type.String(),
     }),
-    async handler({ reqInit, reqReadable }) {
+    async handler({ ctx, reqInit, reqReadable }) {
       let sum = 0;
       for await (const msg of reqReadable) {
         if (!msg.ok) {
@@ -454,7 +454,7 @@ River supports client-side cancellation using AbortController. All procedure cal
 
 ```ts
 const controller = new AbortController();
-const rpcResult = client.service.rpc.rpc(
+const rpcResult = client.example.longRunning.rpc(
   { data: 'hello world' },
   { signal: controller.signal },
 );
