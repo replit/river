@@ -13,7 +13,7 @@ River provides a framework similar to [tRPC](https://trpc.io/) and [gRPC](https:
 - snappy DX (no code generation)
 - transparent reconnect support for long-lived sessions
 - over any transport (WebSockets out of the box)
-- full OpenTelemetry integration (connections, sessions, procedure calls)
+- full OpenTelemetry integration (distributed tracing for connections, sessions, procedure calls)
 
 See [PROTOCOL.md](./PROTOCOL.md) for more information on the protocol.
 
