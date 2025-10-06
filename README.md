@@ -493,6 +493,7 @@ const ExampleService = ServiceSchema.define({
     responseData: Type.Object({ echo: Type.String() }),
     async handler({ ctx, reqReadable, resWritable }) {
       // for streams, cancellation closes both readable and writable
+      // in addition to triggering the abort signal.
       for await (const msg of reqReadable) {
         if (!msg.ok) {
           // msg.payload.code === CANCEL_CODE error if client cancelled
