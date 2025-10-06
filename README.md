@@ -509,6 +509,8 @@ const ExampleService = ServiceSchema.define({
 });
 ```
 
+Worth noting that the `ctx.signal` is triggered regardless of the reason the procedure has ended.
+
 #### Codecs
 
 River provides two built-in codecs:
