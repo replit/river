@@ -642,9 +642,10 @@ describe('My Service', () => {
   test('should add numbers correctly', async () => {
     // setup server
     const serverTransport = getServerTransport('SERVER');
-    const server = createServer(serverTransport, {
+    const services = {
       math: MathService,
-    });
+    };
+    const server = createServer(serverTransport, services);
 
     // setup client
     const clientTransport = getClientTransport('client');
