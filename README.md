@@ -297,7 +297,7 @@ transport.addEventListener('sessionTransition', (evt) => {
 
 River supports four types of procedures, each with different message patterns:
 
-##### RPC Procedures (1:1)
+##### Unary RPC Procedures (1:1)
 
 Single request, single response:
 
