@@ -25,6 +25,12 @@ import { flattenErrorType, ProcedureErrorSchemaType } from '../router/errors';
 import { ReadableImpl } from '../router/streams';
 import { createMockTransportNetwork } from '../testUtil/fixtures/mockTransport';
 
+enum TestErrorCodes {
+  ERROR_ONE = 'ERROR_ONE',
+  ERROR_TWO = 'ERROR_TWO',
+  ERROR_THREE = 'ERROR_THREE',
+}
+
 const requestData = Type.Union([
   Type.Object({ a: Type.Number() }),
   Type.Object({ c: Type.String() }),
@@ -476,6 +482,53 @@ describe('Procedure error schema', () => {
             message: Type.String(),
           }),
         ]),
+      );
+    });
+
+    test('object with enum code', () => {
+      acceptErrorSchema(
+        Type.Object({
+          code: Type.Enum(TestErrorCodes),
+          message: Type.String(),
+        }),
+      );
+    });
+
+    test('union containing enum-based error schemas', () => {
+      acceptErrorSchema(
+        Type.Union([
+          Type.Object({
+            code: Type.Enum(TestErrorCodes),
+            message: Type.String(),
+          }),
+          Type.Object({
+            code: Type.Literal('OTHER_ERROR'),
+            message: Type.String(),
+          }),
+        ]),
+      );
+    });
+
+    test('flattenErrorType with enum-based error schemas', () => {
+      acceptErrorSchema(
+        flattenErrorType(
+          Type.Union([
+            Type.Object({
+              code: Type.Enum(TestErrorCodes),
+              message: Type.String(),
+            }),
+            Type.Union([
+              Type.Object({
+                code: Type.Literal('ERROR_4'),
+                message: Type.String(),
+              }),
+              Type.Object({
+                code: Type.Literal('ERROR_5'),
+                message: Type.String(),
+              }),
+            ]),
+          ]),
+        ),
       );
     });
 
