@@ -1,6 +1,7 @@
 import {
   Kind,
   Static,
+  TEnum,
   TLiteral,
   TNever,
   TObject,
@@ -32,13 +33,15 @@ export const CANCEL_CODE = 'CANCEL';
 
 type TLiteralString = TLiteral<string>;
 
+type TEnumString = TEnum<Record<string, string>>;
+
 export type BaseErrorSchemaType =
   | TObject<{
-      code: TLiteralString;
+      code: TLiteralString | TEnumString;
       message: TLiteralString | TString;
     }>
   | TObject<{
-      code: TLiteralString;
+      code: TLiteralString | TEnumString;
       message: TLiteralString | TString;
       extras: TSchema;
     }>;
@@ -139,7 +142,9 @@ function isUnion(schema: TSchema): schema is TUnion {
 type Flatten<T> = T extends BaseErrorSchemaType
   ? T
   : T extends TUnion<Array<infer U extends TSchema>>
-  ? Flatten<U>
+  ? U extends BaseErrorSchemaType
+    ? TUnion<Array<U>>
+    : Flatten<U>
   : unknown;
 
 /**
