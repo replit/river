@@ -143,8 +143,6 @@ export type Flatten<T> = T extends BaseErrorSchemaType
   ? T
   : T extends TUnion<Array<infer U extends TSchema>>
   ? Flatten<U>
-  : T extends TUnion
-  ? T
   : unknown;
 
 /**

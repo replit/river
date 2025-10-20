@@ -705,15 +705,15 @@ describe('Procedure error schema', () => {
       );
 
       // Then we want to combine it with another error in a new union
-      acceptErrorSchema(
-        Type.Union([
-          Type.Object({
-            code: Type.Literal('NEW_ERROR'),
-            message: Type.String(),
-          }),
-          BaseErrorSchema,
-        ]),
-      );
+      const ExtendedErrorSchema = Type.Union([
+        Type.Object({
+          code: Type.Literal('NEW_ERROR'),
+          message: Type.String(),
+        }),
+        BaseErrorSchema,
+      ]);
+
+      acceptErrorSchema(ExtendedErrorSchema);
     });
   });
 
