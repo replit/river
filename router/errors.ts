@@ -139,7 +139,7 @@ function isUnion(schema: TSchema): schema is TUnion {
   return schema[Kind] === 'Union';
 }
 
-type Flatten<T> = T extends BaseErrorSchemaType
+export type Flatten<T> = T extends BaseErrorSchemaType
   ? T
   : T extends TUnion<Array<infer U extends TSchema>>
   ? Flatten<U>
