@@ -142,9 +142,9 @@ function isUnion(schema: TSchema): schema is TUnion {
 type Flatten<T> = T extends BaseErrorSchemaType
   ? T
   : T extends TUnion<Array<infer U extends TSchema>>
-  ? U extends BaseErrorSchemaType
-    ? TUnion<Array<U>>
-    : Flatten<U>
+  ? Flatten<U>
+  : T extends TUnion
+  ? T
   : unknown;
 
 /**
