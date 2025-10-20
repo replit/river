@@ -689,6 +689,32 @@ describe('Procedure error schema', () => {
         ),
       );
     });
+
+    test('spreading a flattened union into another union', () => {
+      const BaseErrorSchema = flattenErrorType(
+        Type.Union([
+          Type.Object({
+            code: Type.Literal('NOT_FOUND'),
+            message: Type.String(),
+          }),
+          Type.Object({
+            code: Type.Literal('PARSE_ERROR'),
+            message: Type.String(),
+          }),
+        ]),
+      );
+
+      // Then we want to combine it with another error in a new union
+      const ExtendedErrorSchema = Type.Union([
+        Type.Object({
+          code: Type.Literal('NEW_ERROR'),
+          message: Type.String(),
+        }),
+        BaseErrorSchema,
+      ]);
+
+      acceptErrorSchema(ExtendedErrorSchema);
+    });
   });
 
   describe('fails', () => {
