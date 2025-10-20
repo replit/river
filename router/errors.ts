@@ -33,18 +33,15 @@ export const CANCEL_CODE = 'CANCEL';
 
 type TLiteralString = TLiteral<string>;
 
-/**
- * String literals or string enums for error codes.
- */
-type TStringCode = TLiteralString | TEnum<Record<string, string>>;
+type TEnumString = TEnum<Record<string, string>>;
 
 export type BaseErrorSchemaType =
   | TObject<{
-      code: TStringCode;
+      code: TLiteralString | TEnumString;
       message: TLiteralString | TString;
     }>
   | TObject<{
-      code: TStringCode;
+      code: TLiteralString | TEnumString;
       message: TLiteralString | TString;
       extras: TSchema;
     }>;
