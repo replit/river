@@ -1,4 +1,4 @@
-import { Packr } from 'msgpackr';
+import { Options, Packr } from 'msgpackr';
 import { Codec } from './types';
 
 const packr = new Packr({
@@ -8,7 +8,7 @@ const packr = new Packr({
   useTimestamp32: false,
   useBigIntExtension: true,
   skipValues: [undefined],
-});
+} as Options);
 
 /**
  * Binary codec, uses [msgpackr](https://www.npmjs.com/package/msgpackr) under the hood
@@ -19,7 +19,7 @@ export const BinaryCodec: Codec = {
     return packr.pack(obj);
   },
   fromBuffer: (buff: Uint8Array) => {
-    const res = packr.unpack(buff);
+    const res: unknown = packr.unpack(buff);
     if (typeof res !== 'object' || res === null) {
       throw new Error('unpacked msg is not an object');
     }
