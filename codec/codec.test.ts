@@ -1,54 +1,47 @@
 import { describe, test, expect } from 'vitest';
 import { codecs } from '../testUtil/fixtures/codec';
 
-describe.each(codecs)('codec -- $name', ({ codec }) => {
-  test('empty object', () => {
-    const msg = {};
-    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
-  });
-
-  test('simple test', () => {
-    const msg = { abc: 123, def: 'cool' };
-    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
-  });
-
-  test('encodes null properly', () => {
-    const msg = { test: null };
-    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
-  });
-
-  test('encodes the empty buffer properly', () => {
-    const msg = { test: new Uint8Array(0) };
-    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
-  });
-
-  test('skips optional fields', () => {
-    const msg = { test: undefined };
-    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual({});
-  });
-
-  test('encodes bigint properly', () => {
-    const msg = { big: BigInt(Number.MAX_SAFE_INTEGER) + BigInt(1) };
-    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
-  });
-
-  test('deeply nested test', () => {
-    const msg = {
+const examples: Array<{
+  name: string;
+  obj: Record<string, unknown>;
+  expected?: Record<string, unknown>;
+}> = [
+  { name: 'empty object', obj: {} },
+  { name: 'simple object', obj: { abc: 123, def: 'cool' } },
+  { name: 'non-utf8 string', obj: { test: '🇧🇪你好世界' } },
+  { name: 'null value', obj: { test: null } },
+  { name: 'empty buffer', obj: { test: new Uint8Array(0) } },
+  { name: 'optional field', obj: { test: undefined }, expected: {} },
+  {
+    name: 'bigint value',
+    obj: { big: BigInt(Number.MAX_SAFE_INTEGER) + BigInt(1) },
+  },
+  {
+    name: 'deeply nested',
+    obj: {
       array: [{ object: true }],
       deeply: {
         nested: {
           nice: null,
         },
       },
-    };
-    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
-  });
-
-  test('buffer test', () => {
-    const msg = {
+    },
+  },
+  {
+    name: 'buffer test',
+    obj: {
       buff: Uint8Array.from([0, 42, 100, 255]),
-    };
-    expect(codec.fromBuffer(codec.toBuffer(msg))).toStrictEqual(msg);
+    },
+  },
+];
+
+describe.each(codecs)('codec -- $name', ({ codec }) => {
+  describe.each(examples)('example -- $name', ({ obj, expected }) => {
+    test('encodes and decodes correctly', () => {
+      expect(codec.fromBuffer(codec.toBuffer(obj))).toStrictEqual(
+        expected ?? obj,
+      );
+    });
   });
 
   test('invalid json throws', () => {
