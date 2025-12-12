@@ -1590,6 +1590,66 @@ describe.each(testMatrix())(
       });
     });
 
+    test('construct throwing during handshake results in protocol error', async () => {
+      const schema = Type.Object({
+        foo: Type.String(),
+      });
+
+      interface Metadata {
+        foo: string;
+      }
+
+      const constructError = new Error('Failed to construct metadata');
+      const get = vi.fn(async () => {
+        throw constructError;
+      });
+      const parse = vi.fn(async (metadata: Metadata) => ({
+        foo: metadata.foo,
+      }));
+
+      const serverTransport = getServerTransport('SERVER', {
+        schema,
+        validate: parse,
+      });
+      const clientTransport = getClientTransport('client', {
+        schema,
+        construct: get,
+      });
+      const clientHandshakeFailed = vi.fn();
+      clientTransport.addEventListener('protocolError', clientHandshakeFailed);
+      clientTransport.connect(serverTransport.clientId);
+
+      addPostTestCleanup(async () => {
+        clientTransport.removeEventListener(
+          'protocolError',
+          clientHandshakeFailed,
+        );
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(get).toHaveBeenCalledTimes(1);
+        expect(clientHandshakeFailed).toHaveBeenCalledTimes(1);
+        expect(clientHandshakeFailed).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: ProtocolError.HandshakeFailed,
+            message:
+              'failed to construct handshake metadata: Failed to construct metadata',
+          }),
+        );
+        // should never get to the server
+        expect(parse).toHaveBeenCalledTimes(0);
+      });
+
+      expect(numberOfConnections(clientTransport)).toBe(0);
+      expect(numberOfConnections(serverTransport)).toBe(0);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
     test('server checks request schema on receive', async () => {
       const clientRequestSchema = Type.Object({
         foo: Type.Number(),
