@@ -480,7 +480,23 @@ export abstract class ClientTransport<
     let metadata: unknown = undefined;
 
     if (this.handshakeExtensions) {
-      metadata = await this.handshakeExtensions.construct();
+      try {
+        metadata = await this.handshakeExtensions.construct();
+      } catch (err) {
+        const errStr = coerceErrorString(err);
+        this.log?.error(
+          `failed to construct handshake metadata for session to ${session.to}: ${errStr}`,
+          session.loggingMetadata,
+        );
+
+        this.protocolError({
+          type: ProtocolError.HandshakeFailed,
+          message: `failed to construct handshake metadata: ${errStr}`,
+        });
+        this.deleteSession(session, { unhealthy: true });
+
+        return;
+      }
     }
 
     // double-check to make sure we haven't transitioned the session yet
