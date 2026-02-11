@@ -786,6 +786,81 @@ describe.each(testMatrix())(
           server,
         });
       });
+
+      test('cancel is idempotent', async () => {
+        const clientTransport = getClientTransport('client');
+        const serverTransport = getServerTransport();
+
+        const clientProtocolError = vi.fn();
+        const serverProtocolError = vi.fn();
+        clientTransport.addEventListener('protocolError', clientProtocolError);
+        serverTransport.addEventListener('protocolError', serverProtocolError);
+        addPostTestCleanup(async () => {
+          clientTransport.removeEventListener(
+            'protocolError',
+            clientProtocolError,
+          );
+          serverTransport.removeEventListener(
+            'protocolError',
+            serverProtocolError,
+          );
+          await cleanupTransports([clientTransport, serverTransport]);
+        });
+
+        const handler = makeMockHandler('rpc');
+        const services = {
+          service: ServiceSchema.define({
+            rpc: Procedure.rpc({
+              requestInit: Type.Object({}),
+              responseData: Type.Object({}),
+              handler,
+            }),
+          }),
+        };
+
+        const server = createServer(serverTransport, services);
+        const client = createClient<typeof services>(
+          clientTransport,
+          serverTransport.clientId,
+        );
+
+        const resP = client.service.rpc.rpc({});
+
+        await waitFor(() => {
+          expect(handler).toHaveBeenCalledTimes(1);
+        });
+
+        const [{ ctx }] = handler.mock.calls[0];
+        const onRequestFinished = vi.fn();
+        ctx.signal.addEventListener('abort', onRequestFinished);
+
+        ctx.cancel();
+
+        // calling cancel a second time should be a no-op
+        ctx.cancel();
+
+        await waitFor(() => {
+          expect(onRequestFinished).toHaveBeenCalled();
+        });
+
+        // should only get one cancel error, not two
+        await expect(resP).resolves.toEqual(
+          Err({
+            code: CANCEL_CODE,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            message: expect.any(String),
+          }),
+        );
+
+        expect(clientProtocolError).not.toHaveBeenCalled();
+        expect(serverProtocolError).not.toHaveBeenCalled();
+
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
     });
   },
 );
