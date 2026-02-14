@@ -10,6 +10,7 @@ import {
   ValidationErrors,
   castTypeboxValueErrors,
   CancelResultSchema,
+  UncaughtResultSchema,
 } from './errors';
 import {
   AnyService,
@@ -550,7 +551,7 @@ class RiverServer<
       },
     });
 
-    const onHandlerError = (err: unknown, span: Span) => {
+    const onHandlerError = (err: unknown, span: Span): Static<typeof UncaughtResultSchema> => {
       const errorMsg = coerceErrorString(err);
 
       span.recordException(err instanceof Error ? err : new Error(errorMsg));
@@ -571,10 +572,14 @@ class RiverServer<
         },
       );
 
-      onServerCancel({
+      const res = Err({
         code: UNCAUGHT_ERROR_CODE,
         message: errorMsg,
       });
+
+      onServerCancel(res.payload);
+
+      return res;
     };
 
     // if the init message has a close flag then we know this stream
@@ -602,6 +607,9 @@ class RiverServer<
         onServerCancel(errRes);
 
         return Err(errRes);
+      },
+      uncaught: (err?: unknown) => {
+        return onHandlerError(err, span);
       },
       signal: finishedController.signal,
     };
@@ -1039,7 +1047,7 @@ function getStreamCloseBackwardsCompat(protocolVersion: ProtocolVersion) {
 
 export interface MiddlewareContext
   extends Readonly<
-    Omit<ProcedureHandlerContext<unknown, unknown, unknown>, 'cancel'>
+    Omit<ProcedureHandlerContext<unknown, unknown, unknown>, 'cancel' | 'uncaught'>
   > {
   readonly streamId: StreamId;
   readonly procedureName: string;
