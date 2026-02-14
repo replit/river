@@ -791,3 +791,35 @@ describe('Readable types', () => {
     }
   });
 });
+
+describe('Client proxy thenable safety', () => {
+  test('client proxy is not treated as a thenable by Promise resolution', async () => {
+    const mockTransportNetwork = createMockTransportNetwork();
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
+      { eagerlyConnect: false },
+    );
+
+    // When a River client is returned from a Promise.then() callback,
+    // JavaScript's Promise resolution checks typeof value.then to decide
+    // if the resolved value is a thenable. The proxy must return undefined
+    // for .then to avoid being mistakenly treated as a thenable.
+    const resolved = await Promise.resolve().then(() => client);
+    expect(resolved).toBe(client);
+  });
+
+  test('client.then is undefined', () => {
+    const mockTransportNetwork = createMockTransportNetwork();
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
+      { eagerlyConnect: false },
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    expect((client as any).then).toBeUndefined();
+  });
+});

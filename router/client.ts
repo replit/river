@@ -180,6 +180,14 @@ function _createRecursiveProxy(
     get(_obj, key) {
       if (typeof key !== 'string') return undefined;
 
+      // Prevent the proxy from being mistaken for a thenable. When a Promise
+      // resolves to a value, the spec checks `typeof value.then` to decide if
+      // the value is a thenable. Without this guard, the proxy's get trap
+      // returns a callable proxy for "then", causing Promise resolution to
+      // invoke it as `.then(resolve, reject)` which triggers the apply trap
+      // with an incomplete path and throws "invalid river call".
+      if (key === 'then') return undefined;
+
       return _createRecursiveProxy(callback, [...path, key]);
     },
     // hit the end, let's invoke the handler
