@@ -371,6 +371,233 @@ class TestDisconnect:
 
 
 # =====================================================================
+# Client-Initiated Cancellation Tests
+# =====================================================================
+
+
+class TestClientCancellation:
+    """Tests for client-initiated cancellation via abort signal.
+
+    Uses the cancel.blocking* handlers on the test server which never resolve,
+    allowing us to test that the client abort properly sends CANCEL and
+    receives the CANCEL result.
+    """
+
+    @pytest.mark.asyncio
+    async def test_cancel_rpc(self, server_url: str):
+        """Client abort on RPC returns CANCEL error."""
+        client = await make_client(server_url)
+        try:
+            abort_evt = asyncio.Event()
+
+            async def do_abort():
+                await asyncio.sleep(0.2)
+                abort_evt.set()
+
+            asyncio.ensure_future(do_abort())
+            result = await client.rpc(
+                "cancel", "blockingRpc", {}, abort_signal=abort_evt
+            )
+            assert result["ok"] is False
+            assert result["payload"]["code"] == "CANCEL"
+        finally:
+            await cleanup_client(client)
+
+    @pytest.mark.asyncio
+    async def test_cancel_stream(self, server_url: str):
+        """Client abort on stream returns CANCEL error."""
+        client = await make_client(server_url)
+        try:
+            abort_evt = asyncio.Event()
+            stream = client.stream(
+                "cancel", "blockingStream", {}, abort_signal=abort_evt
+            )
+            # Give server time to receive and process the init message
+            await asyncio.sleep(0.2)
+            abort_evt.set()
+            await asyncio.sleep(0)
+
+            results = await stream.res_readable.collect()
+            assert len(results) == 1
+            assert results[0]["ok"] is False
+            assert results[0]["payload"]["code"] == "CANCEL"
+            assert not stream.req_writable.is_writable()
+        finally:
+            await cleanup_client(client)
+
+    @pytest.mark.asyncio
+    async def test_cancel_upload(self, server_url: str):
+        """Client abort on upload returns CANCEL error."""
+        client = await make_client(server_url)
+        try:
+            abort_evt = asyncio.Event()
+            upload = client.upload(
+                "cancel", "blockingUpload", {}, abort_signal=abort_evt
+            )
+            # Give server time to receive
+            await asyncio.sleep(0.2)
+            abort_evt.set()
+
+            result = await upload.finalize()
+            assert result["ok"] is False
+            assert result["payload"]["code"] == "CANCEL"
+            assert not upload.req_writable.is_writable()
+        finally:
+            await cleanup_client(client)
+
+    @pytest.mark.asyncio
+    async def test_cancel_subscription(self, server_url: str):
+        """Client abort on subscription returns CANCEL error."""
+        client = await make_client(server_url)
+        try:
+            abort_evt = asyncio.Event()
+            sub = client.subscribe(
+                "cancel", "blockingSubscription", {}, abort_signal=abort_evt
+            )
+            # Give server time to receive
+            await asyncio.sleep(0.2)
+            abort_evt.set()
+            await asyncio.sleep(0)
+
+            done, msg = await sub.res_readable.next()
+            assert not done
+            assert msg["ok"] is False
+            assert msg["payload"]["code"] == "CANCEL"
+        finally:
+            await cleanup_client(client)
+
+
+# =====================================================================
+# Idempotent Close / Post-Close Safety Tests
+# =====================================================================
+
+
+class TestIdempotentClose:
+    """Tests that closing/aborting after completion is a safe no-op."""
+
+    @pytest.mark.asyncio
+    async def test_stream_idempotent_close(self, server_url: str):
+        """Closing and aborting a stream after it finished is safe."""
+        client = await make_client(server_url)
+        try:
+            abort_evt = asyncio.Event()
+            stream = client.stream(
+                "test", "echo", {}, abort_signal=abort_evt
+            )
+            stream.req_writable.write({"msg": "abc", "ignore": False})
+            stream.req_writable.close()
+
+            done, msg = await stream.res_readable.next()
+            assert not done
+            assert msg["ok"] is True
+            assert msg["payload"]["response"] == "abc"
+
+            # Wait for server close to be received
+            await asyncio.sleep(0.1)
+
+            # Abort after stream completed - should be a no-op
+            abort_evt.set()
+            await asyncio.sleep(0.05)
+
+            # Drain any remaining messages - should be done or at most a cancel
+            done, val = await stream.res_readable.next()
+            # Either the stream is done, or we got a cancel (both ok)
+            if not done:
+                assert val["ok"] is False
+
+            # "Accidentally" close again - no crash
+            stream.req_writable.close()
+            abort_evt.set()
+        finally:
+            await cleanup_client(client)
+
+    @pytest.mark.asyncio
+    async def test_subscription_idempotent_close(self, server_url: str):
+        """Aborting a subscription after it was already aborted is safe."""
+        client = await make_client(server_url)
+        try:
+            abort_evt = asyncio.Event()
+            sub = client.subscribe(
+                "subscribable", "value", {}, abort_signal=abort_evt
+            )
+            # Read initial value
+            done, msg = await sub.res_readable.next()
+            assert not done
+            assert msg["ok"] is True
+
+            # Abort
+            abort_evt.set()
+            await asyncio.sleep(0.05)
+
+            # Read the cancel
+            done, msg = await sub.res_readable.next()
+            assert not done
+            assert msg["ok"] is False
+            assert msg["payload"]["code"] == "CANCEL"
+
+            # "Accidentally" abort again
+            abort_evt.set()
+        finally:
+            await cleanup_client(client)
+
+    @pytest.mark.asyncio
+    async def test_cancellation_after_transport_close(self, server_url: str):
+        """Closing/aborting after transport close doesn't crash."""
+        client = await make_client(server_url)
+        try:
+            abort_evt = asyncio.Event()
+            stream = client.stream(
+                "test", "echo", {}, abort_signal=abort_evt
+            )
+            stream.req_writable.write({"msg": "1", "ignore": False})
+            done, msg = await stream.res_readable.next()
+            assert not done
+            assert msg["payload"]["response"] == "1"
+
+            # Close the transport
+            await client.transport.close()
+            await asyncio.sleep(0.05)
+
+            # Closing writable after transport close should be safe
+            stream.req_writable.close()
+            # Aborting after transport close should be safe
+            abort_evt.set()
+            await asyncio.sleep(0.05)
+            # No crash = success
+        finally:
+            # Transport already closed
+            pass
+
+
+# =====================================================================
+# Eagerly Connect Test
+# =====================================================================
+
+
+class TestEagerConnect:
+    @pytest.mark.asyncio
+    async def test_eagerly_connect(self, server_url: str):
+        """eagerlyConnect creates a connection before any procedure call."""
+        transport = WebSocketClientTransport(
+            ws_url=server_url,
+            server_id="SERVER",
+            codec=NaiveJsonCodec(),
+            eagerly_connect=True,
+        )
+        client = RiverClient(transport, server_id="SERVER", eagerly_connect=True)
+        try:
+            # Wait for the connection to be established
+            await asyncio.sleep(0.5)
+            # Should have a session now
+            assert len(transport.sessions) > 0
+            # Verify the connection works by making a call
+            result = await client.rpc("test", "add", {"n": 1})
+            assert result["ok"] is True
+        finally:
+            await transport.close()
+
+
+# =====================================================================
 # Codec Tests
 # =====================================================================
 
@@ -467,17 +694,21 @@ class TestReadable:
 
     @pytest.mark.asyncio
     async def test_readable_break(self):
-        """Breaking a readable stops iteration."""
+        """Breaking a readable yields broken error on next read."""
         from river.streams import Readable
 
         r: Readable = Readable()
         r._push_value({"ok": True, "payload": 1})
+        # Grab iterator before break (since break locks the stream)
+        done, val = await r.next()
+        assert not done
+        assert val["payload"] == 1
         r.break_()
-
-        results = await r.collect()
-        assert len(results) == 1
-        assert results[0]["ok"] is False
-        assert results[0]["payload"]["code"] == "READABLE_BROKEN"
+        done, val = await r.next()
+        assert not done
+        assert val["ok"] is False
+        assert val["payload"]["code"] == "READABLE_BROKEN"
+        r._trigger_close()
 
     @pytest.mark.asyncio
     async def test_readable_async_for(self):
@@ -626,6 +857,306 @@ class TestTypes:
 # =====================================================================
 # Codec Unit Tests
 # =====================================================================
+
+
+class TestReadableLocking:
+    """Tests for Readable stream locking semantics (mirrors TS streams.test.ts)."""
+
+    @pytest.mark.asyncio
+    async def test_lock_on_aiter(self):
+        """__aiter__ locks the stream; second call raises TypeError."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r.__aiter__()
+        assert not r.is_readable()
+        with pytest.raises(TypeError):
+            r.__aiter__()
+        r._trigger_close()
+
+    @pytest.mark.asyncio
+    async def test_lock_on_collect(self):
+        """collect() locks the stream; __aiter__ raises TypeError."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        # Don't await - just start collect (it will block waiting for close)
+        collect_task = asyncio.ensure_future(r.collect())
+        await asyncio.sleep(0)  # yield to let collect start
+        assert not r.is_readable()
+        with pytest.raises(TypeError):
+            r.__aiter__()
+        r._trigger_close()
+        await collect_task
+
+    @pytest.mark.asyncio
+    async def test_lock_on_break(self):
+        """break_() locks the stream; __aiter__ raises TypeError."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r.break_()
+        assert not r.is_readable()
+        with pytest.raises(TypeError):
+            r.__aiter__()
+        r._trigger_close()
+
+    @pytest.mark.asyncio
+    async def test_raw_iter_from_aiter(self):
+        """Can use the raw iterator from __aiter__."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        it = r.__aiter__()
+        next_p = it.__anext__()
+        r._push_value({"ok": True, "payload": 1})
+        val = await next_p
+        assert val == {"ok": True, "payload": 1}
+        next_p2 = it.__anext__()
+        r._trigger_close()
+        with pytest.raises(StopAsyncIteration):
+            await next_p2
+
+
+class TestReadableIteration:
+    """Tests for Readable iteration edge cases (mirrors TS streams.test.ts)."""
+
+    @pytest.mark.asyncio
+    async def test_values_pushed_before_close(self):
+        """Can iterate values that were pushed before close."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._push_value({"ok": True, "payload": 1})
+        r._push_value({"ok": True, "payload": 2})
+        r._push_value({"ok": True, "payload": 3})
+        r._trigger_close()
+        done, val = await r.next()
+        assert not done and val["payload"] == 1
+        done, val = await r.next()
+        assert not done and val["payload"] == 2
+        done, val = await r.next()
+        assert not done and val["payload"] == 3
+        done, val = await r.next()
+        assert done
+
+    @pytest.mark.asyncio
+    async def test_eager_iteration(self):
+        """Read before push resolves in order."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        # Start reading before values are pushed
+        t1 = asyncio.ensure_future(r.next())
+        t2 = asyncio.ensure_future(r.next())
+        # Give tasks a chance to start waiting
+        await asyncio.sleep(0)
+        r._push_value({"ok": True, "payload": 1})
+        r._push_value({"ok": True, "payload": 2})
+        done1, val1 = await t1
+        done2, val2 = await t2
+        assert not done1 and val1["payload"] == 1
+        assert not done2 and val2["payload"] == 2
+        # Third read + close
+        t3 = asyncio.ensure_future(r.next())
+        await asyncio.sleep(0)
+        r._push_value({"ok": True, "payload": 3})
+        r._trigger_close()
+        done3, val3 = await t3
+        assert not done3 and val3["payload"] == 3
+        done4, _ = await r.next()
+        assert done4
+
+    @pytest.mark.asyncio
+    async def test_not_resolve_until_push(self):
+        """Pending next() doesn't resolve until push or close."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        next_p = asyncio.ensure_future(r.next())
+        # Should not resolve yet
+        result = await asyncio.wait_for(
+            asyncio.shield(next_p), timeout=0.01
+        ) if False else None
+        done = next_p.done()
+        assert not done, "next() should not resolve before push"
+
+        r._push_value({"ok": True, "payload": 1})
+        await asyncio.sleep(0)
+        done_v, val = await next_p
+        assert not done_v and val["payload"] == 1
+
+        # isDone should not resolve until close
+        done_p = asyncio.ensure_future(r.next())
+        await asyncio.sleep(0.01)
+        assert not done_p.done(), "next() should not resolve before close"
+        r._trigger_close()
+        done_v2, _ = await done_p
+        assert done_v2
+
+    @pytest.mark.asyncio
+    async def test_collect_after_close(self):
+        """collect() returns all values when called after close."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._push_value({"ok": True, "payload": 1})
+        r._push_value({"ok": True, "payload": 2})
+        r._push_value({"ok": True, "payload": 3})
+        r._trigger_close()
+        results = await r.collect()
+        assert len(results) == 3
+        assert [v["payload"] for v in results] == [1, 2, 3]
+
+    @pytest.mark.asyncio
+    async def test_collect_waits_for_close(self):
+        """collect() doesn't resolve until the stream is closed."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._push_value({"ok": True, "payload": 1})
+        collect_task = asyncio.ensure_future(r.collect())
+        r._push_value({"ok": True, "payload": 2})
+        r._push_value({"ok": True, "payload": 3})
+        await asyncio.sleep(0.01)
+        assert not collect_task.done(), "collect should not resolve before close"
+        r._push_value({"ok": True, "payload": 4})
+        r._trigger_close()
+        results = await collect_task
+        assert len(results) == 4
+        assert [v["payload"] for v in results] == [1, 2, 3, 4]
+
+    @pytest.mark.asyncio
+    async def test_async_for_with_break(self):
+        """Breaking out of async for mid-stream stops iteration."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._push_value({"ok": True, "payload": 1})
+        r._push_value({"ok": True, "payload": 2})
+        assert r._has_values_in_queue()
+        values = []
+        async for item in r:
+            values.append(item)
+            assert r._has_values_in_queue()
+            break
+        # After break, remaining values should be discarded (broken)
+        assert not r._has_values_in_queue()
+
+    @pytest.mark.asyncio
+    async def test_error_results_in_iteration(self):
+        """Error results are yielded as part of iteration."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._push_value({"ok": True, "payload": 1})
+        r._push_value({"ok": True, "payload": 2})
+        r._push_value(
+            {"ok": False, "payload": {"code": "SOME_ERROR", "message": "err"}}
+        )
+        r._trigger_close()
+        results = []
+        async for item in r:
+            results.append(item)
+        assert len(results) == 3
+        assert results[0]["ok"] is True
+        assert results[1]["ok"] is True
+        assert results[2]["ok"] is False
+        assert results[2]["payload"]["code"] == "SOME_ERROR"
+
+
+class TestReadableBreakVariants:
+    """Tests for Readable break() edge cases (mirrors TS streams.test.ts)."""
+
+    @pytest.mark.asyncio
+    async def test_break_signals_next(self):
+        """break() signals the next read call."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r.break_()
+        done, val = await r.next()
+        assert not done
+        assert val["ok"] is False
+        assert val["payload"]["code"] == "READABLE_BROKEN"
+        r._trigger_close()
+
+    @pytest.mark.asyncio
+    async def test_break_signals_pending(self):
+        """break() signals a pending read."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        pending = asyncio.ensure_future(r.next())
+        await asyncio.sleep(0)
+        r.break_()
+        done, val = await pending
+        assert not done
+        assert val["ok"] is False
+        assert val["payload"]["code"] == "READABLE_BROKEN"
+        r._trigger_close()
+
+    @pytest.mark.asyncio
+    async def test_break_with_queued_value(self):
+        """break() clears queue and yields broken error."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._push_value({"ok": True, "payload": 1})
+        assert r._has_values_in_queue()
+        r.break_()
+        assert not r._has_values_in_queue()
+        done, val = await r.next()
+        assert not done
+        assert val["payload"]["code"] == "READABLE_BROKEN"
+        r._trigger_close()
+
+    @pytest.mark.asyncio
+    async def test_break_with_queued_value_after_close(self):
+        """break() after close with queued values still yields broken error."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._push_value({"ok": True, "payload": 1})
+        r._trigger_close()
+        r.break_()
+        done, val = await r.next()
+        assert not done
+        assert val["payload"]["code"] == "READABLE_BROKEN"
+
+    @pytest.mark.asyncio
+    async def test_break_empty_queue_after_close(self):
+        """break() after close with empty queue -> done."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._trigger_close()
+        r.break_()
+        done, _ = await r.next()
+        assert done
+
+    @pytest.mark.asyncio
+    async def test_break_ends_iteration_midstream(self):
+        """break() during async for ends iteration."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._push_value({"ok": True, "payload": 1})
+        r._push_value({"ok": True, "payload": 2})
+        r._push_value({"ok": True, "payload": 3})
+
+        results = []
+        i = 0
+        async for item in r:
+            if i == 0:
+                assert item["payload"] == 1
+                r.break_()
+            elif i == 1:
+                assert item["ok"] is False
+                assert item["payload"]["code"] == "READABLE_BROKEN"
+            results.append(item)
+            i += 1
+        assert i == 2
 
 
 class TestCodecUnit:

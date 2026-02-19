@@ -55,20 +55,35 @@ class Readable(Generic[T]):
         """Whether the stream has been closed."""
         return self._closed and len(self._queue) == 0
 
+    def _has_values_in_queue(self) -> bool:
+        """Whether there are buffered values waiting to be consumed."""
+        return len(self._queue) > 0
+
     def break_(self) -> None:
-        """Break the stream, discarding all queued values."""
+        """Break the stream, discarding all queued values.
+
+        If the stream is already closed and the queue is empty,
+        this is a no-op (the stream is already done).
+        """
         if self._locked and self._broken:
             return
-        self._broken = True
         self._locked = True
+        # If stream is already done (closed + empty), don't signal broken
+        if self._closed and len(self._queue) == 0:
+            self._notify_waiters()
+            return
+        self._broken = True
         self._queue.clear()
         self._notify_waiters()
 
     async def collect(self) -> list[T]:
         """Consume all values from the stream until it closes.
 
-        Locks the stream. Returns the list of all values.
+        Locks the stream. Raises TypeError if already locked.
+        Returns the list of all values.
         """
+        if self._locked:
+            raise TypeError("Readable is already locked")
         self._locked = True
         results: list[T] = []
         async for item in self._iterate():
@@ -107,12 +122,59 @@ class Readable(Generic[T]):
             await fut
 
     def __aiter__(self):
+        if self._locked:
+            raise TypeError("Readable is already locked")
         self._locked = True
-        return self._async_iter_impl()
+        return _ReadableIterator(self)
 
-    async def _async_iter_impl(self):
-        async for item in self._iterate():
-            yield item
+
+class _ReadableIterator:
+    """Async iterator for Readable that cleans up on break/close.
+
+    Unlike an async generator, this class handles ``__del__``
+    synchronously, ensuring the queue is cleared when a for-await
+    loop breaks out.
+    """
+
+    def __init__(self, readable: Readable) -> None:
+        self._readable = readable
+        self._done = False
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._done:
+            raise StopAsyncIteration
+
+        r = self._readable
+        while True:
+            if r._broken:
+                val = {
+                    "ok": False,
+                    "payload": {
+                        "code": "READABLE_BROKEN",
+                        "message": "stream was broken",
+                    },
+                }
+                # After yielding the broken error, the iterator is done
+                self._done = True
+                return val
+
+            if r._queue:
+                return r._queue.pop(0)
+
+            if r._closed:
+                raise StopAsyncIteration
+
+            loop = asyncio.get_event_loop()
+            fut: asyncio.Future[None] = loop.create_future()
+            r._waiters.append(fut)
+            await fut
+
+    def __del__(self):
+        # Synchronous cleanup when the iterator is GC'd (e.g. break in for-await)
+        self._readable._queue.clear()
 
 
 class Writable(Generic[T]):

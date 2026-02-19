@@ -261,6 +261,120 @@ const UploadableServiceSchema = ServiceSchema.define({
 });
 
 // -------------------------------------------------------------------
+// CancellationService – handlers that block forever for cancel tests
+// -------------------------------------------------------------------
+const CancellationServiceSchema = ServiceSchema.define({
+  blockingRpc: Procedure.rpc({
+    requestInit: Type.Object({}),
+    responseData: Type.Object({}),
+    responseError: Type.Never(),
+    async handler({ ctx }) {
+      // Block until cancelled
+      return new Promise<any>((resolve) => {
+        ctx.signal.addEventListener('abort', () => {
+          // Handler will be cancelled by the framework, nothing to resolve
+        });
+      });
+    },
+  }),
+  blockingStream: Procedure.stream({
+    requestInit: Type.Object({}),
+    requestData: Type.Object({}),
+    responseData: Type.Object({}),
+    responseError: Type.Never(),
+    async handler({ ctx }) {
+      return new Promise<void>(() => {
+        // never resolves
+      });
+    },
+  }),
+  blockingUpload: Procedure.upload({
+    requestInit: Type.Object({}),
+    requestData: Type.Object({}),
+    responseData: Type.Object({}),
+    responseError: Type.Never(),
+    async handler({ ctx }) {
+      return new Promise<any>(() => {
+        // never resolves
+      });
+    },
+  }),
+  blockingSubscription: Procedure.subscription({
+    requestInit: Type.Object({}),
+    responseData: Type.Object({}),
+    responseError: Type.Never(),
+    async handler({ ctx }) {
+      return new Promise<void>(() => {
+        // never resolves
+      });
+    },
+  }),
+  // RPC that resolves normally (for clean handler cancellation)
+  immediateRpc: Procedure.rpc({
+    requestInit: Type.Object({}),
+    responseData: Type.Object({ done: Type.Boolean() }),
+    responseError: Type.Never(),
+    async handler() {
+      return Ok({ done: true });
+    },
+  }),
+  // Stream that writes one response and closes (for clean handler cancel)
+  immediateStream: Procedure.stream({
+    requestInit: Type.Object({}),
+    requestData: Type.Object({}),
+    responseData: Type.Object({ done: Type.Boolean() }),
+    responseError: Type.Never(),
+    async handler({ reqReadable, resWritable }) {
+      resWritable.write(Ok({ done: true }));
+      for await (const result of reqReadable) {
+        if (!result.ok) break;
+      }
+      resWritable.close();
+    },
+  }),
+  // Upload that resolves immediately
+  immediateUpload: Procedure.upload({
+    requestInit: Type.Object({}),
+    requestData: Type.Object({}),
+    responseData: Type.Object({ done: Type.Boolean() }),
+    responseError: Type.Never(),
+    async handler({ reqReadable }) {
+      for await (const result of reqReadable) {
+        if (!result.ok) break;
+      }
+      return Ok({ done: true });
+    },
+  }),
+  // Subscription that closes immediately
+  immediateSubscription: Procedure.subscription({
+    requestInit: Type.Object({}),
+    responseData: Type.Object({ done: Type.Boolean() }),
+    responseError: Type.Never(),
+    async handler({ resWritable }) {
+      resWritable.write(Ok({ done: true }));
+      resWritable.close();
+    },
+  }),
+  // Stream that sends N responses then closes (for idempotent close tests)
+  countedStream: Procedure.stream({
+    requestInit: Type.Object({ total: Type.Number() }),
+    requestData: Type.Object({}),
+    responseData: Type.Object({ i: Type.Number() }),
+    responseError: Type.Never(),
+    async handler({ reqInit, reqReadable, resWritable }) {
+      for (let i = 0; i < reqInit.total; i++) {
+        resWritable.write(Ok({ i }));
+      }
+      // Wait for client to close the request stream
+      for await (const result of reqReadable) {
+        if (!result.ok) break;
+      }
+      resWritable.close();
+    },
+  }),
+});
+
+// -------------------------------------------------------------------
 // Boot the server
 // -------------------------------------------------------------------
 const services = {
@@ -269,6 +383,7 @@ const services = {
   fallible: FallibleServiceSchema,
   subscribable: SubscribableServiceSchema,
   uploadable: UploadableServiceSchema,
+  cancel: CancellationServiceSchema,
 };
 
 async function main() {
