@@ -1,22 +1,28 @@
 /**
  * Standalone test server for the Python River client test suite.
- * Uses the built dist/ output so it works with plain Node.js.
  *
- * Usage:  node python-client/tests/test_server.mjs
- *         (run from the river repo root after `npx tsup`)
+ * Starts a WebSocket server with the standard test services and prints
+ * the port to stdout so the Python test harness can connect.
+ *
+ * Usage (from river repo root):
+ *   npx tsx --tsconfig python-client/tsconfig.tsx.json python-client/tests/test_server.ts
  */
 import http from 'node:http';
-import { WebSocket, WebSocketServer } from 'ws';
-
-// We import from the built output in dist/ (paths relative to river repo root)
-import { createServer, createServiceSchema, Procedure, Ok, Err } from '../../dist/router/index.js';
-import { WebSocketServerTransport } from '../../dist/transport/impls/ws/server.js';
+import { WebSocketServer } from 'ws';
+import { WebSocketServerTransport } from '../../transport/impls/ws/server';
+import {
+  createServer,
+  createServiceSchema,
+  Procedure,
+  Ok,
+  Err,
+} from '../../router';
 import { Type } from '@sinclair/typebox';
 
 const ServiceSchema = createServiceSchema();
 
 // -------------------------------------------------------------------
-// TestService
+// TestService – mirrors the TS TestServiceSchema
 // -------------------------------------------------------------------
 let count = 0;
 
@@ -69,9 +75,9 @@ const TestServiceSchema = ServiceSchema.define({
 });
 
 // -------------------------------------------------------------------
-// OrderingService
+// OrderingService – for message ordering tests
 // -------------------------------------------------------------------
-const msgs = [];
+const msgs: number[] = [];
 
 const OrderingServiceSchema = ServiceSchema.define({
   add: Procedure.rpc({
@@ -94,7 +100,7 @@ const OrderingServiceSchema = ServiceSchema.define({
 });
 
 // -------------------------------------------------------------------
-// FallibleService
+// FallibleService – service-level errors
 // -------------------------------------------------------------------
 const FallibleServiceSchema = ServiceSchema.define({
   divide: Procedure.rpc({
@@ -112,11 +118,17 @@ const FallibleServiceSchema = ServiceSchema.define({
     ]),
     async handler({ reqInit }) {
       if (reqInit.b === 0) {
-        return Err({ code: 'DIV_BY_ZERO', message: 'Cannot divide by zero' });
+        return Err({
+          code: 'DIV_BY_ZERO' as const,
+          message: 'Cannot divide by zero',
+        });
       }
       const result = reqInit.a / reqInit.b;
       if (!isFinite(result)) {
-        return Err({ code: 'INFINITY', message: 'Result is infinity' });
+        return Err({
+          code: 'INFINITY' as const,
+          message: 'Result is infinity',
+        });
       }
       return Ok({ result });
     },
@@ -142,7 +154,7 @@ const FallibleServiceSchema = ServiceSchema.define({
         }
         if (val.throwResult) {
           resWritable.write(
-            Err({ code: 'STREAM_ERROR', message: 'stream error' }),
+            Err({ code: 'STREAM_ERROR' as const, message: 'stream error' }),
           );
           continue;
         }
@@ -154,10 +166,11 @@ const FallibleServiceSchema = ServiceSchema.define({
 });
 
 // -------------------------------------------------------------------
-// SubscribableService
+// SubscribableService – subscriptions
 // -------------------------------------------------------------------
 let subCount = 0;
-const subListeners = new Set();
+type SubListener = (val: number) => void;
+const subListeners = new Set<SubListener>();
 
 const SubscribableServiceSchema = ServiceSchema.define({
   add: Procedure.rpc({
@@ -175,9 +188,10 @@ const SubscribableServiceSchema = ServiceSchema.define({
     responseData: Type.Object({ count: Type.Number() }),
     responseError: Type.Never(),
     async handler({ resWritable, ctx }) {
-      const listener = (val) => {
+      const listener: SubListener = (val) => {
         resWritable.write(Ok({ count: val }));
       };
+      // Send initial value
       resWritable.write(Ok({ count: subCount }));
       subListeners.add(listener);
       ctx.signal.addEventListener('abort', () => {
@@ -189,7 +203,7 @@ const SubscribableServiceSchema = ServiceSchema.define({
 });
 
 // -------------------------------------------------------------------
-// UploadableService
+// UploadableService – uploads
 // -------------------------------------------------------------------
 const UploadableServiceSchema = ServiceSchema.define({
   addMultiple: Procedure.upload({
@@ -235,7 +249,10 @@ const UploadableServiceSchema = ServiceSchema.define({
         total += result.payload.n;
         if (total >= 10) {
           ctx.cancel();
-          return Err({ code: 'CANCEL', message: 'total exceeds limit' });
+          return Err({
+            code: 'CANCEL' as const,
+            message: 'total exceeds limit',
+          });
         }
       }
       return Ok({ result: total });
@@ -244,7 +261,7 @@ const UploadableServiceSchema = ServiceSchema.define({
 });
 
 // -------------------------------------------------------------------
-// Boot
+// Boot the server
 // -------------------------------------------------------------------
 const services = {
   test: TestServiceSchema,
@@ -256,7 +273,7 @@ const services = {
 
 async function main() {
   const httpServer = http.createServer();
-  const port = await new Promise((resolve, reject) => {
+  const port = await new Promise<number>((resolve, reject) => {
     httpServer.listen(0, '127.0.0.1', () => {
       const addr = httpServer.address();
       if (typeof addr === 'object' && addr) resolve(addr.port);
@@ -268,9 +285,10 @@ async function main() {
   const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
   const _server = createServer(serverTransport, services);
 
-  // Print port so the Python test can parse it
+  // Signal that the server is ready by printing the port
   process.stdout.write(`RIVER_PORT=${port}\n`);
 
+  // Keep the server alive
   process.on('SIGTERM', () => {
     _server.close().then(() => {
       httpServer.close();

@@ -5,3 +5,5 @@ __pycache__/
 .pytest_cache/
 dist/
 build/
+# esbuild build artifact (built from test_server.ts at test time)
+tests/test_server.mjs

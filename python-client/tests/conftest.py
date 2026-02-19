@@ -11,16 +11,46 @@ import os
 import re
 import signal
 import subprocess
-import sys
 import time
-from typing import AsyncGenerator, Generator
+from typing import Generator
 
 import pytest
-import pytest_asyncio
 
 
-SERVER_SCRIPT = os.path.join(os.path.dirname(__file__), "test_server.mjs")
-RIVER_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+TESTS_DIR = os.path.dirname(__file__)
+SERVER_TS = os.path.join(TESTS_DIR, "test_server.ts")
+SERVER_MJS = os.path.join(TESTS_DIR, "test_server.mjs")
+RIVER_ROOT = os.path.abspath(os.path.join(TESTS_DIR, "..", ".."))
+ESBUILD = os.path.join(RIVER_ROOT, "node_modules", ".bin", "esbuild")
+
+
+def _build_test_server() -> None:
+    """Bundle test_server.ts -> test_server.mjs using esbuild.
+
+    esbuild handles the river repo's bundler-style module resolution at
+    build time, producing a single ESM file that plain ``node`` can run.
+    """
+    result = subprocess.run(
+        [
+            ESBUILD,
+            SERVER_TS,
+            "--bundle",
+            "--platform=node",
+            "--format=esm",
+            f"--outfile={SERVER_MJS}",
+            # keep heavy deps external so the bundle stays small and
+            # we reuse whatever is already in node_modules
+            "--external:ws",
+            "--external:@sinclair/typebox",
+        ],
+        cwd=RIVER_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"esbuild failed ({result.returncode}):\n{result.stderr}"
+        )
 
 
 @pytest.fixture(scope="session")
@@ -33,12 +63,15 @@ def event_loop():
 
 @pytest.fixture(scope="session")
 def river_server_port() -> Generator[int, None, None]:
-    """Start the TypeScript test server and return the port it listens on.
+    """Build and start the TypeScript test server, yield its port.
 
-    The server is started once for the entire test session and killed afterward.
+    The server is built once via esbuild and kept alive for the entire
+    test session.
     """
+    _build_test_server()
+
     proc = subprocess.Popen(
-        ["node", SERVER_SCRIPT],
+        ["node", SERVER_MJS],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         cwd=RIVER_ROOT,
@@ -46,14 +79,15 @@ def river_server_port() -> Generator[int, None, None]:
 
     # Wait for the server to print the port
     port = None
-    deadline = time.monotonic() + 30  # 30s timeout
+    deadline = time.monotonic() + 30
     assert proc.stdout is not None
     while time.monotonic() < deadline:
         line = proc.stdout.readline().decode("utf-8").strip()
         if not line:
-            # Check if process died
             if proc.poll() is not None:
-                stderr = proc.stderr.read().decode("utf-8") if proc.stderr else ""
+                stderr = (
+                    proc.stderr.read().decode("utf-8") if proc.stderr else ""
+                )
                 raise RuntimeError(
                     f"Test server exited with code {proc.returncode}.\n"
                     f"stderr: {stderr}"
@@ -71,7 +105,6 @@ def river_server_port() -> Generator[int, None, None]:
 
     yield port
 
-    # Cleanup: terminate the server
     proc.send_signal(signal.SIGTERM)
     try:
         proc.wait(timeout=5)
