@@ -7,7 +7,7 @@ import {
   Transport,
 } from '../../transport';
 import { Server } from '../../router';
-import { AnyServiceSchemaMap } from '../../router/services';
+import { AnyServiceSchemaMap, MaybeDisposable } from '../../router/services';
 import { numberOfConnections, testingSessionOptions } from '..';
 import { Value } from '@sinclair/typebox/value';
 import { ControlMessageAckSchema } from '../../transport/message';
@@ -85,7 +85,7 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
 }
 
 export async function ensureServerIsClean(
-  s: Server<object, object, AnyServiceSchemaMap>,
+  s: Server<MaybeDisposable, object, AnyServiceSchemaMap>,
 ) {
   return waitFor(() =>
     expect(
@@ -116,7 +116,7 @@ export async function testFinishesCleanly({
   // so we can safely use any here
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   serverTransport: ServerTransport<Connection, any, any>;
-  server: Server<object, object, AnyServiceSchemaMap>;
+  server: Server<MaybeDisposable, object, AnyServiceSchemaMap>;
 }>) {
   // pre-close invariants
   // invariant check servers first as heartbeats are authoritative on their side

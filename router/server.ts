@@ -15,6 +15,7 @@ import {
   AnyService,
   InstantiatedServiceSchemaMap,
   AnyServiceSchemaMap,
+  MaybeDisposable,
 } from './services';
 import {
   ControlMessagePayloadSchema,
@@ -54,7 +55,7 @@ type StreamId = string;
  * @template Services - The type of services provided by the server.
  */
 export interface Server<
-  Context extends object,
+  Context extends MaybeDisposable,
   ParsedMetadata extends object,
   Services extends AnyServiceSchemaMap<Context>,
 > {
@@ -105,7 +106,7 @@ interface ProcStream<ParsedMetadata> {
 }
 
 class RiverServer<
-  Context extends object,
+  Context extends MaybeDisposable,
   MetadataSchema extends TSchema,
   ParsedMetadata extends object,
   Services extends AnyServiceSchemaMap<Context>,
@@ -118,6 +119,7 @@ class RiverServer<
   >;
 
   private contextMap: Map<AnyService, Context & { state: object }>;
+  private extendedContext?: Context;
   private log?: Logger;
   private middlewares: Array<Middleware>;
 
@@ -159,6 +161,7 @@ class RiverServer<
     this.contextMap = new Map();
 
     extendedContext = extendedContext ?? ({} as Context);
+    this.extendedContext = extendedContext;
 
     for (const [name, service] of Object.entries(services)) {
       const instance = service.instantiate(extendedContext);
@@ -972,6 +975,26 @@ class RiverServer<
       const service = this.services[serviceName];
       await service[Symbol.asyncDispose]();
     }
+
+    if (this.extendedContext) {
+      const ctx = this.extendedContext;
+      if (ctx[Symbol.asyncDispose]) {
+        await ctx[Symbol.asyncDispose]?.();
+      } else if (ctx[Symbol.dispose]) {
+        ctx[Symbol.dispose]?.();
+      } else {
+        for (const value of Object.values(ctx)) {
+          if (value && typeof value === 'object') {
+            const v = value as MaybeDisposable;
+            if (v[Symbol.asyncDispose]) {
+              await v[Symbol.asyncDispose]?.();
+            } else if (v[Symbol.dispose]) {
+              v[Symbol.dispose]?.();
+            }
+          }
+        }
+      }
+    }
   }
 }
 
@@ -1068,10 +1091,11 @@ export type Middleware = (param: MiddlewareParam) => void;
  * @returns A promise that resolves to a server instance with the registered services.
  */
 export function createServer<
-  Context extends object,
   MetadataSchema extends TSchema,
   ParsedMetadata extends object,
-  Services extends AnyServiceSchemaMap<Context>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Services extends AnyServiceSchemaMap<any>,
+  Context extends MaybeDisposable = MaybeDisposable,
 >(
   transport: ServerTransport<Connection, MetadataSchema, ParsedMetadata>,
   services: Services,
