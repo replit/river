@@ -246,3 +246,45 @@ export function closeAllConnections<ConnType extends Connection>(
     conn.close();
   }
 }
+
+/**
+ * Wraps a partial context object in a proxy that throws when accessing
+ * properties that weren't provided. This is useful for test contexts where
+ * you only want to mock the dependencies a test actually uses.
+ *
+ * Symbols and `then` are allowed through without throwing — river checks
+ * for `Symbol.asyncDispose` / `Symbol.dispose` on context values during
+ * `server.close()`, and `then` is checked by the JS runtime when the
+ * proxy is returned from an async function.
+ *
+ * @example
+ * ```ts
+ * const ctx = createPartialContext<MyContext>({
+ *   database: mockDb,
+ *   // accessing ctx.redis will throw
+ * });
+ *
+ * const server = createServer(transport, services, {
+ *   extendedContext: ctx,
+ * });
+ * ```
+ */
+export function createPartialContext<T extends Record<string, unknown>>(
+  partial: Partial<T>,
+): T {
+  return new Proxy(partial as T, {
+    get(target, prop, receiver) {
+      if (prop in target) {
+        return Reflect.get(target, prop, receiver);
+      }
+
+      if (typeof prop === 'string' && prop !== 'then') {
+        throw new Error(
+          `${prop} is not mocked in the test context. Provide it via createPartialContext if your test needs it.`,
+        );
+      }
+
+      return undefined;
+    },
+  });
+}
