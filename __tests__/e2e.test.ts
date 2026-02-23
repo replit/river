@@ -974,6 +974,7 @@ describe.each(testMatrix())(
     });
 
     test('createPartialContext throws on unmocked property access', async () => {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
       type TestContext = {
         db: { query: (sql: string) => string };
         cache: { get: (key: string) => string };
@@ -997,6 +998,7 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport();
       const dbDispose = vi.fn();
 
+      // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
       type TestContext = {
         db: { [Symbol.asyncDispose]: () => Promise<void> };
         cache: { get: (key: string) => string };
