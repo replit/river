@@ -1,6 +1,7 @@
 import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   closeAllConnections,
+  createPartialContext,
   isReadableDone,
   numberOfConnections,
   readNextResult,
@@ -965,6 +966,72 @@ describe.each(testMatrix())(
       await expect(server.close()).rejects.toThrow(
         'db connection failed to close',
       );
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('createPartialContext throws on unmocked property access', async () => {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+      type TestContext = {
+        db: { query: (sql: string) => string };
+        cache: { get: (key: string) => string };
+      };
+
+      const ctx = createPartialContext<TestContext>({
+        db: { query: (sql) => `result: ${sql}` },
+      });
+
+      // provided properties work
+      expect(ctx.db.query('SELECT 1')).toBe('result: SELECT 1');
+
+      // unmocked properties throw
+      expect(() => ctx.cache).toThrow(
+        'cache is not mocked in the test context',
+      );
+    });
+
+    test('createPartialContext works as extendedContext with server dispose', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const dbDispose = vi.fn();
+
+      // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+      type TestContext = {
+        db: { [Symbol.asyncDispose]: () => Promise<void> };
+        cache: { get: (key: string) => string };
+      };
+
+      const ctx = createPartialContext<TestContext>({
+        db: { [Symbol.asyncDispose]: dbDispose },
+      });
+
+      const ServiceSchema = createServiceSchema<TestContext>();
+      const services = {
+        test: ServiceSchema.define({
+          ping: Procedure.rpc({
+            requestInit: Type.Object({}),
+            responseData: Type.Object({}),
+            async handler() {
+              return Ok({});
+            },
+          }),
+        }),
+      };
+
+      const server = createServer(serverTransport, services, {
+        extendedContext: ctx,
+      });
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // server.close() should dispose context values without
+      // throwing on unmocked properties (cache)
+      await server.close();
+      expect(dbDispose).toBeCalledTimes(1);
       await testFinishesCleanly({
         clientTransports: [clientTransport],
         serverTransport,
