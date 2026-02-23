@@ -944,6 +944,34 @@ describe.each(testMatrix())(
       });
     });
 
+    test('context disposal errors propagate to the consumer', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = { test: TestServiceSchema };
+
+      const server = createServer(serverTransport, services, {
+        extendedContext: {
+          [Symbol.asyncDispose]: async () => {
+            throw new Error('db connection failed to close');
+          },
+        },
+      });
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // test -- error handling is up to the consumer
+      await expect(server.close()).rejects.toThrow(
+        'db connection failed to close',
+      );
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
     test('works with non-object schemas', async () => {
       // setup
       const clientTransport = getClientTransport('client');
