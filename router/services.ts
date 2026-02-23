@@ -37,7 +37,7 @@ export type AnyService = Service<object, object, object, ProcedureMap>;
  * Represents any {@link ServiceSchema} object.
  */
 export type AnyServiceSchema<
-  Context extends object = object,
+  Context extends MaybeDisposable = MaybeDisposable,
   ParsedMetadata extends object = object,
 > = InstanceType<
   ReturnType<typeof createServiceSchema<Context, ParsedMetadata>>
@@ -47,9 +47,15 @@ export type AnyServiceSchema<
  * A dictionary of {@link ServiceSchema}s, where the key is the service name.
  */
 export type AnyServiceSchemaMap<
-  Context extends object = object,
+  Context extends MaybeDisposable = MaybeDisposable,
   ParsedMetadata extends object = object,
 > = Record<string, AnyServiceSchema<Context, ParsedMetadata>>;
+
+/**
+ * Extracts the Context type from a {@link AnyServiceSchemaMap}.
+ */
+export type ContextOf<S extends AnyServiceSchemaMap> =
+  S extends AnyServiceSchemaMap<infer C> ? C : MaybeDisposable;
 
 // This has the secret sauce to keep go to definition working, the structure is
 // somewhat delicate, so be careful when modifying it. Would be nice to add a
@@ -59,7 +65,7 @@ export type AnyServiceSchemaMap<
  * services.
  */
 export type InstantiatedServiceSchemaMap<
-  Context extends object,
+  Context extends MaybeDisposable,
   ParsedMetadata extends object,
   T extends AnyServiceSchemaMap<Context, ParsedMetadata>,
 > = {
@@ -157,7 +163,7 @@ type BrandedProcedureMap<Context, State, ParsedMetadata> = Record<
   Branded<AnyProcedure<Context, State, ParsedMetadata>>
 >;
 
-type MaybeDisposable<State extends object> = State & {
+export type MaybeDisposable<T extends object = Record<string, unknown>> = T & {
   [Symbol.asyncDispose]?: () => PromiseLike<void>;
   [Symbol.dispose]?: () => void;
 };
@@ -166,7 +172,7 @@ type MaybeDisposable<State extends object> = State & {
  * The configuration for a service.
  */
 export interface ServiceConfiguration<
-  Context extends object,
+  Context extends MaybeDisposable,
   State extends object,
 > {
   /**
@@ -319,7 +325,7 @@ export function serializeSchema(
  * When defining procedures, always use the {@link Procedure} constructors to create them.
  */
 export function createServiceSchema<
-  Context extends object = object,
+  Context extends MaybeDisposable = MaybeDisposable,
   ParsedMetadata extends object = object,
 >() {
   return class ServiceSchema<
@@ -642,7 +648,7 @@ export function getSerializedProcErrors(
  */
 // note that this isn't exported
 class ServiceScaffold<
-  Context extends object,
+  Context extends MaybeDisposable,
   State extends object,
   ParsedMetadata extends object,
 > {

@@ -35,6 +35,7 @@ import {
   Ok,
   UNCAUGHT_ERROR_CODE,
   CANCEL_CODE,
+  MaybeDisposable,
 } from '../router';
 import {
   createClientHandshakeOptions,
@@ -888,6 +889,61 @@ describe.each(testMatrix())(
       });
     });
 
+    test('calls asyncDispose on extendedContext if it is disposable', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const asyncDispose = vi.fn();
+      const services = { test: TestServiceSchema };
+
+      const server = createServer(serverTransport, services, {
+        extendedContext: {
+          [Symbol.asyncDispose]: asyncDispose,
+        },
+      });
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // test
+      await server.close();
+      expect(asyncDispose).toBeCalledTimes(1);
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('calls asyncDispose on individual context values if context itself is not disposable', async () => {
+      // setup
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const dbDispose = vi.fn();
+      const cacheDispose = vi.fn();
+      const services = { test: TestServiceSchema };
+
+      const server = createServer(serverTransport, services, {
+        extendedContext: {
+          db: { [Symbol.asyncDispose]: dbDispose },
+          cache: { [Symbol.dispose]: cacheDispose },
+        },
+      });
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // test
+      await server.close();
+      expect(dbDispose).toBeCalledTimes(1);
+      expect(cacheDispose).toBeCalledTimes(1);
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
     test('works with non-object schemas', async () => {
       // setup
       const clientTransport = getClientTransport('client');
@@ -954,7 +1010,10 @@ describe.each(testMatrix())(
         await cleanupTransports([clientTransport, serverTransport]);
       });
 
-      const ServiceSchema = createServiceSchema<object, ParsedMetadata>();
+      const ServiceSchema = createServiceSchema<
+        MaybeDisposable,
+        ParsedMetadata
+      >();
 
       const TestServiceScaffold = ServiceSchema.scaffold({
         initializeState: () => ({}),

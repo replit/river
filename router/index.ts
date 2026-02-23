@@ -1,6 +1,7 @@
 export type {
   Service,
   ServiceConfiguration,
+  MaybeDisposable,
   ProcHandler,
   ProcInit,
   ProcRequest,
