@@ -51,12 +51,6 @@ export type AnyServiceSchemaMap<
   ParsedMetadata extends object = object,
 > = Record<string, AnyServiceSchema<Context, ParsedMetadata>>;
 
-/**
- * Extracts the Context type from a {@link AnyServiceSchemaMap}.
- */
-export type ContextOf<S extends AnyServiceSchemaMap> =
-  S extends AnyServiceSchemaMap<infer C> ? C : MaybeDisposable;
-
 // This has the secret sauce to keep go to definition working, the structure is
 // somewhat delicate, so be careful when modifying it. Would be nice to add a
 // static test for this.

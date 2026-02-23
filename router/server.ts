@@ -16,7 +16,6 @@ import {
   InstantiatedServiceSchemaMap,
   AnyServiceSchemaMap,
   MaybeDisposable,
-  ContextOf,
 } from './services';
 import {
   ControlMessagePayloadSchema,
@@ -1096,12 +1095,13 @@ export function createServer<
   ParsedMetadata extends object,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Services extends AnyServiceSchemaMap<any>,
+  Context extends MaybeDisposable = MaybeDisposable,
 >(
   transport: ServerTransport<Connection, MetadataSchema, ParsedMetadata>,
   services: Services,
   providedServerOptions?: Partial<{
     handshakeOptions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>;
-    extendedContext?: ContextOf<Services>;
+    extendedContext?: Context;
     /**
      * Maximum number of cancelled streams to keep track of to avoid
      * cascading stream errors.
@@ -1112,7 +1112,7 @@ export function createServer<
      */
     middlewares?: Array<Middleware>;
   }>,
-): Server<ContextOf<Services>, ParsedMetadata, Services> {
+): Server<Context, ParsedMetadata, Services> {
   return new RiverServer(
     transport,
     services,
