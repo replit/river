@@ -35,9 +35,15 @@ import { Value } from '@sinclair/typebox/value';
 import { Err, Result, Ok, ErrResult } from './result';
 import { EventMap } from '../transport/events';
 import { coerceErrorString } from '../transport/stringifyError';
-import { Span } from '@opentelemetry/api';
+import {
+  context as otelContext,
+  Span,
+  SpanStatusCode,
+  trace,
+} from '@opentelemetry/api';
 import {
   createHandlerSpan,
+  getTracer,
   PropagationContext,
   recordRiverError,
 } from '../tracing';
@@ -586,6 +592,34 @@ class RiverServer<
       closeReadable();
     }
 
+    const deferredCleanups: Array<() => void | Promise<void>> = [];
+    const deferCleanup = (fn: () => void | Promise<void>) => {
+      deferredCleanups.push(fn);
+    };
+
+    const runDeferredCleanups = async () => {
+      if (deferredCleanups.length === 0) return;
+      const cleanupSpan = getTracer().startSpan(
+        'river.cleanup',
+        {},
+        trace.setSpan(otelContext.active(), span),
+      );
+      try {
+        for (let fn = deferredCleanups.pop(); fn; fn = deferredCleanups.pop()) {
+          try {
+            await fn();
+          } catch (err) {
+            cleanupSpan.recordException(
+              err instanceof Error ? err : new Error(coerceErrorString(err)),
+            );
+            cleanupSpan.setStatus({ code: SpanStatusCode.ERROR });
+          }
+        }
+      } finally {
+        cleanupSpan.end();
+      }
+    };
+
     const handlerContextWithSpan: ProcedureHandlerContext<
       object,
       object,
@@ -606,6 +640,7 @@ class RiverServer<
 
         return Err(errRes);
       },
+      deferCleanup,
       signal: finishedController.signal,
     };
 
@@ -615,6 +650,7 @@ class RiverServer<
       from,
       metadata: sessionMetadata,
       span,
+      deferCleanup,
       signal: finishedController.signal,
       streamId,
       procedureName,
@@ -639,6 +675,7 @@ class RiverServer<
           } catch (err) {
             onHandlerError(err, span);
           } finally {
+            await runDeferredCleanups();
             span.end();
           }
           break;
@@ -653,6 +690,7 @@ class RiverServer<
           } catch (err) {
             onHandlerError(err, span);
           } finally {
+            await runDeferredCleanups();
             span.end();
           }
           break;
@@ -666,6 +704,7 @@ class RiverServer<
           } catch (err) {
             onHandlerError(err, span);
           } finally {
+            await runDeferredCleanups();
             span.end();
           }
           break;
@@ -686,6 +725,7 @@ class RiverServer<
           } catch (err) {
             onHandlerError(err, span);
           } finally {
+            await runDeferredCleanups();
             span.end();
           }
           break;
