@@ -35,12 +35,7 @@ import { Value } from '@sinclair/typebox/value';
 import { Err, Result, Ok, ErrResult } from './result';
 import { EventMap } from '../transport/events';
 import { coerceErrorString } from '../transport/stringifyError';
-import {
-  context as otelContext,
-  Span,
-  SpanStatusCode,
-  trace,
-} from '@opentelemetry/api';
+import { context as otelContext, Span, trace } from '@opentelemetry/api';
 import {
   createHandlerSpan,
   getTracer,
@@ -479,9 +474,57 @@ class RiverServer<
       cancelStream(streamId, result);
     };
 
+    const deferredCleanups: Array<() => void | Promise<void>> = [];
+    let cleanupsHaveRun = false;
+    const runCleanupSafe = async (fn: () => void | Promise<void>) => {
+      try {
+        await fn();
+      } catch (err) {
+        span.recordException(
+          err instanceof Error ? err : new Error(coerceErrorString(err)),
+        );
+      }
+    };
+
+    const deferCleanup = (fn: () => void | Promise<void>) => {
+      if (cleanupsHaveRun) {
+        void runCleanupSafe(fn);
+
+        return;
+      }
+
+      deferredCleanups.push(fn);
+    };
+
+    const runDeferredCleanups = async () => {
+      if (deferredCleanups.length === 0) {
+        cleanupsHaveRun = true;
+        span.end();
+
+        return;
+      }
+
+      const cleanupSpan = getTracer().startSpan(
+        'river.cleanup',
+        {},
+        trace.setSpan(otelContext.active(), span),
+      );
+
+      try {
+        for (let fn = deferredCleanups.pop(); fn; fn = deferredCleanups.pop()) {
+          await runCleanupSafe(fn);
+        }
+      } finally {
+        cleanupsHaveRun = true;
+        cleanupSpan.end();
+        span.end();
+      }
+    };
+
     const cleanup = () => {
       finishedController.abort();
       this.streams.delete(streamId);
+      void runDeferredCleanups();
     };
 
     const procClosesWithResponse =
@@ -592,34 +635,6 @@ class RiverServer<
       closeReadable();
     }
 
-    const deferredCleanups: Array<() => void | Promise<void>> = [];
-    const deferCleanup = (fn: () => void | Promise<void>) => {
-      deferredCleanups.push(fn);
-    };
-
-    const runDeferredCleanups = async () => {
-      if (deferredCleanups.length === 0) return;
-      const cleanupSpan = getTracer().startSpan(
-        'river.cleanup',
-        {},
-        trace.setSpan(otelContext.active(), span),
-      );
-      try {
-        for (let fn = deferredCleanups.pop(); fn; fn = deferredCleanups.pop()) {
-          try {
-            await fn();
-          } catch (err) {
-            cleanupSpan.recordException(
-              err instanceof Error ? err : new Error(coerceErrorString(err)),
-            );
-            cleanupSpan.setStatus({ code: SpanStatusCode.ERROR });
-          }
-        }
-      } finally {
-        cleanupSpan.end();
-      }
-    };
-
     const handlerContextWithSpan: ProcedureHandlerContext<
       object,
       object,
@@ -674,9 +689,6 @@ class RiverServer<
             resWritable.write(responsePayload);
           } catch (err) {
             onHandlerError(err, span);
-          } finally {
-            await runDeferredCleanups();
-            span.end();
           }
           break;
         case 'stream':
@@ -689,9 +701,6 @@ class RiverServer<
             });
           } catch (err) {
             onHandlerError(err, span);
-          } finally {
-            await runDeferredCleanups();
-            span.end();
           }
           break;
         case 'subscription':
@@ -703,9 +712,6 @@ class RiverServer<
             });
           } catch (err) {
             onHandlerError(err, span);
-          } finally {
-            await runDeferredCleanups();
-            span.end();
           }
           break;
         case 'upload':
@@ -724,9 +730,6 @@ class RiverServer<
             resWritable.write(responsePayload);
           } catch (err) {
             onHandlerError(err, span);
-          } finally {
-            await runDeferredCleanups();
-            span.end();
           }
           break;
       }

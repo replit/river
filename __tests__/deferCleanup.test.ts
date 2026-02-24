@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import {
+  afterEach,
+  assert,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from 'vitest';
 import { Type } from '@sinclair/typebox';
 import {
   createClient,
@@ -363,6 +371,138 @@ describe('deferCleanup', () => {
     // runs first, then middleware cleanup.
     await waitFor(() => {
       expect(order).toEqual(['handler-cleanup', 'middleware-cleanup']);
+    });
+  });
+
+  test('cleanup that registers more cleanups', async () => {
+    const order: Array<number> = [];
+
+    const services = {
+      test: createServiceSchema().define({
+        myRpc: Procedure.rpc({
+          requestInit: Type.Object({}),
+          responseData: Type.Object({}),
+          async handler({ ctx }) {
+            ctx.deferCleanup(() => {
+              order.push(1);
+            });
+            ctx.deferCleanup(() => {
+              order.push(2);
+              // Register another cleanup during execution.
+              // Since cleanups haven't finished, this gets pushed
+              // to the array and picked up by the pop() loop.
+              ctx.deferCleanup(() => {
+                order.push(3);
+              });
+            });
+
+            return Ok({});
+          },
+        }),
+      }),
+    };
+
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
+    );
+
+    await client.test.myRpc.rpc({});
+
+    // LIFO: 2 pops first (pushes 3), then 3 pops next, then 1
+    await waitFor(() => {
+      expect(order).toEqual([2, 3, 1]);
+    });
+  });
+
+  test('stream cleanup runs when streams close, not when handler returns', async () => {
+    const cleanupRan = vi.fn();
+    let handlerReturned = false;
+
+    const services = {
+      test: createServiceSchema().define({
+        myStream: Procedure.stream({
+          requestInit: Type.Object({}),
+          requestData: Type.Object({}),
+          responseData: Type.Object({}),
+          async handler({ ctx, resWritable }) {
+            ctx.deferCleanup(cleanupRan);
+
+            // Write a response but don't close resWritable — the handler
+            // returns while the procedure is still open.
+            resWritable.write(Ok({}));
+            handlerReturned = true;
+          },
+        }),
+      }),
+    };
+
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
+    );
+
+    const abortController = new AbortController();
+    const { resReadable } = client.test.myStream.stream(
+      {},
+      { signal: abortController.signal },
+    );
+
+    // Read the response the handler wrote
+    const iter = resReadable[Symbol.asyncIterator]();
+    const result = await iter.next();
+    expect(result.done).toBe(false);
+
+    // Handler has returned but streams are still open — cleanup should NOT have run.
+    await waitFor(() => expect(handlerReturned).toBe(true));
+    expect(cleanupRan).not.toHaveBeenCalled();
+
+    // Abort closes everything, triggering cleanup.
+    abortController.abort();
+
+    await waitFor(() => {
+      expect(cleanupRan).toHaveBeenCalledOnce();
+    });
+  });
+
+  test('deferCleanup after handler finished calls fn immediately', async () => {
+    const laterCleanup = vi.fn();
+    let savedCtx: { deferCleanup: (fn: () => void) => void } | undefined;
+
+    const services = {
+      test: createServiceSchema().define({
+        myRpc: Procedure.rpc({
+          requestInit: Type.Object({}),
+          responseData: Type.Object({}),
+          async handler({ ctx }) {
+            savedCtx = ctx;
+
+            return Ok({});
+          },
+        }),
+      }),
+    };
+
+    createServer(mockTransportNetwork.getServerTransport(), services);
+    const client = createClient<typeof services>(
+      mockTransportNetwork.getClientTransport('client'),
+      'SERVER',
+    );
+
+    await client.test.myRpc.rpc({});
+
+    await waitFor(() => {
+      expect(savedCtx).toBeDefined();
+    });
+
+    // The handler has finished and cleanups have run.
+    // Registering a new cleanup should call it immediately.
+    assert(savedCtx);
+    savedCtx.deferCleanup(laterCleanup);
+    await waitFor(() => {
+      expect(laterCleanup).toHaveBeenCalledOnce();
     });
   });
 });
