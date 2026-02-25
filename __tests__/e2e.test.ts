@@ -253,8 +253,10 @@ describe.each(testMatrix())(
         ok: true,
         payload: { response: 'abc' },
       });
-      abortController.abort();
+      // Wait for the server's close to be fully processed before aborting,
+      // so the abort is genuinely a no-op (testing idempotent close).
       expect(await isReadableDone(resReadable)).toEqual(true);
+      abortController.abort();
 
       // Make sure that the handlers have finished.
       await advanceFakeTimersBySessionGrace();

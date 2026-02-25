@@ -41,6 +41,22 @@ export type ProcedureHandlerContext<State, Context, ParsedMetadata> =
      */
     cancel: (message?: string) => ErrResult<Static<typeof CancelErrorSchema>>;
     /**
+     * Register a cleanup function that will run after the procedure handler
+     * completes (whether it returns normally, throws, or is cancelled).
+     * Cleanup functions run in reverse registration order (LIFO) and each
+     * cleanup is awaited before the next one starts.
+     *
+     * Prefer this over registering async cleanup work on `signal`'s 'abort'
+     * event. Abort signal callbacks fire synchronously and do not await async
+     * work, so multiple async callbacks will interlace their execution
+     * (coroutine-like behavior) rather than running sequentially to completion.
+     * `deferCleanup` guarantees each cleanup finishes before the next begins.
+     *
+     * If a cleanup function throws, the error is recorded on the cleanup span
+     * but remaining cleanups continue to run.
+     */
+    deferCleanup: (fn: () => void | Promise<void>) => void;
+    /**
      * This signal is a standard [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal)
      * triggered when the procedure invocation is done. This signal tracks the invocation/request finishing
      * for _any_ reason, for example:

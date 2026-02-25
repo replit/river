@@ -35,9 +35,10 @@ import { Value } from '@sinclair/typebox/value';
 import { Err, Result, Ok, ErrResult } from './result';
 import { EventMap } from '../transport/events';
 import { coerceErrorString } from '../transport/stringifyError';
-import { Span } from '@opentelemetry/api';
+import { context as otelContext, Span, trace } from '@opentelemetry/api';
 import {
   createHandlerSpan,
+  getTracer,
   PropagationContext,
   recordRiverError,
 } from '../tracing';
@@ -473,9 +474,57 @@ class RiverServer<
       cancelStream(streamId, result);
     };
 
+    const deferredCleanups: Array<() => void | Promise<void>> = [];
+    let cleanupsHaveRun = false;
+    const runCleanupSafe = async (fn: () => void | Promise<void>) => {
+      try {
+        await fn();
+      } catch (err) {
+        span.recordException(
+          err instanceof Error ? err : new Error(coerceErrorString(err)),
+        );
+      }
+    };
+
+    const deferCleanup = (fn: () => void | Promise<void>) => {
+      if (cleanupsHaveRun) {
+        void runCleanupSafe(fn);
+
+        return;
+      }
+
+      deferredCleanups.push(fn);
+    };
+
+    const runDeferredCleanups = async () => {
+      if (deferredCleanups.length === 0) {
+        cleanupsHaveRun = true;
+        span.end();
+
+        return;
+      }
+
+      const cleanupSpan = getTracer().startSpan(
+        'river.cleanup',
+        {},
+        trace.setSpan(otelContext.active(), span),
+      );
+
+      try {
+        for (let fn = deferredCleanups.pop(); fn; fn = deferredCleanups.pop()) {
+          await runCleanupSafe(fn);
+        }
+      } finally {
+        cleanupsHaveRun = true;
+        cleanupSpan.end();
+        span.end();
+      }
+    };
+
     const cleanup = () => {
       finishedController.abort();
       this.streams.delete(streamId);
+      void runDeferredCleanups();
     };
 
     const procClosesWithResponse =
@@ -606,6 +655,7 @@ class RiverServer<
 
         return Err(errRes);
       },
+      deferCleanup,
       signal: finishedController.signal,
     };
 
@@ -615,6 +665,7 @@ class RiverServer<
       from,
       metadata: sessionMetadata,
       span,
+      deferCleanup,
       signal: finishedController.signal,
       streamId,
       procedureName,
@@ -638,8 +689,6 @@ class RiverServer<
             resWritable.write(responsePayload);
           } catch (err) {
             onHandlerError(err, span);
-          } finally {
-            span.end();
           }
           break;
         case 'stream':
@@ -652,8 +701,6 @@ class RiverServer<
             });
           } catch (err) {
             onHandlerError(err, span);
-          } finally {
-            span.end();
           }
           break;
         case 'subscription':
@@ -665,8 +712,6 @@ class RiverServer<
             });
           } catch (err) {
             onHandlerError(err, span);
-          } finally {
-            span.end();
           }
           break;
         case 'upload':
@@ -685,8 +730,6 @@ class RiverServer<
             resWritable.write(responsePayload);
           } catch (err) {
             onHandlerError(err, span);
-          } finally {
-            span.end();
           }
           break;
       }
