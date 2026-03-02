@@ -1,0 +1,25 @@
+"""Generated type definitions for River services."""
+
+from __future__ import annotations
+{% if needs_literal %}
+
+from typing import Literal
+{% endif %}
+
+from typing_extensions import {{ typing_ext_imports | join(", ") }}
+{% for td in typedicts %}
+
+
+class {{ td.name }}(TypedDict):
+{% if td.description %}
+    """{{ td.description }}"""
+
+{% endif %}
+{% if not td.fields %}
+    pass
+{% else %}
+{% for f in td.fields %}
+    {{ f.name }}: {{ f.annotation }}
+{% endfor %}
+{% endif %}
+{% endfor %}

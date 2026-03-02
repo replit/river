@@ -12,6 +12,8 @@ license = {text = "MIT"}
 dependencies = [
     "websockets>=12.0",
     "msgpack>=1.0",
+    "typing_extensions>=4.0",
+    "jinja2>=3.0",
 ]
 
 [project.optional-dependencies]
@@ -33,3 +35,6 @@ select = ["E", "F", "I", "W"]
 
 [tool.setuptools.packages.find]
 include = ["river*"]
+
+[tool.setuptools.package-data]
+"river.codegen" = ["templates/*.j2"]

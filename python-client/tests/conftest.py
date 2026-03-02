@@ -11,6 +11,7 @@ import os
 import re
 import signal
 import subprocess
+import sys
 import time
 from typing import Generator
 
@@ -19,24 +20,24 @@ import pytest
 TESTS_DIR = os.path.dirname(__file__)
 SERVER_TS = os.path.join(TESTS_DIR, "test_server.ts")
 SERVER_MJS = os.path.join(TESTS_DIR, "test_server.mjs")
+EXTRACT_SCHEMA_TS = os.path.join(TESTS_DIR, "extract_test_schema.ts")
+EXTRACT_SCHEMA_MJS = os.path.join(TESTS_DIR, "extract_test_schema.mjs")
+SCHEMA_JSON = os.path.join(TESTS_DIR, "test_schema.json")
+GENERATED_DIR = os.path.join(TESTS_DIR, "generated")
 RIVER_ROOT = os.path.abspath(os.path.join(TESTS_DIR, "..", ".."))
 ESBUILD = os.path.join(RIVER_ROOT, "node_modules", ".bin", "esbuild")
 
 
-def _build_test_server() -> None:
-    """Bundle test_server.ts -> test_server.mjs using esbuild.
-
-    esbuild handles the river repo's bundler-style module resolution at
-    build time, producing a single ESM file that plain ``node`` can run.
-    """
+def _esbuild_bundle(ts_path: str, mjs_path: str) -> None:
+    """Bundle a .ts file to .mjs using esbuild."""
     result = subprocess.run(
         [
             ESBUILD,
-            SERVER_TS,
+            ts_path,
             "--bundle",
             "--platform=node",
             "--format=esm",
-            f"--outfile={SERVER_MJS}",
+            f"--outfile={mjs_path}",
             # keep heavy deps external so the bundle stays small and
             # we reuse whatever is already in node_modules
             "--external:ws",
@@ -48,6 +49,54 @@ def _build_test_server() -> None:
     )
     if result.returncode != 0:
         raise RuntimeError(f"esbuild failed ({result.returncode}):\n{result.stderr}")
+
+
+def _build_test_server() -> None:
+    """Bundle test_server.ts -> test_server.mjs using esbuild."""
+    _esbuild_bundle(SERVER_TS, SERVER_MJS)
+
+
+def _extract_test_schema() -> None:
+    """Bundle and run extract_test_schema.ts to produce test_schema.json,
+    then run codegen to produce the generated client module."""
+    _esbuild_bundle(EXTRACT_SCHEMA_TS, EXTRACT_SCHEMA_MJS)
+    result = subprocess.run(
+        ["node", EXTRACT_SCHEMA_MJS],
+        cwd=RIVER_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"extract_test_schema failed ({result.returncode}):\n{result.stderr}"
+        )
+
+    # Run codegen
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "river.codegen",
+            "--schema",
+            SCHEMA_JSON,
+            "--output",
+            GENERATED_DIR,
+        ],
+        cwd=os.path.join(RIVER_ROOT, "python-client"),
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"codegen failed ({result.returncode}):\n{result.stderr}\n{result.stdout}"
+        )
+
+
+@pytest.fixture(scope="session")
+def generated_client_dir() -> str:
+    """Extract test schema and run codegen. Returns the generated dir path."""
+    _extract_test_schema()
+    return GENERATED_DIR
 
 
 @pytest.fixture(scope="session")
