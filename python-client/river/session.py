@@ -8,20 +8,17 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable
 
 from river.codec import CodecMessageAdapter
 from river.types import (
-    ControlFlags,
     PartialTransportMessage,
     TransportMessage,
     generate_id,
     handshake_request_payload,
     heartbeat_message,
-    is_ack,
-    PROTOCOL_VERSION,
 )
 
 logger = logging.getLogger(__name__)
@@ -109,9 +106,7 @@ class Session:
             return self.send_buffer[0].seq
         return self.seq
 
-    def construct_msg(
-        self, partial: PartialTransportMessage
-    ) -> TransportMessage:
+    def construct_msg(self, partial: PartialTransportMessage) -> TransportMessage:
         """Construct a full TransportMessage from a partial one.
 
         Fills in id, from, to, seq, ack and increments seq.
@@ -326,9 +321,7 @@ class Session:
             self._ws = None
         self.send_buffer.clear()
 
-    def create_handshake_request(
-        self, metadata: Any = None
-    ) -> TransportMessage:
+    def create_handshake_request(self, metadata: Any = None) -> TransportMessage:
         """Create a handshake request transport message.
 
         Handshake messages have seq=0, ack=0, controlFlags=0.

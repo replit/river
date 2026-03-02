@@ -16,7 +16,6 @@ from typing import Generator
 
 import pytest
 
-
 TESTS_DIR = os.path.dirname(__file__)
 SERVER_TS = os.path.join(TESTS_DIR, "test_server.ts")
 SERVER_MJS = os.path.join(TESTS_DIR, "test_server.mjs")
@@ -48,9 +47,7 @@ def _build_test_server() -> None:
         text=True,
     )
     if result.returncode != 0:
-        raise RuntimeError(
-            f"esbuild failed ({result.returncode}):\n{result.stderr}"
-        )
+        raise RuntimeError(f"esbuild failed ({result.returncode}):\n{result.stderr}")
 
 
 @pytest.fixture(scope="session")
@@ -85,12 +82,9 @@ def river_server_port() -> Generator[int, None, None]:
         line = proc.stdout.readline().decode("utf-8").strip()
         if not line:
             if proc.poll() is not None:
-                stderr = (
-                    proc.stderr.read().decode("utf-8") if proc.stderr else ""
-                )
+                stderr = proc.stderr.read().decode("utf-8") if proc.stderr else ""
                 raise RuntimeError(
-                    f"Test server exited with code {proc.returncode}.\n"
-                    f"stderr: {stderr}"
+                    f"Test server exited with code {proc.returncode}.\nstderr: {stderr}"
                 )
             time.sleep(0.1)
             continue

@@ -7,12 +7,12 @@ all four procedure types and core protocol behavior.
 from __future__ import annotations
 
 import asyncio
+
 import pytest
 
 from river.client import RiverClient
-from river.transport import WebSocketClientTransport
 from river.codec import NaiveJsonCodec
-
+from river.transport import WebSocketClientTransport
 
 # -- helpers --
 
@@ -78,9 +78,7 @@ class TestRpc:
         """Multiple concurrent RPCs all complete correctly."""
         client = await make_client(server_url)
         try:
-            tasks = [
-                client.rpc("ordering", "add", {"n": i}) for i in range(10)
-            ]
+            tasks = [client.rpc("ordering", "add", {"n": i}) for i in range(10)]
             results = await asyncio.gather(*tasks)
             for i, result in enumerate(results):
                 assert result["ok"] is True
@@ -140,9 +138,7 @@ class TestStream:
         """Stream handler receives the init message."""
         client = await make_client(server_url)
         try:
-            stream = client.stream(
-                "test", "echoWithPrefix", {"prefix": "test"}
-            )
+            stream = client.stream("test", "echoWithPrefix", {"prefix": "test"})
             stream.req_writable.write({"msg": "hello", "ignore": False})
             stream.req_writable.write({"msg": "world", "ignore": False})
             stream.req_writable.close()
@@ -481,9 +477,7 @@ class TestIdempotentClose:
         client = await make_client(server_url)
         try:
             abort_evt = asyncio.Event()
-            stream = client.stream(
-                "test", "echo", {}, abort_signal=abort_evt
-            )
+            stream = client.stream("test", "echo", {}, abort_signal=abort_evt)
             stream.req_writable.write({"msg": "abc", "ignore": False})
             stream.req_writable.close()
 
@@ -517,9 +511,7 @@ class TestIdempotentClose:
         client = await make_client(server_url)
         try:
             abort_evt = asyncio.Event()
-            sub = client.subscribe(
-                "subscribable", "value", {}, abort_signal=abort_evt
-            )
+            sub = client.subscribe("subscribable", "value", {}, abort_signal=abort_evt)
             # Read initial value
             done, msg = await sub.res_readable.next()
             assert not done
@@ -546,9 +538,7 @@ class TestIdempotentClose:
         client = await make_client(server_url)
         try:
             abort_evt = asyncio.Event()
-            stream = client.stream(
-                "test", "echo", {}, abort_signal=abort_evt
-            )
+            stream = client.stream("test", "echo", {}, abort_signal=abort_evt)
             stream.req_writable.write({"msg": "1", "ignore": False})
             done, msg = await stream.res_readable.next()
             assert not done
@@ -593,6 +583,89 @@ class TestEagerConnect:
             # Verify the connection works by making a call
             result = await client.rpc("test", "add", {"n": 1})
             assert result["ok"] is True
+        finally:
+            await transport.close()
+
+
+# =====================================================================
+# Transparent Reconnect Tests
+# =====================================================================
+
+
+class TestTransparentReconnect:
+    @pytest.mark.asyncio
+    async def test_reconnect_with_concurrent_streams(self, server_url: str):
+        """Multiple concurrent streams survive a connection drop and reconnect."""
+        from river.session import SessionState
+
+        transport = WebSocketClientTransport(
+            ws_url=server_url,
+            server_id="SERVER",
+            codec=NaiveJsonCodec(),
+        )
+        client = RiverClient(transport, server_id="SERVER")
+        try:
+            # Open three concurrent streams with different prefixes
+            stream_a = client.stream("test", "echoWithPrefix", {"prefix": "A"})
+            stream_b = client.stream("test", "echoWithPrefix", {"prefix": "B"})
+            stream_c = client.stream("test", "echoWithPrefix", {"prefix": "C"})
+
+            # Send initial messages on each stream and verify they work
+            stream_a.req_writable.write({"msg": "1", "ignore": False})
+            stream_b.req_writable.write({"msg": "1", "ignore": False})
+            stream_c.req_writable.write({"msg": "1", "ignore": False})
+
+            done_a, msg_a = await stream_a.res_readable.next()
+            done_b, msg_b = await stream_b.res_readable.next()
+            done_c, msg_c = await stream_c.res_readable.next()
+
+            assert not done_a and msg_a["payload"]["response"] == "A 1"
+            assert not done_b and msg_b["payload"]["response"] == "B 1"
+            assert not done_c and msg_c["payload"]["response"] == "C 1"
+
+            # Force-close the WebSocket to simulate a network drop
+            session = transport.sessions.get("SERVER")
+            assert session is not None
+            assert session._ws is not None
+            await session._ws.close()
+
+            # Wait for reconnection
+            reconnected = asyncio.Event()
+
+            def on_transition(evt):
+                if evt.get("state") == SessionState.CONNECTED:
+                    reconnected.set()
+
+            transport.add_event_listener("sessionTransition", on_transition)
+            await asyncio.wait_for(reconnected.wait(), timeout=5.0)
+            transport.remove_event_listener("sessionTransition", on_transition)
+
+            # Send more messages on all three streams after reconnect
+            stream_a.req_writable.write({"msg": "2", "ignore": False})
+            stream_b.req_writable.write({"msg": "2", "ignore": False})
+            stream_c.req_writable.write({"msg": "2", "ignore": False})
+
+            # Close all streams
+            stream_a.req_writable.close()
+            stream_b.req_writable.close()
+            stream_c.req_writable.close()
+
+            # Verify the post-reconnect messages arrived correctly
+            done_a2, msg_a2 = await stream_a.res_readable.next()
+            done_b2, msg_b2 = await stream_b.res_readable.next()
+            done_c2, msg_c2 = await stream_c.res_readable.next()
+
+            assert not done_a2 and msg_a2["payload"]["response"] == "A 2"
+            assert not done_b2 and msg_b2["payload"]["response"] == "B 2"
+            assert not done_c2 and msg_c2["payload"]["response"] == "C 2"
+
+            # Streams should close cleanly
+            done_a3, _ = await stream_a.res_readable.next()
+            done_b3, _ = await stream_b.res_readable.next()
+            done_c3, _ = await stream_c.res_readable.next()
+            assert done_a3
+            assert done_b3
+            assert done_c3
         finally:
             await transport.close()
 
@@ -810,9 +883,9 @@ class TestTypes:
         from river.types import (
             ControlFlags,
             is_ack,
-            is_stream_open,
             is_stream_cancel,
             is_stream_close,
+            is_stream_open,
         )
 
         assert is_ack(ControlFlags.AckBit)
@@ -975,9 +1048,10 @@ class TestReadableIteration:
         r: Readable = Readable()
         next_p = asyncio.ensure_future(r.next())
         # Should not resolve yet
-        result = await asyncio.wait_for(
-            asyncio.shield(next_p), timeout=0.01
-        ) if False else None
+        try:
+            await asyncio.wait_for(asyncio.shield(next_p), timeout=0.01)
+        except asyncio.TimeoutError:
+            pass
         done = next_p.done()
         assert not done, "next() should not resolve before push"
 

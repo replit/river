@@ -8,26 +8,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 import random
-import time
 from typing import Any, Callable
 
 from river.codec import Codec, CodecMessageAdapter, NaiveJsonCodec
-from river.session import Session, SessionOptions, SessionState, DEFAULT_SESSION_OPTIONS
+from river.session import DEFAULT_SESSION_OPTIONS, Session, SessionOptions, SessionState
 from river.types import (
-    ControlFlags,
+    RETRIABLE_HANDSHAKE_CODES,
     PartialTransportMessage,
     TransportMessage,
     generate_id,
     is_ack,
-    is_stream_cancel,
-    is_stream_close,
-    is_stream_open,
-    RETRIABLE_HANDSHAKE_CODES,
-    FATAL_HANDSHAKE_CODES,
-    UNEXPECTED_DISCONNECT_CODE,
-    err_result,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,9 +79,7 @@ class LeakyBucketRateLimit:
             return 0
         exponent = max(0, self.budget_consumed - 1)
         jitter = random.random() * self.max_jitter_ms
-        backoff = min(
-            self.base_interval_ms * (2**exponent), self.max_backoff_ms
-        )
+        backoff = min(self.base_interval_ms * (2**exponent), self.max_backoff_ms)
         return backoff + jitter
 
     def consume_budget(self) -> None:
@@ -104,9 +93,7 @@ class LeakyBucketRateLimit:
         async def _restore_loop():
             try:
                 while self.budget_consumed > 0:
-                    await asyncio.sleep(
-                        self.budget_restore_interval_ms / 1000.0
-                    )
+                    await asyncio.sleep(self.budget_restore_interval_ms / 1000.0)
                     self.budget_consumed = max(0, self.budget_consumed - 1)
             except asyncio.CancelledError:
                 pass
@@ -212,9 +199,7 @@ class WebSocketClientTransport:
                 "sessionStatus", {"status": "closing", "session": session}
             )
         session.destroy()
-        self._events.dispatch(
-            "sessionStatus", {"status": "closed", "session": session}
-        )
+        self._events.dispatch("sessionStatus", {"status": "closed", "session": session})
 
     def _on_session_grace_elapsed(self, to: str) -> None:
         """Called when a session's grace period expires."""
@@ -285,19 +270,17 @@ class WebSocketClientTransport:
         url = self._ws_url if isinstance(self._ws_url, str) else self._ws_url(to)
 
         ws = await asyncio.wait_for(
-            websockets.connect(url, max_size=None, ping_interval=None, ping_timeout=None),
+            websockets.connect(
+                url, max_size=None, ping_interval=None, ping_timeout=None
+            ),
             timeout=self.options.connection_timeout_ms / 1000.0,
         )
         return ws
 
-    async def _do_handshake(
-        self, session: Session, ws: Any, to: str
-    ) -> None:
+    async def _do_handshake(self, session: Session, ws: Any, to: str) -> None:
         """Perform the handshake on a newly connected WebSocket."""
         # Send handshake request
-        hs_msg = session.create_handshake_request(
-            metadata=self._handshake_metadata
-        )
+        hs_msg = session.create_handshake_request(metadata=self._handshake_metadata)
         ok, buf = self._codec_adapter.to_buffer(hs_msg)
         if not ok:
             logger.error("Failed to encode handshake: %s", buf)
@@ -332,10 +315,7 @@ class WebSocketClientTransport:
         payload = response_msg.payload
 
         # Validate handshake response
-        if (
-            not isinstance(payload, dict)
-            or payload.get("type") != "HANDSHAKE_RESP"
-        ):
+        if not isinstance(payload, dict) or payload.get("type") != "HANDSHAKE_RESP":
             logger.error("Invalid handshake response payload")
             await ws.close()
             self._on_connection_failed(to)
@@ -345,9 +325,7 @@ class WebSocketClientTransport:
         if not status.get("ok"):
             code = status.get("code", "UNKNOWN")
             reason = status.get("reason", "Unknown reason")
-            logger.debug(
-                "Handshake rejected for %s: %s (%s)", to, reason, code
-            )
+            logger.debug("Handshake rejected for %s: %s (%s)", to, reason, code)
             await ws.close()
 
             if code in RETRIABLE_HANDSHAKE_CODES:
@@ -405,9 +383,7 @@ class WebSocketClientTransport:
         # Start listening for messages
         self._start_message_listener(session, ws, to)
 
-    def _start_message_listener(
-        self, session: Session, ws: Any, to: str
-    ) -> None:
+    def _start_message_listener(self, session: Session, ws: Any, to: str) -> None:
         """Start the async message listener on the WebSocket."""
         loop = self._get_loop()
 
@@ -423,18 +399,14 @@ class WebSocketClientTransport:
                     self._on_message_data(session, raw_msg, to)
             except Exception as e:
                 if not session._destroyed:
-                    logger.debug(
-                        "WebSocket error for session %s: %s", session.id, e
-                    )
+                    logger.debug("WebSocket error for session %s: %s", session.id, e)
             finally:
                 if not session._destroyed:
                     self._on_connection_dropped(to)
 
         loop.create_task(_listen())
 
-    def _on_message_data(
-        self, session: Session, raw: bytes, to: str
-    ) -> None:
+    def _on_message_data(self, session: Session, raw: bytes, to: str) -> None:
         """Handle raw bytes received from the WebSocket."""
         ok, result = self._codec_adapter.from_buffer(raw)
         if not ok:
@@ -499,7 +471,6 @@ class WebSocketClientTransport:
         if session is None or session._destroyed:
             return
 
-        loop = self._get_loop()
         session.state = SessionState.NO_CONNECTION
 
         if self._reconnect_on_connection_drop:

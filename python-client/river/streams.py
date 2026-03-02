@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable, Generic, TypeVar
+from typing import Callable, Generic, TypeVar
 
 T = TypeVar("T")
 
@@ -105,7 +105,13 @@ class Readable(Generic[T]):
         self._locked = True
         while True:
             if self._broken:
-                yield {"ok": False, "payload": {"code": "READABLE_BROKEN", "message": "stream was broken"}}
+                yield {
+                    "ok": False,
+                    "payload": {
+                        "code": "READABLE_BROKEN",
+                        "message": "stream was broken",
+                    },
+                }
                 return
 
             if self._queue:

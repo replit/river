@@ -1,0 +1,50 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm run check
+
+      - name: TypeScript tests
+        run: npm run test:single
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        working-directory: python-client
+        run: pip install -e ".[dev]"
+
+      - name: Python lint
+        working-directory: python-client
+        run: |
+          pip install ruff
+          ruff check .
+          ruff format --check .
+
+      - name: Python tests
+        working-directory: python-client
+        run: python -m pytest tests/ -v

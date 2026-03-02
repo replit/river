@@ -33,6 +33,7 @@ const TestServiceSchema = ServiceSchema.define({
     responseError: Type.Never(),
     async handler({ reqInit }) {
       count += reqInit.n;
+
       return Ok({ result: count });
     },
   }),
@@ -77,7 +78,7 @@ const TestServiceSchema = ServiceSchema.define({
 // -------------------------------------------------------------------
 // OrderingService – for message ordering tests
 // -------------------------------------------------------------------
-const msgs: number[] = [];
+const msgs: Array<number> = [];
 
 const OrderingServiceSchema = ServiceSchema.define({
   add: Procedure.rpc({
@@ -86,6 +87,7 @@ const OrderingServiceSchema = ServiceSchema.define({
     responseError: Type.Never(),
     async handler({ reqInit }) {
       msgs.push(reqInit.n);
+
       return Ok({ n: reqInit.n });
     },
   }),
@@ -93,8 +95,10 @@ const OrderingServiceSchema = ServiceSchema.define({
     requestInit: Type.Object({}),
     responseData: Type.Object({ msgs: Type.Array(Type.Number()) }),
     responseError: Type.Never(),
-    async handler() {
-      return Ok({ msgs: [...msgs] });
+    async handler(_ctx) {
+      const copy: Array<number> = [...msgs];
+
+      return Ok({ msgs: copy });
     },
   }),
 });
@@ -130,6 +134,7 @@ const FallibleServiceSchema = ServiceSchema.define({
           message: 'Result is infinity',
         });
       }
+
       return Ok({ result });
     },
   }),
@@ -169,6 +174,7 @@ const FallibleServiceSchema = ServiceSchema.define({
 // SubscribableService – subscriptions
 // -------------------------------------------------------------------
 let subCount = 0;
+
 type SubListener = (val: number) => void;
 const subListeners = new Set<SubListener>();
 
@@ -180,6 +186,7 @@ const SubscribableServiceSchema = ServiceSchema.define({
     async handler({ reqInit }) {
       subCount += reqInit.n;
       for (const l of subListeners) l(subCount);
+
       return Ok({ result: subCount });
     },
   }),
@@ -217,6 +224,7 @@ const UploadableServiceSchema = ServiceSchema.define({
         if (!result.ok) break;
         total += result.payload.n;
       }
+
       return Ok({ result: total });
     },
   }),
@@ -231,6 +239,7 @@ const UploadableServiceSchema = ServiceSchema.define({
         if (!result.ok) break;
         total += result.payload.n;
       }
+
       return Ok({ result: `${reqInit.prefix} ${total}` });
     },
   }),
@@ -249,12 +258,14 @@ const UploadableServiceSchema = ServiceSchema.define({
         total += result.payload.n;
         if (total >= 10) {
           ctx.cancel();
+
           return Err({
             code: 'CANCEL' as const,
             message: 'total exceeds limit',
           });
         }
       }
+
       return Ok({ result: total });
     },
   }),
@@ -270,7 +281,7 @@ const CancellationServiceSchema = ServiceSchema.define({
     responseError: Type.Never(),
     async handler({ ctx }) {
       // Block until cancelled
-      return new Promise<any>((resolve) => {
+      return new Promise<never>((_resolve) => {
         ctx.signal.addEventListener('abort', () => {
           // Handler will be cancelled by the framework, nothing to resolve
         });
@@ -282,7 +293,7 @@ const CancellationServiceSchema = ServiceSchema.define({
     requestData: Type.Object({}),
     responseData: Type.Object({}),
     responseError: Type.Never(),
-    async handler({ ctx }) {
+    async handler(_ctx) {
       return new Promise<void>(() => {
         // never resolves
       });
@@ -293,8 +304,8 @@ const CancellationServiceSchema = ServiceSchema.define({
     requestData: Type.Object({}),
     responseData: Type.Object({}),
     responseError: Type.Never(),
-    async handler({ ctx }) {
-      return new Promise<any>(() => {
+    async handler(_ctx) {
+      return new Promise<never>(() => {
         // never resolves
       });
     },
@@ -303,7 +314,7 @@ const CancellationServiceSchema = ServiceSchema.define({
     requestInit: Type.Object({}),
     responseData: Type.Object({}),
     responseError: Type.Never(),
-    async handler({ ctx }) {
+    async handler(_ctx) {
       return new Promise<void>(() => {
         // never resolves
       });
@@ -342,6 +353,7 @@ const CancellationServiceSchema = ServiceSchema.define({
       for await (const result of reqReadable) {
         if (!result.ok) break;
       }
+
       return Ok({ done: true });
     },
   }),
@@ -405,20 +417,20 @@ async function main() {
 
   // Keep the server alive
   process.on('SIGTERM', () => {
-    _server.close().then(() => {
+    void _server.close().then(() => {
       httpServer.close();
       process.exit(0);
     });
   });
   process.on('SIGINT', () => {
-    _server.close().then(() => {
+    void _server.close().then(() => {
       httpServer.close();
       process.exit(0);
     });
   });
 }
 
-main().catch((err) => {
+main().catch((err: unknown) => {
   console.error('Failed to start test server:', err);
   process.exit(1);
 });

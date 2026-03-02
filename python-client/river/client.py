@@ -14,6 +14,8 @@ from typing import Any, Callable
 from river.streams import Readable, Writable
 from river.transport import WebSocketClientTransport
 from river.types import (
+    CANCEL_CODE,
+    UNEXPECTED_DISCONNECT_CODE,
     ControlFlags,
     PartialTransportMessage,
     TransportMessage,
@@ -21,11 +23,8 @@ from river.types import (
     close_stream_message,
     err_result,
     generate_id,
-    is_ack,
     is_stream_cancel,
     is_stream_close,
-    CANCEL_CODE,
-    UNEXPECTED_DISCONNECT_CODE,
 )
 
 logger = logging.getLogger(__name__)
@@ -130,9 +129,7 @@ class RiverClient:
         readable = result["res_readable"]
         done, value = await readable.next()
         if done:
-            return err_result(
-                UNEXPECTED_DISCONNECT_CODE, "No response received"
-            )
+            return err_result(UNEXPECTED_DISCONNECT_CODE, "No response received")
         return value
 
     def stream(
@@ -181,9 +178,7 @@ class RiverClient:
             readable = result["res_readable"]
             done, value = await readable.next()
             if done:
-                return err_result(
-                    UNEXPECTED_DISCONNECT_CODE, "No response received"
-                )
+                return err_result(UNEXPECTED_DISCONNECT_CODE, "No response received")
             return value
 
         return UploadResult(
@@ -230,9 +225,7 @@ class RiverClient:
         if transport.get_status() != "open":
             res_readable = Readable()
             res_readable._push_value(
-                err_result(
-                    UNEXPECTED_DISCONNECT_CODE, "transport is closed"
-                )
+                err_result(UNEXPECTED_DISCONNECT_CODE, "transport is closed")
             )
             res_readable._trigger_close()
             req_writable = Writable(write_cb=lambda _: None, close_cb=None)
@@ -335,12 +328,12 @@ class RiverClient:
                 if isinstance(payload, dict) and "ok" in payload:
                     res_readable._push_value(payload)
                 else:
-                    res_readable._push_value(
-                        err_result(
-                            payload.get("code", "UNKNOWN") if isinstance(payload, dict) else "UNKNOWN",
-                            str(payload),
-                        )
+                    code = (
+                        payload.get("code", "UNKNOWN")
+                        if isinstance(payload, dict)
+                        else "UNKNOWN"
                     )
+                    res_readable._push_value(err_result(code, str(payload)))
                 close_readable()
                 if req_writable.is_writable():
                     req_writable._closed = True
@@ -387,9 +380,7 @@ class RiverClient:
             nonlocal clean_close
             clean_close = False
             try:
-                res_readable._push_value(
-                    err_result(CANCEL_CODE, "cancelled by client")
-                )
+                res_readable._push_value(err_result(CANCEL_CODE, "cancelled by client"))
             except RuntimeError:
                 pass
             close_readable()
@@ -439,7 +430,7 @@ class RiverClient:
                     procedure_name=procedure_name,
                 )
             )
-        except RuntimeError as e:
+        except RuntimeError:
             # Session dead at send time
             try:
                 res_readable._push_value(

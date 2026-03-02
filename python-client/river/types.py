@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import string
 import random
+import string
 from dataclasses import dataclass, field
 from enum import IntFlag
-from typing import Any, TypeVar, Generic, Union
-
+from typing import Any, Generic, TypeVar, Union
 
 # --- ID Generation ---
 
