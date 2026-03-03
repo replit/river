@@ -1660,3 +1660,56 @@ class TestFatalErrorPaths:
         buf = codec.to_buffer({"n": large_neg})
         decoded = codec.from_buffer(buf)
         assert decoded["n"] == large_neg
+
+    def test_binary_codec_large_int(self):
+        """Binary codec handles ints beyond msgpack native range."""
+        from river.codec import BinaryCodec
+
+        codec = BinaryCodec()
+        large = 10**30
+        buf = codec.to_buffer({"n": large})
+        decoded = codec.from_buffer(buf)
+        assert decoded["n"] == large
+
+    @pytest.mark.asyncio
+    async def test_next_rejects_after_aiter_lock(self):
+        """next() raises TypeError if stream is locked by __aiter__."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._push_value({"ok": True, "payload": 1})
+        _it = r.__aiter__()  # locks by consumer
+
+        with pytest.raises(TypeError, match="already locked"):
+            await r.next()
+
+    @pytest.mark.asyncio
+    async def test_next_rejects_after_collect_lock(self):
+        """next() raises TypeError if stream is locked by collect()."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._push_value({"ok": True, "payload": 1})
+        r._trigger_close()
+
+        await r.collect()  # locks by consumer
+        with pytest.raises(TypeError, match="already locked"):
+            await r.next()
+
+    @pytest.mark.asyncio
+    async def test_iterator_del_marks_broken_and_wakes(self):
+        """Dropping an iterator marks the stream as broken and wakes waiters."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._push_value({"ok": True, "payload": 1})
+
+        # Iterate and break out
+        async for _item in r:
+            break
+
+        # Stream should be broken (iterator __del__ ran)
+        assert r._broken
+        # Push after break should be a no-op
+        r._push_value({"ok": True, "payload": 2})
+        assert not r._has_values_in_queue()

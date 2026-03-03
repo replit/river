@@ -67,6 +67,11 @@ class NaiveJsonCodec(Codec):
         return json.loads(buf.decode("utf-8"), object_hook=_custom_object_hook)
 
 
+_BIGINT_EXT_TYPE = 0
+_MSGPACK_INT_MAX = 2**64 - 1
+_MSGPACK_INT_MIN = -(2**63)
+
+
 class BinaryCodec(Codec):
     """Codec using msgpack serialization (matches TypeScript BinaryCodec)."""
 
@@ -75,12 +80,31 @@ class BinaryCodec(Codec):
     def to_buffer(self, obj: dict[str, Any]) -> bytes:
         import msgpack  # type: ignore[import-untyped]
 
-        return msgpack.packb(obj, use_bin_type=True)
+        return msgpack.packb(obj, use_bin_type=True, default=self._ext_encode)
 
     def from_buffer(self, buf: bytes) -> dict[str, Any]:
         import msgpack  # type: ignore[import-untyped]
 
-        return msgpack.unpackb(buf, raw=False)
+        return msgpack.unpackb(buf, raw=False, ext_hook=self._ext_decode)
+
+    @staticmethod
+    def _ext_encode(obj: Any) -> Any:
+        import msgpack  # type: ignore[import-untyped]
+
+        if isinstance(obj, int) and (obj > _MSGPACK_INT_MAX or obj < _MSGPACK_INT_MIN):
+            # Encode as string in extension type 0 (matches TS BigInt ext)
+            data = msgpack.packb(str(obj), use_bin_type=True)
+            return msgpack.ExtType(_BIGINT_EXT_TYPE, data)
+        raise TypeError(f"Unknown type: {type(obj)}")
+
+    @staticmethod
+    def _ext_decode(code: int, data: bytes) -> Any:
+        import msgpack  # type: ignore[import-untyped]
+
+        if code == _BIGINT_EXT_TYPE:
+            val = msgpack.unpackb(data, raw=False)
+            return int(val)
+        return msgpack.ExtType(code, data)
 
 
 class CodecMessageAdapter:

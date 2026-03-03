@@ -25,6 +25,7 @@ class Readable(Generic[T]):
         self._closed = False
         self._broken = False
         self._locked = False
+        self._locked_by_consumer = False  # locked by collect() or __aiter__
         self._waiters: list[asyncio.Future[None]] = []
 
     def _push_value(self, value: T) -> None:
@@ -87,6 +88,7 @@ class Readable(Generic[T]):
         if self._locked:
             raise TypeError("Readable is already locked")
         self._locked = True
+        self._locked_by_consumer = True
         results: list[T] = []
         async for item in self._iterate():
             results.append(item)
@@ -98,6 +100,8 @@ class Readable(Generic[T]):
         Returns (False, value) if a value is available.
         Returns (True, None) if the stream is done.
         """
+        if self._locked_by_consumer:
+            raise TypeError("Readable is already locked")
         async for item in self._iterate():
             return False, item
         return True, None
@@ -133,6 +137,7 @@ class Readable(Generic[T]):
         if self._locked:
             raise TypeError("Readable is already locked")
         self._locked = True
+        self._locked_by_consumer = True
         return _ReadableIterator(self)
 
 
@@ -184,6 +189,11 @@ class _ReadableIterator:
         # Synchronous cleanup when the iterator is GC'd (e.g. break in for-await)
         self._readable._broken = True
         self._readable._queue.clear()
+        # Wake any pending waiters so they don't block forever
+        for w in self._readable._waiters:
+            if not w.done():
+                w.set_result(None)
+        self._readable._waiters.clear()
 
 
 class Writable(Generic[T]):
