@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import selectors
 import signal
 import subprocess
 import sys
@@ -119,20 +120,44 @@ def _start_server(
     port = None
     deadline = time.monotonic() + 30
     assert proc.stdout is not None
-    while time.monotonic() < deadline:
-        line = proc.stdout.readline().decode("utf-8").strip()
-        if not line:
-            if proc.poll() is not None:
-                stderr = proc.stderr.read().decode("utf-8") if proc.stderr else ""
-                raise RuntimeError(
-                    f"{label} exited with code {proc.returncode}.\nstderr: {stderr}"
-                )
-            time.sleep(0.1)
-            continue
-        m = re.match(r"RIVER_PORT=(\d+)", line)
-        if m:
-            port = int(m.group(1))
-            break
+    sel = selectors.DefaultSelector()
+    sel.register(proc.stdout, selectors.EVENT_READ)
+    buf = b""
+    try:
+        while time.monotonic() < deadline:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            ready = sel.select(timeout=min(remaining, 1.0))
+            if not ready:
+                if proc.poll() is not None:
+                    stderr = proc.stderr.read().decode("utf-8") if proc.stderr else ""
+                    raise RuntimeError(
+                        f"{label} exited with code {proc.returncode}.\nstderr: {stderr}"
+                    )
+                continue
+            chunk = proc.stdout.read1(4096)  # type: ignore[union-attr]
+            if not chunk:
+                # EOF — child closed stdout (likely exited)
+                if proc.poll() is not None:
+                    stderr = proc.stderr.read().decode("utf-8") if proc.stderr else ""
+                    raise RuntimeError(
+                        f"{label} exited with code {proc.returncode}.\nstderr: {stderr}"
+                    )
+                continue
+            buf += chunk
+            while b"\n" in buf:
+                line_bytes, buf = buf.split(b"\n", 1)
+                line = line_bytes.decode("utf-8").strip()
+                m = re.match(r"RIVER_PORT=(\d+)", line)
+                if m:
+                    port = int(m.group(1))
+                    break
+            if port is not None:
+                break
+    finally:
+        sel.unregister(proc.stdout)
+        sel.close()
 
     if port is None:
         proc.kill()

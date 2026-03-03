@@ -13,6 +13,7 @@ from typing import Any, Callable, Generic, Literal, TypeVar
 
 from typing_extensions import TypedDict
 
+from river.session import SessionState
 from river.streams import Readable, Writable
 from river.transport import WebSocketClientTransport
 from river.types import (
@@ -259,8 +260,30 @@ class RiverClient:
         if self._connect_on_invoke:
             transport.connect(to)
 
-        # Get the session and a send function
+        # Get the session and a send function.
+        # If connect() couldn't start (retry budget exhausted, transport
+        # closing, etc.) the session will be in NO_CONNECTION with no
+        # connect task in flight — fail immediately instead of hanging.
         session = transport._get_or_create_session(to)
+        connect_task = transport._connect_tasks.get(to)
+        has_active_connect = connect_task is not None and not connect_task.done()
+        if session.state == SessionState.NO_CONNECTION and not has_active_connect:
+            transport._delete_session(to, emit_closing=False)
+            res_readable = Readable()
+            res_readable._push_value(
+                err_result(
+                    UNEXPECTED_DISCONNECT_CODE,
+                    f"{to} connection failed",
+                )
+            )
+            res_readable._trigger_close()
+            req_writable = Writable(write_cb=lambda _: None, close_cb=None)
+            req_writable._closed = True
+            return {
+                "res_readable": res_readable,
+                "req_writable": req_writable,
+            }
+
         session_id = session.id
         try:
             send_fn = transport.get_session_bound_send_fn(to, session_id)

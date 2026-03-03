@@ -1751,3 +1751,52 @@ class TestFatalErrorPaths:
             options=opts,
         )
         assert transport.reconnect_on_connection_drop is False
+
+    def test_literal_const_escaping(self):
+        """String consts with quotes/backslashes/control chars are escaped."""
+        from river.codegen.schema import SchemaConverter
+
+        converter = SchemaConverter()
+        schema = {"const": 'a"b'}
+        ref = converter._schema_to_typeref(schema, "Test")
+        assert ref.annotation == 'Literal["a\\"b"]'
+
+        schema2 = {"const": "a\\b"}
+        ref2 = converter._schema_to_typeref(schema2, "Test")
+        assert ref2.annotation == 'Literal["a\\\\b"]'
+
+        # Control characters must be escaped
+        schema3 = {"const": "line1\nline2"}
+        ref3 = converter._schema_to_typeref(schema3, "Test")
+        assert ref3.annotation == 'Literal["line1\\nline2"]'
+
+        schema4 = {"const": "a\tb"}
+        ref4 = converter._schema_to_typeref(schema4, "Test")
+        assert ref4.annotation == 'Literal["a\\tb"]'
+
+    def test_is_closed_with_buffered_data(self):
+        """is_closed() is False when closed but queue has data."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._push_value({"val": 1})
+        r._trigger_close()
+        # Closed but not fully consumed
+        assert r.is_closed() is False
+        assert r._closed is True
+
+    @pytest.mark.asyncio
+    async def test_close_cancels_inflight_connect(self, server_url: str):
+        """close() during handshake doesn't leak the websocket."""
+        transport = WebSocketClientTransport(
+            ws_url=server_url,
+            client_id=None,
+            server_id="SERVER",
+            codec=NaiveJsonCodec(),
+        )
+        transport.connect("SERVER")
+        # Let connection start but don't wait for completion
+        await asyncio.sleep(0)
+        await transport.close()
+        # No leaked sessions
+        assert len(transport.sessions) == 0

@@ -390,3 +390,112 @@ class TestReconnectAfterGrace:
         finally:
             # transport already closed above
             pass
+
+
+# =====================================================================
+# Regression: stale connect-task must not block fail-fast
+# =====================================================================
+
+
+class TestStaleConnectTask:
+    @pytest.mark.asyncio
+    async def test_done_connect_task_does_not_block_failfast(self):
+        """A completed (done) connect task in _connect_tasks must not
+        prevent the fail-fast path from firing.
+
+        Regression: previously the check was `to not in _connect_tasks`,
+        so a done task kept the entry alive and calls would hang instead
+        of failing immediately when retries were exhausted.
+        """
+        transport = WebSocketClientTransport(
+            ws_url="ws://127.0.0.1:1",  # unreachable
+            client_id=None,
+            server_id="STALE",
+            codec=NaiveJsonCodec(),
+            options=SessionOptions(
+                connection_timeout_ms=100,
+                handshake_timeout_ms=100,
+                session_disconnect_grace_ms=200,
+            ),
+        )
+        transport.reconnect_on_connection_drop = False
+        try:
+            # Trigger a connect that will fail
+            transport.connect("STALE")
+            await wait_for_session_gone(transport, "STALE")
+
+            # The done task is still in _connect_tasks
+            assert "STALE" in transport._connect_tasks
+            assert transport._connect_tasks["STALE"].done()
+
+            # Exhaust the retry budget so connect() is a no-op
+            transport._retry_budget.budget_consumed = (
+                transport._retry_budget.attempt_budget_capacity
+            )
+
+            # RPC must fail immediately, not hang
+            client = RiverClient(
+                transport, server_id="STALE", connect_on_invoke=True
+            )
+            result = await asyncio.wait_for(
+                client.rpc("test", "add", {"n": 1}), timeout=1.0
+            )
+            assert result["ok"] is False
+            assert result["payload"]["code"] == "UNEXPECTED_DISCONNECT"
+        finally:
+            await transport.close()
+
+
+# =====================================================================
+# Regression: grace period must not reset on each failed reconnect
+# =====================================================================
+
+
+class TestGracePeriodNotResetOnRetry:
+    @pytest.mark.asyncio
+    async def test_grace_period_not_extended_by_retries(self, server_url: str):
+        """Repeated connection failures must not restart the grace timer.
+
+        Regression: _on_connection_failed() unconditionally called
+        start_grace_period(), which cancelled and restarted the timer
+        on every retry, extending session lifetime far beyond
+        session_disconnect_grace_ms.
+        """
+        grace_ms = 400
+        transport = WebSocketClientTransport(
+            ws_url="ws://127.0.0.1:1",  # unreachable
+            client_id=None,
+            server_id="GRACE",
+            codec=NaiveJsonCodec(),
+            options=SessionOptions(
+                connection_timeout_ms=100,
+                handshake_timeout_ms=100,
+                session_disconnect_grace_ms=grace_ms,
+            ),
+        )
+        try:
+            transport.connect("GRACE")
+
+            # Wait for at least one connection failure to set the grace period
+            await wait_for(
+                lambda: (
+                    (s := transport.sessions.get("GRACE")) is not None
+                    and s._grace_period_task is not None
+                ),
+                timeout=2.0,
+            )
+
+            session = transport.sessions["GRACE"]
+            original_expiry = session._grace_expiry_time
+            assert original_expiry is not None
+
+            # After further retries, the expiry time must not have moved forward
+            await asyncio.sleep(0.2)
+            session2 = transport.sessions.get("GRACE")
+            if session2 is not None and session2._grace_expiry_time is not None:
+                assert session2._grace_expiry_time <= original_expiry
+
+            # Session should be gone within grace_ms + generous margin
+            await wait_for_session_gone(transport, "GRACE", timeout=3.0)
+        finally:
+            await transport.close()

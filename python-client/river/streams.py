@@ -55,7 +55,7 @@ class Readable(Generic[T]):
         return not self._locked and not self._broken
 
     def is_closed(self) -> bool:
-        """Whether the stream has been closed."""
+        """Whether the stream is fully consumed (closed and queue drained)."""
         return self._closed and len(self._queue) == 0
 
     def _has_values_in_queue(self) -> bool:

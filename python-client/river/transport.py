@@ -235,6 +235,7 @@ class WebSocketClientTransport:
         session.state = SessionState.BACKING_OFF
 
         async def _do_connect():
+            ws = None
             try:
                 if backoff_ms > 0:
                     await asyncio.sleep(backoff_ms / 1000.0)
@@ -252,7 +253,9 @@ class WebSocketClientTransport:
                 session.state = SessionState.HANDSHAKING
                 await self._do_handshake(session, ws, to)
             except asyncio.CancelledError:
-                pass
+                # Clean up socket if we got cancelled mid-handshake
+                if ws is not None and session._ws is not ws:
+                    await ws.close()
             except Exception as e:
                 logger.debug("Connection attempt failed for %s: %s", to, e)
                 if not session._destroyed:
@@ -484,9 +487,12 @@ class WebSocketClientTransport:
 
         # Transition to NoConnection with grace period so the session
         # is eventually destroyed if reconnect doesn't succeed.
+        # Only start the grace period if one isn't already running,
+        # so repeated failures don't keep extending the deadline.
         loop = self._get_loop()
         session.state = SessionState.NO_CONNECTION
-        session.start_grace_period(loop)
+        if session._grace_period_task is None or session._grace_period_task.done():
+            session.start_grace_period(loop)
 
         if self._reconnect_on_connection_drop:
             self._try_reconnecting(to)

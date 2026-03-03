@@ -151,6 +151,7 @@ class SchemaConverter:
 
     def convert(self, raw: dict) -> SchemaIR:
         """Convert the top-level serialized schema dict to IR."""
+        self._typedicts = []
         services: list[ServiceDef] = []
         for svc_name, svc_data in raw.get("services", {}).items():
             svc_def = self._convert_service(svc_name, svc_data)
@@ -247,7 +248,11 @@ class SchemaConverter:
         if "const" in schema:
             val = schema["const"]
             if isinstance(val, str):
-                return TypeRef(annotation=f'Literal["{val}"]')
+                # Use repr to handle all escaping (quotes, backslashes,
+                # control chars) then unwrap the outer quotes and re-wrap
+                # with double quotes for Literal["..."] syntax.
+                escaped = repr(val)[1:-1].replace('"', '\\"')
+                return TypeRef(annotation=f'Literal["{escaped}"]')
             return TypeRef(annotation=f"Literal[{val!r}]")
 
         # anyOf (union)

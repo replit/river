@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+{% if needs_literal %}
+from typing import Any, Literal
+{% else %}
 from typing import Any
+{% endif %}
 
 from river.client import (
     ErrResult,

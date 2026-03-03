@@ -132,6 +132,17 @@ def render_service_client(svc: ServiceDef, ir: SchemaIR, import_prefix: str) -> 
     has_upload = "upload" in proc_types
     has_subscription = "subscription" in proc_types
 
+    # Check if any annotation references Literal (e.g. const schemas)
+    all_annotations = []
+    for p in svc.procedures:
+        all_annotations.append(p.init_type.annotation)
+        all_annotations.append(p.output_type.annotation)
+        if p.input_type:
+            all_annotations.append(p.input_type.annotation)
+        if p.error_type:
+            all_annotations.append(p.error_type.annotation)
+    needs_literal = any("Literal[" in a for a in all_annotations)
+
     return _env.get_template("service_client.py.j2").render(
         service=svc,
         type_names=type_names,
@@ -140,6 +151,7 @@ def render_service_client(svc: ServiceDef, ir: SchemaIR, import_prefix: str) -> 
         has_stream=has_stream,
         has_upload=has_upload,
         has_subscription=has_subscription,
+        needs_literal=needs_literal,
     )
 
 
