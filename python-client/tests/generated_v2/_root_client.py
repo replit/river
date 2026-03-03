@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from river.client import RiverClient
+
 from .test_client import TestClient
 
 

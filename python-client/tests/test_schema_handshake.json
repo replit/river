@@ -10,9 +10,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "msg"
-            ]
+            "required": ["msg"]
           },
           "output": {
             "type": "object",
@@ -21,9 +19,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "response"
-            ]
+            "required": ["response"]
           },
           "errors": {
             "anyOf": [
@@ -38,10 +34,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "code",
-                  "message"
-                ]
+                "required": ["code", "message"]
               },
               {
                 "type": "object",
@@ -54,10 +47,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "code",
-                  "message"
-                ]
+                "required": ["code", "message"]
               },
               {
                 "type": "object",
@@ -84,26 +74,17 @@
                               "type": "string"
                             }
                           },
-                          "required": [
-                            "path",
-                            "message"
-                          ]
+                          "required": ["path", "message"]
                         }
                       },
                       "totalErrors": {
                         "type": "number"
                       }
                     },
-                    "required": [
-                      "firstValidationErrors",
-                      "totalErrors"
-                    ]
+                    "required": ["firstValidationErrors", "totalErrors"]
                   }
                 },
-                "required": [
-                  "code",
-                  "message"
-                ]
+                "required": ["code", "message"]
               },
               {
                 "type": "object",
@@ -116,10 +97,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "code",
-                  "message"
-                ]
+                "required": ["code", "message"]
               }
             ]
           },
@@ -135,8 +113,6 @@
         "type": "string"
       }
     },
-    "required": [
-      "token"
-    ]
+    "required": ["token"]
   }
 }

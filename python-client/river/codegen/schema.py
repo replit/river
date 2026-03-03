@@ -220,8 +220,10 @@ class SchemaConverter:
 
         # Init type and streaming input type.
         # Two schema formats:
-        #   - v2 (serializeSchema): all procedures have "init"; stream/upload also have "input"
-        #   - v1 (pid2 etc.): rpc/subscription use "input" as init; stream/upload have "init" + "input"
+        #   - v2 (serializeSchema): all procedures have "init";
+        #     stream/upload also have "input"
+        #   - v1 (pid2 etc.): rpc/subscription use "input" as init;
+        #     stream/upload have "init" + "input"
         input_type = None
         if "init" in data:
             init_type = self._schema_to_typeref(data["init"], f"{prefix}Init")

@@ -3,23 +3,18 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 
 from river.client import (
     ErrResult,
     OkResult,
     RiverClient,
-    StreamResult,
-    SubscriptionResult,
-    UploadResult,
 )
 
+from ._errors import ProtocolError
 from ._types import (
     TestEchoInit,
     TestEchoOutput,
 )
-
-from ._errors import ProtocolError
 
 
 class TestClient:

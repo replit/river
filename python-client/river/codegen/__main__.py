@@ -38,7 +38,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--client-name",
         default=None,
-        help="Generate a root client class with this name that aggregates all services.",
+        help="Generate a root client class with this name "
+        "that aggregates all services.",
     )
 
     args = parser.parse_args(argv)

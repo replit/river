@@ -10,9 +10,12 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Generic, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 from typing_extensions import TypedDict
+
+if TYPE_CHECKING:
+    from river.session import SessionOptions
 
 from river.session import SessionState
 from river.streams import Readable, Writable

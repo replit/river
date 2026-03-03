@@ -98,11 +98,13 @@ def _prepare_typedicts(ir: SchemaIR) -> list[dict]:
     for td in ir.typedicts:
         fields = []
         for f in td.fields:
-            fields.append({
-                "name": f.name,
-                "annotation": _field_annotation(f),
-                "description": f.description,
-            })
+            fields.append(
+                {
+                    "name": f.name,
+                    "annotation": _field_annotation(f),
+                    "description": f.description,
+                }
+            )
         result.append(
             {"name": td.name, "description": td.description, "fields": fields}
         )
@@ -185,9 +187,7 @@ def _module_name(service_name: str) -> str:
     return _sanitize_identifier(service_name)
 
 
-def render_root_client(
-    ir: SchemaIR, client_name: str, import_prefix: str
-) -> str:
+def render_root_client(ir: SchemaIR, client_name: str, import_prefix: str) -> str:
     imports = []
     services = []
     for svc in ir.services:
