@@ -301,6 +301,7 @@ class RiverClient:
 
         # Create writable for requests
         def write_cb(raw_value: Any) -> None:
+            nonlocal clean_close
             try:
                 send_fn(
                     PartialTransportMessage(
@@ -310,7 +311,20 @@ class RiverClient:
                     )
                 )
             except RuntimeError:
-                pass
+                # Session is gone — push disconnect error and tear down
+                clean_close = False
+                try:
+                    res_readable._push_value(
+                        err_result(
+                            UNEXPECTED_DISCONNECT_CODE,
+                            "send failed: session closed",
+                        )
+                    )
+                except RuntimeError:
+                    pass
+                close_readable()
+                if req_writable.is_writable():
+                    req_writable._closed = True
 
         def close_cb() -> None:
             nonlocal clean_close

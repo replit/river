@@ -330,7 +330,9 @@ class WebSocketClientTransport:
                 self._delete_session(to)
                 self._try_reconnecting(to)
             else:
-                # Fatal handshake error — do not retry
+                # Fatal handshake error — do not retry.
+                # Delete the session so pending procedures get
+                # UNEXPECTED_DISCONNECT via the sessionStatus "closing" event.
                 self._events.dispatch(
                     "protocolError",
                     {
@@ -339,7 +341,7 @@ class WebSocketClientTransport:
                         "code": code,
                     },
                 )
-                session.state = SessionState.NO_CONNECTION
+                self._delete_session(to)
             return
 
         # Check session ID match

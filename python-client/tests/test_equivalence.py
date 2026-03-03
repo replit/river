@@ -638,3 +638,46 @@ class TestOrderingEquivalence:
             assert sorted(returned_ns) == list(range(n))
         finally:
             await cleanup(client)
+
+    @pytest.mark.asyncio
+    async def test_ordering_preserved_across_disconnects(
+        self, codec_and_url: tuple[Codec, str]
+    ):
+        """50 RPCs with forced disconnects at msg 10 and 42 — all arrive.
+
+        Mirrors the TS e2e.test.ts 'message order is preserved in the face
+        of disconnects' test.
+        """
+        codec, url = codec_and_url
+        client = await make_client(url, codec)
+        try:
+            session = client.transport.sessions.get("SERVER")
+            # Warm up connection
+            warm = await client.rpc("ordering", "add", {"n": -1})
+            assert warm["ok"] is True
+            session = client.transport.sessions.get("SERVER")
+            assert session is not None
+
+            tasks = []
+            for i in range(50):
+                # Force-close WS at specific points
+                if i == 10 or i == 42:
+                    ws = session._ws
+                    if ws is not None:
+                        await ws.close()
+
+                tasks.append(client.rpc("ordering", "add", {"n": i}))
+
+            results = await asyncio.gather(*tasks)
+            for r in results:
+                assert r["ok"] is True
+
+            # Verify all 50 messages arrived at the server
+            get_result = await client.rpc("ordering", "getAll", {})
+            assert get_result["ok"] is True
+            msgs = get_result["payload"]["msgs"]
+            # All values 0-49 should be present (plus the -1 warmup)
+            for i in range(50):
+                assert i in msgs, f"message {i} missing from server"
+        finally:
+            await cleanup(client)

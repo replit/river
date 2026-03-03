@@ -85,12 +85,21 @@ PROTOCOL_ERROR_CODES = frozenset(
 # ---------------------------------------------------------------------------
 
 
+def _sanitize_identifier(s: str) -> str:
+    """Replace characters illegal in Python identifiers with underscores."""
+    # Replace dashes, spaces, and other non-alnum/non-underscore chars
+    s = re.sub(r"[^a-zA-Z0-9_]", "_", s)
+    # Strip leading underscores/digits so the result is a valid identifier
+    s = re.sub(r"^[_0-9]+", "", s)
+    return s or "unnamed"
+
+
 def _to_pascal_case(s: str) -> str:
     """Convert a camelCase, snake_case, or space-separated string to PascalCase."""
+    s = _sanitize_identifier(s)
     # Handle snake_case or space-separated
-    if "_" in s or " " in s:
-        # Split on underscores and spaces
-        words = re.split(r"[_ ]+", s)
+    if "_" in s:
+        words = re.split(r"_+", s)
         return "".join(word.capitalize() for word in words if word)
     # camelCase → PascalCase: just capitalize first letter
     if s:
@@ -100,6 +109,7 @@ def _to_pascal_case(s: str) -> str:
 
 def _to_snake_case(s: str) -> str:
     """Convert camelCase to snake_case."""
+    s = _sanitize_identifier(s)
     result = re.sub(r"([A-Z])", r"_\1", s).lower()
     result = result.lstrip("_")
     if keyword.iskeyword(result):
@@ -109,6 +119,7 @@ def _to_snake_case(s: str) -> str:
 
 def _safe_field_name(name: str) -> str:
     """Ensure a field name is a valid Python identifier."""
+    name = _sanitize_identifier(name)
     if keyword.iskeyword(name):
         return name + "_"
     return name

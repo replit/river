@@ -31,6 +31,8 @@ class Readable(Generic[T]):
         """Push a value into the readable stream (internal use)."""
         if self._closed:
             raise RuntimeError("Cannot push to a closed readable")
+        if self._broken:
+            return  # Discard values after break to prevent unbounded buffering
         self._queue.append(value)
         self._notify_waiters()
 
