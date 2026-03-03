@@ -56,10 +56,11 @@ def _collect_used_type_names(svc: ServiceDef, ir: SchemaIR) -> list[str]:
 
 
 def _extract_names(annotation: str, known: set[str], out: set[str]) -> None:
-    for part in annotation.replace("|", " ").split():
-        clean = part.strip("[]").strip()
-        if clean in known:
-            out.add(clean)
+    import re
+
+    for name in re.findall(r"[A-Za-z_]\w*", annotation):
+        if name in known:
+            out.add(name)
 
 
 # ---------------------------------------------------------------------------

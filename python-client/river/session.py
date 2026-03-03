@@ -34,7 +34,7 @@ class SessionState(str, Enum):
     CONNECTED = "Connected"
 
 
-@dataclass
+@dataclass(frozen=True)
 class SessionOptions:
     """Configuration options for a session."""
 
@@ -141,9 +141,10 @@ class Session:
         if self.state == SessionState.CONNECTED and self._ws is not None:
             ok, result = self._send_over_wire(msg)
             if not ok:
-                # Remove the unsendable message from the buffer so it
-                # doesn't poison retransmit state.
+                # Roll back: remove the unsendable message from the buffer
+                # and restore seq so subsequent messages don't have a gap.
                 self.send_buffer = [m for m in self.send_buffer if m.id != msg.id]
+                self.seq = msg.seq  # restore to the seq we consumed
                 return False, result
         return True, msg.id
 

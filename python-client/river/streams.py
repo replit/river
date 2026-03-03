@@ -182,6 +182,7 @@ class _ReadableIterator:
 
     def __del__(self):
         # Synchronous cleanup when the iterator is GC'd (e.g. break in for-await)
+        self._readable._broken = True
         self._readable._queue.clear()
 
 
