@@ -119,7 +119,9 @@ class TransportMessage:
         if "payload" not in d:
             raise KeyError("Missing required field: payload")
 
-        control_flags = d.get("controlFlags", 0)
+        if "controlFlags" not in d:
+            raise KeyError("Missing required field: controlFlags")
+        control_flags = d["controlFlags"]
         if isinstance(control_flags, bool) or not isinstance(control_flags, int):
             raise TypeError(
                 f"Field 'controlFlags' must be int, got {type(control_flags).__name__}"

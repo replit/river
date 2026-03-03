@@ -157,11 +157,14 @@ class SchemaConverter:
         self._typedicts: list[TypedDictDef] = []
         # $id → assigned Python name (for recursive $ref resolution)
         self._id_to_name: dict[str, str] = {}
+        # Track emitted TypedDict names to detect collisions
+        self._td_names: set[str] = set()
 
     def convert(self, raw: dict) -> SchemaIR:
         """Convert the top-level serialized schema dict to IR."""
         self._typedicts = []
         self._id_to_name = {}
+        self._td_names = set()
         services: list[ServiceDef] = []
         seen_modules: dict[str, str] = {}  # sanitized name → wire name
         seen_classes: dict[str, str] = {}  # class name → wire name
@@ -345,6 +348,16 @@ class SchemaConverter:
         # Fallback
         return TypeRef(annotation="Any")
 
+    def _emit_typedict(self, td: TypedDictDef) -> None:
+        """Register a TypedDict, raising on name collision."""
+        if td.name in self._td_names:
+            raise ValueError(
+                f"TypedDict name {td.name!r} is already used; "
+                f"two schema properties map to the same generated class"
+            )
+        self._td_names.add(td.name)
+        self._typedicts.append(td)
+
     def _convert_object(self, schema: dict, name: str) -> TypeRef:
         """Convert a JSON Schema object to a TypedDict and return a ref to it."""
         properties = schema.get("properties", {})
@@ -371,7 +384,7 @@ class SchemaConverter:
             )
 
         td = TypedDictDef(name=name, fields=fields, description=description)
-        self._typedicts.append(td)
+        self._emit_typedict(td)
         return TypeRef(annotation=name)
 
     def _convert_intersection(self, schema: dict, name_hint: str) -> TypeRef:
@@ -429,7 +442,7 @@ class SchemaConverter:
                     )
                 )
             td = TypedDictDef(name=name_hint, fields=fields, description=description)
-            self._typedicts.append(td)
+            self._emit_typedict(td)
             return TypeRef(annotation=name_hint)
 
         # No object variants — primitive intersection is unrepresentable
@@ -441,6 +454,8 @@ class SchemaConverter:
     def _convert_union(self, schema: dict, name_hint: str) -> TypeRef:
         """Convert a JSON Schema anyOf to a Union type."""
         variants = schema.get("anyOf", [])
+        if len(variants) == 0:
+            return TypeRef(annotation="Never")
         if len(variants) == 1:
             return self._schema_to_typeref(variants[0], name_hint)
 

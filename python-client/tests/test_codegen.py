@@ -512,7 +512,7 @@ class TestNameCollisions:
     """Codegen detects and rejects name collisions."""
 
     def test_procedure_name_collision_raises(self):
-        """Two procedures that map to the same snake_case name are rejected."""
+        """Two procedures that collide (method name or TypedDict) are rejected."""
         from river.codegen.schema import SchemaConverter
 
         raw = {
@@ -534,7 +534,7 @@ class TestNameCollisions:
             }
         }
         converter = SchemaConverter()
-        with pytest.raises(ValueError, match="foo_bar"):
+        with pytest.raises(ValueError):
             converter.convert(raw)
 
     def test_service_module_collision_raises(self):
@@ -604,6 +604,35 @@ class TestNameCollisions:
 
         assert '"""' not in _escape_docstring('bad """ doc')
         assert _escape_docstring('say """hello"""') == r"say \"\"\"hello\"\"\""
+
+    def test_typedict_name_collision_raises(self):
+        """Two properties that generate the same TypedDict name are rejected."""
+        from river.codegen.schema import SchemaConverter
+
+        converter = SchemaConverter()
+        schema = {
+            "type": "object",
+            "properties": {
+                "fooBar": {
+                    "type": "object",
+                    "properties": {"a": {"type": "string"}},
+                },
+                "FooBar": {
+                    "type": "object",
+                    "properties": {"b": {"type": "number"}},
+                },
+            },
+        }
+        with pytest.raises(ValueError, match="already used"):
+            converter._schema_to_typeref(schema, "Prefix")
+
+    def test_empty_anyof_is_never(self):
+        """anyOf with zero variants → Never."""
+        from river.codegen.schema import SchemaConverter
+
+        converter = SchemaConverter()
+        ref = converter._schema_to_typeref({"anyOf": []}, "X")
+        assert ref.annotation == "Never"
 
 
 # ---------------------------------------------------------------------------
