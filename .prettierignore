@@ -3,3 +3,7 @@ node_modules
 python-client/.venv
 python-client/.pytest_cache
 python-client/tests/test_server.mjs
+python-client/tests/extract_test_schema.mjs
+python-client/tests/test_schema.json
+python-client/tests/generated
+.codex-review-tmp

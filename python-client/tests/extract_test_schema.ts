@@ -1,10 +1,11 @@
 /**
  * Extract the test server schema to a JSON file for codegen tests.
  *
- * Usage (from river repo root):
- *   node python-client/tests/extract_test_schema.mjs
+ * Defines the same service schemas as test_server.ts but with stub
+ * handlers — only the type shapes matter for serialization.
  *
- * Outputs: python-client/tests/test_schema.json
+ * Usage (from river repo root, after esbuild bundle):
+ *   node python-client/tests/extract_test_schema.mjs
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,17 +13,11 @@ import {
   createServiceSchema,
   Procedure,
   Ok,
-  Err,
   serializeSchema,
 } from '../../router';
 import { Type } from '@sinclair/typebox';
 
 const ServiceSchema = createServiceSchema();
-
-// -------------------------------------------------------------------
-// TestService
-// -------------------------------------------------------------------
-let count = 0;
 
 const TestServiceSchema = ServiceSchema.define({
   add: Procedure.rpc({
@@ -30,8 +25,7 @@ const TestServiceSchema = ServiceSchema.define({
     responseData: Type.Object({ result: Type.Number() }),
     responseError: Type.Never(),
     async handler({ reqInit }) {
-      count += reqInit.n;
-      return Ok({ result: count });
+      return Ok({ result: reqInit.n });
     },
   }),
   echo: Procedure.stream({
@@ -42,13 +36,7 @@ const TestServiceSchema = ServiceSchema.define({
     }),
     responseData: Type.Object({ response: Type.String() }),
     responseError: Type.Never(),
-    async handler({ reqReadable, resWritable }) {
-      for await (const result of reqReadable) {
-        if (!result.ok) break;
-        const val = result.payload;
-        if (val.ignore) continue;
-        resWritable.write(Ok({ response: val.msg }));
-      }
+    async handler({ resWritable }) {
       resWritable.close();
     },
   }),
@@ -60,22 +48,11 @@ const TestServiceSchema = ServiceSchema.define({
     }),
     responseData: Type.Object({ response: Type.String() }),
     responseError: Type.Never(),
-    async handler({ reqInit, reqReadable, resWritable }) {
-      for await (const result of reqReadable) {
-        if (!result.ok) break;
-        const val = result.payload;
-        if (val.ignore) continue;
-        resWritable.write(Ok({ response: `${reqInit.prefix} ${val.msg}` }));
-      }
+    async handler({ resWritable }) {
       resWritable.close();
     },
   }),
 });
-
-// -------------------------------------------------------------------
-// OrderingService
-// -------------------------------------------------------------------
-const msgs: Array<number> = [];
 
 const OrderingServiceSchema = ServiceSchema.define({
   add: Procedure.rpc({
@@ -83,7 +60,6 @@ const OrderingServiceSchema = ServiceSchema.define({
     responseData: Type.Object({ n: Type.Number() }),
     responseError: Type.Never(),
     async handler({ reqInit }) {
-      msgs.push(reqInit.n);
       return Ok({ n: reqInit.n });
     },
   }),
@@ -91,15 +67,12 @@ const OrderingServiceSchema = ServiceSchema.define({
     requestInit: Type.Object({}),
     responseData: Type.Object({ msgs: Type.Array(Type.Number()) }),
     responseError: Type.Never(),
-    async handler() {
-      return Ok({ msgs: [...msgs] });
+    async handler(_ctx) {
+      return Ok({ msgs: [] as Array<number> });
     },
   }),
 });
 
-// -------------------------------------------------------------------
-// FallibleService
-// -------------------------------------------------------------------
 const FallibleServiceSchema = ServiceSchema.define({
   divide: Procedure.rpc({
     requestInit: Type.Object({ a: Type.Number(), b: Type.Number() }),
@@ -115,14 +88,7 @@ const FallibleServiceSchema = ServiceSchema.define({
       }),
     ]),
     async handler({ reqInit }) {
-      if (reqInit.b === 0) {
-        return Err({ code: 'DIV_BY_ZERO' as const, message: 'Cannot divide by zero' });
-      }
-      const result = reqInit.a / reqInit.b;
-      if (!isFinite(result)) {
-        return Err({ code: 'INFINITY' as const, message: 'Result is infinity' });
-      }
-      return Ok({ result });
+      return Ok({ result: reqInit.a / reqInit.b });
     },
   }),
   echo: Procedure.stream({
@@ -137,28 +103,11 @@ const FallibleServiceSchema = ServiceSchema.define({
       code: Type.Literal('STREAM_ERROR'),
       message: Type.String(),
     }),
-    async handler({ reqReadable, resWritable }) {
-      for await (const result of reqReadable) {
-        if (!result.ok) break;
-        const val = result.payload;
-        if (val.throwError) throw new Error('uncaught error');
-        if (val.throwResult) {
-          resWritable.write(Err({ code: 'STREAM_ERROR' as const, message: 'stream error' }));
-          continue;
-        }
-        resWritable.write(Ok({ response: val.msg }));
-      }
+    async handler({ resWritable }) {
       resWritable.close();
     },
   }),
 });
-
-// -------------------------------------------------------------------
-// SubscribableService
-// -------------------------------------------------------------------
-let subCount = 0;
-type SubListener = (val: number) => void;
-const subListeners = new Set<SubListener>();
 
 const SubscribableServiceSchema = ServiceSchema.define({
   add: Procedure.rpc({
@@ -166,45 +115,28 @@ const SubscribableServiceSchema = ServiceSchema.define({
     responseData: Type.Object({ result: Type.Number() }),
     responseError: Type.Never(),
     async handler({ reqInit }) {
-      subCount += reqInit.n;
-      for (const l of subListeners) l(subCount);
-      return Ok({ result: subCount });
+      return Ok({ result: reqInit.n });
     },
   }),
   value: Procedure.subscription({
     requestInit: Type.Object({}),
     responseData: Type.Object({ count: Type.Number() }),
     responseError: Type.Never(),
-    async handler({ resWritable, ctx }) {
-      resWritable.write(Ok({ count: subCount }));
-      const listener: SubListener = (val) => {
-        resWritable.write(Ok({ count: val }));
-      };
-      subListeners.add(listener);
-      ctx.signal.addEventListener('abort', () => {
-        subListeners.delete(listener);
-        resWritable.close();
-      });
+    async handler({ resWritable }) {
+      resWritable.write(Ok({ count: 0 }));
+      resWritable.close();
     },
   }),
 });
 
-// -------------------------------------------------------------------
-// UploadableService
-// -------------------------------------------------------------------
 const UploadableServiceSchema = ServiceSchema.define({
   addMultiple: Procedure.upload({
     requestInit: Type.Object({}),
     requestData: Type.Object({ n: Type.Number() }),
     responseData: Type.Object({ result: Type.Number() }),
     responseError: Type.Never(),
-    async handler({ reqReadable }) {
-      let total = 0;
-      for await (const result of reqReadable) {
-        if (!result.ok) break;
-        total += result.payload.n;
-      }
-      return Ok({ result: total });
+    async handler(_ctx) {
+      return Ok({ result: 0 });
     },
   }),
   addMultipleWithPrefix: Procedure.upload({
@@ -212,13 +144,8 @@ const UploadableServiceSchema = ServiceSchema.define({
     requestData: Type.Object({ n: Type.Number() }),
     responseData: Type.Object({ result: Type.String() }),
     responseError: Type.Never(),
-    async handler({ reqInit, reqReadable }) {
-      let total = 0;
-      for await (const result of reqReadable) {
-        if (!result.ok) break;
-        total += result.payload.n;
-      }
-      return Ok({ result: `${reqInit.prefix} ${total}` });
+    async handler(_ctx) {
+      return Ok({ result: '' });
     },
   }),
   cancellableAdd: Procedure.upload({
@@ -229,33 +156,19 @@ const UploadableServiceSchema = ServiceSchema.define({
       code: Type.Literal('CANCEL'),
       message: Type.String(),
     }),
-    async handler({ reqReadable, ctx }) {
-      let total = 0;
-      for await (const result of reqReadable) {
-        if (!result.ok) break;
-        total += result.payload.n;
-        if (total >= 10) {
-          ctx.cancel();
-          return Err({ code: 'CANCEL' as const, message: 'total exceeds limit' });
-        }
-      }
-      return Ok({ result: total });
+    async handler(_ctx) {
+      return Ok({ result: 0 });
     },
   }),
 });
 
-// -------------------------------------------------------------------
-// CancellationService
-// -------------------------------------------------------------------
 const CancellationServiceSchema = ServiceSchema.define({
   blockingRpc: Procedure.rpc({
     requestInit: Type.Object({}),
     responseData: Type.Object({}),
     responseError: Type.Never(),
-    async handler({ ctx }) {
-      return new Promise<never>((_resolve) => {
-        ctx.signal.addEventListener('abort', () => {});
-      });
+    async handler(_ctx) {
+      return Ok({});
     },
   }),
   blockingStream: Procedure.stream({
@@ -263,8 +176,8 @@ const CancellationServiceSchema = ServiceSchema.define({
     requestData: Type.Object({}),
     responseData: Type.Object({}),
     responseError: Type.Never(),
-    async handler(_ctx) {
-      return new Promise<void>(() => {});
+    async handler({ resWritable }) {
+      resWritable.close();
     },
   }),
   blockingUpload: Procedure.upload({
@@ -273,22 +186,22 @@ const CancellationServiceSchema = ServiceSchema.define({
     responseData: Type.Object({}),
     responseError: Type.Never(),
     async handler(_ctx) {
-      return new Promise<never>(() => {});
+      return Ok({});
     },
   }),
   blockingSubscription: Procedure.subscription({
     requestInit: Type.Object({}),
     responseData: Type.Object({}),
     responseError: Type.Never(),
-    async handler(_ctx) {
-      return new Promise<void>(() => {});
+    async handler({ resWritable }) {
+      resWritable.close();
     },
   }),
   immediateRpc: Procedure.rpc({
     requestInit: Type.Object({}),
     responseData: Type.Object({ done: Type.Boolean() }),
     responseError: Type.Never(),
-    async handler() {
+    async handler(_ctx) {
       return Ok({ done: true });
     },
   }),
@@ -297,11 +210,7 @@ const CancellationServiceSchema = ServiceSchema.define({
     requestData: Type.Object({}),
     responseData: Type.Object({ done: Type.Boolean() }),
     responseError: Type.Never(),
-    async handler({ reqReadable, resWritable }) {
-      resWritable.write(Ok({ done: true }));
-      for await (const result of reqReadable) {
-        if (!result.ok) break;
-      }
+    async handler({ resWritable }) {
       resWritable.close();
     },
   }),
@@ -310,10 +219,7 @@ const CancellationServiceSchema = ServiceSchema.define({
     requestData: Type.Object({}),
     responseData: Type.Object({ done: Type.Boolean() }),
     responseError: Type.Never(),
-    async handler({ reqReadable }) {
-      for await (const result of reqReadable) {
-        if (!result.ok) break;
-      }
+    async handler(_ctx) {
       return Ok({ done: true });
     },
   }),
@@ -322,7 +228,6 @@ const CancellationServiceSchema = ServiceSchema.define({
     responseData: Type.Object({ done: Type.Boolean() }),
     responseError: Type.Never(),
     async handler({ resWritable }) {
-      resWritable.write(Ok({ done: true }));
       resWritable.close();
     },
   }),
@@ -331,21 +236,12 @@ const CancellationServiceSchema = ServiceSchema.define({
     requestData: Type.Object({}),
     responseData: Type.Object({ i: Type.Number() }),
     responseError: Type.Never(),
-    async handler({ reqInit, reqReadable, resWritable }) {
-      for (let i = 0; i < reqInit.total; i++) {
-        resWritable.write(Ok({ i }));
-      }
-      for await (const result of reqReadable) {
-        if (!result.ok) break;
-      }
+    async handler({ resWritable }) {
       resWritable.close();
     },
   }),
 });
 
-// -------------------------------------------------------------------
-// Serialize and write
-// -------------------------------------------------------------------
 const services = {
   test: TestServiceSchema,
   ordering: OrderingServiceSchema,
@@ -356,6 +252,9 @@ const services = {
 };
 
 const schema = serializeSchema(services);
-const outPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'test_schema.json');
+const outPath = path.join(
+  path.dirname(new URL(import.meta.url).pathname),
+  'test_schema.json',
+);
 fs.writeFileSync(outPath, JSON.stringify(schema, null, 2));
 console.log(`Wrote schema to ${outPath}`);
