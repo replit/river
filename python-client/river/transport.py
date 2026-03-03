@@ -278,10 +278,28 @@ class WebSocketClientTransport:
         )
         return ws
 
+    def _get_otel_propagation_context(self) -> dict[str, str] | None:
+        """Extract OTel propagation context if opentelemetry is installed."""
+        try:
+            from opentelemetry import propagate
+        except ImportError:
+            return None
+        ctx: dict[str, str] = {}
+        propagate.inject(ctx)
+        result = {}
+        if ctx.get("traceparent"):
+            result["traceparent"] = ctx["traceparent"]
+        if ctx.get("tracestate"):
+            result["tracestate"] = ctx["tracestate"]
+        return result or None
+
     async def _do_handshake(self, session: Session, ws: Any, to: str) -> None:
         """Perform the handshake on a newly connected WebSocket."""
         # Send handshake request
-        hs_msg = session.create_handshake_request(metadata=self._handshake_metadata)
+        tracing = self._get_otel_propagation_context()
+        hs_msg = session.create_handshake_request(
+            metadata=self._handshake_metadata, tracing=tracing
+        )
         ok, buf = self._codec_adapter.to_buffer(hs_msg)
         if not ok:
             # Handshake send failure is fatal — destroy session

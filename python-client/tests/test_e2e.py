@@ -1800,3 +1800,99 @@ class TestFatalErrorPaths:
         await transport.close()
         # No leaked sessions
         assert len(transport.sessions) == 0
+
+
+# =====================================================================
+# OTel Tracing Propagation Tests
+# =====================================================================
+
+
+class TestOtelTracingPropagation:
+    def test_handshake_includes_tracing_when_otel_available(self):
+        """Handshake message includes tracing when OTel propagation is configured."""
+
+        from river.codec import CodecMessageAdapter, NaiveJsonCodec
+        from river.session import Session
+
+        session = Session(
+            session_id="test-session",
+            from_id="client",
+            to_id="server",
+            codec=CodecMessageAdapter(NaiveJsonCodec()),
+        )
+
+        tracing = {
+            "traceparent": "00-abc123-def456-01",
+            "tracestate": "vendor=value",
+        }
+        msg = session.create_handshake_request(tracing=tracing)
+        assert msg.tracing == tracing
+        wire = msg.to_dict()
+        assert wire["tracing"] == tracing
+
+    def test_handshake_omits_tracing_when_none(self):
+        """Handshake message omits tracing when not provided."""
+        from river.codec import CodecMessageAdapter, NaiveJsonCodec
+        from river.session import Session
+
+        session = Session(
+            session_id="test-session",
+            from_id="client",
+            to_id="server",
+            codec=CodecMessageAdapter(NaiveJsonCodec()),
+        )
+
+        msg = session.create_handshake_request()
+        assert msg.tracing is None
+        wire = msg.to_dict()
+        assert "tracing" not in wire
+
+    def test_get_otel_propagation_context_with_mock(self):
+        """_get_otel_propagation_context extracts traceparent/tracestate."""
+        import types
+        from unittest.mock import patch
+
+        transport = WebSocketClientTransport(
+            ws_url="ws://localhost:0",
+            client_id="test",
+            server_id="SERVER",
+            codec=NaiveJsonCodec(),
+        )
+
+        def fake_inject(carrier):
+            carrier["traceparent"] = "00-tid-sid-01"
+            carrier["tracestate"] = "k=v"
+
+        # Create a fake opentelemetry module with a propagate submodule
+        fake_otel = types.ModuleType("opentelemetry")
+        fake_propagate = types.ModuleType("opentelemetry.propagate")
+        fake_propagate.inject = fake_inject  # type: ignore[attr-defined]
+        fake_otel.propagate = fake_propagate  # type: ignore[attr-defined]
+
+        with patch.dict(
+            "sys.modules",
+            {"opentelemetry": fake_otel, "opentelemetry.propagate": fake_propagate},
+        ):
+            result = transport._get_otel_propagation_context()
+
+        assert result == {
+            "traceparent": "00-tid-sid-01",
+            "tracestate": "k=v",
+        }
+
+    def test_get_otel_propagation_context_without_otel(self):
+        """_get_otel_propagation_context returns None when OTel is not installed."""
+        from unittest.mock import patch
+
+        transport = WebSocketClientTransport(
+            ws_url="ws://localhost:0",
+            client_id="test",
+            server_id="SERVER",
+            codec=NaiveJsonCodec(),
+        )
+
+        # Ensure opentelemetry is not importable
+        with patch.dict("sys.modules", {"opentelemetry": None}):
+            result = transport._get_otel_propagation_context()
+
+        assert result is None

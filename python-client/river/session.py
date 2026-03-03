@@ -331,7 +331,9 @@ class Session:
             self._ws = None
         self.send_buffer.clear()
 
-    def create_handshake_request(self, metadata: Any = None) -> TransportMessage:
+    def create_handshake_request(
+        self, metadata: Any = None, tracing: dict[str, str] | None = None
+    ) -> TransportMessage:
         """Create a handshake request transport message.
 
         Handshake messages have seq=0, ack=0, controlFlags=0.
@@ -351,4 +353,5 @@ class Session:
             payload=payload,
             stream_id=generate_id(),
             control_flags=0,
+            tracing=tracing,
         )
