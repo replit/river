@@ -12,7 +12,7 @@ from typing_extensions import {{ typing_ext_imports | join(", ") }}
 
 class {{ td.name }}(TypedDict):
 {% if td.description %}
-    """{{ td.description }}"""
+    """{{ td.description | docstring }}"""
 
 {% endif %}
 {% if not td.fields %}

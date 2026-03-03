@@ -584,6 +584,27 @@ class TestNameCollisions:
         ir = converter.convert(raw)
         assert len(ir.services) == 2
 
+    def test_service_class_name_collision_raises(self):
+        """Two services that map to the same class name are rejected."""
+        from river.codegen.schema import SchemaConverter
+
+        raw = {
+            "services": {
+                "foo_bar": {"procedures": {}},
+                "FooBar": {"procedures": {}},
+            }
+        }
+        converter = SchemaConverter()
+        with pytest.raises(ValueError, match="FooBarClient"):
+            converter.convert(raw)
+
+    def test_description_with_triple_quotes(self):
+        """Descriptions containing triple quotes are escaped in output."""
+        from river.codegen.emitter import _escape_docstring
+
+        assert '"""' not in _escape_docstring('bad """ doc')
+        assert _escape_docstring('say """hello"""') == r"say \"\"\"hello\"\"\""
+
 
 # ---------------------------------------------------------------------------
 # Complex type tests

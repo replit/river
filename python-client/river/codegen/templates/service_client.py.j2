@@ -44,7 +44,7 @@ class {{ service.class_name }}Client:
         abort_signal: asyncio.Event | None = None,
     ) -> {{ proc | result_type }}:
 {% if proc.description %}
-        """{{ proc.description }}"""
+        """{{ proc.description | docstring }}"""
 {% endif %}
         return await self._client.rpc(
             "{{ service.name }}",
@@ -60,7 +60,7 @@ class {{ service.class_name }}Client:
         abort_signal: asyncio.Event | None = None,
     ) -> StreamResult[{{ proc.input_type.annotation }}]:
 {% if proc.description %}
-        """{{ proc.description }}"""
+        """{{ proc.description | docstring }}"""
 {% endif %}
         return self._client.stream(
             "{{ service.name }}",
@@ -76,7 +76,7 @@ class {{ service.class_name }}Client:
         abort_signal: asyncio.Event | None = None,
     ) -> UploadResult[{{ proc.input_type.annotation }}]:
 {% if proc.description %}
-        """{{ proc.description }}"""
+        """{{ proc.description | docstring }}"""
 {% endif %}
         return self._client.upload(
             "{{ service.name }}",
@@ -92,7 +92,7 @@ class {{ service.class_name }}Client:
         abort_signal: asyncio.Event | None = None,
     ) -> SubscriptionResult:
 {% if proc.description %}
-        """{{ proc.description }}"""
+        """{{ proc.description | docstring }}"""
 {% endif %}
         return self._client.subscribe(
             "{{ service.name }}",

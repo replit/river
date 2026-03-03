@@ -29,6 +29,14 @@ _env = jinja2.Environment(
 _env.filters["pascal"] = _to_pascal_case
 
 
+def _escape_docstring(s: str) -> str:
+    """Escape a string for use inside triple-quoted docstrings."""
+    return s.replace("\\", "\\\\").replace('"""', r"\"\"\"")
+
+
+_env.filters["docstring"] = _escape_docstring
+
+
 def _result_type(proc) -> str:  # noqa: ANN001
     """Build the typed result annotation for a procedure."""
     ok = f"OkResult[{proc.output_type.annotation}]"

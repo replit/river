@@ -164,6 +164,7 @@ class SchemaConverter:
         self._id_to_name = {}
         services: list[ServiceDef] = []
         seen_modules: dict[str, str] = {}  # sanitized name → wire name
+        seen_classes: dict[str, str] = {}  # class name → wire name
         for svc_name, svc_data in raw.get("services", {}).items():
             module_name = _sanitize_identifier(svc_name)
             if module_name in seen_modules:
@@ -173,6 +174,16 @@ class SchemaConverter:
                     f"{module_name!r}_client.py"
                 )
             seen_modules[module_name] = svc_name
+
+            class_name = _to_pascal_case(svc_name) + "Client"
+            if class_name in seen_classes:
+                raise ValueError(
+                    f"services {seen_classes[class_name]!r} and "
+                    f"{svc_name!r} both map to Python class "
+                    f"{class_name!r}"
+                )
+            seen_classes[class_name] = svc_name
+
             svc_def = self._convert_service(svc_name, svc_data)
             services.append(svc_def)
 

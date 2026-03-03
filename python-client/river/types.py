@@ -92,36 +92,37 @@ class TransportMessage:
 
         Raises ``TypeError`` if required fields have wrong types.
         """
-        required_str = {"id": "id", "from": "from", "streamId": "streamId"}
+        required_str = {
+            "id": "id",
+            "from": "from",
+            "to": "to",
+            "streamId": "streamId",
+        }
         for wire_key, label in required_str.items():
             if wire_key not in d:
                 raise KeyError(f"Missing required field: {label}")
             if not isinstance(d[wire_key], str):
                 raise TypeError(
-                    f"Field '{label}' must be str, "
-                    f"got {type(d[wire_key]).__name__}"
+                    f"Field '{label}' must be str, got {type(d[wire_key]).__name__}"
                 )
 
         required_int = {"seq": "seq", "ack": "ack"}
         for wire_key, label in required_int.items():
             if wire_key not in d:
                 raise KeyError(f"Missing required field: {label}")
-            if not isinstance(d[wire_key], int):
+            # bool is a subclass of int in Python — reject it explicitly
+            if isinstance(d[wire_key], bool) or not isinstance(d[wire_key], int):
                 raise TypeError(
-                    f"Field '{label}' must be int, "
-                    f"got {type(d[wire_key]).__name__}"
+                    f"Field '{label}' must be int, got {type(d[wire_key]).__name__}"
                 )
 
-        if "to" not in d:
-            raise KeyError("Missing required field: to")
         if "payload" not in d:
             raise KeyError("Missing required field: payload")
 
         control_flags = d.get("controlFlags", 0)
-        if not isinstance(control_flags, int):
+        if isinstance(control_flags, bool) or not isinstance(control_flags, int):
             raise TypeError(
-                f"Field 'controlFlags' must be int, "
-                f"got {type(control_flags).__name__}"
+                f"Field 'controlFlags' must be int, got {type(control_flags).__name__}"
             )
 
         return cls(
