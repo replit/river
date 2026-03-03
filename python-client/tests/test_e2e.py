@@ -1860,16 +1860,16 @@ class TestOtelTracingPropagation:
 
 
 class TestEagerConnectSync:
-    def test_eager_connect_does_not_raise_outside_loop(self):
+    def test_eager_connect_raises_outside_loop(self):
         """Constructing with eagerly_connect=True outside an event loop
-        should not raise RuntimeError."""
+        raises RuntimeError rather than silently binding to a dead loop."""
         transport = WebSocketClientTransport(
             ws_url="ws://127.0.0.1:1",
             server_id="SERVER",
             codec=BinaryCodec(),
         )
-        # This used to raise "no running event loop"
-        RiverClient(transport, server_id="SERVER", eagerly_connect=True)
+        with pytest.raises(RuntimeError, match="no running event loop"):
+            RiverClient(transport, server_id="SERVER", eagerly_connect=True)
 
 
 # =====================================================================

@@ -508,6 +508,83 @@ class TestCodegenFieldNames:
         assert [f.name for f in td.fields] == ["userId", "count"]
 
 
+class TestNameCollisions:
+    """Codegen detects and rejects name collisions."""
+
+    def test_procedure_name_collision_raises(self):
+        """Two procedures that map to the same snake_case name are rejected."""
+        from river.codegen.schema import SchemaConverter
+
+        raw = {
+            "services": {
+                "svc": {
+                    "procedures": {
+                        "fooBar": {
+                            "type": "rpc",
+                            "init": {"type": "object", "properties": {}},
+                            "output": {"type": "object", "properties": {}},
+                        },
+                        "foo_bar": {
+                            "type": "rpc",
+                            "init": {"type": "object", "properties": {}},
+                            "output": {"type": "object", "properties": {}},
+                        },
+                    }
+                }
+            }
+        }
+        converter = SchemaConverter()
+        with pytest.raises(ValueError, match="foo_bar"):
+            converter.convert(raw)
+
+    def test_service_module_collision_raises(self):
+        """Two services that map to the same module name are rejected."""
+        from river.codegen.schema import SchemaConverter
+
+        raw = {
+            "services": {
+                "foo-bar": {
+                    "procedures": {},
+                },
+                "foo_bar": {
+                    "procedures": {},
+                },
+            }
+        }
+        converter = SchemaConverter()
+        with pytest.raises(ValueError, match="foo_bar"):
+            converter.convert(raw)
+
+    def test_no_collision_passes(self):
+        """Distinct names that don't collide work fine."""
+        from river.codegen.schema import SchemaConverter
+
+        raw = {
+            "services": {
+                "alpha": {
+                    "procedures": {
+                        "doX": {
+                            "type": "rpc",
+                            "init": {"type": "object", "properties": {}},
+                            "output": {"type": "object", "properties": {}},
+                        },
+                        "doY": {
+                            "type": "rpc",
+                            "init": {"type": "object", "properties": {}},
+                            "output": {"type": "object", "properties": {}},
+                        },
+                    }
+                },
+                "beta": {
+                    "procedures": {},
+                },
+            }
+        }
+        converter = SchemaConverter()
+        ir = converter.convert(raw)
+        assert len(ir.services) == 2
+
+
 # ---------------------------------------------------------------------------
 # Complex type tests
 # ---------------------------------------------------------------------------

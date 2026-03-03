@@ -88,7 +88,42 @@ class TransportMessage:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> TransportMessage:
-        """Deserialize from a wire format dict."""
+        """Deserialize from a wire format dict.
+
+        Raises ``TypeError`` if required fields have wrong types.
+        """
+        required_str = {"id": "id", "from": "from", "streamId": "streamId"}
+        for wire_key, label in required_str.items():
+            if wire_key not in d:
+                raise KeyError(f"Missing required field: {label}")
+            if not isinstance(d[wire_key], str):
+                raise TypeError(
+                    f"Field '{label}' must be str, "
+                    f"got {type(d[wire_key]).__name__}"
+                )
+
+        required_int = {"seq": "seq", "ack": "ack"}
+        for wire_key, label in required_int.items():
+            if wire_key not in d:
+                raise KeyError(f"Missing required field: {label}")
+            if not isinstance(d[wire_key], int):
+                raise TypeError(
+                    f"Field '{label}' must be int, "
+                    f"got {type(d[wire_key]).__name__}"
+                )
+
+        if "to" not in d:
+            raise KeyError("Missing required field: to")
+        if "payload" not in d:
+            raise KeyError("Missing required field: payload")
+
+        control_flags = d.get("controlFlags", 0)
+        if not isinstance(control_flags, int):
+            raise TypeError(
+                f"Field 'controlFlags' must be int, "
+                f"got {type(control_flags).__name__}"
+            )
+
         return cls(
             id=d["id"],
             from_=d["from"],
@@ -97,7 +132,7 @@ class TransportMessage:
             ack=d["ack"],
             payload=d["payload"],
             stream_id=d["streamId"],
-            control_flags=d.get("controlFlags", 0),
+            control_flags=control_flags,
             service_name=d.get("serviceName"),
             procedure_name=d.get("procedureName"),
             tracing=d.get("tracing"),

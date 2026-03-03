@@ -84,35 +84,16 @@ class CodecMessageAdapter:
         """Deserialize bytes to a TransportMessage.
 
         Returns (True, TransportMessage) on success, (False, error_reason) on failure.
+        Validation of required fields and types is handled by
+        :meth:`TransportMessage.from_dict`.
         """
         try:
             raw = self._codec.from_buffer(buf)
             if not isinstance(raw, dict):
                 return False, f"Expected dict, got {type(raw).__name__}"
-            # Validate required fields
-            required = ("id", "from", "to", "seq", "ack", "payload", "streamId")
-            for f in required:
-                if f not in raw:
-                    return False, f"Missing required field: {f}"
-            # Validate field types to prevent downstream crashes
-            if not isinstance(raw["seq"], int):
-                return False, (
-                    f"Field 'seq' must be int, got {type(raw['seq']).__name__}"
-                )
-            if not isinstance(raw["ack"], int):
-                return False, (
-                    f"Field 'ack' must be int, got {type(raw['ack']).__name__}"
-                )
-            if not isinstance(raw["id"], str):
-                return False, (
-                    f"Field 'id' must be str, got {type(raw['id']).__name__}"
-                )
-            if not isinstance(raw["streamId"], str):
-                return False, (
-                    f"Field 'streamId' must be str, "
-                    f"got {type(raw['streamId']).__name__}"
-                )
             msg = TransportMessage.from_dict(raw)
             return True, msg
+        except (KeyError, TypeError) as e:
+            return False, str(e)
         except Exception as e:
             return False, f"Failed to deserialize message: {e}"

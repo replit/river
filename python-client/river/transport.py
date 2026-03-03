@@ -157,17 +157,7 @@ class WebSocketClientTransport:
 
     def _get_loop(self) -> asyncio.AbstractEventLoop:
         if self._loop is None:
-            try:
-                self._loop = asyncio.get_running_loop()
-            except RuntimeError:
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_closed():
-                        raise RuntimeError("closed")
-                    self._loop = loop
-                except RuntimeError:
-                    self._loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(self._loop)
+            self._loop = asyncio.get_running_loop()
         return self._loop
 
     # --- Event API ---

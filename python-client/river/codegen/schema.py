@@ -163,7 +163,16 @@ class SchemaConverter:
         self._typedicts = []
         self._id_to_name = {}
         services: list[ServiceDef] = []
+        seen_modules: dict[str, str] = {}  # sanitized name → wire name
         for svc_name, svc_data in raw.get("services", {}).items():
+            module_name = _sanitize_identifier(svc_name)
+            if module_name in seen_modules:
+                raise ValueError(
+                    f"services {seen_modules[module_name]!r} and "
+                    f"{svc_name!r} both map to Python module "
+                    f"{module_name!r}_client.py"
+                )
+            seen_modules[module_name] = svc_name
             svc_def = self._convert_service(svc_name, svc_data)
             services.append(svc_def)
 
@@ -172,8 +181,17 @@ class SchemaConverter:
     def _convert_service(self, name: str, data: dict) -> ServiceDef:
         class_name = _to_pascal_case(name)
         procedures: list[ProcedureDef] = []
+        seen_py_names: dict[str, str] = {}  # py_name → wire name
         for proc_name, proc_data in data.get("procedures", {}).items():
             proc_def = self._convert_procedure(class_name, proc_name, proc_data)
+            if proc_def.py_name in seen_py_names:
+                raise ValueError(
+                    f"service {name!r}: procedures "
+                    f"{seen_py_names[proc_def.py_name]!r} and "
+                    f"{proc_name!r} both map to Python method "
+                    f"{proc_def.py_name!r}"
+                )
+            seen_py_names[proc_def.py_name] = proc_name
             procedures.append(proc_def)
         return ServiceDef(
             name=name,
