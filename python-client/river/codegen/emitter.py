@@ -11,7 +11,12 @@ from pathlib import Path
 
 import jinja2
 
-from river.codegen.schema import SchemaIR, ServiceDef, _to_pascal_case
+from river.codegen.schema import (
+    SchemaIR,
+    ServiceDef,
+    _sanitize_identifier,
+    _to_pascal_case,
+)
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 
@@ -123,13 +128,19 @@ def render_service_client(svc: ServiceDef, ir: SchemaIR, import_prefix: str) -> 
     )
 
 
+def _module_name(service_name: str) -> str:
+    """Sanitize a service name for use as a Python module name."""
+    return _sanitize_identifier(service_name)
+
+
 def render_init(ir: SchemaIR, import_prefix: str) -> str:
     imports = []
     for svc in ir.services:
+        mod_name = _module_name(svc.name)
         if import_prefix == ".":
-            mod = f".{svc.name}_client"
+            mod = f".{mod_name}_client"
         else:
-            mod = f"{import_prefix}{svc.name}_client"
+            mod = f"{import_prefix}{mod_name}_client"
         imports.append((mod, f"{svc.class_name}Client"))
 
     imports.sort(key=lambda x: x[0])
@@ -165,7 +176,7 @@ def write_generated_files(
 
     for svc in ir.services:
         _write(
-            f"{svc.name}_client.py",
+            f"{_module_name(svc.name)}_client.py",
             render_service_client(svc, ir, import_prefix),
         )
 

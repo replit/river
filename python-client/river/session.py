@@ -141,6 +141,9 @@ class Session:
         if self.state == SessionState.CONNECTED and self._ws is not None:
             ok, result = self._send_over_wire(msg)
             if not ok:
+                # Remove the unsendable message from the buffer so it
+                # doesn't poison retransmit state.
+                self.send_buffer = [m for m in self.send_buffer if m.id != msg.id]
                 return False, result
         return True, msg.id
 
@@ -339,6 +342,6 @@ class Session:
             seq=0,
             ack=0,
             payload=payload,
-            stream_id="handshake",
+            stream_id=generate_id(),
             control_flags=0,
         )

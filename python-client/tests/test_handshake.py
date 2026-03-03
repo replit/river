@@ -6,13 +6,12 @@ that requires {token: string} in the handshake.
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 
 from river.client import RiverClient
 from river.codec import NaiveJsonCodec
 from river.transport import WebSocketClientTransport
+from tests.test_utils import wait_for_connected, wait_for_event
 
 
 async def make_handshake_client(
@@ -65,22 +64,13 @@ class TestHandshake:
             codec=NaiveJsonCodec(),
             handshake_metadata={"token": "wrong-token"},
         )
-
-        error_event = asyncio.Event()
-        errors: list[dict] = []
-
-        def on_error(e: dict) -> None:
-            errors.append(e)
-            error_event.set()
-
-        transport.add_event_listener("protocolError", on_error)
-
         try:
             transport.connect("HANDSHAKE_SERVER")
-            # Wait for the handshake failure event
-            await asyncio.wait_for(error_event.wait(), timeout=5.0)
-            assert len(errors) > 0
-            assert errors[0]["type"] in ("handshake_failed", "conn_retry_exceeded")
+            evt = await wait_for_event(transport, "protocolError")
+            assert evt["type"] in (
+                "handshake_failed",
+                "conn_retry_exceeded",
+            )
         finally:
             await transport.close()
 
@@ -96,20 +86,10 @@ class TestHandshake:
             codec=NaiveJsonCodec(),
             handshake_metadata=None,
         )
-
-        error_event = asyncio.Event()
-        errors: list[dict] = []
-
-        def on_error(e: dict) -> None:
-            errors.append(e)
-            error_event.set()
-
-        transport.add_event_listener("protocolError", on_error)
-
         try:
             transport.connect("HANDSHAKE_SERVER")
-            await asyncio.wait_for(error_event.wait(), timeout=5.0)
-            assert len(errors) > 0
+            evt = await wait_for_event(transport, "protocolError")
+            assert evt is not None
         finally:
             await transport.close()
 
@@ -131,7 +111,8 @@ class TestHandshake:
             if ws is not None:
                 await ws.close()
 
-            await asyncio.sleep(0.5)
+            # Wait for reconnect to complete
+            await wait_for_connected(client.transport, "HANDSHAKE_SERVER")
 
             result = await client.rpc("test", "echo", {"msg": "after-reconnect"})
             assert result["ok"] is True

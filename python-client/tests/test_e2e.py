@@ -13,6 +13,7 @@ import pytest
 from river.client import RiverClient
 from river.codec import NaiveJsonCodec
 from river.transport import WebSocketClientTransport
+from tests.test_utils import wait_for_connected
 
 # -- helpers --
 
@@ -390,7 +391,7 @@ class TestClientCancellation:
             abort_evt = asyncio.Event()
 
             async def do_abort():
-                await asyncio.sleep(0.2)
+                await wait_for_connected(client.transport)
                 abort_evt.set()
 
             asyncio.ensure_future(do_abort())
@@ -411,10 +412,8 @@ class TestClientCancellation:
             stream = client.stream(
                 "cancel", "blockingStream", {}, abort_signal=abort_evt
             )
-            # Give server time to receive and process the init message
-            await asyncio.sleep(0.2)
+            await wait_for_connected(client.transport)
             abort_evt.set()
-            await asyncio.sleep(0)
 
             results = await stream.res_readable.collect()
             assert len(results) == 1
@@ -433,8 +432,7 @@ class TestClientCancellation:
             upload = client.upload(
                 "cancel", "blockingUpload", {}, abort_signal=abort_evt
             )
-            # Give server time to receive
-            await asyncio.sleep(0.2)
+            await wait_for_connected(client.transport)
             abort_evt.set()
 
             result = await upload.finalize()
@@ -453,10 +451,8 @@ class TestClientCancellation:
             sub = client.subscribe(
                 "cancel", "blockingSubscription", {}, abort_signal=abort_evt
             )
-            # Give server time to receive
-            await asyncio.sleep(0.2)
+            await wait_for_connected(client.transport)
             abort_evt.set()
-            await asyncio.sleep(0)
 
             done, msg = await sub.res_readable.next()
             assert not done
@@ -489,12 +485,8 @@ class TestIdempotentClose:
             assert msg["ok"] is True
             assert msg["payload"]["response"] == "abc"
 
-            # Wait for server close to be received
-            await asyncio.sleep(0.1)
-
             # Abort after stream completed - should be a no-op
             abort_evt.set()
-            await asyncio.sleep(0.05)
 
             # Drain any remaining messages - should be done or at most a cancel
             done, val = await stream.res_readable.next()
@@ -522,7 +514,6 @@ class TestIdempotentClose:
 
             # Abort
             abort_evt.set()
-            await asyncio.sleep(0.05)
 
             # Read the cancel
             done, msg = await sub.res_readable.next()
@@ -549,13 +540,11 @@ class TestIdempotentClose:
 
             # Close the transport
             await client.transport.close()
-            await asyncio.sleep(0.05)
 
             # Closing writable after transport close should be safe
             stream.req_writable.close()
             # Aborting after transport close should be safe
             abort_evt.set()
-            await asyncio.sleep(0.05)
             # No crash = success
         finally:
             # Transport already closed
@@ -578,9 +567,7 @@ class TestEagerConnect:
         )
         client = RiverClient(transport, server_id="SERVER", eagerly_connect=True)
         try:
-            # Wait for the connection to be established
-            await asyncio.sleep(0.5)
-            # Should have a session now
+            await wait_for_connected(transport)
             assert len(transport.sessions) > 0
             # Verify the connection works by making a call
             result = await client.rpc("test", "add", {"n": 1})
@@ -598,8 +585,6 @@ class TestTransparentReconnect:
     @pytest.mark.asyncio
     async def test_reconnect_with_concurrent_streams(self, server_url: str):
         """Multiple concurrent streams survive a connection drop and reconnect."""
-        from river.session import SessionState
-
         transport = WebSocketClientTransport(
             ws_url=server_url,
             server_id="SERVER",
@@ -632,15 +617,7 @@ class TestTransparentReconnect:
             await session._ws.close()
 
             # Wait for reconnection
-            reconnected = asyncio.Event()
-
-            def on_transition(evt):
-                if evt.get("state") == SessionState.CONNECTED:
-                    reconnected.set()
-
-            transport.add_event_listener("sessionTransition", on_transition)
-            await asyncio.wait_for(reconnected.wait(), timeout=5.0)
-            transport.remove_event_listener("sessionTransition", on_transition)
+            await wait_for_connected(transport)
 
             # Send more messages on all three streams after reconnect
             stream_a.req_writable.write({"msg": "2", "ignore": False})
@@ -1331,9 +1308,6 @@ class TestListenerCleanup:
             abort.set()
             await stream.res_readable.next()  # consume CANCEL error
 
-            # Give the event loop a tick to run cleanup
-            await asyncio.sleep(0.05)
-
             assert transport._events.listener_count("message") == before_msg
             assert transport._events.listener_count("sessionStatus") == before_ss
         finally:
@@ -1358,7 +1332,6 @@ class TestListenerCleanup:
                 )
                 abort.set()
                 await stream.res_readable.next()
-                await asyncio.sleep(0.01)
 
             assert transport._events.listener_count("message") == before
         finally:
@@ -1387,11 +1360,8 @@ class TestListenerCleanup:
             done2, _ = await stream.res_readable.next()
             assert done2
 
-            await asyncio.sleep(0.05)
-
             # Setting the signal now should be harmless (no stale cancel)
             abort.set()
-            await asyncio.sleep(0.05)
         finally:
             await transport.close()
 
@@ -1427,3 +1397,107 @@ class TestUploadFinalize:
             assert result["payload"]["result"] == 2
         finally:
             await cleanup_client(client)
+
+
+# =====================================================================
+# Protocol conformance tests
+# =====================================================================
+
+
+class TestProtocolConformance:
+    """Tests verifying Python client matches TS protocol behavior."""
+
+    def test_handshake_stream_id_is_random(self):
+        """Handshake streamId should be a random ID, not a fixed string.
+
+        TS uses generateId() for handshake streamId; Python must match.
+        """
+        from river.codec import CodecMessageAdapter, NaiveJsonCodec
+        from river.session import Session
+
+        codec = CodecMessageAdapter(NaiveJsonCodec())
+        s1 = Session("sess1", "client", "server", codec)
+        s2 = Session("sess2", "client", "server", codec)
+
+        hs1 = s1.create_handshake_request()
+        hs2 = s2.create_handshake_request()
+
+        # streamId should NOT be the fixed string "handshake"
+        assert hs1.stream_id != "handshake"
+        # streamId should be random (different between sessions)
+        assert hs1.stream_id != hs2.stream_id
+        # Should have a reasonable length (like generate_id output)
+        assert len(hs1.stream_id) > 8
+
+    def test_readable_push_after_break_is_noop(self):
+        """push_value after break_() should not buffer (memory leak fix)."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._push_value({"val": 1})
+        r.break_()
+        # After break, queue should be cleared
+        assert not r._has_values_in_queue()
+        # Pushing more values should be silently discarded
+        r._push_value({"val": 2})
+        r._push_value({"val": 3})
+        assert not r._has_values_in_queue()
+
+    def test_writable_close_nullifies_callbacks(self):
+        """After close(), write/close callbacks should not be invocable.
+
+        TS nullifies callbacks after close to prevent reuse.
+        """
+        from river.streams import Writable
+
+        write_count = [0]
+        close_count = [0]
+        w: Writable = Writable(
+            write_cb=lambda x: write_count.__setitem__(0, write_count[0] + 1),
+            close_cb=lambda: close_count.__setitem__(0, close_count[0] + 1),
+        )
+        w.close()
+        assert close_count[0] == 1
+
+        # After close, the callbacks should not fire again even if we
+        # bypass the _closed check (internal invariant)
+        w._closed = False
+        w.close()
+        # Should still be 1 since callbacks were nullified
+        assert close_count[0] == 1
+
+    def test_heartbeat_stream_id_is_fixed(self):
+        """Heartbeat streamId should be 'heartbeat' (matching TS)."""
+        from river.types import heartbeat_message
+
+        hb = heartbeat_message()
+        assert hb.stream_id == "heartbeat"
+
+    def test_handshake_payload_matches_ts_schema(self):
+        """Handshake request payload has all required fields."""
+        from river.types import PROTOCOL_VERSION, handshake_request_payload
+
+        payload = handshake_request_payload(
+            session_id="test-session",
+            next_expected_seq=0,
+            next_sent_seq=0,
+            metadata={"token": "abc"},
+        )
+        assert payload["type"] == "HANDSHAKE_REQ"
+        assert payload["protocolVersion"] == PROTOCOL_VERSION
+        assert payload["sessionId"] == "test-session"
+        assert payload["expectedSessionState"]["nextExpectedSeq"] == 0
+        assert payload["expectedSessionState"]["nextSentSeq"] == 0
+        assert payload["metadata"] == {"token": "abc"}
+
+    def test_handshake_payload_omits_metadata_when_none(self):
+        """Handshake without metadata should not include metadata field."""
+        from river.types import handshake_request_payload
+
+        payload = handshake_request_payload(
+            session_id="test-session",
+            next_expected_seq=0,
+            next_sent_seq=0,
+            metadata=None,
+        )
+        assert "metadata" not in payload

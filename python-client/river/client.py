@@ -324,7 +324,7 @@ class RiverClient:
                     pass
                 close_readable()
                 if req_writable.is_writable():
-                    req_writable._closed = True
+                    req_writable.close()
 
         def close_cb() -> None:
             nonlocal clean_close

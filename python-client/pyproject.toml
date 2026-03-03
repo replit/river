@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "river-client"
 version = "0.1.0"
 description = "Python client for River protocol v2.0"
-readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 dependencies = [

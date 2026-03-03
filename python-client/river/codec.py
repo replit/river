@@ -24,13 +24,25 @@ class Codec(ABC):
         ...
 
 
-class _CustomEncoder(json.JSONEncoder):
-    """JSON encoder with support for bytes and large ints."""
+_MAX_SAFE_INTEGER = 2**53 - 1
+_MIN_SAFE_INTEGER = -(2**53 - 1)
 
-    def default(self, o: Any) -> Any:
-        if isinstance(o, (bytes, bytearray)):
-            return {"$t": base64.b64encode(o).decode("ascii")}
-        return super().default(o)
+
+def _prepare_for_json(obj: Any) -> Any:
+    """Recursively replace bytes and large ints with wire markers."""
+    if isinstance(obj, (bytes, bytearray)):
+        return {"$t": base64.b64encode(obj).decode("ascii")}
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, int):
+        if obj > _MAX_SAFE_INTEGER or obj < _MIN_SAFE_INTEGER:
+            return {"$b": str(obj)}
+        return obj
+    if isinstance(obj, dict):
+        return {k: _prepare_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_prepare_for_json(v) for v in obj]
+    return obj
 
 
 def _custom_object_hook(obj: dict) -> Any:
@@ -48,9 +60,8 @@ class NaiveJsonCodec(Codec):
     name = "naive"
 
     def to_buffer(self, obj: dict[str, Any]) -> bytes:
-        return json.dumps(obj, cls=_CustomEncoder, separators=(",", ":")).encode(
-            "utf-8"
-        )
+        prepared = _prepare_for_json(obj)
+        return json.dumps(prepared, separators=(",", ":")).encode("utf-8")
 
     def from_buffer(self, buf: bytes) -> dict[str, Any]:
         return json.loads(buf.decode("utf-8"), object_hook=_custom_object_hook)

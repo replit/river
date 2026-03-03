@@ -210,11 +210,14 @@ class Writable(Generic[T]):
         """Close the stream, optionally writing a final value."""
         if self._closed:
             return  # Idempotent
-        self._closed = True
         if value is not None:
             self._write_cb(value)
+        self._closed = True
+        # Nullify callbacks after invocation to prevent reuse (matches TS)
+        self._write_cb = lambda _: None  # type: ignore[assignment]
         if self._close_cb:
             self._close_cb()
+        self._close_cb = None
 
     def is_writable(self) -> bool:
         return not self._closed

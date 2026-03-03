@@ -14,6 +14,12 @@ from river.client import RiverClient
 from river.codec import NaiveJsonCodec
 from river.session import SessionOptions, SessionState
 from river.transport import WebSocketClientTransport
+from tests.test_utils import (
+    wait_for,
+    wait_for_connected,
+    wait_for_disconnected,
+    wait_for_session_gone,
+)
 
 SHORT_OPTIONS = SessionOptions(
     heartbeat_interval_ms=100,
@@ -58,7 +64,6 @@ class TestHeartbeatMiss:
         """Force-closing WS transitions session to NO_CONNECTION."""
         client = await make_client(server_url)
         try:
-            # Make an RPC to establish connection
             result = await client.rpc("test", "add", {"n": 1})
             assert result["ok"] is True
 
@@ -66,17 +71,10 @@ class TestHeartbeatMiss:
             assert session is not None
             assert session.state == SessionState.CONNECTED
 
-            # Force-close the WS (not the transport)
-            ws = session._ws
-            assert ws is not None
-            # Disable reconnect so we can observe the state
             client.transport.reconnect_on_connection_drop = False
-            await ws.close()
+            await session._ws.close()
 
-            # Wait for the connection drop to be processed
-            await asyncio.sleep(0.3)
-
-            assert session.state == SessionState.NO_CONNECTION
+            await wait_for_disconnected(client.transport)
         finally:
             await cleanup(client)
 
@@ -85,11 +83,9 @@ class TestHeartbeatMiss:
         """Active RPCs reset heartbeat miss — no spurious disconnect."""
         client = await make_client(server_url)
         try:
-            # Make several RPCs over a period longer than heartbeat_interval
             for _ in range(5):
                 result = await client.rpc("test", "add", {"n": 1})
                 assert result["ok"] is True
-                await asyncio.sleep(0.05)
 
             session = client.transport.sessions.get("SERVER")
             assert session is not None
@@ -106,39 +102,25 @@ class TestHeartbeatMiss:
 class TestGracePeriod:
     @pytest.mark.asyncio
     async def test_grace_period_expiry_destroys_session(self, server_url: str):
-        """Session destroyed after grace period elapses without reconnect."""
+        """Session destroyed after grace period elapses."""
         client = await make_client(server_url)
         try:
             result = await client.rpc("test", "add", {"n": 1})
             assert result["ok"] is True
 
+            client.transport.reconnect_on_connection_drop = False
             session = client.transport.sessions.get("SERVER")
             assert session is not None
-            session_id = session.id
+            await session._ws.close()
 
-            # Force WS close and disable reconnect
-            client.transport.reconnect_on_connection_drop = False
-            ws = session._ws
-            assert ws is not None
-            await ws.close()
-
-            # Wait for drop processing
-            await asyncio.sleep(0.1)
-            assert session.state == SessionState.NO_CONNECTION
-
-            # Wait for grace period to elapse (300ms + buffer)
-            await asyncio.sleep(0.4)
-
-            # Session should have been deleted
-            remaining = client.transport.sessions.get("SERVER")
-            assert remaining is None or remaining.id != session_id
+            await wait_for_disconnected(client.transport)
+            await wait_for_session_gone(client.transport)
         finally:
             await cleanup(client)
 
     @pytest.mark.asyncio
     async def test_reconnect_within_grace_preserves_session(self, server_url: str):
         """Reconnecting within grace period preserves the session."""
-        # Use longer grace to ensure reconnect completes in time
         opts = SessionOptions(
             heartbeat_interval_ms=100,
             heartbeats_until_dead=2,
@@ -153,21 +135,11 @@ class TestGracePeriod:
 
             session = client.transport.sessions.get("SERVER")
             assert session is not None
+            await session._ws.close()
 
-            # Force WS close — auto-reconnect is on by default
-            ws = session._ws
-            assert ws is not None
-            await ws.close()
+            # Auto-reconnect is on; wait for reconnection
+            await wait_for_connected(client.transport)
 
-            # Wait for reconnect to complete (well within 300ms grace)
-            await asyncio.sleep(0.5)
-
-            # Session should still exist with same ID
-            new_session = client.transport.sessions.get("SERVER")
-            # Either same session or a new one (server may have lost state)
-            assert new_session is not None
-
-            # Verify connection works
             result = await client.rpc("test", "add", {"n": 2})
             assert result["ok"] is True
         finally:
@@ -199,7 +171,6 @@ class TestRetryBudget:
             assert budget.has_budget()
             initial_backoff = budget.get_backoff_ms()
 
-            # Consume some budget to simulate failures
             budget.consume_budget()
             budget.consume_budget()
             budget.consume_budget()
@@ -214,15 +185,11 @@ class TestRetryBudget:
         """Budget restores gradually after successful connection."""
         client = await make_client(server_url)
         try:
-            # Make an RPC to trigger a successful connection
             result = await client.rpc("test", "add", {"n": 1})
             assert result["ok"] is True
 
             budget = client.transport._retry_budget
-            # After a successful connection the budget_consumed should be
-            # restoring (or already at 0)
-            await asyncio.sleep(0.3)  # wait for budget restore
-            assert budget.budget_consumed <= 1  # mostly restored
+            await wait_for(lambda: budget.budget_consumed <= 1, timeout=2.0)
         finally:
             await cleanup(client)
 
@@ -238,31 +205,43 @@ class TestGracePeriodActiveProcedures:
 
     @pytest.mark.asyncio
     async def test_rpc_gets_disconnect_on_grace_expiry(self, server_url: str):
-        """RPC buffered during disconnect gets UNEXPECTED_DISCONNECT after grace."""
-        client = await make_client(server_url)
+        """RPC buffered during disconnect gets UNEXPECTED_DISCONNECT."""
+        transport = WebSocketClientTransport(
+            ws_url=server_url,
+            client_id=None,
+            server_id="SERVER",
+            codec=NaiveJsonCodec(),
+            options=SHORT_OPTIONS,
+        )
+        client = RiverClient(
+            transport,
+            server_id="SERVER",
+            connect_on_invoke=False,
+            eagerly_connect=True,
+        )
         try:
-            # Establish connection
+            await wait_for_connected(transport)
+
             result = await client.rpc("test", "add", {"n": 1})
             assert result["ok"] is True
 
-            # Kill connection, disable reconnect
-            client.transport.reconnect_on_connection_drop = False
-            session = client.transport.sessions.get("SERVER")
+            transport.reconnect_on_connection_drop = False
+            session = transport.sessions.get("SERVER")
             assert session is not None
             await session._ws.close()
-            await asyncio.sleep(0.1)
 
-            # Start an RPC while disconnected — message gets buffered
+            # Buffer an RPC on the disconnected session
             rpc_task = asyncio.create_task(client.rpc("test", "add", {"n": 2}))
+            await asyncio.sleep(0)  # yield so task starts
 
-            # Wait for grace period (300ms) to expire
-            await asyncio.sleep(0.5)
+            # Grace period expires → session destroyed → RPC fails
+            await wait_for_session_gone(transport)
 
             result = await asyncio.wait_for(rpc_task, timeout=2.0)
             assert result["ok"] is False
             assert result["payload"]["code"] == "UNEXPECTED_DISCONNECT"
         finally:
-            await cleanup(client)
+            await transport.close()
 
     @pytest.mark.asyncio
     async def test_stream_gets_disconnect_on_grace_expiry(self, server_url: str):
@@ -275,14 +254,12 @@ class TestGracePeriodActiveProcedures:
             assert not done
             assert msg["ok"] is True
 
-            # Kill connection, disable reconnect
             client.transport.reconnect_on_connection_drop = False
             session = client.transport.sessions.get("SERVER")
             assert session is not None
             await session._ws.close()
 
-            # Wait for grace period to expire
-            await asyncio.sleep(0.5)
+            await wait_for_session_gone(client.transport)
 
             done, msg = await stream.res_readable.next()
             assert not done
@@ -301,16 +278,14 @@ class TestGracePeriodActiveProcedures:
             upload.req_writable.write({"n": 1})
 
             # Ensure connection established
-            await asyncio.sleep(0.1)
+            await wait_for_connected(client.transport)
 
-            # Kill connection, disable reconnect
             client.transport.reconnect_on_connection_drop = False
             session = client.transport.sessions.get("SERVER")
             assert session is not None
             await session._ws.close()
 
-            # Wait for grace period to expire
-            await asyncio.sleep(0.5)
+            await wait_for_session_gone(client.transport)
 
             result = await asyncio.wait_for(upload.finalize(), timeout=2.0)
             assert result["ok"] is False
@@ -328,14 +303,12 @@ class TestGracePeriodActiveProcedures:
             assert not done
             assert msg["ok"] is True
 
-            # Kill connection, disable reconnect
             client.transport.reconnect_on_connection_drop = False
             session = client.transport.sessions.get("SERVER")
             assert session is not None
             await session._ws.close()
 
-            # Wait for grace period to expire
-            await asyncio.sleep(0.5)
+            await wait_for_session_gone(client.transport)
 
             done, msg = await sub.res_readable.next()
             assert not done
@@ -363,20 +336,15 @@ class TestReconnectAfterGrace:
             assert old_session is not None
             old_id = old_session.id
 
-            # Kill connection, disable reconnect, wait for grace expiry
             client.transport.reconnect_on_connection_drop = False
             await old_session._ws.close()
-            await asyncio.sleep(0.5)
-
-            # Session should be gone
-            assert client.transport.sessions.get("SERVER") is None
+            await wait_for_session_gone(client.transport)
 
             # Re-enable reconnect and make a new RPC
             client.transport.reconnect_on_connection_drop = True
             result = await client.rpc("test", "add", {"n": 2})
             assert result["ok"] is True
 
-            # Should have a new session with a different ID
             new_session = client.transport.sessions.get("SERVER")
             assert new_session is not None
             assert new_session.id != old_id
@@ -385,12 +353,7 @@ class TestReconnectAfterGrace:
 
     @pytest.mark.asyncio
     async def test_connect_on_invoke_false_no_reconnect(self, server_url: str):
-        """With connect_on_invoke=False, no reconnect after grace expiry.
-
-        The RPC buffers the message but never connects, so it hangs.
-        We verify this by checking the transport state rather than
-        waiting for an RPC result.
-        """
+        """With connect_on_invoke=False, no reconnect after grace expiry."""
         transport = WebSocketClientTransport(
             ws_url=server_url,
             client_id=None,
@@ -405,29 +368,20 @@ class TestReconnectAfterGrace:
             eagerly_connect=True,
         )
         try:
-            # Wait for eager connection
-            await asyncio.sleep(0.3)
-            session = transport.sessions.get("SERVER")
-            assert session is not None
+            await wait_for_connected(transport)
 
-            # Make an RPC to verify connection works
             result = await client.rpc("test", "add", {"n": 1})
             assert result["ok"] is True
 
-            # Kill connection, disable reconnect, wait for grace expiry
             transport.reconnect_on_connection_drop = False
+            session = transport.sessions.get("SERVER")
+            assert session is not None
             await session._ws.close()
-            await asyncio.sleep(0.5)
+            await wait_for_session_gone(transport)
 
-            # Session should be gone after grace expiry
-            assert transport.sessions.get("SERVER") is None
-
-            # Re-enable reconnect on drop but connect_on_invoke is still false
             transport.reconnect_on_connection_drop = True
 
-            # With connect_on_invoke=False, the transport won't connect.
-            # Closing the transport now should produce UNEXPECTED_DISCONNECT
-            # for any pending procedures.
+            # Close transport; RPC on closed transport → UNEXPECTED_DISCONNECT
             await transport.close()
 
             result = await client.rpc("test", "add", {"n": 2})

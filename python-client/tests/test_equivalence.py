@@ -15,6 +15,7 @@ from river.client import RiverClient
 from river.codec import Codec
 from river.session import SessionOptions
 from river.transport import WebSocketClientTransport
+from tests.test_utils import wait_for_connected, wait_for_session_gone
 
 # -- helpers --
 
@@ -400,7 +401,6 @@ class TestSubscriptionEquivalence:
             assert msg["ok"] is True
 
             abort_evt.set()
-            await asyncio.sleep(0.05)
 
             done, msg = await sub.res_readable.next()
             assert not done
@@ -438,7 +438,8 @@ class TestCancellationEquivalence:
             abort_evt = asyncio.Event()
 
             async def trigger():
-                await asyncio.sleep(0.2)
+                # Wait for connection, then cancel
+                await wait_for_connected(client.transport)
                 abort_evt.set()
 
             asyncio.ensure_future(trigger())
@@ -459,9 +460,8 @@ class TestCancellationEquivalence:
             stream = client.stream(
                 "cancel", "blockingStream", {}, abort_signal=abort_evt
             )
-            await asyncio.sleep(0.2)
+            await wait_for_connected(client.transport)
             abort_evt.set()
-            await asyncio.sleep(0)
 
             results = await stream.res_readable.collect()
             assert len(results) == 1
@@ -480,7 +480,7 @@ class TestCancellationEquivalence:
             upload = client.upload(
                 "cancel", "blockingUpload", {}, abort_signal=abort_evt
             )
-            await asyncio.sleep(0.2)
+            await wait_for_connected(client.transport)
             abort_evt.set()
 
             result = await upload.finalize()
@@ -497,11 +497,13 @@ class TestCancellationEquivalence:
         try:
             abort_evt = asyncio.Event()
             sub = client.subscribe(
-                "cancel", "blockingSubscription", {}, abort_signal=abort_evt
+                "cancel",
+                "blockingSubscription",
+                {},
+                abort_signal=abort_evt,
             )
-            await asyncio.sleep(0.2)
+            await wait_for_connected(client.transport)
             abort_evt.set()
-            await asyncio.sleep(0)
 
             done, msg = await sub.res_readable.next()
             assert not done
@@ -525,8 +527,8 @@ class TestCancellationEquivalence:
             assert result["ok"] is True
             assert result["payload"]["done"] is True
 
+            # Cancel after completion — should be safe no-op
             abort_evt.set()
-            await asyncio.sleep(0.05)
         finally:
             await cleanup(client)
 
@@ -542,7 +544,6 @@ class TestCancellationEquivalence:
         await client.transport.close()
 
         abort_evt.set()
-        await asyncio.sleep(0.05)
 
 
 # =====================================================================
@@ -602,8 +603,7 @@ class TestDisconnectEquivalence:
             if session._ws is not None:
                 await session._ws.close()
 
-            # Wait for short grace period to expire
-            await asyncio.sleep(0.4)
+            await wait_for_session_gone(client.transport)
 
             # Session destroyed → stream gets UNEXPECTED_DISCONNECT
             done, msg = await stream.res_readable.next()
