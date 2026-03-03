@@ -404,6 +404,53 @@ class TestCodegenFieldNames:
         assert _safe_field_name("name") == "name"
         assert _safe_field_name("streamId") == "streamId"
 
+    def test_underscore_prefixed_field_accepted(self):
+        """Underscore-prefixed fields like _id are valid Python identifiers.
+
+        Regression: _sanitize_identifier stripped leading underscores,
+        causing _safe_field_name to reject valid fields like '_id'.
+        """
+        from river.codegen.schema import _safe_field_name
+
+        assert _safe_field_name("_id") == "_id"
+        assert _safe_field_name("_private") == "_private"
+
+    def test_dunder_field_rejected(self):
+        """Double-underscore-prefixed fields are name-mangled in class bodies.
+
+        Regression: after allowing leading underscores, __dunder fields
+        were accepted but would be name-mangled in the generated TypedDict
+        class body, making the key not match the wire representation.
+        """
+        from river.codegen.schema import _safe_field_name
+
+        with pytest.raises(ValueError, match="name-mangled"):
+            _safe_field_name("__dunder")
+        with pytest.raises(ValueError, match="name-mangled"):
+            _safe_field_name("__private")
+        # Dunder methods (ending with __) are NOT mangled
+        assert _safe_field_name("__init__") == "__init__"
+
+    def test_schema_with_underscore_prefixed_field(self):
+        """Schemas with underscore-prefixed properties generate correctly."""
+        from river.codegen.schema import SchemaConverter
+
+        converter = SchemaConverter()
+        schema = {
+            "type": "object",
+            "properties": {
+                "_id": {"type": "string"},
+                "name": {"type": "string"},
+            },
+            "required": ["_id", "name"],
+        }
+        ref = converter._schema_to_typeref(schema, "Doc")
+        assert ref.annotation == "Doc"
+        td = converter._typedicts[-1]
+        field_names = [f.name for f in td.fields]
+        assert "_id" in field_names
+        assert "name" in field_names
+
     def test_dash_field_raises(self):
         """Fields with dashes are rejected at codegen time."""
         from river.codegen.schema import _safe_field_name

@@ -155,20 +155,27 @@ class Session:
         assert isinstance(buf_or_err, bytes)
         try:
             assert self._ws is not None
-            # websockets library uses async send, but we schedule it
-            buf = buf_or_err
-            asyncio.get_event_loop().call_soon(lambda data=buf: self._do_ws_send(data))
+            loop = asyncio.get_running_loop()
+            task = loop.create_task(self._ws.send(buf_or_err))
+            task.add_done_callback(self._on_ws_send_done)
             return True, msg.id
         except Exception as e:
             return False, f"Failed to send: {e}"
 
-    def _do_ws_send(self, data: bytes) -> None:
-        """Actually send data over the WebSocket."""
-        if self._ws is not None and not self._destroyed:
-            try:
-                asyncio.ensure_future(self._ws.send(data))
-            except Exception as e:
-                logger.error("WebSocket send error: %s", e)
+    def _on_ws_send_done(self, task: asyncio.Task) -> None:
+        """Handle completion of an async ws.send().
+
+        If the send failed, trigger the connection-closed callback so the
+        transport can reconnect and replay the send buffer — matching how
+        the TS side relies on synchronous send exceptions.
+        """
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error("WebSocket send error: %s", exc)
+            if not self._destroyed and self._on_connection_closed:
+                self._on_connection_closed()
 
     def send_buffered_messages(self) -> tuple[bool, str | None]:
         """Retransmit all buffered messages over the current connection.
@@ -245,7 +252,7 @@ class Session:
             self._heartbeat_miss_task.cancel()
             self._heartbeat_miss_task = None
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             if loop.is_running():
                 self.start_heartbeat_miss_timeout(loop)
         except RuntimeError:

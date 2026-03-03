@@ -268,7 +268,7 @@ class RiverClient:
         connect_task = transport._connect_tasks.get(to)
         has_active_connect = connect_task is not None and not connect_task.done()
         if session.state == SessionState.NO_CONNECTION and not has_active_connect:
-            transport._delete_session(to, emit_closing=False)
+            transport._delete_session(to)
             res_readable = Readable()
             res_readable._push_value(
                 err_result(
@@ -473,7 +473,7 @@ class RiverClient:
                 on_client_cancel()
 
             try:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 abort_task = loop.create_task(_watch_abort())
             except RuntimeError:
                 pass

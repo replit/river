@@ -497,3 +497,66 @@ class TestGracePeriodNotResetOnRetry:
             await wait_for_session_gone(transport, "GRACE", timeout=3.0)
         finally:
             await transport.close()
+
+
+# =====================================================================
+# Regression: fail-fast must not orphan existing in-flight procedures
+# =====================================================================
+
+
+class TestFailFastEmitsClosing:
+    @pytest.mark.asyncio
+    async def test_failfast_notifies_existing_streams(self, server_url: str):
+        """When fail-fast deletes a session, existing in-flight procedures
+        must receive the sessionStatus 'closing' event so they get
+        UNEXPECTED_DISCONNECT instead of hanging.
+
+        Regression: _delete_session was called with emit_closing=False,
+        silently removing the session while older streams still waited.
+        """
+        transport = WebSocketClientTransport(
+            ws_url=server_url,
+            client_id=None,
+            server_id="SERVER",
+            codec=NaiveJsonCodec(),
+            options=SHORT_OPTIONS,
+        )
+        client = RiverClient(
+            transport,
+            server_id="SERVER",
+            connect_on_invoke=True,
+            eagerly_connect=False,
+        )
+        try:
+            # Open a stream so there's an in-flight procedure
+            stream = client.stream("test", "echo", {})
+            stream.req_writable.write({"msg": "hello", "ignore": False})
+            done, msg = await stream.res_readable.next()
+            assert not done
+            assert msg["ok"] is True
+
+            # Drop connection, disable reconnect so session stays NO_CONNECTION
+            transport.reconnect_on_connection_drop = False
+            session = transport.sessions.get("SERVER")
+            assert session is not None
+            await session._ws.close()
+            await wait_for_disconnected(transport)
+
+            # Exhaust retry budget so connect() in the next RPC is a no-op
+            transport._retry_budget.budget_consumed = (
+                transport._retry_budget.attempt_budget_capacity
+            )
+
+            # This RPC hits the fail-fast path and deletes the session
+            result = await asyncio.wait_for(
+                client.rpc("test", "add", {"n": 1}), timeout=2.0
+            )
+            assert result["ok"] is False
+
+            # The existing stream must have received UNEXPECTED_DISCONNECT
+            done, msg = await asyncio.wait_for(stream.res_readable.next(), timeout=2.0)
+            assert not done
+            assert msg["ok"] is False
+            assert msg["payload"]["code"] == "UNEXPECTED_DISCONNECT"
+        finally:
+            await transport.close()

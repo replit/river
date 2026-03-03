@@ -99,7 +99,7 @@ class LeakyBucketRateLimit:
                 pass
 
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             self._restore_task = loop.create_task(_restore_loop())
         except RuntimeError:
             pass
@@ -155,7 +155,7 @@ class WebSocketClientTransport:
 
     def _get_loop(self) -> asyncio.AbstractEventLoop:
         if self._loop is None:
-            self._loop = asyncio.get_event_loop()
+            self._loop = asyncio.get_running_loop()
         return self._loop
 
     # --- Event API ---

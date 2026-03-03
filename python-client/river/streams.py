@@ -128,7 +128,7 @@ class Readable(Generic[T]):
                 return
 
             # Wait for more data
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             fut: asyncio.Future[None] = loop.create_future()
             self._waiters.append(fut)
             await fut
@@ -180,7 +180,7 @@ class _ReadableIterator:
             if r._closed:
                 raise StopAsyncIteration
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             fut: asyncio.Future[None] = loop.create_future()
             r._waiters.append(fut)
             await fut

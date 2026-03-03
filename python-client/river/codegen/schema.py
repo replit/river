@@ -89,8 +89,8 @@ def _sanitize_identifier(s: str) -> str:
     """Replace characters illegal in Python identifiers with underscores."""
     # Replace dashes, spaces, and other non-alnum/non-underscore chars
     s = re.sub(r"[^a-zA-Z0-9_]", "_", s)
-    # Strip leading underscores/digits so the result is a valid identifier
-    s = re.sub(r"^[_0-9]+", "", s)
+    # Strip leading digits so the result is a valid identifier
+    s = re.sub(r"^[0-9]+", "", s)
     return s or "unnamed"
 
 
@@ -134,6 +134,13 @@ def _safe_field_name(name: str) -> str:
         raise ValueError(
             f"schema property {name!r} is a Python keyword "
             f"and cannot be used as a TypedDict field"
+        )
+    # Names starting with __ (and not ending with __) are name-mangled
+    # inside class bodies, so the TypedDict key won't match the wire key.
+    if name.startswith("__") and not name.endswith("__"):
+        raise ValueError(
+            f"schema property {name!r} would be name-mangled in a "
+            f"TypedDict class body and cannot be used as a field"
         )
     return name
 
