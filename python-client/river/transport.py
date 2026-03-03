@@ -11,7 +11,9 @@ import logging
 import random
 from typing import Any, Callable
 
-from river.codec import Codec, CodecMessageAdapter, NaiveJsonCodec
+from opentelemetry import propagate
+
+from river.codec import BinaryCodec, Codec, CodecMessageAdapter
 from river.session import DEFAULT_SESSION_OPTIONS, Session, SessionOptions, SessionState
 from river.types import (
     RETRIABLE_HANDSHAKE_CODES,
@@ -133,7 +135,7 @@ class WebSocketClientTransport:
         self.client_id = client_id or generate_id()
         self.server_id = server_id or "SERVER"
         self._ws_url = ws_url
-        self._codec = codec or NaiveJsonCodec()
+        self._codec = codec or BinaryCodec()
         self._codec_adapter = CodecMessageAdapter(self._codec)
         self.options = options or DEFAULT_SESSION_OPTIONS
         self._handshake_metadata = handshake_metadata
@@ -155,7 +157,17 @@ class WebSocketClientTransport:
 
     def _get_loop(self) -> asyncio.AbstractEventLoop:
         if self._loop is None:
-            self._loop = asyncio.get_running_loop()
+            try:
+                self._loop = asyncio.get_running_loop()
+            except RuntimeError:
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_closed():
+                        raise RuntimeError("closed")
+                    self._loop = loop
+                except RuntimeError:
+                    self._loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(self._loop)
         return self._loop
 
     # --- Event API ---
@@ -279,11 +291,7 @@ class WebSocketClientTransport:
         return ws
 
     def _get_otel_propagation_context(self) -> dict[str, str] | None:
-        """Extract OTel propagation context if opentelemetry is installed."""
-        try:
-            from opentelemetry import propagate
-        except ImportError:
-            return None
+        """Extract OTel propagation context."""
         ctx: dict[str, str] = {}
         propagate.inject(ctx)
         result = {}

@@ -22,6 +22,8 @@ from ._types import (
     TestEchoInit,
     TestEchoInput,
     TestEchoOutput,
+    TestEchoRecursiveInit,
+    TestEchoRecursiveOutput,
     TestEchoWithPrefixInit,
     TestEchoWithPrefixInput,
     TestEchoWithPrefixOutput,
@@ -84,6 +86,19 @@ class TestClient:
         return await self._client.rpc(
             "test",
             "echoBinary",
+            init,
+            abort_signal=abort_signal,
+        )
+
+    async def echo_recursive(
+        self,
+        init: TestEchoRecursiveInit,
+        *,
+        abort_signal: asyncio.Event | None = None,
+    ) -> OkResult[TestEchoRecursiveOutput] | ErrResult[ProtocolError]:
+        return await self._client.rpc(
+            "test",
+            "echoRecursive",
             init,
             abort_signal=abort_signal,
         )

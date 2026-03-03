@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import base64
-import json
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -22,49 +20,6 @@ class Codec(ABC):
     def from_buffer(self, buf: bytes) -> dict[str, Any]:
         """Decode bytes to an object."""
         ...
-
-
-_MAX_SAFE_INTEGER = 2**53 - 1
-_MIN_SAFE_INTEGER = -(2**53 - 1)
-
-
-def _prepare_for_json(obj: Any) -> Any:
-    """Recursively replace bytes and large ints with wire markers."""
-    if isinstance(obj, (bytes, bytearray)):
-        return {"$t": base64.b64encode(obj).decode("ascii")}
-    if isinstance(obj, bool):
-        return obj
-    if isinstance(obj, int):
-        if obj > _MAX_SAFE_INTEGER or obj < _MIN_SAFE_INTEGER:
-            return {"$b": str(obj)}
-        return obj
-    if isinstance(obj, dict):
-        return {k: _prepare_for_json(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_prepare_for_json(v) for v in obj]
-    return obj
-
-
-def _custom_object_hook(obj: dict) -> Any:
-    """JSON decoder hook for custom types."""
-    if "$t" in obj and len(obj) == 1:
-        return base64.b64decode(obj["$t"])
-    if "$b" in obj and len(obj) == 1:
-        return int(obj["$b"])
-    return obj
-
-
-class NaiveJsonCodec(Codec):
-    """Codec using JSON serialization (matches TypeScript NaiveJsonCodec)."""
-
-    name = "naive"
-
-    def to_buffer(self, obj: dict[str, Any]) -> bytes:
-        prepared = _prepare_for_json(obj)
-        return json.dumps(prepared, separators=(",", ":")).encode("utf-8")
-
-    def from_buffer(self, buf: bytes) -> dict[str, Any]:
-        return json.loads(buf.decode("utf-8"), object_hook=_custom_object_hook)
 
 
 _BIGINT_EXT_TYPE = 0
@@ -136,9 +91,27 @@ class CodecMessageAdapter:
                 return False, f"Expected dict, got {type(raw).__name__}"
             # Validate required fields
             required = ("id", "from", "to", "seq", "ack", "payload", "streamId")
-            for field in required:
-                if field not in raw:
-                    return False, f"Missing required field: {field}"
+            for f in required:
+                if f not in raw:
+                    return False, f"Missing required field: {f}"
+            # Validate field types to prevent downstream crashes
+            if not isinstance(raw["seq"], int):
+                return False, (
+                    f"Field 'seq' must be int, got {type(raw['seq']).__name__}"
+                )
+            if not isinstance(raw["ack"], int):
+                return False, (
+                    f"Field 'ack' must be int, got {type(raw['ack']).__name__}"
+                )
+            if not isinstance(raw["id"], str):
+                return False, (
+                    f"Field 'id' must be str, got {type(raw['id']).__name__}"
+                )
+            if not isinstance(raw["streamId"], str):
+                return False, (
+                    f"Field 'streamId' must be str, "
+                    f"got {type(raw['streamId']).__name__}"
+                )
             msg = TransportMessage.from_dict(raw)
             return True, msg
         except Exception as e:

@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 from river.client import RiverClient
-from river.codec import NaiveJsonCodec
+from river.codec import BinaryCodec
 from river.transport import WebSocketClientTransport
 from tests.test_utils import wait_for_connected, wait_for_event
 
@@ -22,7 +22,7 @@ async def make_handshake_client(
         ws_url=server_url,
         client_id=None,
         server_id="HANDSHAKE_SERVER",
-        codec=NaiveJsonCodec(),
+        codec=BinaryCodec(),
         handshake_metadata=handshake_metadata,
     )
     return RiverClient(
@@ -61,7 +61,7 @@ class TestHandshake:
             ws_url=handshake_server_url,
             client_id=None,
             server_id="HANDSHAKE_SERVER",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
             handshake_metadata={"token": "wrong-token"},
         )
         try:
@@ -83,7 +83,7 @@ class TestHandshake:
             ws_url=handshake_server_url,
             client_id=None,
             server_id="HANDSHAKE_SERVER",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
             handshake_metadata=None,
         )
         try:

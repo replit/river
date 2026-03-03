@@ -1,8 +1,6 @@
-"""Cross-codec parametrized equivalence tests.
+"""Equivalence tests for the River Python client.
 
-Every test in this module runs against both NaiveJsonCodec and BinaryCodec,
-proving that both codecs produce identical behavior against the TS server.
-Each codec is paired with a matching server (JSON or binary).
+Tests all procedure types against the TS test server using BinaryCodec.
 """
 
 from __future__ import annotations

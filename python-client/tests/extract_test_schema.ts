@@ -19,6 +19,13 @@ import { Type } from '@sinclair/typebox';
 
 const ServiceSchema = createServiceSchema();
 
+const RecursivePayload = Type.Recursive((This) =>
+  Type.Object({
+    value: Type.String(),
+    children: Type.Optional(Type.Array(This)),
+  }),
+);
+
 const TestServiceSchema = ServiceSchema.define({
   add: Procedure.rpc({
     requestInit: Type.Object({ n: Type.Number() }),
@@ -61,6 +68,14 @@ const TestServiceSchema = ServiceSchema.define({
     responseError: Type.Never(),
     async handler({ reqInit }) {
       return Ok({ data: reqInit.data, length: reqInit.data.length });
+    },
+  }),
+  echoRecursive: Procedure.rpc({
+    requestInit: RecursivePayload,
+    responseData: RecursivePayload,
+    responseError: Type.Never(),
+    async handler({ reqInit }) {
+      return Ok(reqInit);
     },
   }),
 });

@@ -155,10 +155,13 @@ class SchemaConverter:
 
     def __init__(self) -> None:
         self._typedicts: list[TypedDictDef] = []
+        # $id → assigned Python name (for recursive $ref resolution)
+        self._id_to_name: dict[str, str] = {}
 
     def convert(self, raw: dict) -> SchemaIR:
         """Convert the top-level serialized schema dict to IR."""
         self._typedicts = []
+        self._id_to_name = {}
         services: list[ServiceDef] = []
         for svc_name, svc_data in raw.get("services", {}).items():
             svc_def = self._convert_service(svc_name, svc_data)
@@ -251,6 +254,18 @@ class SchemaConverter:
         if not isinstance(schema, dict):
             return TypeRef(annotation="Any")
 
+        # $ref → forward reference to a previously-registered $id
+        if "$ref" in schema:
+            ref_id = schema["$ref"]
+            if ref_id in self._id_to_name:
+                return TypeRef(annotation=self._id_to_name[ref_id])
+            return TypeRef(annotation="Never")
+
+        # $id → register the name before converting (enables recursive refs)
+        schema_id = schema.get("$id")
+        if schema_id is not None:
+            self._id_to_name[schema_id] = name_hint
+
         # const
         if "const" in schema:
             val = schema["const"]
@@ -265,6 +280,10 @@ class SchemaConverter:
         # anyOf (union)
         if "anyOf" in schema:
             return self._convert_union(schema, name_hint)
+
+        # allOf (intersection) — merge object properties
+        if "allOf" in schema:
+            return self._convert_intersection(schema, name_hint)
 
         schema_type = schema.get("type")
 
@@ -288,8 +307,10 @@ class SchemaConverter:
             item_ref = self._schema_to_typeref(items, f"{name_hint}Item")
             return TypeRef(annotation=f"list[{item_ref.annotation}]")
 
-        # Object → TypedDict
+        # Object → TypedDict (may also contain allOf to merge)
         if schema_type == "object":
+            if "allOf" in schema:
+                return self._convert_intersection(schema, name_hint)
             return self._convert_object(schema, name_hint)
 
         # Fallback
@@ -323,6 +344,70 @@ class SchemaConverter:
         td = TypedDictDef(name=name, fields=fields, description=description)
         self._typedicts.append(td)
         return TypeRef(annotation=name)
+
+    def _convert_intersection(self, schema: dict, name_hint: str) -> TypeRef:
+        """Convert a JSON Schema allOf to a merged TypedDict.
+
+        Object variants have their properties merged into a single
+        TypedDict.  A field is required if it appears in the ``required``
+        list of *any* variant (intersection semantics).  Non-object
+        variants and empty allOf produce ``Never`` since they represent
+        unrepresentable or contradictory intersections.
+        """
+        variants = schema.get("allOf", [])
+        if not variants:
+            return TypeRef(annotation="Never")
+
+        # Partition into object-like variants and other variants
+        object_variants: list[dict] = []
+        other_variants: list[dict] = []
+        for v in variants:
+            if not isinstance(v, dict):
+                continue
+            v_type = v.get("type")
+            if v_type == "object" or "properties" in v:
+                object_variants.append(v)
+            else:
+                other_variants.append(v)
+
+        # Merge all object properties
+        merged_props: dict[str, dict] = {}
+        merged_required: set[str] = set()
+        for v in object_variants:
+            for prop_name, prop_schema in v.get("properties", {}).items():
+                merged_props[prop_name] = prop_schema
+            merged_required.update(v.get("required", []))
+
+        # If we have object properties, emit a TypedDict
+        if merged_props or object_variants:
+            description = schema.get("description")
+            fields: list[TypedDictField] = []
+            for prop_name, prop_schema in merged_props.items():
+                field_name = _safe_field_name(prop_name)
+                nested_name = name_hint + _to_pascal_case(prop_name)
+                field_ref = self._schema_to_typeref(prop_schema, nested_name)
+                field_desc = (
+                    prop_schema.get("description")
+                    if isinstance(prop_schema, dict)
+                    else None
+                )
+                fields.append(
+                    TypedDictField(
+                        name=field_name,
+                        type_ref=field_ref,
+                        required=prop_name in merged_required,
+                        description=field_desc,
+                    )
+                )
+            td = TypedDictDef(name=name_hint, fields=fields, description=description)
+            self._typedicts.append(td)
+            return TypeRef(annotation=name_hint)
+
+        # No object variants — primitive intersection is unrepresentable
+        if other_variants:
+            return TypeRef(annotation="Never")
+
+        return TypeRef(annotation="Any")
 
     def _convert_union(self, schema: dict, name_hint: str) -> TypeRef:
         """Convert a JSON Schema anyOf to a Union type."""

@@ -50,6 +50,16 @@ class TestEchoBinaryOutput(TypedDict):
     length: float
 
 
+class TestEchoRecursiveInit(TypedDict):
+    value: str
+    children: NotRequired[list[TestEchoRecursiveInit]]
+
+
+class TestEchoRecursiveOutput(TypedDict):
+    value: str
+    children: NotRequired[list[TestEchoRecursiveOutput]]
+
+
 class OrderingAddInit(TypedDict):
     n: float
 

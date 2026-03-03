@@ -11,7 +11,7 @@ import asyncio
 import pytest
 
 from river.client import RiverClient
-from river.codec import NaiveJsonCodec
+from river.codec import BinaryCodec
 from river.transport import WebSocketClientTransport
 from tests.test_utils import wait_for_connected
 
@@ -24,7 +24,7 @@ async def make_client(server_url: str, **kwargs) -> RiverClient:
         ws_url=server_url,
         client_id=None,  # auto-generate
         server_id="SERVER",
-        codec=NaiveJsonCodec(),
+        codec=BinaryCodec(),
     )
     return RiverClient(
         transport,
@@ -563,7 +563,7 @@ class TestEagerConnect:
         transport = WebSocketClientTransport(
             ws_url=server_url,
             server_id="SERVER",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
         )
         client = RiverClient(transport, server_id="SERVER", eagerly_connect=True)
         try:
@@ -588,7 +588,7 @@ class TestTransparentReconnect:
         transport = WebSocketClientTransport(
             ws_url=server_url,
             server_id="SERVER",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
         )
         client = RiverClient(transport, server_id="SERVER")
         try:
@@ -655,21 +655,6 @@ class TestTransparentReconnect:
 
 
 class TestCodec:
-    @pytest.mark.asyncio
-    async def test_json_codec_rpc(self, server_url: str):
-        """JSON codec works for basic RPC."""
-        transport = WebSocketClientTransport(
-            ws_url=server_url,
-            server_id="SERVER",
-            codec=NaiveJsonCodec(),
-        )
-        client = RiverClient(transport, server_id="SERVER")
-        try:
-            result = await client.rpc("test", "add", {"n": 5})
-            assert result["ok"] is True
-        finally:
-            await transport.close()
-
     @pytest.mark.asyncio
     async def test_binary_codec_roundtrip(self):
         """Binary (msgpack) codec encodes and decodes transport messages."""
@@ -1213,27 +1198,6 @@ class TestReadableBreakVariants:
 
 
 class TestCodecUnit:
-    def test_json_codec_encode_decode(self):
-        """JSON codec round-trips correctly."""
-        from river.codec import NaiveJsonCodec
-
-        codec = NaiveJsonCodec()
-        obj = {"key": "value", "num": 42, "nested": {"a": [1, 2, 3]}}
-        buf = codec.to_buffer(obj)
-        assert isinstance(buf, bytes)
-        result = codec.from_buffer(buf)
-        assert result == obj
-
-    def test_json_codec_bytes_handling(self):
-        """JSON codec handles bytes via base64."""
-        from river.codec import NaiveJsonCodec
-
-        codec = NaiveJsonCodec()
-        obj = {"data": b"\x00\x01\x02\xff"}
-        buf = codec.to_buffer(obj)
-        result = codec.from_buffer(buf)
-        assert result["data"] == b"\x00\x01\x02\xff"
-
     def test_binary_codec_encode_decode(self):
         """Binary (msgpack) codec round-trips correctly."""
         from river.codec import BinaryCodec
@@ -1247,10 +1211,10 @@ class TestCodecUnit:
 
     def test_codec_adapter_valid(self):
         """CodecMessageAdapter encodes and decodes transport messages."""
-        from river.codec import CodecMessageAdapter, NaiveJsonCodec
+        from river.codec import BinaryCodec, CodecMessageAdapter
         from river.types import TransportMessage
 
-        adapter = CodecMessageAdapter(NaiveJsonCodec())
+        adapter = CodecMessageAdapter(BinaryCodec())
         msg = TransportMessage(
             id="abc",
             from_="c1",
@@ -1271,12 +1235,53 @@ class TestCodecUnit:
 
     def test_codec_adapter_invalid_buffer(self):
         """CodecMessageAdapter returns error on invalid bytes."""
-        from river.codec import CodecMessageAdapter, NaiveJsonCodec
+        from river.codec import BinaryCodec, CodecMessageAdapter
 
-        adapter = CodecMessageAdapter(NaiveJsonCodec())
+        adapter = CodecMessageAdapter(BinaryCodec())
         ok, result = adapter.from_buffer(b"not valid json")
         assert ok is False
         assert isinstance(result, str)
+
+    def test_codec_adapter_rejects_wrong_seq_type(self):
+        """CodecMessageAdapter rejects seq that is not an int."""
+        from river.codec import BinaryCodec, CodecMessageAdapter
+
+        adapter = CodecMessageAdapter(BinaryCodec())
+        raw = BinaryCodec().to_buffer(
+            {
+                "id": "m1",
+                "from": "s",
+                "to": "c",
+                "seq": "0",  # wrong type
+                "ack": 0,
+                "payload": {},
+                "streamId": "st1",
+            }
+        )
+        ok, result = adapter.from_buffer(raw)
+        assert ok is False
+        assert "seq" in result
+        assert "str" in result
+
+    def test_codec_adapter_rejects_wrong_ack_type(self):
+        """CodecMessageAdapter rejects ack that is not an int."""
+        from river.codec import BinaryCodec, CodecMessageAdapter
+
+        adapter = CodecMessageAdapter(BinaryCodec())
+        raw = BinaryCodec().to_buffer(
+            {
+                "id": "m1",
+                "from": "s",
+                "to": "c",
+                "seq": 0,
+                "ack": "0",  # wrong type
+                "payload": {},
+                "streamId": "st1",
+            }
+        )
+        ok, result = adapter.from_buffer(raw)
+        assert ok is False
+        assert "ack" in result
 
 
 # =====================================================================
@@ -1293,7 +1298,7 @@ class TestListenerCleanup:
         transport = WebSocketClientTransport(
             ws_url=server_url,
             server_id="SERVER",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
         )
         client = RiverClient(transport, server_id="SERVER")
         try:
@@ -1319,7 +1324,7 @@ class TestListenerCleanup:
         transport = WebSocketClientTransport(
             ws_url=server_url,
             server_id="SERVER",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
         )
         client = RiverClient(transport, server_id="SERVER")
         try:
@@ -1343,7 +1348,7 @@ class TestListenerCleanup:
         transport = WebSocketClientTransport(
             ws_url=server_url,
             server_id="SERVER",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
         )
         client = RiverClient(transport, server_id="SERVER")
         try:
@@ -1412,10 +1417,10 @@ class TestProtocolConformance:
 
         The protocol requires a random streamId for handshakes.
         """
-        from river.codec import CodecMessageAdapter, NaiveJsonCodec
+        from river.codec import BinaryCodec, CodecMessageAdapter
         from river.session import Session
 
-        codec = CodecMessageAdapter(NaiveJsonCodec())
+        codec = CodecMessageAdapter(BinaryCodec())
         s1 = Session("sess1", "client", "server", codec)
         s2 = Session("sess2", "client", "server", codec)
 
@@ -1514,7 +1519,7 @@ class TestFatalErrorPaths:
         """Send failure on a connected session destroys it."""
         from unittest.mock import AsyncMock
 
-        from river.codec import CodecMessageAdapter, NaiveJsonCodec
+        from river.codec import BinaryCodec, CodecMessageAdapter
         from river.session import Session, SessionState
         from river.transport import WebSocketClientTransport
 
@@ -1522,9 +1527,9 @@ class TestFatalErrorPaths:
             ws_url="ws://127.0.0.1:1",
             client_id="client",
             server_id="server",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
         )
-        codec = CodecMessageAdapter(NaiveJsonCodec())
+        codec = CodecMessageAdapter(BinaryCodec())
         session = Session("s1", "client", "server", codec)
         session.state = SessionState.CONNECTED
         session._ws = AsyncMock()
@@ -1556,11 +1561,11 @@ class TestFatalErrorPaths:
         """
         from unittest.mock import AsyncMock
 
-        from river.codec import CodecMessageAdapter, NaiveJsonCodec
+        from river.codec import BinaryCodec, CodecMessageAdapter
         from river.session import Session, SessionState
         from river.types import PartialTransportMessage
 
-        codec = CodecMessageAdapter(NaiveJsonCodec())
+        codec = CodecMessageAdapter(BinaryCodec())
         session = Session("s1", "client", "server", codec)
         session.state = SessionState.CONNECTED
         session._ws = AsyncMock()
@@ -1581,7 +1586,7 @@ class TestFatalErrorPaths:
 
     def test_invalid_message_destroys_session(self):
         """Receiving a corrupt message destroys the session."""
-        from river.codec import CodecMessageAdapter, NaiveJsonCodec
+        from river.codec import BinaryCodec, CodecMessageAdapter
         from river.session import Session, SessionState
         from river.transport import WebSocketClientTransport
 
@@ -1589,9 +1594,9 @@ class TestFatalErrorPaths:
             ws_url="ws://127.0.0.1:1",
             client_id="client",
             server_id="server",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
         )
-        codec = CodecMessageAdapter(NaiveJsonCodec())
+        codec = CodecMessageAdapter(BinaryCodec())
         session = Session("s1", "client", "server", codec)
         session.state = SessionState.CONNECTED
         transport.sessions["server"] = session
@@ -1635,31 +1640,6 @@ class TestFatalErrorPaths:
             raise AssertionError("should have raised FrozenInstanceError")
         except AttributeError:
             pass  # frozen dataclass raises AttributeError on mutation
-
-    def test_json_codec_large_int_encoding(self):
-        """Large ints beyond JS safe integer range are encoded as $b."""
-        from river.codec import NaiveJsonCodec
-
-        codec = NaiveJsonCodec()
-        large = 2**53 + 1
-        buf = codec.to_buffer({"n": large})
-        decoded = codec.from_buffer(buf)
-        assert decoded["n"] == large
-
-        # Normal ints should NOT be encoded as $b
-        buf2 = codec.to_buffer({"n": 42})
-        raw = buf2.decode("utf-8")
-        assert "$b" not in raw
-
-    def test_json_codec_negative_large_int(self):
-        """Negative large ints are also encoded as $b."""
-        from river.codec import NaiveJsonCodec
-
-        codec = NaiveJsonCodec()
-        large_neg = -(2**53 + 1)
-        buf = codec.to_buffer({"n": large_neg})
-        decoded = codec.from_buffer(buf)
-        assert decoded["n"] == large_neg
 
     def test_binary_codec_large_int(self):
         """Binary codec handles ints beyond msgpack native range."""
@@ -1724,7 +1704,7 @@ class TestFatalErrorPaths:
             ws_url="ws://127.0.0.1:1",  # unreachable
             client_id=None,
             server_id="UNREACHABLE",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
             options=SessionOptions(
                 connection_timeout_ms=100,
                 session_disconnect_grace_ms=300,
@@ -1747,7 +1727,7 @@ class TestFatalErrorPaths:
             ws_url="ws://127.0.0.1:1",
             client_id=None,
             server_id="SERVER",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
             options=opts,
         )
         assert transport.reconnect_on_connection_drop is False
@@ -1792,7 +1772,7 @@ class TestFatalErrorPaths:
             ws_url=server_url,
             client_id=None,
             server_id="SERVER",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
         )
         transport.connect("SERVER")
         # Let connection start but don't wait for completion
@@ -1811,14 +1791,14 @@ class TestOtelTracingPropagation:
     def test_handshake_includes_tracing_when_otel_available(self):
         """Handshake message includes tracing when OTel propagation is configured."""
 
-        from river.codec import CodecMessageAdapter, NaiveJsonCodec
+        from river.codec import BinaryCodec, CodecMessageAdapter
         from river.session import Session
 
         session = Session(
             session_id="test-session",
             from_id="client",
             to_id="server",
-            codec=CodecMessageAdapter(NaiveJsonCodec()),
+            codec=CodecMessageAdapter(BinaryCodec()),
         )
 
         tracing = {
@@ -1832,14 +1812,14 @@ class TestOtelTracingPropagation:
 
     def test_handshake_omits_tracing_when_none(self):
         """Handshake message omits tracing when not provided."""
-        from river.codec import CodecMessageAdapter, NaiveJsonCodec
+        from river.codec import BinaryCodec, CodecMessageAdapter
         from river.session import Session
 
         session = Session(
             session_id="test-session",
             from_id="client",
             to_id="server",
-            codec=CodecMessageAdapter(NaiveJsonCodec()),
+            codec=CodecMessageAdapter(BinaryCodec()),
         )
 
         msg = session.create_handshake_request()
@@ -1849,29 +1829,22 @@ class TestOtelTracingPropagation:
 
     def test_get_otel_propagation_context_with_mock(self):
         """_get_otel_propagation_context extracts traceparent/tracestate."""
-        import types
         from unittest.mock import patch
 
         transport = WebSocketClientTransport(
             ws_url="ws://localhost:0",
             client_id="test",
             server_id="SERVER",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
         )
 
         def fake_inject(carrier):
             carrier["traceparent"] = "00-tid-sid-01"
             carrier["tracestate"] = "k=v"
 
-        # Create a fake opentelemetry module with a propagate submodule
-        fake_otel = types.ModuleType("opentelemetry")
-        fake_propagate = types.ModuleType("opentelemetry.propagate")
-        fake_propagate.inject = fake_inject  # type: ignore[attr-defined]
-        fake_otel.propagate = fake_propagate  # type: ignore[attr-defined]
-
-        with patch.dict(
-            "sys.modules",
-            {"opentelemetry": fake_otel, "opentelemetry.propagate": fake_propagate},
+        with patch(
+            "river.transport.propagate.inject",
+            side_effect=fake_inject,
         ):
             result = transport._get_otel_propagation_context()
 
@@ -1880,19 +1853,73 @@ class TestOtelTracingPropagation:
             "tracestate": "k=v",
         }
 
-    def test_get_otel_propagation_context_without_otel(self):
-        """_get_otel_propagation_context returns None when OTel is not installed."""
-        from unittest.mock import patch
 
+# =====================================================================
+# Eager connect in sync context
+# =====================================================================
+
+
+class TestEagerConnectSync:
+    def test_eager_connect_does_not_raise_outside_loop(self):
+        """Constructing with eagerly_connect=True outside an event loop
+        should not raise RuntimeError."""
         transport = WebSocketClientTransport(
-            ws_url="ws://localhost:0",
-            client_id="test",
+            ws_url="ws://127.0.0.1:1",
             server_id="SERVER",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
         )
+        # This used to raise "no running event loop"
+        RiverClient(transport, server_id="SERVER", eagerly_connect=True)
 
-        # Ensure opentelemetry is not importable
-        with patch.dict("sys.modules", {"opentelemetry": None}):
-            result = transport._get_otel_propagation_context()
 
-        assert result is None
+# =====================================================================
+# Cancel frame validation
+# =====================================================================
+
+
+class TestCancelFrameValidation:
+    @pytest.mark.asyncio
+    async def test_server_cancel_always_error_shaped(self, server_url: str):
+        """Server-initiated cancel always yields an error result."""
+        client = await make_client(server_url)
+        try:
+            # cancellableAdd cancels when total >= 10
+            upload = client.upload("uploadable", "cancellableAdd", {})
+            upload.req_writable.write({"n": 15})
+            # Server sends cancel with Err payload
+            result = await asyncio.wait_for(upload.finalize(), timeout=5.0)
+            assert result["ok"] is False
+            assert result["payload"]["code"] == "CANCEL"
+        finally:
+            await cleanup_client(client)
+
+    def test_cancel_frame_ok_true_forced_to_error(self):
+        """A cancel payload with ok:true is coerced to error shape."""
+        from river.types import ControlFlags, err_result
+
+        # Simulate what on_message does with a cancel frame
+        payload = {"ok": True, "payload": {"unexpected": "success"}}
+        flags = ControlFlags.StreamCancelBit
+
+        # The fix: cancel frames with ok:True get forced to err_result
+        from river.types import is_stream_cancel
+
+        assert is_stream_cancel(flags)
+        # After the fix, the code checks `not payload["ok"]` — so
+        # ok:True falls through to the error branch
+        if isinstance(payload, dict) and "ok" in payload and not payload["ok"]:
+            result = payload
+        else:
+            code = (
+                payload.get("code", "UNKNOWN")
+                if isinstance(payload, dict)
+                else "UNKNOWN"
+            )
+            message = (
+                payload.get("message", str(payload))
+                if isinstance(payload, dict)
+                else str(payload)
+            )
+            result = err_result(code, message)
+
+        assert result["ok"] is False

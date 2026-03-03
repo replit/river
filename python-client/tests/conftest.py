@@ -17,7 +17,7 @@ from typing import Generator
 
 import pytest
 
-from river.codec import BinaryCodec, Codec, NaiveJsonCodec
+from river.codec import BinaryCodec, Codec
 
 TESTS_DIR = os.path.dirname(__file__)
 SERVER_TS = os.path.join(TESTS_DIR, "test_server.ts")
@@ -183,20 +183,9 @@ def generated_client_dir() -> str:
 
 @pytest.fixture(scope="session")
 def river_server_port() -> Generator[int, None, None]:
-    """Build and start the TypeScript test server (JSON codec), yield its port."""
+    """Build and start the TypeScript test server, yield its port."""
     _build_test_server()
-    proc, port = _start_server(SERVER_MJS, "Test server")
-    yield port
-    _stop_server(proc)
-
-
-@pytest.fixture(scope="session")
-def river_binary_server_port() -> Generator[int, None, None]:
-    """Build and start the TypeScript test server (binary codec), yield its port."""
-    _build_test_server()
-    proc, port = _start_server(
-        SERVER_MJS, "Binary test server", env={"RIVER_CODEC": "binary"}
-    )
+    proc, port = _start_server(SERVER_MJS, "Test server", env={"RIVER_CODEC": "binary"})
     yield port
     _stop_server(proc)
 
@@ -222,16 +211,9 @@ def handshake_server_url(river_handshake_server_port: int) -> str:
     return f"ws://127.0.0.1:{river_handshake_server_port}"
 
 
-@pytest.fixture(params=["json", "binary"])
+@pytest.fixture
 def codec_and_url(
-    request: pytest.FixtureRequest,
     river_server_port: int,
-    river_binary_server_port: int,
 ) -> tuple[Codec, str]:
-    """Parametrized fixture returning (codec, server_url) pairs.
-
-    Each codec is paired with a server that speaks the same protocol.
-    """
-    if request.param == "json":
-        return NaiveJsonCodec(), f"ws://127.0.0.1:{river_server_port}"
-    return BinaryCodec(), f"ws://127.0.0.1:{river_binary_server_port}"
+    """Return (BinaryCodec(), server_url)."""
+    return BinaryCodec(), f"ws://127.0.0.1:{river_server_port}"

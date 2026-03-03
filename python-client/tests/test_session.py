@@ -11,7 +11,7 @@ import asyncio
 import pytest
 
 from river.client import RiverClient
-from river.codec import NaiveJsonCodec
+from river.codec import BinaryCodec
 from river.session import SessionOptions, SessionState
 from river.transport import WebSocketClientTransport
 from tests.test_utils import (
@@ -38,7 +38,7 @@ async def make_client(
         ws_url=server_url,
         client_id=None,
         server_id="SERVER",
-        codec=NaiveJsonCodec(),
+        codec=BinaryCodec(),
         options=options or SHORT_OPTIONS,
     )
     return RiverClient(
@@ -159,7 +159,7 @@ class TestRetryBudget:
             ws_url="ws://127.0.0.1:1",  # intentionally invalid
             client_id=None,
             server_id="INVALID",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
             options=SessionOptions(
                 connection_timeout_ms=200,
                 handshake_timeout_ms=200,
@@ -210,7 +210,7 @@ class TestGracePeriodActiveProcedures:
             ws_url=server_url,
             client_id=None,
             server_id="SERVER",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
             options=SHORT_OPTIONS,
         )
         client = RiverClient(
@@ -358,7 +358,7 @@ class TestReconnectAfterGrace:
             ws_url=server_url,
             client_id=None,
             server_id="SERVER",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
             options=SHORT_OPTIONS,
         )
         client = RiverClient(
@@ -411,7 +411,7 @@ class TestStaleConnectTask:
             ws_url="ws://127.0.0.1:1",  # unreachable
             client_id=None,
             server_id="STALE",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
             options=SessionOptions(
                 connection_timeout_ms=100,
                 handshake_timeout_ms=100,
@@ -464,7 +464,7 @@ class TestGracePeriodNotResetOnRetry:
             ws_url="ws://127.0.0.1:1",  # unreachable
             client_id=None,
             server_id="GRACE",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
             options=SessionOptions(
                 connection_timeout_ms=100,
                 handshake_timeout_ms=100,
@@ -518,7 +518,7 @@ class TestFailFastEmitsClosing:
             ws_url=server_url,
             client_id=None,
             server_id="SERVER",
-            codec=NaiveJsonCodec(),
+            codec=BinaryCodec(),
             options=SHORT_OPTIONS,
         )
         client = RiverClient(

@@ -384,19 +384,26 @@ class RiverClient:
             if msg.to != transport.client_id:
                 return
 
-            # Cancel from server
+            # Cancel from server — always an error
             if is_stream_cancel(msg.control_flags):
                 clean_close = False
                 payload = msg.payload
-                if isinstance(payload, dict) and "ok" in payload:
+                if isinstance(payload, dict) and "ok" in payload and not payload["ok"]:
+                    # Already error-shaped, forward as-is
                     res_readable._push_value(payload)
                 else:
+                    # Force to error shape (reject ok:true on cancel)
                     code = (
                         payload.get("code", "UNKNOWN")
                         if isinstance(payload, dict)
                         else "UNKNOWN"
                     )
-                    res_readable._push_value(err_result(code, str(payload)))
+                    message = (
+                        payload.get("message", str(payload))
+                        if isinstance(payload, dict)
+                        else str(payload)
+                    )
+                    res_readable._push_value(err_result(code, message))
                 close_readable()
                 if req_writable.is_writable():
                     req_writable.close()

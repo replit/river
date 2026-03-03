@@ -10,6 +10,7 @@ import { WebSocketServerTransport } from '../../transport/impls/ws/server';
 import { createServer, createServiceSchema, Procedure, Ok } from '../../router';
 import { createServerHandshakeOptions } from '../../router/handshake';
 import { Type } from '@sinclair/typebox';
+import { BinaryCodec } from '../../codec/binary';
 
 const ServiceSchema = createServiceSchema();
 
@@ -44,6 +45,7 @@ async function main() {
   const serverTransport = new WebSocketServerTransport<typeof handshakeSchema>(
     wss,
     'HANDSHAKE_SERVER',
+    { codec: BinaryCodec },
   );
   const _server = createServer(serverTransport, services, {
     handshakeOptions: createServerHandshakeOptions(
