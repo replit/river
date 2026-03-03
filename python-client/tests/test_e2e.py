@@ -1405,12 +1405,12 @@ class TestUploadFinalize:
 
 
 class TestProtocolConformance:
-    """Tests verifying Python client matches TS protocol behavior."""
+    """Tests verifying protocol-level conformance."""
 
     def test_handshake_stream_id_is_random(self):
         """Handshake streamId should be a random ID, not a fixed string.
 
-        TS uses generateId() for handshake streamId; Python must match.
+        The protocol requires a random streamId for handshakes.
         """
         from river.codec import CodecMessageAdapter, NaiveJsonCodec
         from river.session import Session
@@ -1446,7 +1446,7 @@ class TestProtocolConformance:
     def test_writable_close_nullifies_callbacks(self):
         """After close(), write/close callbacks should not be invocable.
 
-        TS nullifies callbacks after close to prevent reuse.
+        Callbacks should be nullified after close to prevent reuse.
         """
         from river.streams import Writable
 
@@ -1467,7 +1467,7 @@ class TestProtocolConformance:
         assert close_count[0] == 1
 
     def test_heartbeat_stream_id_is_fixed(self):
-        """Heartbeat streamId should be 'heartbeat' (matching TS)."""
+        """Heartbeat streamId should be the fixed string 'heartbeat'."""
         from river.types import heartbeat_message
 
         hb = heartbeat_message()
@@ -1501,3 +1501,162 @@ class TestProtocolConformance:
             metadata=None,
         )
         assert "metadata" not in payload
+
+
+class TestFatalErrorPaths:
+    """Regression tests for fatal error paths that must destroy the session.
+
+    Certain errors are not retryable and must immediately destroy
+    the session.
+    """
+
+    def test_failed_send_destroys_session(self):
+        """Send failure on a connected session destroys it."""
+        from unittest.mock import AsyncMock
+
+        from river.codec import CodecMessageAdapter, NaiveJsonCodec
+        from river.session import Session, SessionState
+        from river.transport import WebSocketClientTransport
+
+        transport = WebSocketClientTransport(
+            ws_url="ws://127.0.0.1:1",
+            client_id="client",
+            server_id="server",
+            codec=NaiveJsonCodec(),
+        )
+        codec = CodecMessageAdapter(NaiveJsonCodec())
+        session = Session("s1", "client", "server", codec)
+        session.state = SessionState.CONNECTED
+        session._ws = AsyncMock()
+        transport.sessions["server"] = session
+
+        send_fn = transport.get_session_bound_send_fn("server", "s1")
+
+        # A payload that can't be serialized (set is not JSON-serializable)
+        from river.types import PartialTransportMessage
+
+        try:
+            send_fn(
+                PartialTransportMessage(
+                    payload={"bad": {1, 2}},
+                    stream_id="x",
+                    control_flags=0,
+                )
+            )
+        except RuntimeError:
+            pass
+
+        # Session must be destroyed
+        assert transport.sessions.get("server") is None
+
+    def test_failed_send_seq_consumed(self):
+        """Send failure does not roll back seq.
+
+        The seq is consumed and the session is destroyed instead.
+        """
+        from unittest.mock import AsyncMock
+
+        from river.codec import CodecMessageAdapter, NaiveJsonCodec
+        from river.session import Session, SessionState
+        from river.types import PartialTransportMessage
+
+        codec = CodecMessageAdapter(NaiveJsonCodec())
+        session = Session("s1", "client", "server", codec)
+        session.state = SessionState.CONNECTED
+        session._ws = AsyncMock()
+
+        initial_seq = session.seq
+
+        ok, _ = session.send(
+            PartialTransportMessage(
+                payload={"bad": {1, 2}},
+                stream_id="x",
+                control_flags=0,
+            )
+        )
+
+        assert not ok
+        # seq was consumed (not rolled back)
+        assert session.seq == initial_seq + 1
+
+    def test_invalid_message_destroys_session(self):
+        """Receiving a corrupt message destroys the session."""
+        from river.codec import CodecMessageAdapter, NaiveJsonCodec
+        from river.session import Session, SessionState
+        from river.transport import WebSocketClientTransport
+
+        transport = WebSocketClientTransport(
+            ws_url="ws://127.0.0.1:1",
+            client_id="client",
+            server_id="server",
+            codec=NaiveJsonCodec(),
+        )
+        codec = CodecMessageAdapter(NaiveJsonCodec())
+        session = Session("s1", "client", "server", codec)
+        session.state = SessionState.CONNECTED
+        transport.sessions["server"] = session
+
+        errors: list[dict] = []
+        transport.add_event_listener("protocolError", lambda e: errors.append(e))
+
+        # Feed garbage bytes
+        transport._on_message_data(session, b"not valid json", "server")
+
+        # Session must be destroyed
+        assert transport.sessions.get("server") is None
+        assert len(errors) == 1
+        assert errors[0]["type"] == "invalid_message"
+
+    def test_readable_broken_after_async_for_break(self):
+        """Breaking out of async for marks readable as broken."""
+        from river.streams import Readable
+
+        r: Readable = Readable()
+        r._push_value({"ok": True, "payload": 1})
+
+        # Simulate what async for + break does: create iterator, get
+        # one value, then let the iterator be GC'd
+        it = r.__aiter__()
+        # The __del__ should mark broken
+        del it
+
+        assert r._broken
+        # Subsequent pushes should be no-ops
+        r._push_value({"ok": True, "payload": 2})
+        assert not r._has_values_in_queue()
+
+    def test_frozen_session_options(self):
+        """SessionOptions is frozen — mutation raises."""
+        from river.session import SessionOptions
+
+        opts = SessionOptions()
+        try:
+            opts.heartbeat_interval_ms = 999  # type: ignore[misc]
+            raise AssertionError("should have raised FrozenInstanceError")
+        except AttributeError:
+            pass  # frozen dataclass raises AttributeError on mutation
+
+    def test_json_codec_large_int_encoding(self):
+        """Large ints beyond JS safe integer range are encoded as $b."""
+        from river.codec import NaiveJsonCodec
+
+        codec = NaiveJsonCodec()
+        large = 2**53 + 1
+        buf = codec.to_buffer({"n": large})
+        decoded = codec.from_buffer(buf)
+        assert decoded["n"] == large
+
+        # Normal ints should NOT be encoded as $b
+        buf2 = codec.to_buffer({"n": 42})
+        raw = buf2.decode("utf-8")
+        assert "$b" not in raw
+
+    def test_json_codec_negative_large_int(self):
+        """Negative large ints are also encoded as $b."""
+        from river.codec import NaiveJsonCodec
+
+        codec = NaiveJsonCodec()
+        large_neg = -(2**53 + 1)
+        buf = codec.to_buffer({"n": large_neg})
+        decoded = codec.from_buffer(buf)
+        assert decoded["n"] == large_neg

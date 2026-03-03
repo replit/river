@@ -280,9 +280,14 @@ class WebSocketClientTransport:
         hs_msg = session.create_handshake_request(metadata=self._handshake_metadata)
         ok, buf = self._codec_adapter.to_buffer(hs_msg)
         if not ok:
+            # Handshake send failure is fatal — destroy session
             logger.error("Failed to encode handshake: %s", buf)
             await ws.close()
-            self._on_connection_failed(to)
+            self._events.dispatch(
+                "protocolError",
+                {"type": "message_send_failure", "message": buf},
+            )
+            self._delete_session(to)
             return
 
         await ws.send(buf)
@@ -303,9 +308,10 @@ class WebSocketClientTransport:
 
         ok, result = self._codec_adapter.from_buffer(response_bytes)
         if not ok:
+            # Invalid handshake response is fatal
             logger.error("Failed to decode handshake response: %s", result)
             await ws.close()
-            self._on_connection_failed(to)
+            self._delete_session(to)
             return
 
         response_msg: TransportMessage = result  # type: ignore[assignment]
@@ -313,9 +319,10 @@ class WebSocketClientTransport:
 
         # Validate handshake response
         if not isinstance(payload, dict) or payload.get("type") != "HANDSHAKE_RESP":
+            # Invalid handshake schema is fatal
             logger.error("Invalid handshake response payload")
             await ws.close()
-            self._on_connection_failed(to)
+            self._delete_session(to)
             return
 
         status = payload.get("status", {})
@@ -411,10 +418,12 @@ class WebSocketClientTransport:
         """Handle raw bytes received from the WebSocket."""
         ok, result = self._codec_adapter.from_buffer(raw)
         if not ok:
+            # Invalid message is fatal — destroy the session
             self._events.dispatch(
                 "protocolError",
                 {"type": "invalid_message", "message": result},
             )
+            self._delete_session(to)
             return
 
         msg: TransportMessage = result  # type: ignore[assignment]
@@ -506,6 +515,12 @@ class WebSocketClientTransport:
 
             ok, result = session.send(msg)
             if not ok:
+                # Send failure is fatal — destroy session
+                self._events.dispatch(
+                    "protocolError",
+                    {"type": "message_send_failure", "message": result},
+                )
+                self._delete_session(to)
                 raise RuntimeError(f"Send failed: {result}")
             return result
 
