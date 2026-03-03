@@ -1,12 +1,11 @@
 """Pytest fixtures for River Python client tests.
 
-Manages the lifecycle of a TypeScript test server process that the
+Manages the lifecycle of TypeScript test server processes that the
 Python client connects to.
 """
 
 from __future__ import annotations
 
-import asyncio
 import os
 import re
 import signal
@@ -17,9 +16,13 @@ from typing import Generator
 
 import pytest
 
+from river.codec import BinaryCodec, Codec, NaiveJsonCodec
+
 TESTS_DIR = os.path.dirname(__file__)
 SERVER_TS = os.path.join(TESTS_DIR, "test_server.ts")
 SERVER_MJS = os.path.join(TESTS_DIR, "test_server.mjs")
+HANDSHAKE_SERVER_TS = os.path.join(TESTS_DIR, "test_server_handshake.ts")
+HANDSHAKE_SERVER_MJS = os.path.join(TESTS_DIR, "test_server_handshake.mjs")
 EXTRACT_SCHEMA_TS = os.path.join(TESTS_DIR, "extract_test_schema.ts")
 EXTRACT_SCHEMA_MJS = os.path.join(TESTS_DIR, "extract_test_schema.mjs")
 SCHEMA_JSON = os.path.join(TESTS_DIR, "test_schema.json")
@@ -42,6 +45,7 @@ def _esbuild_bundle(ts_path: str, mjs_path: str) -> None:
             # we reuse whatever is already in node_modules
             "--external:ws",
             "--external:@sinclair/typebox",
+            "--external:@msgpack/msgpack",
         ],
         cwd=RIVER_ROOT,
         capture_output=True,
@@ -54,6 +58,11 @@ def _esbuild_bundle(ts_path: str, mjs_path: str) -> None:
 def _build_test_server() -> None:
     """Bundle test_server.ts -> test_server.mjs using esbuild."""
     _esbuild_bundle(SERVER_TS, SERVER_MJS)
+
+
+def _build_handshake_server() -> None:
+    """Bundle test_server_handshake.ts -> test_server_handshake.mjs using esbuild."""
+    _esbuild_bundle(HANDSHAKE_SERVER_TS, HANDSHAKE_SERVER_MJS)
 
 
 def _extract_test_schema() -> None:
@@ -92,38 +101,21 @@ def _extract_test_schema() -> None:
         )
 
 
-@pytest.fixture(scope="session")
-def generated_client_dir() -> str:
-    """Extract test schema and run codegen. Returns the generated dir path."""
-    _extract_test_schema()
-    return GENERATED_DIR
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an event loop for the entire test session."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture(scope="session")
-def river_server_port() -> Generator[int, None, None]:
-    """Build and start the TypeScript test server, yield its port.
-
-    The server is built once via esbuild and kept alive for the entire
-    test session.
-    """
-    _build_test_server()
-
+def _start_server(
+    mjs_path: str,
+    label: str,
+    env: dict[str, str] | None = None,
+) -> tuple[subprocess.Popen, int]:
+    """Start a Node.js server process and return (proc, port)."""
+    full_env = {**os.environ, **(env or {})}
     proc = subprocess.Popen(
-        ["node", SERVER_MJS],
+        ["node", mjs_path],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         cwd=RIVER_ROOT,
+        env=full_env,
     )
 
-    # Wait for the server to print the port
     port = None
     deadline = time.monotonic() + 30
     assert proc.stdout is not None
@@ -133,7 +125,7 @@ def river_server_port() -> Generator[int, None, None]:
             if proc.poll() is not None:
                 stderr = proc.stderr.read().decode("utf-8") if proc.stderr else ""
                 raise RuntimeError(
-                    f"Test server exited with code {proc.returncode}.\nstderr: {stderr}"
+                    f"{label} exited with code {proc.returncode}.\nstderr: {stderr}"
                 )
             time.sleep(0.1)
             continue
@@ -144,10 +136,12 @@ def river_server_port() -> Generator[int, None, None]:
 
     if port is None:
         proc.kill()
-        raise RuntimeError("Failed to get port from test server within 30s")
+        raise RuntimeError(f"Failed to get port from {label} within 30s")
 
-    yield port
+    return proc, port
 
+
+def _stop_server(proc: subprocess.Popen) -> None:
     proc.send_signal(signal.SIGTERM)
     try:
         proc.wait(timeout=5)
@@ -155,7 +149,64 @@ def river_server_port() -> Generator[int, None, None]:
         proc.kill()
 
 
+@pytest.fixture(scope="session")
+def generated_client_dir() -> str:
+    """Extract test schema and run codegen. Returns the generated dir path."""
+    _extract_test_schema()
+    return GENERATED_DIR
+
+
+@pytest.fixture(scope="session")
+def river_server_port() -> Generator[int, None, None]:
+    """Build and start the TypeScript test server (JSON codec), yield its port."""
+    _build_test_server()
+    proc, port = _start_server(SERVER_MJS, "Test server")
+    yield port
+    _stop_server(proc)
+
+
+@pytest.fixture(scope="session")
+def river_binary_server_port() -> Generator[int, None, None]:
+    """Build and start the TypeScript test server (binary codec), yield its port."""
+    _build_test_server()
+    proc, port = _start_server(
+        SERVER_MJS, "Binary test server", env={"RIVER_CODEC": "binary"}
+    )
+    yield port
+    _stop_server(proc)
+
+
 @pytest.fixture
 def server_url(river_server_port: int) -> str:
     """Return the WebSocket URL for the test server."""
     return f"ws://127.0.0.1:{river_server_port}"
+
+
+@pytest.fixture(scope="session")
+def river_handshake_server_port() -> Generator[int, None, None]:
+    """Build and start the handshake test server, yield its port."""
+    _build_handshake_server()
+    proc, port = _start_server(HANDSHAKE_SERVER_MJS, "Handshake test server")
+    yield port
+    _stop_server(proc)
+
+
+@pytest.fixture
+def handshake_server_url(river_handshake_server_port: int) -> str:
+    """Return the WebSocket URL for the handshake test server."""
+    return f"ws://127.0.0.1:{river_handshake_server_port}"
+
+
+@pytest.fixture(params=["json", "binary"])
+def codec_and_url(
+    request: pytest.FixtureRequest,
+    river_server_port: int,
+    river_binary_server_port: int,
+) -> tuple[Codec, str]:
+    """Parametrized fixture returning (codec, server_url) pairs.
+
+    Each codec is paired with a server that speaks the same protocol.
+    """
+    if request.param == "json":
+        return NaiveJsonCodec(), f"ws://127.0.0.1:{river_server_port}"
+    return BinaryCodec(), f"ws://127.0.0.1:{river_binary_server_port}"

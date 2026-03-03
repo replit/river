@@ -175,6 +175,9 @@ class RiverClient:
         )
 
         async def finalize() -> dict[str, Any]:
+            writable = result["req_writable"]
+            if writable.is_writable():
+                writable.close()
             readable = result["res_readable"]
             done, value = await readable.next()
             if done:
@@ -271,6 +274,7 @@ class RiverClient:
         # Tracking state
         clean_close = True
         cleaned_up = False
+        abort_task: asyncio.Task | None = None
 
         def cleanup():
             nonlocal cleaned_up
@@ -279,15 +283,21 @@ class RiverClient:
             cleaned_up = True
             transport.remove_event_listener("message", on_message)
             transport.remove_event_listener("sessionStatus", on_session_status)
+            if abort_task is not None and not abort_task.done():
+                abort_task.cancel()
+
+        def _try_cleanup():
+            """Run cleanup once both sides have been closed/triggered."""
+            if res_readable._closed and req_writable.is_closed():
+                cleanup()
 
         def close_readable():
-            if not res_readable.is_closed():
+            if not res_readable._closed:
                 try:
                     res_readable._trigger_close()
                 except RuntimeError:
                     pass
-            if req_writable.is_closed():
-                cleanup()
+            _try_cleanup()
 
         # Create writable for requests
         def write_cb(raw_value: Any) -> None:
@@ -309,8 +319,7 @@ class RiverClient:
                     send_fn(close_stream_message(stream_id))
                 except RuntimeError:
                     pass
-            if res_readable.is_closed():
-                cleanup()
+            _try_cleanup()
 
         req_writable: Writable = Writable(write_cb=write_cb, close_cb=close_cb)
 
@@ -336,7 +345,7 @@ class RiverClient:
                     res_readable._push_value(err_result(code, str(payload)))
                 close_readable()
                 if req_writable.is_writable():
-                    req_writable._closed = True
+                    req_writable.close()
                 return
 
             if res_readable.is_closed():
@@ -374,10 +383,12 @@ class RiverClient:
                 pass
             close_readable()
             if req_writable.is_writable():
-                req_writable._closed = True
+                req_writable.close()
 
         def on_client_cancel() -> None:
             nonlocal clean_close
+            if cleaned_up:
+                return
             clean_close = False
             try:
                 res_readable._push_value(err_result(CANCEL_CODE, "cancelled by client"))
@@ -385,7 +396,7 @@ class RiverClient:
                 pass
             close_readable()
             if req_writable.is_writable():
-                req_writable._closed = True
+                req_writable.close()
             try:
                 send_fn(
                     cancel_message(
@@ -402,14 +413,14 @@ class RiverClient:
 
         # Wire up abort signal
         if abort_signal is not None:
-            # Use asyncio task to watch the event
+
             async def _watch_abort():
                 await abort_signal.wait()
                 on_client_cancel()
 
             try:
                 loop = asyncio.get_event_loop()
-                loop.create_task(_watch_abort())
+                abort_task = loop.create_task(_watch_abort())
             except RuntimeError:
                 pass
 

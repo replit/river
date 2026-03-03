@@ -10,6 +10,7 @@ from river.streams import Readable, Writable
 
 from ._types import (
     TestAddInit,
+    TestEchoBinaryInit,
     TestEchoInit,
     TestEchoInput,
     TestEchoWithPrefixInit,
@@ -97,3 +98,16 @@ class TestClient:
             abort_signal=abort_signal,
         )
         return TestEchoWithPrefixStreamResult(result)
+
+    async def echo_binary(
+        self,
+        init: TestEchoBinaryInit,
+        *,
+        abort_signal: asyncio.Event | None = None,
+    ) -> dict[str, Any]:
+        return await self._client.rpc(
+            "test",
+            "echoBinary",
+            init,
+            abort_signal=abort_signal,
+        )

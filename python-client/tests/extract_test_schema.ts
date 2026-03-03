@@ -52,6 +52,14 @@ const TestServiceSchema = ServiceSchema.define({
       resWritable.close();
     },
   }),
+  echoBinary: Procedure.rpc({
+    requestInit: Type.Object({ data: Type.Uint8Array() }),
+    responseData: Type.Object({ data: Type.Uint8Array(), length: Type.Number() }),
+    responseError: Type.Never(),
+    async handler({ reqInit }) {
+      return Ok({ data: reqInit.data, length: reqInit.data.length });
+    },
+  }),
 });
 
 const OrderingServiceSchema = ServiceSchema.define({

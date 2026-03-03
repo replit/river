@@ -24,10 +24,13 @@ async def make_client(server_url: str, **kwargs) -> RiverClient:
         client_id=None,  # auto-generate
         server_id="SERVER",
         codec=NaiveJsonCodec(),
+    )
+    return RiverClient(
+        transport,
+        server_id="SERVER",
         connect_on_invoke=kwargs.get("connect_on_invoke", True),
         eagerly_connect=kwargs.get("eagerly_connect", False),
     )
-    return RiverClient(transport, server_id="SERVER")
 
 
 async def cleanup_client(client: RiverClient) -> None:
@@ -572,7 +575,6 @@ class TestEagerConnect:
             ws_url=server_url,
             server_id="SERVER",
             codec=NaiveJsonCodec(),
-            eagerly_connect=True,
         )
         client = RiverClient(transport, server_id="SERVER", eagerly_connect=True)
         try:
@@ -1298,3 +1300,130 @@ class TestCodecUnit:
         ok, result = adapter.from_buffer(b"not valid json")
         assert ok is False
         assert isinstance(result, str)
+
+
+# =====================================================================
+# Lifecycle / Cleanup Tests
+# =====================================================================
+
+
+class TestListenerCleanup:
+    """Verify that event listeners are cleaned up after cancel/disconnect."""
+
+    @pytest.mark.asyncio
+    async def test_cancel_cleans_up_listeners(self, server_url: str):
+        """Cancelling a stream removes transport event listeners."""
+        transport = WebSocketClientTransport(
+            ws_url=server_url,
+            server_id="SERVER",
+            codec=NaiveJsonCodec(),
+        )
+        client = RiverClient(transport, server_id="SERVER")
+        try:
+            before_msg = transport._events.listener_count("message")
+            before_ss = transport._events.listener_count("sessionStatus")
+
+            abort = asyncio.Event()
+            stream = client.stream("cancel", "blockingStream", {}, abort_signal=abort)
+            # Each stream registers +1 message and +1 sessionStatus listener
+            assert transport._events.listener_count("message") == before_msg + 1
+
+            abort.set()
+            await stream.res_readable.next()  # consume CANCEL error
+
+            # Give the event loop a tick to run cleanup
+            await asyncio.sleep(0.05)
+
+            assert transport._events.listener_count("message") == before_msg
+            assert transport._events.listener_count("sessionStatus") == before_ss
+        finally:
+            await transport.close()
+
+    @pytest.mark.asyncio
+    async def test_repeated_cancels_do_not_leak(self, server_url: str):
+        """Many cancelled streams don't accumulate stale listeners."""
+        transport = WebSocketClientTransport(
+            ws_url=server_url,
+            server_id="SERVER",
+            codec=NaiveJsonCodec(),
+        )
+        client = RiverClient(transport, server_id="SERVER")
+        try:
+            before = transport._events.listener_count("message")
+
+            for _ in range(20):
+                abort = asyncio.Event()
+                stream = client.stream(
+                    "cancel", "blockingStream", {}, abort_signal=abort
+                )
+                abort.set()
+                await stream.res_readable.next()
+                await asyncio.sleep(0.01)
+
+            assert transport._events.listener_count("message") == before
+        finally:
+            await transport.close()
+
+    @pytest.mark.asyncio
+    async def test_abort_task_cancelled_on_normal_close(self, server_url: str):
+        """Abort watcher task is cancelled when stream completes normally."""
+        transport = WebSocketClientTransport(
+            ws_url=server_url,
+            server_id="SERVER",
+            codec=NaiveJsonCodec(),
+        )
+        client = RiverClient(transport, server_id="SERVER")
+        try:
+            # Create a stream with an abort signal that is never set
+            abort = asyncio.Event()
+            stream = client.stream("test", "echo", {}, abort_signal=abort)
+
+            stream.req_writable.write({"msg": "hi", "ignore": False})
+            done, msg = await stream.res_readable.next()
+            assert not done and msg["ok"] is True
+
+            stream.req_writable.close()
+            # Wait for server to close the stream
+            done2, _ = await stream.res_readable.next()
+            assert done2
+
+            await asyncio.sleep(0.05)
+
+            # Setting the signal now should be harmless (no stale cancel)
+            abort.set()
+            await asyncio.sleep(0.05)
+        finally:
+            await transport.close()
+
+
+class TestUploadFinalize:
+    """Verify upload finalize closes the request stream."""
+
+    @pytest.mark.asyncio
+    async def test_finalize_without_explicit_close(self, server_url: str):
+        """finalize() closes req_writable if caller didn't."""
+        client = await make_client(server_url)
+        try:
+            upload = client.upload("uploadable", "addMultiple", {})
+            upload.req_writable.write({"n": 5})
+            upload.req_writable.write({"n": 3})
+            # Don't call upload.req_writable.close() — finalize should do it
+            result = await asyncio.wait_for(upload.finalize(), timeout=5.0)
+            assert result["ok"] is True
+            assert result["payload"]["result"] == 8
+        finally:
+            await cleanup_client(client)
+
+    @pytest.mark.asyncio
+    async def test_finalize_after_explicit_close(self, server_url: str):
+        """finalize() works when req_writable was already closed."""
+        client = await make_client(server_url)
+        try:
+            upload = client.upload("uploadable", "addMultiple", {})
+            upload.req_writable.write({"n": 2})
+            upload.req_writable.close()
+            result = await asyncio.wait_for(upload.finalize(), timeout=5.0)
+            assert result["ok"] is True
+            assert result["payload"]["result"] == 2
+        finally:
+            await cleanup_client(client)

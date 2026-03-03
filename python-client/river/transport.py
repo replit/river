@@ -129,8 +129,6 @@ class WebSocketClientTransport:
         codec: Codec | None = None,
         options: SessionOptions | None = None,
         handshake_metadata: Any = None,
-        connect_on_invoke: bool = True,
-        eagerly_connect: bool = False,
     ) -> None:
         self.client_id = client_id or generate_id()
         self.server_id = server_id or "SERVER"
@@ -139,7 +137,6 @@ class WebSocketClientTransport:
         self._codec_adapter = CodecMessageAdapter(self._codec)
         self.options = options or DEFAULT_SESSION_OPTIONS
         self._handshake_metadata = handshake_metadata
-        self._connect_on_invoke = connect_on_invoke
 
         # State
         self._status: str = "open"  # 'open' | 'closed'
@@ -333,6 +330,7 @@ class WebSocketClientTransport:
                 self._delete_session(to)
                 self._try_reconnecting(to)
             else:
+                # Fatal handshake error — do not retry
                 self._events.dispatch(
                     "protocolError",
                     {
@@ -341,7 +339,7 @@ class WebSocketClientTransport:
                         "code": code,
                     },
                 )
-                self._on_connection_failed(to)
+                session.state = SessionState.NO_CONNECTION
             return
 
         # Check session ID match
@@ -353,6 +351,7 @@ class WebSocketClientTransport:
                 session.id,
                 resp_session_id,
             )
+            await ws.close()
             # The server lost our session state; destroy old and create new
             self._delete_session(to, emit_closing=True)
             self._try_reconnecting(to)

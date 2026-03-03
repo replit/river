@@ -18,6 +18,8 @@ import {
   Err,
 } from '../../router';
 import { Type } from '@sinclair/typebox';
+import { BinaryCodec } from '../../codec/binary';
+import { NaiveJsonCodec } from '../../codec/json';
 
 const ServiceSchema = createServiceSchema();
 
@@ -71,6 +73,14 @@ const TestServiceSchema = ServiceSchema.define({
         resWritable.write(Ok({ response: `${reqInit.prefix} ${val.msg}` }));
       }
       resWritable.close();
+    },
+  }),
+  echoBinary: Procedure.rpc({
+    requestInit: Type.Object({ data: Type.Uint8Array() }),
+    responseData: Type.Object({ data: Type.Uint8Array(), length: Type.Number() }),
+    responseError: Type.Never(),
+    async handler({ reqInit }) {
+      return Ok({ data: reqInit.data, length: reqInit.data.length });
     },
   }),
 });
@@ -399,6 +409,8 @@ const services = {
 };
 
 async function main() {
+  const codec = process.env.RIVER_CODEC === 'binary' ? BinaryCodec : NaiveJsonCodec;
+
   const httpServer = http.createServer();
   const port = await new Promise<number>((resolve, reject) => {
     httpServer.listen(0, '127.0.0.1', () => {
@@ -409,7 +421,7 @@ async function main() {
   });
 
   const wss = new WebSocketServer({ server: httpServer });
-  const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
+  const serverTransport = new WebSocketServerTransport(wss, 'SERVER', { codec });
   const _server = createServer(serverTransport, services);
 
   // Signal that the server is ready by printing the port

@@ -41,6 +41,15 @@ class TestEchoWithPrefixOutput(TypedDict):
     response: str
 
 
+class TestEchoBinaryInit(TypedDict):
+    data: bytes
+
+
+class TestEchoBinaryOutput(TypedDict):
+    data: bytes
+    length: float
+
+
 class OrderingAddInit(TypedDict):
     n: float
 
