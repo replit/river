@@ -473,7 +473,10 @@ var TestServiceSchema = ServiceSchema.define({
   }),
   echoBinary: Procedure.rpc({
     requestInit: Type5.Object({ data: Type5.Uint8Array() }),
-    responseData: Type5.Object({ data: Type5.Uint8Array(), length: Type5.Number() }),
+    responseData: Type5.Object({
+      data: Type5.Uint8Array(),
+      length: Type5.Number()
+    }),
     responseError: Type5.Never(),
     async handler({ reqInit }) {
       return Ok({ data: reqInit.data, length: reqInit.data.length });

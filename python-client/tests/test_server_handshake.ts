@@ -7,15 +7,8 @@
 import http from 'node:http';
 import { WebSocketServer } from 'ws';
 import { WebSocketServerTransport } from '../../transport/impls/ws/server';
-import {
-  createServer,
-  createServiceSchema,
-  Procedure,
-  Ok,
-} from '../../router';
-import {
-  createServerHandshakeOptions,
-} from '../../router/handshake';
+import { createServer, createServiceSchema, Procedure, Ok } from '../../router';
+import { createServerHandshakeOptions } from '../../router/handshake';
 import { Type } from '@sinclair/typebox';
 
 const ServiceSchema = createServiceSchema();
@@ -48,7 +41,10 @@ async function main() {
   });
 
   const wss = new WebSocketServer({ server: httpServer });
-  const serverTransport = new WebSocketServerTransport<typeof handshakeSchema>(wss, 'HANDSHAKE_SERVER');
+  const serverTransport = new WebSocketServerTransport<typeof handshakeSchema>(
+    wss,
+    'HANDSHAKE_SERVER',
+  );
   const _server = createServer(serverTransport, services, {
     handshakeOptions: createServerHandshakeOptions(
       handshakeSchema,
@@ -56,6 +52,7 @@ async function main() {
         if (metadata.token !== 'valid-token') {
           return 'REJECTED_BY_CUSTOM_HANDLER' as const;
         }
+
         return {};
       },
     ),

@@ -4501,7 +4501,10 @@ async function main() {
     });
   });
   const wss = new WebSocketServer({ server: httpServer });
-  const serverTransport = new WebSocketServerTransport(wss, "HANDSHAKE_SERVER");
+  const serverTransport = new WebSocketServerTransport(
+    wss,
+    "HANDSHAKE_SERVER"
+  );
   const _server = createServer(serverTransport, services, {
     handshakeOptions: createServerHandshakeOptions(
       handshakeSchema,
