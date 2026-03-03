@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from typing_extensions import TypedDict
 
@@ -33,6 +34,7 @@ from river.types import (
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+TOutput = TypeVar("TOutput")
 TPayload = TypeVar("TPayload")
 
 
@@ -51,32 +53,37 @@ class ErrResult(TypedDict, Generic[TPayload]):
 
 
 @dataclass
-class StreamResult(Generic[T]):
+class StreamResult(Generic[T, TOutput]):
     """Result of opening a stream procedure.
 
-    Generic over the input type ``T`` written to ``req_writable``.
+    Generic over the input type ``T`` written to ``req_writable``
+    and the output type ``TOutput`` read from ``res_readable``.
     """
 
     req_writable: Writable[T]
-    res_readable: Readable
+    res_readable: Readable[TOutput]
 
 
 @dataclass
-class UploadResult(Generic[T]):
+class UploadResult(Generic[T, TOutput]):
     """Result of opening an upload procedure.
 
-    Generic over the input type ``T`` written to ``req_writable``.
+    Generic over the input type ``T`` written to ``req_writable``
+    and the output type ``TOutput`` returned by ``finalize()``.
     """
 
     req_writable: Writable[T]
-    finalize: Callable[[], Any]  # async callable returning RpcResult
+    finalize: Callable[[], Awaitable[TOutput]]
 
 
 @dataclass
-class SubscriptionResult:
-    """Result of opening a subscription procedure."""
+class SubscriptionResult(Generic[T]):
+    """Result of opening a subscription procedure.
 
-    res_readable: Readable
+    Generic over the output type ``T`` received from ``res_readable``.
+    """
+
+    res_readable: Readable[T]
 
 
 class RiverClient:
@@ -156,7 +163,7 @@ class RiverClient:
         procedure_name: str,
         init: Any,
         abort_signal: asyncio.Event | None = None,
-    ) -> StreamResult:
+    ) -> StreamResult[Any, Any]:
         """Open a stream procedure.
 
         Returns StreamResult with req_writable and res_readable.
@@ -179,7 +186,7 @@ class RiverClient:
         procedure_name: str,
         init: Any,
         abort_signal: asyncio.Event | None = None,
-    ) -> UploadResult:
+    ) -> UploadResult[Any, Any]:
         """Open an upload procedure.
 
         Returns UploadResult with req_writable and finalize().
@@ -213,7 +220,7 @@ class RiverClient:
         procedure_name: str,
         init: Any,
         abort_signal: asyncio.Event | None = None,
-    ) -> SubscriptionResult:
+    ) -> SubscriptionResult[Any]:
         """Open a subscription procedure.
 
         Returns SubscriptionResult with res_readable.

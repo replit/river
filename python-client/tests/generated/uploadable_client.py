@@ -40,7 +40,7 @@ class UploadableClient:
         init: UploadableAddMultipleInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> UploadResult[UploadableAddMultipleInput]:
+    ) -> UploadResult[UploadableAddMultipleInput, OkResult[UploadableAddMultipleOutput] | ErrResult[ProtocolError]]:
         return self._client.upload(
             "uploadable",
             "addMultiple",
@@ -53,7 +53,7 @@ class UploadableClient:
         init: UploadableAddMultipleWithPrefixInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> UploadResult[UploadableAddMultipleWithPrefixInput]:
+    ) -> UploadResult[UploadableAddMultipleWithPrefixInput, OkResult[UploadableAddMultipleWithPrefixOutput] | ErrResult[ProtocolError]]:
         return self._client.upload(
             "uploadable",
             "addMultipleWithPrefix",
@@ -66,7 +66,7 @@ class UploadableClient:
         init: UploadableCancellableAddInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> UploadResult[UploadableCancellableAddInput]:
+    ) -> UploadResult[UploadableCancellableAddInput, OkResult[UploadableCancellableAddOutput] | ErrResult[ProtocolError]]:
         return self._client.upload(
             "uploadable",
             "cancellableAdd",

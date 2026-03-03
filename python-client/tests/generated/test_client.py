@@ -56,7 +56,7 @@ class TestClient:
         init: TestEchoInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> StreamResult[TestEchoInput]:
+    ) -> StreamResult[TestEchoInput, OkResult[TestEchoOutput] | ErrResult[ProtocolError]]:
         return self._client.stream(
             "test",
             "echo",
@@ -69,7 +69,7 @@ class TestClient:
         init: TestEchoWithPrefixInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> StreamResult[TestEchoWithPrefixInput]:
+    ) -> StreamResult[TestEchoWithPrefixInput, OkResult[TestEchoWithPrefixOutput] | ErrResult[ProtocolError]]:
         return self._client.stream(
             "test",
             "echoWithPrefix",

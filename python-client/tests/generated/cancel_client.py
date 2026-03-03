@@ -67,7 +67,7 @@ class CancelClient:
         init: CancelBlockingStreamInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> StreamResult[CancelBlockingStreamInput]:
+    ) -> StreamResult[CancelBlockingStreamInput, OkResult[CancelBlockingStreamOutput] | ErrResult[ProtocolError]]:
         return self._client.stream(
             "cancel",
             "blockingStream",
@@ -80,7 +80,7 @@ class CancelClient:
         init: CancelBlockingUploadInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> UploadResult[CancelBlockingUploadInput]:
+    ) -> UploadResult[CancelBlockingUploadInput, OkResult[CancelBlockingUploadOutput] | ErrResult[ProtocolError]]:
         return self._client.upload(
             "cancel",
             "blockingUpload",
@@ -93,7 +93,7 @@ class CancelClient:
         init: CancelBlockingSubscriptionInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> SubscriptionResult:
+    ) -> SubscriptionResult[OkResult[CancelBlockingSubscriptionOutput] | ErrResult[ProtocolError]]:
         return self._client.subscribe(
             "cancel",
             "blockingSubscription",
@@ -119,7 +119,7 @@ class CancelClient:
         init: CancelImmediateStreamInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> StreamResult[CancelImmediateStreamInput]:
+    ) -> StreamResult[CancelImmediateStreamInput, OkResult[CancelImmediateStreamOutput] | ErrResult[ProtocolError]]:
         return self._client.stream(
             "cancel",
             "immediateStream",
@@ -132,7 +132,7 @@ class CancelClient:
         init: CancelImmediateUploadInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> UploadResult[CancelImmediateUploadInput]:
+    ) -> UploadResult[CancelImmediateUploadInput, OkResult[CancelImmediateUploadOutput] | ErrResult[ProtocolError]]:
         return self._client.upload(
             "cancel",
             "immediateUpload",
@@ -145,7 +145,7 @@ class CancelClient:
         init: CancelImmediateSubscriptionInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> SubscriptionResult:
+    ) -> SubscriptionResult[OkResult[CancelImmediateSubscriptionOutput] | ErrResult[ProtocolError]]:
         return self._client.subscribe(
             "cancel",
             "immediateSubscription",
@@ -158,7 +158,7 @@ class CancelClient:
         init: CancelCountedStreamInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> StreamResult[CancelCountedStreamInput]:
+    ) -> StreamResult[CancelCountedStreamInput, OkResult[CancelCountedStreamOutput] | ErrResult[ProtocolError]]:
         return self._client.stream(
             "cancel",
             "countedStream",

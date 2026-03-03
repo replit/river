@@ -58,7 +58,7 @@ class {{ service.class_name }}Client:
         init: {{ proc.init_type.annotation }},
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> StreamResult[{{ proc.input_type.annotation }}]:
+    ) -> StreamResult[{{ proc.input_type.annotation }}, {{ proc | result_type }}]:
 {% if proc.description %}
         """{{ proc.description | docstring }}"""
 {% endif %}
@@ -74,7 +74,7 @@ class {{ service.class_name }}Client:
         init: {{ proc.init_type.annotation }},
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> UploadResult[{{ proc.input_type.annotation }}]:
+    ) -> UploadResult[{{ proc.input_type.annotation }}, {{ proc | result_type }}]:
 {% if proc.description %}
         """{{ proc.description | docstring }}"""
 {% endif %}
@@ -90,7 +90,7 @@ class {{ service.class_name }}Client:
         init: {{ proc.init_type.annotation }},
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> SubscriptionResult:
+    ) -> SubscriptionResult[{{ proc | result_type }}]:
 {% if proc.description %}
         """{{ proc.description | docstring }}"""
 {% endif %}

@@ -52,7 +52,7 @@ class FallibleClient:
         init: FallibleEchoInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> StreamResult[FallibleEchoInput]:
+    ) -> StreamResult[FallibleEchoInput, OkResult[FallibleEchoOutput] | ErrResult[FallibleEchoError | ProtocolError]]:
         return self._client.stream(
             "fallible",
             "echo",

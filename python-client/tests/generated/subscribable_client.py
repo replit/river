@@ -48,7 +48,7 @@ class SubscribableClient:
         init: SubscribableValueInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> SubscriptionResult:
+    ) -> SubscriptionResult[OkResult[SubscribableValueOutput] | ErrResult[ProtocolError]]:
         return self._client.subscribe(
             "subscribable",
             "value",
