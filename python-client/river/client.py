@@ -128,6 +128,32 @@ class RiverClient:
         if eagerly_connect:
             transport.connect(self._server_id)
 
+    @classmethod
+    async def connect(
+        cls,
+        url: str,
+        *,
+        client_id: str | None = None,
+        server_id: str = "SERVER",
+        handshake_metadata: Any = None,
+        options: "SessionOptions | None" = None,
+    ) -> "RiverClient":
+        """Create a connected RiverClient.
+
+        Convenience factory that creates a transport and eagerly connects.
+        """
+        from river.session import SessionOptions as _SO
+
+        transport = WebSocketClientTransport(
+            url,
+            client_id=client_id,
+            server_id=server_id,
+            handshake_metadata=handshake_metadata,
+            options=options or _SO(),
+        )
+        client = cls(transport, server_id=server_id, eagerly_connect=True)
+        return client
+
     @property
     def transport(self) -> WebSocketClientTransport:
         return self._transport

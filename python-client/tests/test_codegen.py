@@ -387,16 +387,13 @@ class TestGeneratedClientsLive:
 class TestCodegenFieldNames:
     """Codegen field name validation tests."""
 
-    def test_keyword_field_raises(self):
-        """Python keywords are rejected at codegen time."""
+    def test_keyword_field_normalized(self):
+        """Python keywords get an underscore suffix."""
         from river.codegen.schema import _safe_field_name
 
-        with pytest.raises(ValueError, match="Python keyword"):
-            _safe_field_name("from")
-        with pytest.raises(ValueError, match="Python keyword"):
-            _safe_field_name("class")
-        with pytest.raises(ValueError, match="Python keyword"):
-            _safe_field_name("import")
+        assert _safe_field_name("from") == "from_"
+        assert _safe_field_name("class") == "class_"
+        assert _safe_field_name("import") == "import_"
 
     def test_normal_field_unchanged(self):
         from river.codegen.schema import _safe_field_name
@@ -415,19 +412,12 @@ class TestCodegenFieldNames:
         assert _safe_field_name("_id") == "_id"
         assert _safe_field_name("_private") == "_private"
 
-    def test_dunder_field_rejected(self):
-        """Double-underscore-prefixed fields are name-mangled in class bodies.
-
-        Regression: after allowing leading underscores, __dunder fields
-        were accepted but would be name-mangled in the generated TypedDict
-        class body, making the key not match the wire representation.
-        """
+    def test_dunder_field_normalized(self):
+        """Double-underscore-prefixed fields get an extra underscore prefix."""
         from river.codegen.schema import _safe_field_name
 
-        with pytest.raises(ValueError, match="name-mangled"):
-            _safe_field_name("__dunder")
-        with pytest.raises(ValueError, match="name-mangled"):
-            _safe_field_name("__private")
+        assert _safe_field_name("__dunder") == "___dunder"
+        assert _safe_field_name("__private") == "___private"
         # Dunder methods (ending with __) are NOT mangled
         assert _safe_field_name("__init__") == "__init__"
 
@@ -451,15 +441,20 @@ class TestCodegenFieldNames:
         assert "_id" in field_names
         assert "name" in field_names
 
-    def test_dash_field_raises(self):
-        """Fields with dashes are rejected at codegen time."""
+    def test_dash_field_normalized(self):
+        """Fields with dashes are normalized."""
         from river.codegen.schema import _safe_field_name
 
-        with pytest.raises(ValueError, match="not a valid Python identifier"):
-            _safe_field_name("request-id")
+        assert _safe_field_name("request-id") == "request_id"
 
-    def test_schema_with_invalid_field_raises(self):
-        """Codegen rejects schemas with non-identifier property names."""
+    def test_dollar_field_normalized(self):
+        """Fields with dollar signs are normalized."""
+        from river.codegen.schema import _safe_field_name
+
+        assert _safe_field_name("$kind") == "_kind"
+
+    def test_schema_with_invalid_field_normalized(self):
+        """Codegen normalizes non-identifier property names."""
         from river.codegen.schema import SchemaConverter
 
         converter = SchemaConverter()
@@ -471,11 +466,15 @@ class TestCodegenFieldNames:
             },
             "required": ["request-id", "normal"],
         }
-        with pytest.raises(ValueError, match="not a valid Python identifier"):
-            converter._schema_to_typeref(schema, "TestObj")
+        ref = converter._schema_to_typeref(schema, "TestObj")
+        assert ref.annotation == "TestObj"
+        td = converter._typedicts[-1]
+        field_names = [f.name for f in td.fields]
+        assert "request_id" in field_names
+        assert "normal" in field_names
 
-    def test_schema_with_keyword_field_raises(self):
-        """Codegen rejects schemas with keyword property names."""
+    def test_schema_with_keyword_field_normalized(self):
+        """Codegen normalizes keyword property names."""
         from river.codegen.schema import SchemaConverter
 
         converter = SchemaConverter()
@@ -486,7 +485,25 @@ class TestCodegenFieldNames:
             },
             "required": ["from"],
         }
-        with pytest.raises(ValueError, match="Python keyword"):
+        ref = converter._schema_to_typeref(schema, "TestObj")
+        assert ref.annotation == "TestObj"
+        td = converter._typedicts[-1]
+        assert td.fields[0].name == "from_"
+
+    def test_collision_raises(self):
+        """Codegen raises when two properties normalize to the same name."""
+        from river.codegen.schema import SchemaConverter
+
+        converter = SchemaConverter()
+        schema = {
+            "type": "object",
+            "properties": {
+                "$kind": {"type": "string"},
+                "_kind": {"type": "string"},
+            },
+            "required": ["$kind", "_kind"],
+        }
+        with pytest.raises(ValueError, match="both normalize to"):
             converter._schema_to_typeref(schema, "TestObj")
 
     def test_valid_schema_passes(self):
@@ -605,8 +622,8 @@ class TestNameCollisions:
         assert '"""' not in _escape_docstring('bad """ doc')
         assert _escape_docstring('say """hello"""') == r"say \"\"\"hello\"\"\""
 
-    def test_typedict_name_collision_raises(self):
-        """Two properties that generate the same TypedDict name are rejected."""
+    def test_typedict_name_collision_deduplicates(self):
+        """Two properties that generate the same TypedDict name — first wins."""
         from river.codegen.schema import SchemaConverter
 
         converter = SchemaConverter()
@@ -623,8 +640,11 @@ class TestNameCollisions:
                 },
             },
         }
-        with pytest.raises(ValueError, match="already used"):
-            converter._schema_to_typeref(schema, "Prefix")
+        converter._schema_to_typeref(schema, "Prefix")
+        matching = [td for td in converter._typedicts if td.name == "PrefixFooBar"]
+        assert len(matching) == 1
+        # First definition wins
+        assert matching[0].fields[0].name == "a"
 
     def test_empty_anyof_is_never(self):
         """anyOf with zero variants → Never."""

@@ -346,6 +346,15 @@ class WebSocketClientTransport:
             return
 
         status = payload.get("status", {})
+        if not isinstance(status, dict):
+            logger.error(
+                "Invalid handshake status: expected dict, got %s",
+                type(status).__name__,
+            )
+            await ws.close()
+            self._delete_session(to)
+            return
+
         if not status.get("ok"):
             code = status.get("code", "UNKNOWN")
             reason = status.get("reason", "Unknown reason")

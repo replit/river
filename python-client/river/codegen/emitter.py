@@ -98,7 +98,11 @@ def _prepare_typedicts(ir: SchemaIR) -> list[dict]:
     for td in ir.typedicts:
         fields = []
         for f in td.fields:
-            fields.append({"name": f.name, "annotation": _field_annotation(f)})
+            fields.append({
+                "name": f.name,
+                "annotation": _field_annotation(f),
+                "description": f.description,
+            })
         result.append(
             {"name": td.name, "description": td.description, "fields": fields}
         )
@@ -111,6 +115,19 @@ def render_errors() -> str:
 
 def render_types(ir: SchemaIR) -> str:
     typedicts = _prepare_typedicts(ir)
+
+    # Append handshake TypedDict if present
+    if ir.handshake_type:
+        hs_fields = []
+        for f in ir.handshake_type.fields:
+            hs_fields.append({"name": f.name, "annotation": _field_annotation(f)})
+        typedicts.append(
+            {
+                "name": ir.handshake_type.name,
+                "description": ir.handshake_type.description,
+                "fields": hs_fields,
+            }
+        )
 
     needs_literal = any(
         "Literal[" in f["annotation"] for td in typedicts for f in td["fields"]
@@ -168,7 +185,34 @@ def _module_name(service_name: str) -> str:
     return _sanitize_identifier(service_name)
 
 
-def render_init(ir: SchemaIR, import_prefix: str) -> str:
+def render_root_client(
+    ir: SchemaIR, client_name: str, import_prefix: str
+) -> str:
+    imports = []
+    services = []
+    for svc in ir.services:
+        mod_name = _module_name(svc.name)
+        cls = f"{svc.class_name}Client"
+        if import_prefix == ".":
+            mod = f".{mod_name}_client"
+        else:
+            mod = f"{import_prefix}{mod_name}_client"
+        imports.append((mod, cls))
+        services.append((_sanitize_identifier(svc.name), cls))
+
+    imports.sort(key=lambda x: x[0])
+    services.sort(key=lambda x: x[0])
+
+    return _env.get_template("root_client.py.j2").render(
+        client_name=client_name,
+        imports=imports,
+        services=services,
+    )
+
+
+def render_init(
+    ir: SchemaIR, import_prefix: str, client_name: str | None = None
+) -> str:
     imports = []
     for svc in ir.services:
         mod_name = _module_name(svc.name)
@@ -177,6 +221,17 @@ def render_init(ir: SchemaIR, import_prefix: str) -> str:
         else:
             mod = f"{import_prefix}{mod_name}_client"
         imports.append((mod, f"{svc.class_name}Client"))
+
+    if client_name:
+        if import_prefix == ".":
+            mod = "._root_client"
+        else:
+            mod = f"{import_prefix}_root_client"
+        imports.append((mod, client_name))
+
+    if ir.handshake_type:
+        types_mod = "._types" if import_prefix == "." else f"{import_prefix}_types"
+        imports.append((types_mod, ir.handshake_type.name))
 
     imports.sort(key=lambda x: x[0])
 
@@ -192,6 +247,7 @@ def write_generated_files(
     ir: SchemaIR,
     output_dir: str,
     package: str | None = None,
+    client_name: str | None = None,
 ) -> list[str]:
     """Write all generated files to *output_dir*.
 
@@ -215,6 +271,9 @@ def write_generated_files(
             render_service_client(svc, ir, import_prefix),
         )
 
-    _write("__init__.py", render_init(ir, import_prefix))
+    if client_name:
+        _write("_root_client.py", render_root_client(ir, client_name, import_prefix))
+
+    _write("__init__.py", render_init(ir, import_prefix, client_name=client_name))
 
     return written

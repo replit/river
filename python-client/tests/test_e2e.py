@@ -1283,6 +1283,53 @@ class TestCodecUnit:
         assert ok is False
         assert "ack" in result
 
+    def test_codec_adapter_rejects_missing_control_flags(self):
+        """CodecMessageAdapter rejects messages without controlFlags."""
+        from river.codec import BinaryCodec, CodecMessageAdapter
+
+        adapter = CodecMessageAdapter(BinaryCodec())
+        raw = BinaryCodec().to_buffer(
+            {
+                "id": "m1",
+                "from": "s",
+                "to": "c",
+                "seq": 0,
+                "ack": 0,
+                "payload": {},
+                "streamId": "st1",
+                # controlFlags omitted
+            }
+        )
+        ok, result = adapter.from_buffer(raw)
+        assert ok is False
+        assert "controlFlags" in result
+
+    def test_binary_codec_bigint_js_safe_range(self):
+        """Ints beyond JS MAX_SAFE_INTEGER use bigint extension."""
+        from river.codec import BinaryCodec
+
+        codec = BinaryCodec()
+        just_over = 2**53 + 1
+        buf = codec.to_buffer({"n": just_over})
+        decoded = codec.from_buffer(buf)
+        assert decoded["n"] == just_over
+
+        # Value at the boundary should still be a normal int
+        at_boundary = 2**53 - 1
+        buf2 = codec.to_buffer({"n": at_boundary})
+        decoded2 = codec.from_buffer(buf2)
+        assert decoded2["n"] == at_boundary
+
+    def test_binary_codec_negative_bigint_js_safe_range(self):
+        """Negative ints beyond -MAX_SAFE_INTEGER use bigint extension."""
+        from river.codec import BinaryCodec
+
+        codec = BinaryCodec()
+        just_under = -(2**53 + 1)
+        buf = codec.to_buffer({"n": just_under})
+        decoded = codec.from_buffer(buf)
+        assert decoded["n"] == just_under
+
 
 # =====================================================================
 # Lifecycle / Cleanup Tests
@@ -1611,6 +1658,55 @@ class TestFatalErrorPaths:
         assert transport.sessions.get("server") is None
         assert len(errors) == 1
         assert errors[0]["type"] == "invalid_message"
+
+    @pytest.mark.asyncio
+    async def test_malformed_handshake_status_closes_ws(self):
+        """Non-dict handshake status closes the socket cleanly."""
+        from unittest.mock import AsyncMock
+
+        from river.codec import BinaryCodec, CodecMessageAdapter
+        from river.session import Session, SessionState
+        from river.transport import WebSocketClientTransport
+        from river.types import TransportMessage
+
+        transport = WebSocketClientTransport(
+            ws_url="ws://127.0.0.1:1",
+            client_id="client",
+            server_id="server",
+            codec=BinaryCodec(),
+        )
+        codec_adapter = CodecMessageAdapter(BinaryCodec())
+        session = Session("s1", "client", "server", codec_adapter)
+        session.state = SessionState.HANDSHAKING
+        transport.sessions["server"] = session
+
+        # Build a handshake response with non-dict status
+        resp_msg = TransportMessage(
+            id="hs",
+            from_="server",
+            to="client",
+            seq=0,
+            ack=0,
+            payload={
+                "type": "HANDSHAKE_RESP",
+                "status": "oops",  # should be dict
+            },
+            stream_id="heartbeat",
+            control_flags=1,
+        )
+        ok, resp_bytes = codec_adapter.to_buffer(resp_msg)
+        assert ok
+
+        ws = AsyncMock()
+        ws.recv = AsyncMock(return_value=resp_bytes)
+        ws.close = AsyncMock()
+
+        await transport._do_handshake(session, ws, "server")
+
+        # WebSocket should have been closed
+        ws.close.assert_awaited_once()
+        # Session should be deleted
+        assert "server" not in transport.sessions
 
     def test_readable_broken_after_async_for_break(self):
         """Breaking out of async for marks readable as broken."""

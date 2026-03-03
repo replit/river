@@ -19,7 +19,12 @@ class {{ td.name }}(TypedDict):
     pass
 {% else %}
 {% for f in td.fields %}
+{% if f.description %}
     {{ f.name }}: {{ f.annotation }}
+    """{{ f.description | docstring }}"""
+{% else %}
+    {{ f.name }}: {{ f.annotation }}
+{% endif %}
 {% endfor %}
 {% endif %}
 {% endfor %}

@@ -35,6 +35,11 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="Absolute import prefix instead of relative imports.",
     )
+    parser.add_argument(
+        "--client-name",
+        default=None,
+        help="Generate a root client class with this name that aggregates all services.",
+    )
 
     args = parser.parse_args(argv)
 
@@ -44,7 +49,9 @@ def main(argv: list[str] | None = None) -> None:
     converter = SchemaConverter()
     ir = converter.convert(raw_schema)
 
-    written = write_generated_files(ir, args.output, package=args.package)
+    written = write_generated_files(
+        ir, args.output, package=args.package, client_name=args.client_name
+    )
 
     for path in written:
         print(f"  wrote {path}")

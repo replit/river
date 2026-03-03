@@ -12,6 +12,7 @@ from river.client import (
     UploadResult,
 )
 from river.codec import BinaryCodec
+from river.session import SessionOptions
 from river.streams import Readable, Writable
 from river.transport import WebSocketClientTransport
 from river.types import Err, Ok, TransportMessage
@@ -25,6 +26,7 @@ __all__ = [
     "SubscriptionResult",
     "WebSocketClientTransport",
     "BinaryCodec",
+    "SessionOptions",
     "TransportMessage",
     "Ok",
     "Err",

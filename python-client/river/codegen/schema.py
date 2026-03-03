@@ -69,6 +69,7 @@ class SchemaIR:
 
     services: list[ServiceDef] = field(default_factory=list)
     typedicts: list[TypedDictDef] = field(default_factory=list)
+    handshake_type: TypedDictDef | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -118,31 +119,19 @@ def _to_snake_case(s: str) -> str:
 
 
 def _safe_field_name(name: str) -> str:
-    """Ensure a field name is a valid Python identifier.
+    """Normalize a property name into a valid Python identifier.
 
-    Raises ValueError if the name requires sanitization that would
-    change it from its wire representation, since TypedDict keys must
-    match the dict keys sent on the wire.
+    Strips characters illegal in identifiers (e.g. ``$kind`` → ``kind``)
+    and appends ``_`` to Python keywords.
     """
     sanitized = _sanitize_identifier(name)
-    if sanitized != name:
-        raise ValueError(
-            f"schema property {name!r} is not a valid Python identifier "
-            f"and cannot be represented in a TypedDict"
-        )
-    if keyword.iskeyword(name):
-        raise ValueError(
-            f"schema property {name!r} is a Python keyword "
-            f"and cannot be used as a TypedDict field"
-        )
+    if keyword.iskeyword(sanitized):
+        sanitized += "_"
     # Names starting with __ (and not ending with __) are name-mangled
-    # inside class bodies, so the TypedDict key won't match the wire key.
-    if name.startswith("__") and not name.endswith("__"):
-        raise ValueError(
-            f"schema property {name!r} would be name-mangled in a "
-            f"TypedDict class body and cannot be used as a field"
-        )
-    return name
+    # inside class bodies — prefix with underscore to avoid that.
+    if sanitized.startswith("__") and not sanitized.endswith("__"):
+        sanitized = "_" + sanitized
+    return sanitized
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +179,19 @@ class SchemaConverter:
             svc_def = self._convert_service(svc_name, svc_data)
             services.append(svc_def)
 
-        return SchemaIR(services=services, typedicts=list(self._typedicts))
+        # Parse optional handshake schema
+        handshake_type: TypedDictDef | None = None
+        hs_schema = raw.get("handshakeSchema")
+        if hs_schema and isinstance(hs_schema, dict):
+            self._schema_to_typeref(hs_schema, "HandshakeSchema")
+            # The TypedDict was just emitted — pop it off _typedicts
+            handshake_type = self._typedicts.pop()
+
+        return SchemaIR(
+            services=services,
+            typedicts=list(self._typedicts),
+            handshake_type=handshake_type,
+        )
 
     def _convert_service(self, name: str, data: dict) -> ServiceDef:
         class_name = _to_pascal_case(name)
@@ -217,13 +218,17 @@ class SchemaConverter:
         proc_type = data["type"]
         prefix = svc_class + _to_pascal_case(name)
 
-        # Init type
-        init_type = self._schema_to_typeref(data["init"], f"{prefix}Init")
-
-        # Input type (only for stream/upload)
+        # Init type and streaming input type.
+        # Two schema formats:
+        #   - v2 (serializeSchema): all procedures have "init"; stream/upload also have "input"
+        #   - v1 (pid2 etc.): rpc/subscription use "input" as init; stream/upload have "init" + "input"
         input_type = None
-        if "input" in data:
-            input_type = self._schema_to_typeref(data["input"], f"{prefix}Input")
+        if "init" in data:
+            init_type = self._schema_to_typeref(data["init"], f"{prefix}Init")
+            if "input" in data:
+                input_type = self._schema_to_typeref(data["input"], f"{prefix}Input")
+        else:
+            init_type = self._schema_to_typeref(data["input"], f"{prefix}Init")
 
         # Output type
         output_type = self._schema_to_typeref(data["output"], f"{prefix}Output")
@@ -349,12 +354,9 @@ class SchemaConverter:
         return TypeRef(annotation="Any")
 
     def _emit_typedict(self, td: TypedDictDef) -> None:
-        """Register a TypedDict, raising on name collision."""
+        """Register a TypedDict, skipping if the same name was already emitted."""
         if td.name in self._td_names:
-            raise ValueError(
-                f"TypedDict name {td.name!r} is already used; "
-                f"two schema properties map to the same generated class"
-            )
+            return
         self._td_names.add(td.name)
         self._typedicts.append(td)
 
@@ -365,8 +367,16 @@ class SchemaConverter:
         description = schema.get("description")
 
         fields: list[TypedDictField] = []
+        seen_field_names: dict[str, str] = {}  # normalized → original
         for prop_name, prop_schema in properties.items():
             field_name = _safe_field_name(prop_name)
+            if field_name in seen_field_names:
+                raise ValueError(
+                    f"TypedDict {name!r}: properties "
+                    f"{seen_field_names[field_name]!r} and {prop_name!r} "
+                    f"both normalize to field {field_name!r}"
+                )
+            seen_field_names[field_name] = prop_name
             nested_name = name + _to_pascal_case(prop_name)
             field_ref = self._schema_to_typeref(prop_schema, nested_name)
             field_desc = (
@@ -412,20 +422,31 @@ class SchemaConverter:
             else:
                 other_variants.append(v)
 
-        # Merge all object properties
-        merged_props: dict[str, dict] = {}
-        merged_required: set[str] = set()
-        for v in object_variants:
-            for prop_name, prop_schema in v.get("properties", {}).items():
-                merged_props[prop_name] = prop_schema
-            merged_required.update(v.get("required", []))
+        # Mixed object + non-object is contradictory (object ∩ number = ∅)
+        if object_variants and other_variants:
+            return TypeRef(annotation="Never")
 
-        # If we have object properties, emit a TypedDict
-        if merged_props or object_variants:
+        # Pure object intersection — merge properties
+        if object_variants:
+            merged_props: dict[str, dict] = {}
+            merged_required: set[str] = set()
+            for v in object_variants:
+                for prop_name, prop_schema in v.get("properties", {}).items():
+                    merged_props[prop_name] = prop_schema
+                merged_required.update(v.get("required", []))
+
             description = schema.get("description")
             fields: list[TypedDictField] = []
+            seen_field_names: dict[str, str] = {}
             for prop_name, prop_schema in merged_props.items():
                 field_name = _safe_field_name(prop_name)
+                if field_name in seen_field_names:
+                    raise ValueError(
+                        f"TypedDict {name_hint!r}: properties "
+                        f"{seen_field_names[field_name]!r} and {prop_name!r} "
+                        f"both normalize to field {field_name!r}"
+                    )
+                seen_field_names[field_name] = prop_name
                 nested_name = name_hint + _to_pascal_case(prop_name)
                 field_ref = self._schema_to_typeref(prop_schema, nested_name)
                 field_desc = (
@@ -445,11 +466,8 @@ class SchemaConverter:
             self._emit_typedict(td)
             return TypeRef(annotation=name_hint)
 
-        # No object variants — primitive intersection is unrepresentable
-        if other_variants:
-            return TypeRef(annotation="Never")
-
-        return TypeRef(annotation="Any")
+        # Only non-object variants — contradictory primitive intersection
+        return TypeRef(annotation="Never")
 
     def _convert_union(self, schema: dict, name_hint: str) -> TypeRef:
         """Convert a JSON Schema anyOf to a Union type."""

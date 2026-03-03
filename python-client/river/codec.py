@@ -23,8 +23,10 @@ class Codec(ABC):
 
 
 _BIGINT_EXT_TYPE = 0
-_MSGPACK_INT_MAX = 2**64 - 1
-_MSGPACK_INT_MIN = -(2**63)
+# Use JS Number.MAX_SAFE_INTEGER bounds, not msgpack's 64-bit range.
+# Values outside this range lose precision when decoded as JS numbers.
+_MAX_SAFE_INTEGER = 2**53 - 1
+_MIN_SAFE_INTEGER = -(2**53 - 1)
 
 
 class BinaryCodec(Codec):
@@ -46,7 +48,9 @@ class BinaryCodec(Codec):
     def _ext_encode(obj: Any) -> Any:
         import msgpack
 
-        if isinstance(obj, int) and (obj > _MSGPACK_INT_MAX or obj < _MSGPACK_INT_MIN):
+        if isinstance(obj, int) and (
+            obj > _MAX_SAFE_INTEGER or obj < _MIN_SAFE_INTEGER
+        ):
             # Encode as string in extension type 0 (matches TS BigInt ext)
             data = msgpack.packb(str(obj), use_bin_type=True)
             return msgpack.ExtType(_BIGINT_EXT_TYPE, data)
