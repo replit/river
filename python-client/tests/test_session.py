@@ -434,9 +434,7 @@ class TestStaleConnectTask:
             )
 
             # RPC must fail immediately, not hang
-            client = RiverClient(
-                transport, server_id="STALE", connect_on_invoke=True
-            )
+            client = RiverClient(transport, server_id="STALE", connect_on_invoke=True)
             result = await asyncio.wait_for(
                 client.rpc("test", "add", {"n": 1}), timeout=1.0
             )
