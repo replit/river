@@ -60,7 +60,7 @@ jobs:
 
       - name: Install Python dependencies
         working-directory: python-client
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev]" ty
 
       - name: Python lint
         working-directory: python-client
@@ -68,6 +68,16 @@ jobs:
           ruff check .
           ruff format --check .
 
+      - name: Python type check
+        working-directory: python-client
+        run: ty check river/
+
       - name: Python tests
         working-directory: python-client
         run: python -m pytest tests/ -v
+
+      - name: Python type check generated clients
+        working-directory: python-client
+        run: |
+          ty check tests/generated/
+          ty check tests/test_codegen.py

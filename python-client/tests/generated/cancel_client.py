@@ -5,132 +5,42 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from river.client import RiverClient
-from river.streams import Readable, Writable
+from river.client import (
+    ErrResult,
+    OkResult,
+    RiverClient,
+    StreamResult,
+    SubscriptionResult,
+    UploadResult,
+)
 
 from ._types import (
     CancelBlockingRpcInit,
+    CancelBlockingRpcOutput,
     CancelBlockingStreamInit,
     CancelBlockingStreamInput,
+    CancelBlockingStreamOutput,
     CancelBlockingSubscriptionInit,
+    CancelBlockingSubscriptionOutput,
     CancelBlockingUploadInit,
     CancelBlockingUploadInput,
+    CancelBlockingUploadOutput,
     CancelCountedStreamInit,
     CancelCountedStreamInput,
+    CancelCountedStreamOutput,
     CancelImmediateRpcInit,
+    CancelImmediateRpcOutput,
     CancelImmediateStreamInit,
     CancelImmediateStreamInput,
+    CancelImmediateStreamOutput,
     CancelImmediateSubscriptionInit,
+    CancelImmediateSubscriptionOutput,
     CancelImmediateUploadInit,
     CancelImmediateUploadInput,
+    CancelImmediateUploadOutput,
 )
 
-
-class CancelBlockingStreamStreamResult:
-    """Streaming result for ``cancel.blockingStream``."""
-
-    def __init__(self, inner: Any) -> None:
-        self._inner = inner
-
-    @property
-    def req_writable(self) -> Writable[CancelBlockingStreamInput]:
-        """Writable stream for sending requests."""
-        return self._inner.req_writable
-
-    @property
-    def res_readable(self) -> Readable[dict[str, Any]]:
-        """Readable stream for receiving responses."""
-        return self._inner.res_readable
-
-
-class CancelBlockingUploadUploadResult:
-    """Upload result for ``cancel.blockingUpload``."""
-
-    def __init__(self, inner: Any) -> None:
-        self._inner = inner
-
-    @property
-    def req_writable(self) -> Writable[CancelBlockingUploadInput]:
-        """Writable stream for sending requests."""
-        return self._inner.req_writable
-
-    async def finalize(self) -> dict[str, Any]:
-        """Finalize the upload and get the response."""
-        return await self._inner.finalize()
-
-
-class CancelBlockingSubscriptionSubscriptionResult:
-    """Subscription result for ``cancel.blockingSubscription``."""
-
-    def __init__(self, inner: Any) -> None:
-        self._inner = inner
-
-    @property
-    def res_readable(self) -> Readable[dict[str, Any]]:
-        """Readable stream for receiving responses."""
-        return self._inner.res_readable
-
-
-class CancelImmediateStreamStreamResult:
-    """Streaming result for ``cancel.immediateStream``."""
-
-    def __init__(self, inner: Any) -> None:
-        self._inner = inner
-
-    @property
-    def req_writable(self) -> Writable[CancelImmediateStreamInput]:
-        """Writable stream for sending requests."""
-        return self._inner.req_writable
-
-    @property
-    def res_readable(self) -> Readable[dict[str, Any]]:
-        """Readable stream for receiving responses."""
-        return self._inner.res_readable
-
-
-class CancelImmediateUploadUploadResult:
-    """Upload result for ``cancel.immediateUpload``."""
-
-    def __init__(self, inner: Any) -> None:
-        self._inner = inner
-
-    @property
-    def req_writable(self) -> Writable[CancelImmediateUploadInput]:
-        """Writable stream for sending requests."""
-        return self._inner.req_writable
-
-    async def finalize(self) -> dict[str, Any]:
-        """Finalize the upload and get the response."""
-        return await self._inner.finalize()
-
-
-class CancelImmediateSubscriptionSubscriptionResult:
-    """Subscription result for ``cancel.immediateSubscription``."""
-
-    def __init__(self, inner: Any) -> None:
-        self._inner = inner
-
-    @property
-    def res_readable(self) -> Readable[dict[str, Any]]:
-        """Readable stream for receiving responses."""
-        return self._inner.res_readable
-
-
-class CancelCountedStreamStreamResult:
-    """Streaming result for ``cancel.countedStream``."""
-
-    def __init__(self, inner: Any) -> None:
-        self._inner = inner
-
-    @property
-    def req_writable(self) -> Writable[CancelCountedStreamInput]:
-        """Writable stream for sending requests."""
-        return self._inner.req_writable
-
-    @property
-    def res_readable(self) -> Readable[dict[str, Any]]:
-        """Readable stream for receiving responses."""
-        return self._inner.res_readable
+from ._errors import ProtocolError
 
 
 class CancelClient:
@@ -144,7 +54,7 @@ class CancelClient:
         init: CancelBlockingRpcInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> dict[str, Any]:
+    ) -> OkResult[CancelBlockingRpcOutput] | ErrResult[ProtocolError]:
         return await self._client.rpc(
             "cancel",
             "blockingRpc",
@@ -157,49 +67,46 @@ class CancelClient:
         init: CancelBlockingStreamInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> CancelBlockingStreamStreamResult:
-        result = self._client.stream(
+    ) -> StreamResult[CancelBlockingStreamInput]:
+        return self._client.stream(
             "cancel",
             "blockingStream",
             init,
             abort_signal=abort_signal,
         )
-        return CancelBlockingStreamStreamResult(result)
 
     def blocking_upload(
         self,
         init: CancelBlockingUploadInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> CancelBlockingUploadUploadResult:
-        result = self._client.upload(
+    ) -> UploadResult[CancelBlockingUploadInput]:
+        return self._client.upload(
             "cancel",
             "blockingUpload",
             init,
             abort_signal=abort_signal,
         )
-        return CancelBlockingUploadUploadResult(result)
 
     def blocking_subscription(
         self,
         init: CancelBlockingSubscriptionInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> CancelBlockingSubscriptionSubscriptionResult:
-        result = self._client.subscribe(
+    ) -> SubscriptionResult:
+        return self._client.subscribe(
             "cancel",
             "blockingSubscription",
             init,
             abort_signal=abort_signal,
         )
-        return CancelBlockingSubscriptionSubscriptionResult(result)
 
     async def immediate_rpc(
         self,
         init: CancelImmediateRpcInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> dict[str, Any]:
+    ) -> OkResult[CancelImmediateRpcOutput] | ErrResult[ProtocolError]:
         return await self._client.rpc(
             "cancel",
             "immediateRpc",
@@ -212,53 +119,49 @@ class CancelClient:
         init: CancelImmediateStreamInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> CancelImmediateStreamStreamResult:
-        result = self._client.stream(
+    ) -> StreamResult[CancelImmediateStreamInput]:
+        return self._client.stream(
             "cancel",
             "immediateStream",
             init,
             abort_signal=abort_signal,
         )
-        return CancelImmediateStreamStreamResult(result)
 
     def immediate_upload(
         self,
         init: CancelImmediateUploadInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> CancelImmediateUploadUploadResult:
-        result = self._client.upload(
+    ) -> UploadResult[CancelImmediateUploadInput]:
+        return self._client.upload(
             "cancel",
             "immediateUpload",
             init,
             abort_signal=abort_signal,
         )
-        return CancelImmediateUploadUploadResult(result)
 
     def immediate_subscription(
         self,
         init: CancelImmediateSubscriptionInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> CancelImmediateSubscriptionSubscriptionResult:
-        result = self._client.subscribe(
+    ) -> SubscriptionResult:
+        return self._client.subscribe(
             "cancel",
             "immediateSubscription",
             init,
             abort_signal=abort_signal,
         )
-        return CancelImmediateSubscriptionSubscriptionResult(result)
 
     def counted_stream(
         self,
         init: CancelCountedStreamInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> CancelCountedStreamStreamResult:
-        result = self._client.stream(
+    ) -> StreamResult[CancelCountedStreamInput]:
+        return self._client.stream(
             "cancel",
             "countedStream",
             init,
             abort_signal=abort_signal,
         )
-        return CancelCountedStreamStreamResult(result)

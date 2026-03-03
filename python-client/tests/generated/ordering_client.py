@@ -5,12 +5,23 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from river.client import RiverClient
+from river.client import (
+    ErrResult,
+    OkResult,
+    RiverClient,
+    StreamResult,
+    SubscriptionResult,
+    UploadResult,
+)
 
 from ._types import (
     OrderingAddInit,
+    OrderingAddOutput,
     OrderingGetAllInit,
+    OrderingGetAllOutput,
 )
+
+from ._errors import ProtocolError
 
 
 class OrderingClient:
@@ -24,7 +35,7 @@ class OrderingClient:
         init: OrderingAddInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> dict[str, Any]:
+    ) -> OkResult[OrderingAddOutput] | ErrResult[ProtocolError]:
         return await self._client.rpc(
             "ordering",
             "add",
@@ -37,7 +48,7 @@ class OrderingClient:
         init: OrderingGetAllInit,
         *,
         abort_signal: asyncio.Event | None = None,
-    ) -> dict[str, Any]:
+    ) -> OkResult[OrderingGetAllOutput] | ErrResult[ProtocolError]:
         return await self._client.rpc(
             "ordering",
             "getAll",

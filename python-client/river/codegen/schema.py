@@ -118,10 +118,23 @@ def _to_snake_case(s: str) -> str:
 
 
 def _safe_field_name(name: str) -> str:
-    """Ensure a field name is a valid Python identifier."""
-    name = _sanitize_identifier(name)
+    """Ensure a field name is a valid Python identifier.
+
+    Raises ValueError if the name requires sanitization that would
+    change it from its wire representation, since TypedDict keys must
+    match the dict keys sent on the wire.
+    """
+    sanitized = _sanitize_identifier(name)
+    if sanitized != name:
+        raise ValueError(
+            f"schema property {name!r} is not a valid Python identifier "
+            f"and cannot be represented in a TypedDict"
+        )
     if keyword.iskeyword(name):
-        return name + "_"
+        raise ValueError(
+            f"schema property {name!r} is a Python keyword "
+            f"and cannot be used as a TypedDict field"
+        )
     return name
 
 

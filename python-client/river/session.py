@@ -148,15 +148,16 @@ class Session:
 
     def _send_over_wire(self, msg: TransportMessage) -> tuple[bool, str]:
         """Serialize and send a message over the current connection."""
-        ok, result = self.codec.to_buffer(msg)
+        ok, buf_or_err = self.codec.to_buffer(msg)
         if not ok:
-            return False, result  # type: ignore[return-value]
+            assert isinstance(buf_or_err, str)
+            return False, buf_or_err
+        assert isinstance(buf_or_err, bytes)
         try:
             assert self._ws is not None
             # websockets library uses async send, but we schedule it
-            asyncio.get_event_loop().call_soon(
-                lambda data=result: self._do_ws_send(data)
-            )
+            buf = buf_or_err
+            asyncio.get_event_loop().call_soon(lambda data=buf: self._do_ws_send(data))
             return True, msg.id
         except Exception as e:
             return False, f"Failed to send: {e}"

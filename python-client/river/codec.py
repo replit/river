@@ -78,18 +78,18 @@ class BinaryCodec(Codec):
     name = "binary"
 
     def to_buffer(self, obj: dict[str, Any]) -> bytes:
-        import msgpack  # type: ignore[import-untyped]
+        import msgpack
 
         return msgpack.packb(obj, use_bin_type=True, default=self._ext_encode)
 
     def from_buffer(self, buf: bytes) -> dict[str, Any]:
-        import msgpack  # type: ignore[import-untyped]
+        import msgpack
 
         return msgpack.unpackb(buf, raw=False, ext_hook=self._ext_decode)
 
     @staticmethod
     def _ext_encode(obj: Any) -> Any:
-        import msgpack  # type: ignore[import-untyped]
+        import msgpack
 
         if isinstance(obj, int) and (obj > _MSGPACK_INT_MAX or obj < _MSGPACK_INT_MIN):
             # Encode as string in extension type 0 (matches TS BigInt ext)
@@ -99,7 +99,7 @@ class BinaryCodec(Codec):
 
     @staticmethod
     def _ext_decode(code: int, data: bytes) -> Any:
-        import msgpack  # type: ignore[import-untyped]
+        import msgpack
 
         if code == _BIGINT_EXT_TYPE:
             val = msgpack.unpackb(data, raw=False)

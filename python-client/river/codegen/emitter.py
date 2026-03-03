@@ -29,6 +29,19 @@ _env = jinja2.Environment(
 _env.filters["pascal"] = _to_pascal_case
 
 
+def _result_type(proc) -> str:  # noqa: ANN001
+    """Build the typed result annotation for a procedure."""
+    ok = f"OkResult[{proc.output_type.annotation}]"
+    if proc.error_type:
+        err = f"ErrResult[{proc.error_type.annotation} | ProtocolError]"
+    else:
+        err = "ErrResult[ProtocolError]"
+    return f"{ok} | {err}"
+
+
+_env.filters["result_type"] = _result_type
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -51,6 +64,9 @@ def _collect_used_type_names(svc: ServiceDef, ir: SchemaIR) -> list[str]:
         _extract_names(proc.init_type.annotation, td_names, names)
         if proc.input_type:
             _extract_names(proc.input_type.annotation, td_names, names)
+        _extract_names(proc.output_type.annotation, td_names, names)
+        if proc.error_type:
+            _extract_names(proc.error_type.annotation, td_names, names)
 
     return sorted(names)
 
@@ -110,22 +126,20 @@ def render_service_client(svc: ServiceDef, ir: SchemaIR, import_prefix: str) -> 
     type_names = _collect_used_type_names(svc, ir)
     types_module = "._types" if import_prefix == "." else f"{import_prefix}_types"
 
-    needs_readable = any(
-        p.proc_type in ("stream", "subscription") for p in svc.procedures
-    )
-    needs_writable = any(p.proc_type in ("stream", "upload") for p in svc.procedures)
-
-    wrappers = [
-        p for p in svc.procedures if p.proc_type in ("stream", "upload", "subscription")
-    ]
+    proc_types = {p.proc_type for p in svc.procedures}
+    has_rpc = "rpc" in proc_types
+    has_stream = "stream" in proc_types
+    has_upload = "upload" in proc_types
+    has_subscription = "subscription" in proc_types
 
     return _env.get_template("service_client.py.j2").render(
         service=svc,
         type_names=type_names,
         types_module=types_module,
-        needs_readable=needs_readable,
-        needs_writable=needs_writable,
-        wrappers=wrappers,
+        has_rpc=has_rpc,
+        has_stream=has_stream,
+        has_upload=has_upload,
+        has_subscription=has_subscription,
     )
 
 

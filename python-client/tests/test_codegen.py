@@ -351,6 +351,7 @@ class TestGeneratedClientsLive:
             # Get the initial value
             done, msg = await sub.res_readable.next()
             assert not done
+            assert msg is not None
             assert msg["ok"] is True
             assert "count" in msg["payload"]
 
@@ -381,3 +382,80 @@ class TestGeneratedClientsLive:
             assert result["payload"]["code"] == "DIV_BY_ZERO"
         finally:
             await transport.close()
+
+
+class TestCodegenFieldNames:
+    """Codegen field name validation tests."""
+
+    def test_keyword_field_raises(self):
+        """Python keywords are rejected at codegen time."""
+        from river.codegen.schema import _safe_field_name
+
+        with pytest.raises(ValueError, match="Python keyword"):
+            _safe_field_name("from")
+        with pytest.raises(ValueError, match="Python keyword"):
+            _safe_field_name("class")
+        with pytest.raises(ValueError, match="Python keyword"):
+            _safe_field_name("import")
+
+    def test_normal_field_unchanged(self):
+        from river.codegen.schema import _safe_field_name
+
+        assert _safe_field_name("name") == "name"
+        assert _safe_field_name("streamId") == "streamId"
+
+    def test_dash_field_raises(self):
+        """Fields with dashes are rejected at codegen time."""
+        from river.codegen.schema import _safe_field_name
+
+        with pytest.raises(ValueError, match="not a valid Python identifier"):
+            _safe_field_name("request-id")
+
+    def test_schema_with_invalid_field_raises(self):
+        """Codegen rejects schemas with non-identifier property names."""
+        from river.codegen.schema import SchemaConverter
+
+        converter = SchemaConverter()
+        schema = {
+            "type": "object",
+            "properties": {
+                "request-id": {"type": "string"},
+                "normal": {"type": "string"},
+            },
+            "required": ["request-id", "normal"],
+        }
+        with pytest.raises(ValueError, match="not a valid Python identifier"):
+            converter._schema_to_typeref(schema, "TestObj")
+
+    def test_schema_with_keyword_field_raises(self):
+        """Codegen rejects schemas with keyword property names."""
+        from river.codegen.schema import SchemaConverter
+
+        converter = SchemaConverter()
+        schema = {
+            "type": "object",
+            "properties": {
+                "from": {"type": "string"},
+            },
+            "required": ["from"],
+        }
+        with pytest.raises(ValueError, match="Python keyword"):
+            converter._schema_to_typeref(schema, "TestObj")
+
+    def test_valid_schema_passes(self):
+        """Schemas with normal camelCase properties work fine."""
+        from river.codegen.schema import SchemaConverter
+
+        converter = SchemaConverter()
+        schema = {
+            "type": "object",
+            "properties": {
+                "userId": {"type": "string"},
+                "count": {"type": "number"},
+            },
+            "required": ["userId", "count"],
+        }
+        ref = converter._schema_to_typeref(schema, "TestObj")
+        assert ref.annotation == "TestObj"
+        td = converter._typedicts[-1]
+        assert [f.name for f in td.fields] == ["userId", "count"]

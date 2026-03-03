@@ -143,7 +143,7 @@ class WebSocketClientTransport:
         self.sessions: dict[str, Session] = {}  # to_id -> Session
         self._events = EventDispatcher()
         self._retry_budget = LeakyBucketRateLimit()
-        self._reconnect_on_connection_drop = True
+        self._reconnect_on_connection_drop = self.options.enable_transparent_reconnects
 
         # Connection tasks
         self._connect_tasks: dict[str, asyncio.Task] = {}
@@ -224,6 +224,7 @@ class WebSocketClientTransport:
                 "protocolError",
                 {"type": "conn_retry_exceeded", "message": "Retries exceeded"},
             )
+            self._delete_session(to)
             return
 
         backoff_ms = self._retry_budget.get_backoff_ms()
@@ -262,7 +263,7 @@ class WebSocketClientTransport:
 
     async def _create_connection(self, to: str) -> Any:
         """Create a new WebSocket connection."""
-        import websockets  # type: ignore[import-untyped]
+        import websockets
 
         url = self._ws_url if isinstance(self._ws_url, str) else self._ws_url(to)
 
@@ -481,7 +482,11 @@ class WebSocketClientTransport:
         if session is None or session._destroyed:
             return
 
+        # Transition to NoConnection with grace period so the session
+        # is eventually destroyed if reconnect doesn't succeed.
+        loop = self._get_loop()
         session.state = SessionState.NO_CONNECTION
+        session.start_grace_period(loop)
 
         if self._reconnect_on_connection_drop:
             self._try_reconnecting(to)

@@ -9,7 +9,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Generic, Literal, TypeVar
+
+from typing_extensions import TypedDict
 
 from river.streams import Readable, Writable
 from river.transport import WebSocketClientTransport
@@ -29,28 +31,43 @@ from river.types import (
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T")
+TPayload = TypeVar("TPayload")
+
+
+class OkResult(TypedDict, Generic[TPayload]):
+    """Successful result from a procedure call."""
+
+    ok: Literal[True]
+    payload: TPayload
+
+
+class ErrResult(TypedDict, Generic[TPayload]):
+    """Error result from a procedure call."""
+
+    ok: Literal[False]
+    payload: TPayload
+
 
 @dataclass
-class RpcResult:
-    """Result of an RPC call."""
+class StreamResult(Generic[T]):
+    """Result of opening a stream procedure.
 
-    ok: bool
-    payload: Any
+    Generic over the input type ``T`` written to ``req_writable``.
+    """
 
-
-@dataclass
-class StreamResult:
-    """Result of opening a stream procedure."""
-
-    req_writable: Writable
+    req_writable: Writable[T]
     res_readable: Readable
 
 
 @dataclass
-class UploadResult:
-    """Result of opening an upload procedure."""
+class UploadResult(Generic[T]):
+    """Result of opening an upload procedure.
 
-    req_writable: Writable
+    Generic over the input type ``T`` written to ``req_writable``.
+    """
+
+    req_writable: Writable[T]
     finalize: Callable[[], Any]  # async callable returning RpcResult
 
 
@@ -113,7 +130,7 @@ class RiverClient:
         procedure_name: str,
         init: Any,
         abort_signal: asyncio.Event | None = None,
-    ) -> dict[str, Any]:
+    ) -> Any:
         """Invoke an RPC procedure.
 
         Returns the result dict: {"ok": True/False, "payload": ...}

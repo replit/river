@@ -29,9 +29,13 @@ testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py310"
+exclude = ["tests/generated"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
+
+[tool.ty.environment]
+extra-paths = ["tests"]
 
 [tool.setuptools.packages.find]
 include = ["river*"]

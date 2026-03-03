@@ -1713,3 +1713,41 @@ class TestFatalErrorPaths:
         # Push after break should be a no-op
         r._push_value({"ok": True, "payload": 2})
         assert not r._has_values_in_queue()
+
+    @pytest.mark.asyncio
+    async def test_connection_failed_starts_grace_period(self, server_url: str):
+        """Connection failure starts grace period so session eventually dies."""
+        from river.session import SessionOptions
+        from tests.test_utils import wait_for_session_gone
+
+        transport = WebSocketClientTransport(
+            ws_url="ws://127.0.0.1:1",  # unreachable
+            client_id=None,
+            server_id="UNREACHABLE",
+            codec=NaiveJsonCodec(),
+            options=SessionOptions(
+                connection_timeout_ms=100,
+                session_disconnect_grace_ms=300,
+            ),
+        )
+        transport.reconnect_on_connection_drop = False
+        try:
+            transport.connect("UNREACHABLE")
+            # Connection will fail; grace period starts
+            await wait_for_session_gone(transport, "UNREACHABLE")
+        finally:
+            await transport.close()
+
+    def test_enable_transparent_reconnects_option(self):
+        """enable_transparent_reconnects=False disables reconnect."""
+        from river.session import SessionOptions
+
+        opts = SessionOptions(enable_transparent_reconnects=False)
+        transport = WebSocketClientTransport(
+            ws_url="ws://127.0.0.1:1",
+            client_id=None,
+            server_id="SERVER",
+            codec=NaiveJsonCodec(),
+            options=opts,
+        )
+        assert transport.reconnect_on_connection_drop is False

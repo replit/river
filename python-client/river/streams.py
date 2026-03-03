@@ -225,7 +225,7 @@ class Writable(Generic[T]):
             self._write_cb(value)
         self._closed = True
         # Nullify callbacks after invocation to prevent reuse
-        self._write_cb = lambda _: None  # type: ignore[assignment]
+        self._write_cb = lambda _: None
         if self._close_cb:
             self._close_cb()
         self._close_cb = None
