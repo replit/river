@@ -1330,6 +1330,39 @@ class TestCodecUnit:
         decoded = codec.from_buffer(buf)
         assert decoded["n"] == just_under
 
+    def test_binary_codec_bigint_uses_ext_type(self):
+        """Large ints are encoded as msgpack ExtType, not native ints."""
+        import msgpack
+
+        from river.codec import BinaryCodec
+
+        codec = BinaryCodec()
+        big = 2**53 + 1
+        buf = codec.to_buffer({"n": big})
+        # Unpack raw (without ext_hook) to verify the value is an ExtType
+        raw = msgpack.unpackb(buf, raw=False)
+        assert isinstance(raw["n"], msgpack.ExtType)
+        assert raw["n"].code == 0
+
+    def test_binary_codec_bigint_nested(self):
+        """Large ints nested in lists and dicts are encoded as ExtType."""
+        from river.codec import BinaryCodec
+
+        codec = BinaryCodec()
+        big = 2**53 + 1
+        obj = {"a": [big], "b": {"c": big}}
+        decoded = codec.from_buffer(codec.to_buffer(obj))
+        assert decoded["a"][0] == big
+        assert decoded["b"]["c"] == big
+
+    def test_binary_codec_bool_not_treated_as_bigint(self):
+        """Booleans (subclass of int) should not be converted to ExtType."""
+        from river.codec import BinaryCodec
+
+        codec = BinaryCodec()
+        decoded = codec.from_buffer(codec.to_buffer({"flag": True}))
+        assert decoded["flag"] is True
+
 
 # =====================================================================
 # Lifecycle / Cleanup Tests

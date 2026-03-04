@@ -37,7 +37,7 @@ class BinaryCodec(Codec):
     def to_buffer(self, obj: dict[str, Any]) -> bytes:
         import msgpack
 
-        return msgpack.packb(obj, use_bin_type=True, default=self._ext_encode)
+        return msgpack.packb(self._prepare(obj), use_bin_type=True)
 
     def from_buffer(self, buf: bytes) -> dict[str, Any]:
         import msgpack
@@ -45,16 +45,20 @@ class BinaryCodec(Codec):
         return msgpack.unpackb(buf, raw=False, ext_hook=self._ext_decode)
 
     @staticmethod
-    def _ext_encode(obj: Any) -> Any:
+    def _prepare(obj: Any) -> Any:
+        """Walk *obj* and replace ints outside JS safe range with ExtType."""
         import msgpack
 
-        if isinstance(obj, int) and (
+        if isinstance(obj, dict):
+            return {k: BinaryCodec._prepare(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [BinaryCodec._prepare(v) for v in obj]
+        if isinstance(obj, int) and not isinstance(obj, bool) and (
             obj > _MAX_SAFE_INTEGER or obj < _MIN_SAFE_INTEGER
         ):
-            # Encode as string in extension type 0 (matches TS BigInt ext)
             data = msgpack.packb(str(obj), use_bin_type=True)
             return msgpack.ExtType(_BIGINT_EXT_TYPE, data)
-        raise TypeError(f"Unknown type: {type(obj)}")
+        return obj
 
     @staticmethod
     def _ext_decode(code: int, data: bytes) -> Any:

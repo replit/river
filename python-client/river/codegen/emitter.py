@@ -31,7 +31,11 @@ _env.filters["pascal"] = _to_pascal_case
 
 def _escape_docstring(s: str) -> str:
     """Escape a string for use inside triple-quoted docstrings."""
-    return s.replace("\\", "\\\\").replace('"""', r"\"\"\"")
+    s = s.replace("\\", "\\\\").replace('"""', r"\"\"\"")
+    # A trailing " would merge with the closing """ to form """", breaking syntax.
+    if s.endswith('"'):
+        s = s[:-1] + r"\""
+    return s
 
 
 _env.filters["docstring"] = _escape_docstring

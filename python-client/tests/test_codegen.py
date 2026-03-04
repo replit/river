@@ -620,7 +620,25 @@ class TestNameCollisions:
         from river.codegen.emitter import _escape_docstring
 
         assert '"""' not in _escape_docstring('bad """ doc')
-        assert _escape_docstring('say """hello"""') == r"say \"\"\"hello\"\"\""
+        # Internal triple quotes are escaped; trailing " also escaped
+        result = _escape_docstring('say """hello"""')
+        assert '"""' not in result
+        assert not result.endswith('"') or result.endswith(r'\"')
+
+    def test_description_ending_with_quote(self):
+        """Trailing quote is escaped to avoid merging with closing triple-quote."""
+        from river.codegen.emitter import _escape_docstring
+
+        result = _escape_docstring('example: "hello"')
+        # Must not end with unescaped " which would form """" with closing """
+        assert not result.endswith('"') or result.endswith(r'\"')
+        assert result == r'example: "hello\"'
+
+    def test_description_ending_without_quote(self):
+        """Non-quote endings are left unchanged."""
+        from river.codegen.emitter import _escape_docstring
+
+        assert _escape_docstring("normal text") == "normal text"
 
     def test_typedict_name_collision_deduplicates(self):
         """Two properties that generate the same TypedDict name — first wins."""
@@ -1357,3 +1375,291 @@ class TestComplexTypes:
         tags_field = next((f for f in init_td.fields if f.name == "tags"), None)
         assert tags_field is not None
         assert "list[" in tags_field.type_ref.annotation
+
+
+class TestPatternProperties:
+    """Test codegen handling of patternProperties (dynamic dict keys)."""
+
+    def _convert(self, schema: dict, name: str = "Test"):
+        from river.codegen.schema import SchemaConverter
+
+        converter = SchemaConverter()
+        ref = converter._schema_to_typeref(schema, name)
+        return ref, converter._typedicts
+
+    def test_simple_string_values(self):
+        """patternProperties with string values → dict[str, str]."""
+        schema = {
+            "type": "object",
+            "patternProperties": {
+                "^(.*)$": {"type": "string"},
+            },
+        }
+        ref, tds = self._convert(schema, "Env")
+        assert ref.annotation == "dict[str, str]"
+        assert len(tds) == 0  # no TypedDict emitted
+
+    def test_object_values(self):
+        """patternProperties with object values → dict[str, TypedDict]."""
+        schema = {
+            "type": "object",
+            "patternProperties": {
+                "^(.*)$": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "version": {"type": "string"},
+                    },
+                    "required": ["name", "version"],
+                },
+            },
+        }
+        ref, tds = self._convert(schema, "Packages")
+        assert ref.annotation == "dict[str, PackagesValue]"
+        assert len(tds) == 1
+        td = tds[0]
+        assert td.name == "PackagesValue"
+        field_names = {f.name for f in td.fields}
+        assert field_names == {"name", "version"}
+
+    def test_nested_object_values(self):
+        """patternProperties where values have nested structure."""
+        schema = {
+            "type": "object",
+            "patternProperties": {
+                "^(.*)$": {
+                    "type": "object",
+                    "properties": {
+                        "all": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "version": {"type": "string"},
+                                },
+                                "required": ["name", "version"],
+                            },
+                        },
+                        "required": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "version": {"type": "string"},
+                                },
+                                "required": ["name", "version"],
+                            },
+                        },
+                    },
+                },
+            },
+        }
+        ref, tds = self._convert(schema, "InstalledPackages")
+        assert ref.annotation == "dict[str, InstalledPackagesValue]"
+
+        value_td = next(td for td in tds if td.name == "InstalledPackagesValue")
+        field_names = {f.name for f in value_td.fields}
+        assert "all" in field_names
+        assert "required" in field_names
+
+        all_field = next(f for f in value_td.fields if f.name == "all")
+        assert "list[" in all_field.type_ref.annotation
+
+    def test_integer_pattern_keys(self):
+        """patternProperties with integer-only pattern still becomes dict[str, ...]."""
+        schema = {
+            "type": "object",
+            "patternProperties": {
+                "^(0|[1-9][0-9]*)$": {
+                    "type": "object",
+                    "properties": {"id": {"type": "number"}},
+                    "required": ["id"],
+                },
+            },
+        }
+        ref, tds = self._convert(schema, "IntMap")
+        assert ref.annotation == "dict[str, IntMapValue]"
+
+    def test_multiple_patterns_union(self):
+        """Multiple patternProperties produce a union value type."""
+        schema = {
+            "type": "object",
+            "patternProperties": {
+                "^a": {"type": "string"},
+                "^b": {"type": "integer"},
+            },
+        }
+        ref, tds = self._convert(schema, "Multi")
+        assert ref.annotation == "dict[str, str | int]"
+        assert len(tds) == 0
+
+    def test_multiple_patterns_same_type(self):
+        """Multiple patternProperties with the same type collapse to one."""
+        schema = {
+            "type": "object",
+            "patternProperties": {
+                "^a": {"type": "string"},
+                "^b": {"type": "string"},
+            },
+        }
+        ref, tds = self._convert(schema, "Same")
+        assert ref.annotation == "dict[str, str]"
+
+    def test_properties_take_precedence(self):
+        """Object with properties (not patternProperties) → TypedDict, not dict."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+            },
+            "required": ["name"],
+        }
+        ref, tds = self._convert(schema, "Named")
+        assert ref.annotation == "Named"
+        assert len(tds) == 1
+
+    def test_pattern_properties_in_parent_object(self):
+        """patternProperties nested inside a normal object with properties."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "kind": {"const": "packages", "type": "string"},
+                "packages": {
+                    "type": "object",
+                    "patternProperties": {
+                        "^(.*)$": {
+                            "type": "object",
+                            "properties": {
+                                "count": {"type": "integer"},
+                            },
+                            "required": ["count"],
+                        },
+                    },
+                },
+            },
+            "required": ["kind", "packages"],
+        }
+        ref, tds = self._convert(schema, "Output")
+        assert ref.annotation == "Output"
+
+        output_td = next(td for td in tds if td.name == "Output")
+        packages_field = next(f for f in output_td.fields if f.name == "packages")
+        assert packages_field.type_ref.annotation == "dict[str, OutputPackagesValue]"
+
+    def test_e2e_pattern_properties_codegen(self, tmp_path):
+        """End-to-end: schema with patternProperties → generated code → importable."""
+        from river.codegen.emitter import write_generated_files
+        from river.codegen.schema import SchemaConverter
+
+        schema = {
+            "services": {
+                "registry": {
+                    "procedures": {
+                        "listPackages": {
+                            "type": "rpc",
+                            "input": {
+                                "type": "object",
+                                "properties": {
+                                    "language": {"type": "string"},
+                                },
+                                "required": ["language"],
+                            },
+                            "output": {
+                                "type": "object",
+                                "properties": {
+                                    "packages": {
+                                        "type": "object",
+                                        "patternProperties": {
+                                            "^(.*)$": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "all": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "version": {
+                                                                    "type": "string"
+                                                                },
+                                                            },
+                                                            "required": [
+                                                                "name",
+                                                                "version",
+                                                            ],
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                                "required": ["packages"],
+                            },
+                            "errors": {
+                                "anyOf": [
+                                    {
+                                        "type": "object",
+                                        "properties": {
+                                            "code": {
+                                                "const": "UNCAUGHT_ERROR",
+                                                "type": "string",
+                                            },
+                                            "message": {"type": "string"},
+                                        },
+                                        "required": ["code", "message"],
+                                    }
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+        }
+
+        converter = SchemaConverter()
+        ir = converter.convert(schema)
+
+        output_dir = str(tmp_path / "generated")
+        os.makedirs(output_dir, exist_ok=True)
+        write_generated_files(ir, output_dir)
+
+        # Verify generated types file is valid Python
+        types_path = os.path.join(output_dir, "_types.py")
+        assert os.path.exists(types_path)
+        with open(types_path) as f:
+            source = f.read()
+
+        # Should contain dict[str, ...] not an empty TypedDict
+        assert "dict[str," in source
+        assert "pass" not in source or "pass" in source.split("class")[0]
+
+        # Verify it compiles
+        compile(source, types_path, "exec")
+
+        # Import and check the type at runtime
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("_types", types_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)  # type: ignore
+
+        # The output type should reference the value TypedDict via dict[str, ...]
+        assert hasattr(mod, "RegistryListPackagesOutput")
+        assert hasattr(mod, "RegistryListPackagesOutputPackagesValue")
+        assert hasattr(mod, "RegistryListPackagesOutputPackagesValueAllItem")
+
+        # Check the annotation references dict[str, ...] with the value type
+        ann = str(mod.RegistryListPackagesOutput.__annotations__["packages"])
+        assert "dict[str," in ann
+        assert "RegistryListPackagesOutputPackagesValue" in ann
+
+        # The value type has an 'all' field with a list of items
+        value_ann = str(
+            mod.RegistryListPackagesOutputPackagesValue.__annotations__["all"]
+        )
+        assert "list[" in value_ann

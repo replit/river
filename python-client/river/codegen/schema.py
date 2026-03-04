@@ -364,6 +364,22 @@ class SchemaConverter:
 
     def _convert_object(self, schema: dict, name: str) -> TypeRef:
         """Convert a JSON Schema object to a TypedDict and return a ref to it."""
+        # patternProperties with a catch-all pattern → dict[str, ValueType]
+        pattern_props = schema.get("patternProperties", {})
+        if pattern_props and not schema.get("properties"):
+            values = list(pattern_props.values())
+            if len(values) == 1:
+                value_ref = self._schema_to_typeref(values[0], f"{name}Value")
+                val_ann = value_ref.annotation
+            else:
+                value_refs = [
+                    self._schema_to_typeref(v, f"{name}Value{i}")
+                    for i, v in enumerate(values)
+                ]
+                unique = list(dict.fromkeys(r.annotation for r in value_refs))
+                val_ann = unique[0] if len(unique) == 1 else " | ".join(unique)
+            return TypeRef(annotation=f"dict[str, {val_ann}]")
+
         properties = schema.get("properties", {})
         required_set = set(schema.get("required", []))
         description = schema.get("description")
