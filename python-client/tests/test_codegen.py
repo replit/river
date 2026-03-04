@@ -1180,8 +1180,8 @@ class TestComplexTypes:
         assert "Envelope" in td_names
         assert "EnvelopeMeta" in td_names
 
-    def test_allof_mixed_types_merges_objects(self):
-        """allOf with object + primitive → object properties still merged."""
+    def test_allof_mixed_types_is_never(self):
+        """allOf with object + primitive → Never (contradictory)."""
         schema = {
             "allOf": [
                 {
@@ -1193,11 +1193,7 @@ class TestComplexTypes:
             ]
         }
         ref, tds = self._convert(schema, "Mixed")
-        # Object properties are merged; primitive constraint is ignored
-        assert ref.annotation == "Mixed"
-        td = next(td for td in tds if td.name == "Mixed")
-        assert len(td.fields) == 1
-        assert td.fields[0].name == "x"
+        assert ref.annotation == "Never"
 
     def test_allof_only_primitives_is_never(self):
         """allOf with only primitives → Never (contradictory intersection)."""
