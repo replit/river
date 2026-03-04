@@ -1,0 +1,567 @@
+"""River client for invoking remote procedures.
+
+Provides the high-level API for calling rpc, stream, upload, and
+subscription procedures on a River server.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
+
+from typing_extensions import TypedDict
+
+if TYPE_CHECKING:
+    from river.session import SessionOptions
+
+from river.session import SessionState
+from river.streams import Readable, Writable
+from river.transport import WebSocketClientTransport
+from river.types import (
+    CANCEL_CODE,
+    UNEXPECTED_DISCONNECT_CODE,
+    ControlFlags,
+    PartialTransportMessage,
+    TransportMessage,
+    cancel_message,
+    close_stream_message,
+    err_result,
+    generate_id,
+    is_stream_cancel,
+    is_stream_close,
+)
+
+logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+TOutput = TypeVar("TOutput")
+TPayload = TypeVar("TPayload")
+
+
+class OkResult(TypedDict, Generic[TPayload]):
+    """Successful result from a procedure call."""
+
+    ok: Literal[True]
+    payload: TPayload
+
+
+class ErrResult(TypedDict, Generic[TPayload]):
+    """Error result from a procedure call."""
+
+    ok: Literal[False]
+    payload: TPayload
+
+
+@dataclass
+class StreamResult(Generic[T, TOutput]):
+    """Result of opening a stream procedure.
+
+    Generic over the input type ``T`` written to ``req_writable``
+    and the output type ``TOutput`` read from ``res_readable``.
+    """
+
+    req_writable: Writable[T]
+    res_readable: Readable[TOutput]
+
+
+@dataclass
+class UploadResult(Generic[T, TOutput]):
+    """Result of opening an upload procedure.
+
+    Generic over the input type ``T`` written to ``req_writable``
+    and the output type ``TOutput`` returned by ``finalize()``.
+    """
+
+    req_writable: Writable[T]
+    finalize: Callable[[], Awaitable[TOutput]]
+
+
+@dataclass
+class SubscriptionResult(Generic[T]):
+    """Result of opening a subscription procedure.
+
+    Generic over the output type ``T`` received from ``res_readable``.
+    """
+
+    res_readable: Readable[T]
+
+
+class RiverClient:
+    """Client for invoking procedures on a River server.
+
+    Usage:
+        transport = WebSocketClientTransport("ws://localhost:8080", ...)
+        client = RiverClient(transport, server_id="my-server")
+
+        # RPC
+        result = await client.rpc("service", "procedure", {"arg": 1})
+
+        # Stream
+        stream = client.stream("service", "procedure", {"arg": 1})
+        stream.req_writable.write({"data": "hello"})
+        async for msg in stream.res_readable:
+            print(msg)
+
+        # Upload
+        upload = client.upload("service", "procedure", {"arg": 1})
+        upload.req_writable.write({"data": "chunk1"})
+        upload.req_writable.close()
+        result = await upload.finalize()
+
+        # Subscription
+        sub = client.subscribe("service", "procedure", {"arg": 1})
+        async for msg in sub.res_readable:
+            print(msg)
+    """
+
+    def __init__(
+        self,
+        transport: WebSocketClientTransport,
+        server_id: str | None = None,
+        connect_on_invoke: bool = True,
+        eagerly_connect: bool = False,
+    ) -> None:
+        self._transport = transport
+        self._server_id = server_id or transport.server_id
+        self._connect_on_invoke = connect_on_invoke
+
+        if eagerly_connect:
+            transport.connect(self._server_id)
+
+    @classmethod
+    async def connect(
+        cls,
+        url: str,
+        *,
+        client_id: str | None = None,
+        server_id: str = "SERVER",
+        handshake_metadata: Any = None,
+        options: "SessionOptions | None" = None,
+    ) -> "RiverClient":
+        """Create a connected RiverClient.
+
+        Convenience factory that creates a transport and eagerly connects.
+        """
+        from river.session import SessionOptions as _SO
+
+        transport = WebSocketClientTransport(
+            url,
+            client_id=client_id,
+            server_id=server_id,
+            handshake_metadata=handshake_metadata,
+            options=options or _SO(),
+        )
+        client = cls(transport, server_id=server_id, eagerly_connect=True)
+        return client
+
+    @property
+    def transport(self) -> WebSocketClientTransport:
+        return self._transport
+
+    async def rpc(
+        self,
+        service_name: str,
+        procedure_name: str,
+        init: Any,
+        abort_signal: asyncio.Event | None = None,
+    ) -> Any:
+        """Invoke an RPC procedure.
+
+        Returns the result dict: {"ok": True/False, "payload": ...}
+        """
+        result = self._handle_proc(
+            proc_type="rpc",
+            service_name=service_name,
+            procedure_name=procedure_name,
+            init=init,
+            abort_signal=abort_signal,
+        )
+        # For RPC, we await the single response
+        readable = result["res_readable"]
+        done, value = await readable.next()
+        if done:
+            return err_result(UNEXPECTED_DISCONNECT_CODE, "No response received")
+        return value
+
+    def stream(
+        self,
+        service_name: str,
+        procedure_name: str,
+        init: Any,
+        abort_signal: asyncio.Event | None = None,
+    ) -> StreamResult[Any, Any]:
+        """Open a stream procedure.
+
+        Returns StreamResult with req_writable and res_readable.
+        """
+        result = self._handle_proc(
+            proc_type="stream",
+            service_name=service_name,
+            procedure_name=procedure_name,
+            init=init,
+            abort_signal=abort_signal,
+        )
+        return StreamResult(
+            req_writable=result["req_writable"],
+            res_readable=result["res_readable"],
+        )
+
+    def upload(
+        self,
+        service_name: str,
+        procedure_name: str,
+        init: Any,
+        abort_signal: asyncio.Event | None = None,
+    ) -> UploadResult[Any, Any]:
+        """Open an upload procedure.
+
+        Returns UploadResult with req_writable and finalize().
+        """
+        result = self._handle_proc(
+            proc_type="upload",
+            service_name=service_name,
+            procedure_name=procedure_name,
+            init=init,
+            abort_signal=abort_signal,
+        )
+
+        async def finalize() -> dict[str, Any]:
+            writable = result["req_writable"]
+            if writable.is_writable():
+                writable.close()
+            readable = result["res_readable"]
+            done, value = await readable.next()
+            if done:
+                return err_result(UNEXPECTED_DISCONNECT_CODE, "No response received")
+            return value
+
+        return UploadResult(
+            req_writable=result["req_writable"],
+            finalize=finalize,
+        )
+
+    def subscribe(
+        self,
+        service_name: str,
+        procedure_name: str,
+        init: Any,
+        abort_signal: asyncio.Event | None = None,
+    ) -> SubscriptionResult[Any]:
+        """Open a subscription procedure.
+
+        Returns SubscriptionResult with res_readable.
+        """
+        result = self._handle_proc(
+            proc_type="subscription",
+            service_name=service_name,
+            procedure_name=procedure_name,
+            init=init,
+            abort_signal=abort_signal,
+        )
+        return SubscriptionResult(res_readable=result["res_readable"])
+
+    def _handle_proc(
+        self,
+        proc_type: str,
+        service_name: str,
+        procedure_name: str,
+        init: Any,
+        abort_signal: asyncio.Event | None = None,
+    ) -> dict[str, Any]:
+        """Core procedure dispatch logic.
+
+        Sets up the stream, registers message handlers, sends the init message.
+        """
+        to = self._server_id
+        transport = self._transport
+
+        # If transport is closed, return immediate disconnect error
+        if transport.get_status() != "open":
+            res_readable = Readable()
+            res_readable._push_value(
+                err_result(UNEXPECTED_DISCONNECT_CODE, "transport is closed")
+            )
+            res_readable._trigger_close()
+            req_writable = Writable(write_cb=lambda _: None, close_cb=None)
+            req_writable._closed = True
+            return {
+                "res_readable": res_readable,
+                "req_writable": req_writable,
+            }
+
+        # Connect if needed
+        if self._connect_on_invoke:
+            transport.connect(to)
+
+        # Get the session and a send function.
+        # If connect() couldn't start (retry budget exhausted, transport
+        # closing, etc.) the session will be in NO_CONNECTION with no
+        # connect task in flight — fail immediately instead of hanging.
+        session = transport._get_or_create_session(to)
+        connect_task = transport._connect_tasks.get(to)
+        has_active_connect = connect_task is not None and not connect_task.done()
+        if session.state == SessionState.NO_CONNECTION and not has_active_connect:
+            transport._delete_session(to)
+            res_readable = Readable()
+            res_readable._push_value(
+                err_result(
+                    UNEXPECTED_DISCONNECT_CODE,
+                    f"{to} connection failed",
+                )
+            )
+            res_readable._trigger_close()
+            req_writable = Writable(write_cb=lambda _: None, close_cb=None)
+            req_writable._closed = True
+            return {
+                "res_readable": res_readable,
+                "req_writable": req_writable,
+            }
+
+        session_id = session.id
+        try:
+            send_fn = transport.get_session_bound_send_fn(to, session_id)
+        except RuntimeError:
+            # Session already dead
+            res_readable = Readable()
+            res_readable._push_value(
+                err_result(
+                    UNEXPECTED_DISCONNECT_CODE,
+                    f"{to} unexpectedly disconnected",
+                )
+            )
+            res_readable._trigger_close()
+            req_writable = Writable(write_cb=lambda _: None, close_cb=None)
+            req_writable._closed = True
+            return {
+                "res_readable": res_readable,
+                "req_writable": req_writable,
+            }
+
+        # Determine flags
+        proc_closes_with_init = proc_type in ("rpc", "subscription")
+        stream_id = generate_id()
+
+        # Create readable for responses
+        res_readable: Readable = Readable()
+
+        # Tracking state
+        clean_close = True
+        cleaned_up = False
+        abort_task: asyncio.Task | None = None
+
+        def cleanup():
+            nonlocal cleaned_up
+            if cleaned_up:
+                return
+            cleaned_up = True
+            transport.remove_event_listener("message", on_message)
+            transport.remove_event_listener("sessionStatus", on_session_status)
+            if abort_task is not None and not abort_task.done():
+                abort_task.cancel()
+
+        def _try_cleanup():
+            """Run cleanup once both sides have been closed/triggered."""
+            if res_readable._closed and req_writable.is_closed():
+                cleanup()
+
+        def close_readable():
+            if not res_readable._closed:
+                try:
+                    res_readable._trigger_close()
+                except RuntimeError:
+                    pass
+            _try_cleanup()
+
+        # Create writable for requests
+        def write_cb(raw_value: Any) -> None:
+            nonlocal clean_close
+            try:
+                send_fn(
+                    PartialTransportMessage(
+                        payload=raw_value,
+                        stream_id=stream_id,
+                        control_flags=0,
+                    )
+                )
+            except RuntimeError:
+                # Session is gone — push disconnect error and tear down
+                clean_close = False
+                try:
+                    res_readable._push_value(
+                        err_result(
+                            UNEXPECTED_DISCONNECT_CODE,
+                            "send failed: session closed",
+                        )
+                    )
+                except RuntimeError:
+                    pass
+                close_readable()
+                if req_writable.is_writable():
+                    req_writable.close()
+
+        def close_cb() -> None:
+            nonlocal clean_close
+            if not proc_closes_with_init and clean_close:
+                try:
+                    send_fn(close_stream_message(stream_id))
+                except RuntimeError:
+                    pass
+            _try_cleanup()
+
+        req_writable: Writable = Writable(write_cb=write_cb, close_cb=close_cb)
+
+        def on_message(msg: TransportMessage) -> None:
+            nonlocal clean_close
+            if msg.stream_id != stream_id:
+                return
+            if msg.to != transport.client_id:
+                return
+
+            # Cancel from server — always an error
+            if is_stream_cancel(msg.control_flags):
+                clean_close = False
+                payload = msg.payload
+                if isinstance(payload, dict) and "ok" in payload and not payload["ok"]:
+                    # Already error-shaped, forward as-is
+                    res_readable._push_value(payload)
+                else:
+                    # Force to error shape (reject ok:true on cancel)
+                    code = (
+                        payload.get("code", "UNKNOWN")
+                        if isinstance(payload, dict)
+                        else "UNKNOWN"
+                    )
+                    message = (
+                        payload.get("message", str(payload))
+                        if isinstance(payload, dict)
+                        else str(payload)
+                    )
+                    res_readable._push_value(err_result(code, message))
+                close_readable()
+                if req_writable.is_writable():
+                    req_writable.close()
+                return
+
+            if res_readable.is_closed():
+                return
+
+            # Normal payload (not a CLOSE control)
+            if isinstance(msg.payload, dict):
+                if msg.payload.get("type") != "CLOSE":
+                    if "ok" in msg.payload:
+                        res_readable._push_value(msg.payload)
+
+            # Stream close
+            if is_stream_close(msg.control_flags):
+                close_readable()
+
+        def on_session_status(evt: dict) -> None:
+            nonlocal clean_close
+            if evt.get("status") != "closing":
+                return
+            event_session = evt.get("session")
+            if event_session is None:
+                return
+            if event_session.to_id != to or event_session.id != session_id:
+                return
+
+            clean_close = False
+            try:
+                res_readable._push_value(
+                    err_result(
+                        UNEXPECTED_DISCONNECT_CODE,
+                        f"{to} unexpectedly disconnected",
+                    )
+                )
+            except RuntimeError:
+                pass
+            close_readable()
+            if req_writable.is_writable():
+                req_writable.close()
+
+        def on_client_cancel() -> None:
+            nonlocal clean_close
+            if cleaned_up:
+                return
+            clean_close = False
+            try:
+                res_readable._push_value(err_result(CANCEL_CODE, "cancelled by client"))
+            except RuntimeError:
+                pass
+            close_readable()
+            if req_writable.is_writable():
+                req_writable.close()
+            try:
+                send_fn(
+                    cancel_message(
+                        stream_id,
+                        err_result(CANCEL_CODE, "cancelled by client"),
+                    )
+                )
+            except RuntimeError:
+                pass
+
+        # Register listeners
+        transport.add_event_listener("message", on_message)
+        transport.add_event_listener("sessionStatus", on_session_status)
+
+        # Wire up abort signal
+        if abort_signal is not None:
+
+            async def _watch_abort():
+                await abort_signal.wait()
+                on_client_cancel()
+
+            try:
+                loop = asyncio.get_running_loop()
+                abort_task = loop.create_task(_watch_abort())
+            except RuntimeError:
+                pass
+
+        # Send init message
+        init_flags = (
+            ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit
+            if proc_closes_with_init
+            else ControlFlags.StreamOpenBit
+        )
+
+        try:
+            send_fn(
+                PartialTransportMessage(
+                    payload=init,
+                    stream_id=stream_id,
+                    control_flags=init_flags,
+                    service_name=service_name,
+                    procedure_name=procedure_name,
+                )
+            )
+        except RuntimeError:
+            # Session dead at send time
+            try:
+                res_readable._push_value(
+                    err_result(
+                        UNEXPECTED_DISCONNECT_CODE,
+                        f"{to} unexpectedly disconnected",
+                    )
+                )
+                res_readable._trigger_close()
+            except RuntimeError:
+                pass
+            req_writable._closed = True
+            cleanup()
+            return {
+                "res_readable": res_readable,
+                "req_writable": req_writable,
+            }
+
+        # For rpc/subscription, close request side immediately
+        if proc_closes_with_init:
+            req_writable._closed = True
+
+        return {
+            "res_readable": res_readable,
+            "req_writable": req_writable,
+        }

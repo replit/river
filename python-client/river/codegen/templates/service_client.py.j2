@@ -1,0 +1,104 @@
+"""Generated client for the {{ service.name }} service."""
+
+from __future__ import annotations
+
+import asyncio
+{% if needs_literal %}
+from typing import Any, Literal
+{% else %}
+from typing import Any
+{% endif %}
+
+from river.client import (
+    ErrResult,
+    OkResult,
+    RiverClient,
+    StreamResult,
+    SubscriptionResult,
+    UploadResult,
+)
+{% if type_names %}
+
+from {{ types_module }} import (
+{% for name in type_names %}
+    {{ name }},
+{% endfor %}
+)
+{% endif %}
+
+from ._errors import ProtocolError
+
+
+class {{ service.class_name }}Client:
+    """Typed client for the ``{{ service.name }}`` service."""
+
+    def __init__(self, client: RiverClient) -> None:
+        self._client = client
+{% for proc in service.procedures %}
+
+{% if proc.proc_type == "rpc" %}
+    async def {{ proc.py_name }}(
+        self,
+        init: {{ proc.init_type.annotation }},
+        *,
+        abort_signal: asyncio.Event | None = None,
+    ) -> {{ proc | result_type }}:
+{% if proc.description %}
+        """{{ proc.description | docstring }}"""
+{% endif %}
+        return await self._client.rpc(
+            "{{ service.name }}",
+            "{{ proc.name }}",
+            init,
+            abort_signal=abort_signal,
+        )
+{% elif proc.proc_type == "stream" %}
+    def {{ proc.py_name }}(
+        self,
+        init: {{ proc.init_type.annotation }},
+        *,
+        abort_signal: asyncio.Event | None = None,
+    ) -> StreamResult[{{ proc.input_type.annotation }}, {{ proc | result_type }}]:
+{% if proc.description %}
+        """{{ proc.description | docstring }}"""
+{% endif %}
+        return self._client.stream(
+            "{{ service.name }}",
+            "{{ proc.name }}",
+            init,
+            abort_signal=abort_signal,
+        )
+{% elif proc.proc_type == "upload" %}
+    def {{ proc.py_name }}(
+        self,
+        init: {{ proc.init_type.annotation }},
+        *,
+        abort_signal: asyncio.Event | None = None,
+    ) -> UploadResult[{{ proc.input_type.annotation }}, {{ proc | result_type }}]:
+{% if proc.description %}
+        """{{ proc.description | docstring }}"""
+{% endif %}
+        return self._client.upload(
+            "{{ service.name }}",
+            "{{ proc.name }}",
+            init,
+            abort_signal=abort_signal,
+        )
+{% elif proc.proc_type == "subscription" %}
+    def {{ proc.py_name }}(
+        self,
+        init: {{ proc.init_type.annotation }},
+        *,
+        abort_signal: asyncio.Event | None = None,
+    ) -> SubscriptionResult[{{ proc | result_type }}]:
+{% if proc.description %}
+        """{{ proc.description | docstring }}"""
+{% endif %}
+        return self._client.subscribe(
+            "{{ service.name }}",
+            "{{ proc.name }}",
+            init,
+            abort_signal=abort_signal,
+        )
+{% endif %}
+{% endfor %}

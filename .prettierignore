@@ -1,2 +1,8 @@
 .cache
 node_modules
+python-client/.venv
+python-client/.pytest_cache
+python-client/tests/*.mjs
+python-client/tests/test_schema.json
+python-client/tests/generated
+.codex-review-tmp
