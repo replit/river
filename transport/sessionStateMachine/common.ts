@@ -1,17 +1,15 @@
 import { Logger, MessageMetadata } from '../../logging';
 import { TelemetryInfo } from '../../tracing';
 import {
-  OpaqueTransportMessage,
+  EncodedTransportMessage,
   PartialTransportMessage,
   ProtocolVersion,
   TransportClientId,
-  TransportMessage,
 } from '../message';
 import { Codec, CodecMessageAdapter } from '../../codec';
 import { generateId } from '../id';
 import { Tracer } from '@opentelemetry/api';
-import { SendResult } from '../results';
-import { Connection } from '../connection';
+import { EncodeResult, SendResult } from '../results';
 
 export const enum SessionState {
   NoConnection = 'NoConnection',
@@ -174,10 +172,25 @@ export abstract class CommonSession extends StateMachineState {
 
 export type InheritedProperties = Pick<
   IdentifiedSession,
-  'id' | 'from' | 'to' | 'seq' | 'ack' | 'sendBuffer' | 'telemetry' | 'options'
+  | 'id'
+  | 'from'
+  | 'to'
+  | 'seq'
+  | 'ack'
+  | 'seqSent'
+  | 'sendBuffer'
+  | 'telemetry'
+  | 'options'
 >;
 
 export type SessionId = string;
+
+export interface IdentifiedSessionListeners {
+  onMessageSendFailure: (
+    msg: PartialTransportMessage & { seq: number },
+    reason: string,
+  ) => void;
+}
 
 // all sessions where we know the other side's client id
 export interface IdentifiedSessionProps extends CommonSessionProps {
@@ -186,9 +199,10 @@ export interface IdentifiedSessionProps extends CommonSessionProps {
   seq: number;
   ack: number;
   seqSent: number;
-  sendBuffer: Array<OpaqueTransportMessage>;
+  sendBuffer: Array<EncodedTransportMessage>;
   telemetry: TelemetryInfo;
   protocolVersion: ProtocolVersion;
+  listeners: IdentifiedSessionListeners;
 }
 
 export abstract class IdentifiedSession extends CommonSession {
@@ -196,6 +210,7 @@ export abstract class IdentifiedSession extends CommonSession {
   readonly telemetry: TelemetryInfo;
   readonly to: TransportClientId;
   readonly protocolVersion: ProtocolVersion;
+  listeners: IdentifiedSessionListeners;
 
   /**
    * Index of the message we will send next (excluding handshake)
@@ -211,7 +226,7 @@ export abstract class IdentifiedSession extends CommonSession {
    * Number of unique messages we've received this session (excluding handshake)
    */
   ack: number;
-  sendBuffer: Array<OpaqueTransportMessage>;
+  sendBuffer: Array<EncodedTransportMessage>;
 
   constructor(props: IdentifiedSessionProps) {
     const {
@@ -224,6 +239,7 @@ export abstract class IdentifiedSession extends CommonSession {
       log,
       protocolVersion,
       seqSent: messagesSent,
+      listeners,
     } = props;
     super(props);
     this.id = id;
@@ -235,6 +251,7 @@ export abstract class IdentifiedSession extends CommonSession {
     this.log = log;
     this.protocolVersion = protocolVersion;
     this.seqSent = messagesSent;
+    this.listeners = listeners;
   }
 
   get loggingMetadata(): MessageMetadata {
@@ -255,9 +272,7 @@ export abstract class IdentifiedSession extends CommonSession {
     return metadata;
   }
 
-  constructMsg<Payload>(
-    partialMsg: PartialTransportMessage<Payload>,
-  ): TransportMessage<Payload> {
+  encodeMsg(partialMsg: PartialTransportMessage): EncodeResult {
     const msg = {
       ...partialMsg,
       id: generateId(),
@@ -267,9 +282,29 @@ export abstract class IdentifiedSession extends CommonSession {
       ack: this.ack,
     };
 
+    const encoded = this.codec.toBuffer(msg);
+    if (!encoded.ok) {
+      // safety: onMessageSendFailure tears down the session via protocol error,
+      // which emits sessionStatus 'closing' and cleans up all procedure listeners.
+      this.listeners.onMessageSendFailure(
+        { ...partialMsg, seq: this.seq },
+        encoded.reason,
+      );
+
+      return encoded;
+    }
+
     this.seq++;
 
-    return msg;
+    return {
+      ok: true,
+      value: {
+        id: msg.id,
+        seq: msg.seq,
+        msg: partialMsg,
+        data: encoded.value,
+      },
+    };
   }
 
   nextSeq(): number {
@@ -277,12 +312,16 @@ export abstract class IdentifiedSession extends CommonSession {
   }
 
   send(msg: PartialTransportMessage): SendResult {
-    const constructedMsg = this.constructMsg(msg);
-    this.sendBuffer.push(constructedMsg);
+    const encodeResult = this.encodeMsg(msg);
+    if (!encodeResult.ok) {
+      return encodeResult;
+    }
+
+    this.sendBuffer.push(encodeResult.value);
 
     return {
       ok: true,
-      value: constructedMsg.id,
+      value: encodeResult.value.id,
     };
   }
 
@@ -297,7 +336,8 @@ export abstract class IdentifiedSession extends CommonSession {
   }
 }
 
-export interface IdentifiedSessionWithGracePeriodListeners {
+export interface IdentifiedSessionWithGracePeriodListeners
+  extends IdentifiedSessionListeners {
   onSessionGracePeriodElapsed: () => void;
 }
 
@@ -335,28 +375,4 @@ export abstract class IdentifiedSessionWithGracePeriod extends IdentifiedSession
   _handleClose(): void {
     super._handleClose();
   }
-}
-
-export function sendMessage(
-  conn: Connection,
-  codec: CodecMessageAdapter,
-  msg: TransportMessage,
-): SendResult {
-  const buff = codec.toBuffer(msg);
-  if (!buff.ok) {
-    return buff;
-  }
-
-  const sent = conn.send(buff.value);
-  if (!sent) {
-    return {
-      ok: false,
-      reason: 'failed to send message',
-    };
-  }
-
-  return {
-    ok: true,
-    value: msg.id,
-  };
 }

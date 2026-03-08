@@ -10,7 +10,13 @@ import {
   LoggingLevel,
   createLogProxy,
 } from '../logging/log';
-import { EventDispatcher, EventHandler, EventMap, EventTypes } from './events';
+import {
+  EventDispatcher,
+  EventHandler,
+  EventMap,
+  EventTypes,
+  ProtocolError,
+} from './events';
 import {
   ProvidedTransportOptions,
   TransportOptions,
@@ -21,6 +27,7 @@ import {
   SessionConnecting,
   SessionHandshaking,
   SessionNoConnection,
+  SessionNoConnectionListeners,
   SessionState,
 } from './sessionStateMachine';
 import { Connection } from './connection';
@@ -277,6 +284,18 @@ export abstract class Transport<ConnType extends Connection> {
         onSessionGracePeriodElapsed: () => {
           this.onSessionGracePeriodElapsed(noConnectionSession);
         },
+        onMessageSendFailure: (msg, reason) => {
+          this.log?.error(`failed to send message: ${reason}`, {
+            ...noConnectionSession.loggingMetadata,
+            transportMessage: msg,
+          });
+
+          this.protocolError({
+            type: ProtocolError.MessageSendFailure,
+            message: reason,
+          });
+          this.deleteSession(noConnectionSession, { unhealthy: true });
+        },
       });
 
     this.updateSession(noConnectionSession);
@@ -289,20 +308,36 @@ export abstract class Transport<ConnType extends Connection> {
   ): SessionNoConnection {
     // transition to no connection
     let noConnectionSession: SessionNoConnection;
+    const listeners: SessionNoConnectionListeners = {
+      onSessionGracePeriodElapsed: () => {
+        this.onSessionGracePeriodElapsed(noConnectionSession);
+      },
+      onMessageSendFailure: (msg, reason) => {
+        this.log?.error(`failed to send message: ${reason}`, {
+          ...noConnectionSession.loggingMetadata,
+          transportMessage: msg,
+        });
+
+        this.protocolError({
+          type: ProtocolError.MessageSendFailure,
+          message: reason,
+        });
+        this.deleteSession(noConnectionSession, { unhealthy: true });
+      },
+    };
+
     if (session.state === SessionState.Handshaking) {
       noConnectionSession =
-        SessionStateGraph.transition.HandshakingToNoConnection(session, {
-          onSessionGracePeriodElapsed: () => {
-            this.onSessionGracePeriodElapsed(noConnectionSession);
-          },
-        });
+        SessionStateGraph.transition.HandshakingToNoConnection(
+          session,
+          listeners,
+        );
     } else {
       noConnectionSession =
-        SessionStateGraph.transition.ConnectedToNoConnection(session, {
-          onSessionGracePeriodElapsed: () => {
-            this.onSessionGracePeriodElapsed(noConnectionSession);
-          },
-        });
+        SessionStateGraph.transition.ConnectedToNoConnection(
+          session,
+          listeners,
+        );
     }
 
     this.updateSession(noConnectionSession);

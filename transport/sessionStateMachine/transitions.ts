@@ -1,4 +1,4 @@
-import { OpaqueTransportMessage, TransportClientId } from '..';
+import { TransportClientId } from '..';
 import {
   SessionConnecting,
   SessionConnectingListeners,
@@ -38,13 +38,13 @@ import {
   SessionBackingOff,
   SessionBackingOffListeners,
 } from './SessionBackingOff';
-import { ProtocolVersion } from '../message';
+import { EncodedTransportMessage, ProtocolVersion } from '../message';
 import { Tracer } from '@opentelemetry/api';
 import { CodecMessageAdapter } from '../../codec';
 
 function inheritSharedSession(
   session: IdentifiedSession,
-): IdentifiedSessionProps {
+): Omit<IdentifiedSessionProps, 'listeners'> {
   return {
     id: session.id,
     from: session.from,
@@ -84,7 +84,7 @@ export const SessionStateGraph = {
     ) => {
       const id = `session-${generateId()}`;
       const telemetry = createSessionTelemetryInfo(tracer, id, to, from);
-      const sendBuffer: Array<OpaqueTransportMessage> = [];
+      const sendBuffer: Array<EncodedTransportMessage> = [];
 
       const session = new SessionNoConnection({
         listeners,
@@ -255,7 +255,7 @@ export const SessionStateGraph = {
     ): SessionConnected<ConnType> => {
       const conn = pendingSession.conn;
       const { from, options } = pendingSession;
-      const carriedState: IdentifiedSessionProps = oldSession
+      const carriedState: Omit<IdentifiedSessionProps, 'listeners'> = oldSession
         ? // old session exists, inherit state
           inheritSharedSession(oldSession)
         : // old session does not exist, create new state
@@ -279,7 +279,7 @@ export const SessionStateGraph = {
             log: pendingSession.log,
             protocolVersion,
             codec: new CodecMessageAdapter(options.codec),
-          } satisfies IdentifiedSessionProps);
+          } satisfies Omit<IdentifiedSessionProps, 'listeners'>);
 
       pendingSession._handleStateExit();
       oldSession?._handleStateExit();

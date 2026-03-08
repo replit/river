@@ -408,6 +408,18 @@ export abstract class ServerTransport<
               onSessionGracePeriodElapsed: () => {
                 this.onSessionGracePeriodElapsed(noConnectionSession);
               },
+              onMessageSendFailure: (msg, reason) => {
+                this.log?.error(`failed to send message: ${reason}`, {
+                  ...noConnectionSession.loggingMetadata,
+                  transportMessage: msg,
+                });
+
+                this.protocolError({
+                  type: ProtocolError.MessageSendFailure,
+                  message: reason,
+                });
+                this.deleteSession(noConnectionSession, { unhealthy: true });
+              },
             },
           );
 

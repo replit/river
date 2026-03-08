@@ -2,26 +2,25 @@ import { Static } from '@sinclair/typebox';
 import {
   ControlFlags,
   ControlMessageAckSchema,
+  EncodedTransportMessage,
   OpaqueTransportMessage,
   PartialTransportMessage,
-  TransportMessage,
   isAck,
 } from '../message';
 import {
   IdentifiedSession,
+  IdentifiedSessionListeners,
   IdentifiedSessionProps,
-  sendMessage,
   SessionState,
 } from './common';
 import { Connection } from '../connection';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { SendBufferResult, SendResult } from '../results';
 
-export interface SessionConnectedListeners {
+export interface SessionConnectedListeners extends IdentifiedSessionListeners {
   onConnectionErrored: (err: unknown) => void;
   onConnectionClosed: () => void;
   onMessage: (msg: OpaqueTransportMessage) => void;
-  onMessageSendFailure: (msg: PartialTransportMessage, reason: string) => void;
   onInvalidMessage: (reason: string) => void;
 }
 
@@ -57,12 +56,11 @@ export class SessionConnected<
     this.startMissingHeartbeatTimeout();
   }
 
-  private assertSendOrdering(constructedMsg: TransportMessage) {
-    if (constructedMsg.seq > this.seqSent + 1) {
-      const msg = `invariant violation: would have sent out of order msg (seq: ${constructedMsg.seq}, expected: ${this.seqSent} + 1)`;
+  private assertSendOrdering(encodedMsg: EncodedTransportMessage) {
+    if (encodedMsg.seq > this.seqSent + 1) {
+      const msg = `invariant violation: would have sent out of order msg (seq: ${encodedMsg.seq}, expected: ${this.seqSent} + 1)`;
       this.log?.error(msg, {
         ...this.loggingMetadata,
-        transportMessage: constructedMsg,
         tags: ['invariant-violation'],
       });
 
@@ -71,19 +69,29 @@ export class SessionConnected<
   }
 
   send(msg: PartialTransportMessage): SendResult {
-    const constructedMsg = this.constructMsg(msg);
-    this.assertSendOrdering(constructedMsg);
-    this.sendBuffer.push(constructedMsg);
-    const res = sendMessage(this.conn, this.codec, constructedMsg);
-    if (!res.ok) {
-      this.listeners.onMessageSendFailure(constructedMsg, res.reason);
-
-      return res;
+    const encodeResult = this.encodeMsg(msg);
+    if (!encodeResult.ok) {
+      return encodeResult;
     }
 
-    this.seqSent = constructedMsg.seq;
+    const encodedMsg = encodeResult.value;
+    this.assertSendOrdering(encodedMsg);
+    this.sendBuffer.push(encodedMsg);
 
-    return res;
+    const sent = this.conn.send(encodedMsg.data);
+    if (!sent) {
+      const reason = 'failed to send message';
+      this.listeners.onMessageSendFailure(
+        { ...encodedMsg.msg, seq: encodedMsg.seq },
+        reason,
+      );
+
+      return { ok: false, reason };
+    }
+
+    this.seqSent = encodedMsg.seq;
+
+    return { ok: true, value: encodedMsg.id };
   }
 
   constructor(props: SessionConnectedProps<ConnType>) {
@@ -110,11 +118,16 @@ export class SessionConnected<
 
       for (const msg of this.sendBuffer) {
         this.assertSendOrdering(msg);
-        const res = sendMessage(this.conn, this.codec, msg);
-        if (!res.ok) {
-          this.listeners.onMessageSendFailure(msg, res.reason);
 
-          return res;
+        const sent = this.conn.send(msg.data);
+        if (!sent) {
+          const reason = 'failed to send buffered message';
+          this.listeners.onMessageSendFailure(
+            { ...msg.msg, seq: msg.seq },
+            reason,
+          );
+
+          return { ok: false, reason };
         }
 
         this.seqSent = msg.seq;

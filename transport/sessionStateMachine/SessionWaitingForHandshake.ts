@@ -5,12 +5,7 @@ import {
   OpaqueTransportMessage,
   TransportMessage,
 } from '../message';
-import {
-  CommonSession,
-  CommonSessionProps,
-  sendMessage,
-  SessionState,
-} from './common';
+import { CommonSession, CommonSessionProps, SessionState } from './common';
 import { SendResult } from '../results';
 
 export interface SessionWaitingForHandshakeListeners {
@@ -84,7 +79,23 @@ export class SessionWaitingForHandshake<
   };
 
   sendHandshake(msg: TransportMessage): SendResult {
-    return sendMessage(this.conn, this.codec, msg);
+    const buff = this.codec.toBuffer(msg);
+    if (!buff.ok) {
+      return buff;
+    }
+
+    const sent = this.conn.send(buff.value);
+    if (!sent) {
+      return {
+        ok: false,
+        reason: 'failed to send handshake',
+      };
+    }
+
+    return {
+      ok: true,
+      value: msg.id,
+    };
   }
 
   _handleStateExit(): void {

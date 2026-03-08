@@ -184,6 +184,9 @@ export function dummySession() {
       onSessionGracePeriodElapsed: () => {
         /* noop */
       },
+      onMessageSendFailure: () => {
+        /* noop */
+      },
     },
     testingSessionOptions,
     currentProtocolVersion,
