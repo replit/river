@@ -85,6 +85,38 @@ describe('unserializable values in procedure handlers', () => {
         });
       });
 
+      test('client-side encode failure cleans up listeners', async () => {
+        const clientTransport = getClientTransport('client');
+        const serverTransport = getServerTransport();
+        const services = { svc: UnserializableServiceSchema };
+        createServer(serverTransport, services);
+        const client = createClient<typeof services>(
+          clientTransport,
+          serverTransport.clientId,
+        );
+        addPostTestCleanup(() =>
+          cleanupTransports([clientTransport, serverTransport]),
+        );
+
+        const messageListenersBefore =
+          clientTransport.eventDispatcher.numberOfListeners('message');
+        const sessionStatusListenersBefore =
+          clientTransport.eventDispatcher.numberOfListeners('sessionStatus');
+
+        // sending a Symbol as init payload will fail encoding on the client side
+        expect(() =>
+          client.svc.returnSymbol.rpc({ extra: Symbol('x') } as any),
+        ).toThrow();
+
+        // listeners should not leak after the failed send
+        expect(
+          clientTransport.eventDispatcher.numberOfListeners('message'),
+        ).toEqual(messageListenersBefore);
+        expect(
+          clientTransport.eventDispatcher.numberOfListeners('sessionStatus'),
+        ).toEqual(sessionStatusListenersBefore);
+      });
+
       test('subscription handler writing symbol causes client disconnect', async () => {
         const clientTransport = getClientTransport('client');
         const serverTransport = getServerTransport();

@@ -508,16 +508,21 @@ function handleProc(
   transport.addEventListener('message', onMessage);
   transport.addEventListener('sessionStatus', onSessionStatus);
 
-  sessionScopedSend({
-    streamId,
-    serviceName,
-    procedureName,
-    tracing: getPropagationContext(ctx),
-    payload: init,
-    controlFlags: procClosesWithInit
-      ? ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit
-      : ControlFlags.StreamOpenBit,
-  });
+  try {
+    sessionScopedSend({
+      streamId,
+      serviceName,
+      procedureName,
+      tracing: getPropagationContext(ctx),
+      payload: init,
+      controlFlags: procClosesWithInit
+        ? ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit
+        : ControlFlags.StreamOpenBit,
+    });
+  } catch (e) {
+    cleanup();
+    throw e;
+  }
 
   if (procClosesWithInit) {
     reqWritable.close();
