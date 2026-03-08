@@ -5,13 +5,11 @@ import {
   PartialTransportMessage,
   ProtocolVersion,
   TransportClientId,
-  TransportMessage,
 } from '../message';
 import { Codec, CodecMessageAdapter } from '../../codec';
 import { generateId } from '../id';
 import { Tracer } from '@opentelemetry/api';
 import { EncodeResult, SendResult } from '../results';
-import { Connection } from '../connection';
 
 export const enum SessionState {
   NoConnection = 'NoConnection',
@@ -377,28 +375,4 @@ export abstract class IdentifiedSessionWithGracePeriod extends IdentifiedSession
   _handleClose(): void {
     super._handleClose();
   }
-}
-
-export function sendMessage(
-  conn: Connection,
-  codec: CodecMessageAdapter,
-  msg: TransportMessage,
-): SendResult {
-  const buff = codec.toBuffer(msg);
-  if (!buff.ok) {
-    return buff;
-  }
-
-  const sent = conn.send(buff.value);
-  if (!sent) {
-    return {
-      ok: false,
-      reason: 'failed to send message',
-    };
-  }
-
-  return {
-    ok: true,
-    value: msg.id,
-  };
 }

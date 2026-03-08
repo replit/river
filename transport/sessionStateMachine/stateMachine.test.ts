@@ -1811,6 +1811,103 @@ describe('session state machine', () => {
       });
     });
 
+    test('handshaking sendHandshake: codec failure does not corrupt seq and subsequent success works', async () => {
+      const sessionHandle = await createSessionHandshaking();
+      const session = sessionHandle.session;
+
+      // buffer some messages during handshake
+      session.send(payloadToTransportMessage('hello'));
+      session.send(payloadToTransportMessage('world'));
+      expect(session.seq).toBe(2);
+      expect(session.ack).toBe(0);
+      expect(session.sendBuffer.length).toBe(2);
+
+      const msg = handshakeRequestMessage({
+        from: 'from',
+        to: 'to',
+        sessionId: 'clientSessionId',
+        expectedSessionState: {
+          nextExpectedSeq: 0,
+          nextSentSeq: 0,
+        },
+      });
+
+      // make codec.toBuffer fail
+      const spy = vi
+        .spyOn(session.codec, 'toBuffer')
+        .mockReturnValue({ ok: false, reason: 'encode error' });
+
+      const res = session.sendHandshake(msg);
+      expect(res.ok).toBe(false);
+      assert(!res.ok);
+      expect(res.reason).toBe('encode error');
+      expect(session.conn.send).not.toHaveBeenCalled();
+
+      // seq/ack/sendBuffer should be unchanged
+      expect(session.seq).toBe(2);
+      expect(session.ack).toBe(0);
+      expect(session.sendBuffer.length).toBe(2);
+
+      // restore codec and retry handshake
+      spy.mockRestore();
+      const retryRes = session.sendHandshake(msg);
+      expect(retryRes.ok).toBe(true);
+
+      // transition to connected and verify messages work
+      const connectedListeners = createSessionConnectedListeners();
+      const connected = SessionStateGraph.transition.HandshakingToConnected(
+        session,
+        connectedListeners,
+      );
+
+      expect(connected.state).toBe(SessionState.Connected);
+      expect(connected.seq).toBe(2);
+      expect(connected.ack).toBe(0);
+
+      // flush buffered messages first
+      const bufferRes = connected.sendBufferedMessages();
+      expect(bufferRes.ok).toBe(true);
+
+      // send a new message in connected state
+      const sendRes = connected.send(payloadToTransportMessage('after'));
+      expect(sendRes.ok).toBe(true);
+      expect(connected.seq).toBe(3);
+      // 1 handshake retry + 2 buffered + 1 new = 4
+      expect(connected.conn.send).toHaveBeenCalledTimes(4);
+    });
+
+    test('pending identification sendHandshake: codec failure does not prevent subsequent success', () => {
+      const sessionHandle = createSessionWaitingForHandshake();
+      const session = sessionHandle.session;
+
+      const msg = handshakeRequestMessage({
+        from: 'from',
+        to: 'to',
+        sessionId: 'clientSessionId',
+        expectedSessionState: {
+          nextExpectedSeq: 0,
+          nextSentSeq: 0,
+        },
+      });
+
+      // make codec.toBuffer fail
+      const spy = vi
+        .spyOn(session.codec, 'toBuffer')
+        .mockReturnValue({ ok: false, reason: 'encode error' });
+
+      const res = session.sendHandshake(msg);
+      expect(res.ok).toBe(false);
+      assert(!res.ok);
+      expect(res.reason).toBe('encode error');
+      expect(session.conn.send).not.toHaveBeenCalled();
+
+      // restore codec and retry handshake
+      spy.mockRestore();
+      const retryRes = session.sendHandshake(msg);
+      expect(retryRes.ok).toBe(true);
+      expect(session.conn.send).toHaveBeenCalledTimes(1);
+    });
+
     test('connected event listeners: connectionErrored', async () => {
       const sessionHandle = await createSessionConnected();
       const session = sessionHandle.session;
