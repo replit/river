@@ -99,6 +99,7 @@ function getPendingMockConnection(): PendingMockConnectionHandle {
 function createSessionNoConnectionListeners(): SessionNoConnectionListeners {
   return {
     onSessionGracePeriodElapsed: vi.fn(),
+    onMessageSendFailure: vi.fn(),
   };
 }
 
@@ -106,6 +107,7 @@ function createSessionBackingOffListeners(): SessionBackingOffListeners {
   return {
     onBackoffFinished: vi.fn(),
     onSessionGracePeriodElapsed: vi.fn(),
+    onMessageSendFailure: vi.fn(),
   };
 }
 
@@ -115,6 +117,7 @@ function createSessionConnectingListeners(): SessionConnectingListeners {
     onConnectionFailed: vi.fn(),
     onConnectionTimeout: vi.fn(),
     onSessionGracePeriodElapsed: vi.fn(),
+    onMessageSendFailure: vi.fn(),
   };
 }
 
@@ -126,6 +129,7 @@ function createSessionHandshakingListeners(): SessionHandshakingListeners {
     onConnectionErrored: vi.fn(),
     onHandshakeTimeout: vi.fn(),
     onSessionGracePeriodElapsed: vi.fn(),
+    onMessageSendFailure: vi.fn(),
   };
 }
 

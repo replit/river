@@ -9,6 +9,7 @@ import {
 } from '../message';
 import {
   IdentifiedSession,
+  IdentifiedSessionListeners,
   IdentifiedSessionProps,
   SessionState,
 } from './common';
@@ -16,14 +17,10 @@ import { Connection } from '../connection';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { SendBufferResult, SendResult } from '../results';
 
-export interface SessionConnectedListeners {
+export interface SessionConnectedListeners extends IdentifiedSessionListeners {
   onConnectionErrored: (err: unknown) => void;
   onConnectionClosed: () => void;
   onMessage: (msg: OpaqueTransportMessage) => void;
-  onMessageSendFailure: (
-    msg: PartialTransportMessage & { seq: number },
-    reason: string,
-  ) => void;
   onInvalidMessage: (reason: string) => void;
 }
 
@@ -74,13 +71,6 @@ export class SessionConnected<
   send(msg: PartialTransportMessage): SendResult {
     const encodeResult = this.encodeMsg(msg);
     if (!encodeResult.ok) {
-      // safety: onMessageSendFailure tears down the session via protocol error,
-      // which emits sessionStatus 'closing' and cleans up all procedure listeners.
-      this.listeners.onMessageSendFailure(
-        { ...msg, seq: this.seq },
-        encodeResult.reason,
-      );
-
       return encodeResult;
     }
 

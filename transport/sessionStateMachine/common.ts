@@ -187,6 +187,13 @@ export type InheritedProperties = Pick<
 
 export type SessionId = string;
 
+export interface IdentifiedSessionListeners {
+  onMessageSendFailure: (
+    msg: PartialTransportMessage & { seq: number },
+    reason: string,
+  ) => void;
+}
+
 // all sessions where we know the other side's client id
 export interface IdentifiedSessionProps extends CommonSessionProps {
   id: SessionId;
@@ -197,6 +204,7 @@ export interface IdentifiedSessionProps extends CommonSessionProps {
   sendBuffer: Array<EncodedTransportMessage>;
   telemetry: TelemetryInfo;
   protocolVersion: ProtocolVersion;
+  listeners: IdentifiedSessionListeners;
 }
 
 export abstract class IdentifiedSession extends CommonSession {
@@ -204,6 +212,7 @@ export abstract class IdentifiedSession extends CommonSession {
   readonly telemetry: TelemetryInfo;
   readonly to: TransportClientId;
   readonly protocolVersion: ProtocolVersion;
+  listeners: IdentifiedSessionListeners;
 
   /**
    * Index of the message we will send next (excluding handshake)
@@ -232,6 +241,7 @@ export abstract class IdentifiedSession extends CommonSession {
       log,
       protocolVersion,
       seqSent: messagesSent,
+      listeners,
     } = props;
     super(props);
     this.id = id;
@@ -243,6 +253,7 @@ export abstract class IdentifiedSession extends CommonSession {
     this.log = log;
     this.protocolVersion = protocolVersion;
     this.seqSent = messagesSent;
+    this.listeners = listeners;
   }
 
   get loggingMetadata(): MessageMetadata {
@@ -275,6 +286,13 @@ export abstract class IdentifiedSession extends CommonSession {
 
     const encoded = this.codec.toBuffer(msg);
     if (!encoded.ok) {
+      // safety: onMessageSendFailure tears down the session via protocol error,
+      // which emits sessionStatus 'closing' and cleans up all procedure listeners.
+      this.listeners.onMessageSendFailure(
+        { ...partialMsg, seq: this.seq },
+        encoded.reason,
+      );
+
       return encoded;
     }
 
@@ -320,7 +338,8 @@ export abstract class IdentifiedSession extends CommonSession {
   }
 }
 
-export interface IdentifiedSessionWithGracePeriodListeners {
+export interface IdentifiedSessionWithGracePeriodListeners
+  extends IdentifiedSessionListeners {
   onSessionGracePeriodElapsed: () => void;
 }
 

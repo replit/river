@@ -107,6 +107,18 @@ export abstract class ClientTransport<
         onSessionGracePeriodElapsed: () => {
           this.onSessionGracePeriodElapsed(session);
         },
+        onMessageSendFailure: (msg, reason) => {
+          this.log?.error(`failed to send message: ${reason}`, {
+            ...session.loggingMetadata,
+            transportMessage: msg,
+          });
+
+          this.protocolError({
+            type: ProtocolError.MessageSendFailure,
+            message: reason,
+          });
+          this.deleteSession(session, { unhealthy: true });
+        },
       },
       this.options,
       currentProtocolVersion,
@@ -185,6 +197,18 @@ export abstract class ClientTransport<
           },
           onSessionGracePeriodElapsed: () => {
             this.onSessionGracePeriodElapsed(handshakingSession);
+          },
+          onMessageSendFailure: (msg, reason) => {
+            this.log?.error(`failed to send message: ${reason}`, {
+              ...handshakingSession.loggingMetadata,
+              transportMessage: msg,
+            });
+
+            this.protocolError({
+              type: ProtocolError.MessageSendFailure,
+              message: reason,
+            });
+            this.deleteSession(handshakingSession, { unhealthy: true });
           },
         },
       );
@@ -395,6 +419,18 @@ export abstract class ClientTransport<
           onSessionGracePeriodElapsed: () => {
             this.onSessionGracePeriodElapsed(backingOffSession);
           },
+          onMessageSendFailure: (msg, reason) => {
+            this.log?.error(`failed to send message: ${reason}`, {
+              ...backingOffSession.loggingMetadata,
+              transportMessage: msg,
+            });
+
+            this.protocolError({
+              type: ProtocolError.MessageSendFailure,
+              message: reason,
+            });
+            this.deleteSession(backingOffSession, { unhealthy: true });
+          },
         },
       );
 
@@ -469,6 +505,18 @@ export abstract class ClientTransport<
           },
           onSessionGracePeriodElapsed: () => {
             this.onSessionGracePeriodElapsed(connectingSession);
+          },
+          onMessageSendFailure: (msg, reason) => {
+            this.log?.error(`failed to send message: ${reason}`, {
+              ...connectingSession.loggingMetadata,
+              transportMessage: msg,
+            });
+
+            this.protocolError({
+              type: ProtocolError.MessageSendFailure,
+              message: reason,
+            });
+            this.deleteSession(connectingSession, { unhealthy: true });
           },
         },
       );
