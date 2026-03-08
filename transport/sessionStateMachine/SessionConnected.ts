@@ -21,7 +21,7 @@ export interface SessionConnectedListeners {
   onConnectionClosed: () => void;
   onMessage: (msg: OpaqueTransportMessage) => void;
   onMessageSendFailure: (
-    msg: Omit<EncodedTransportMessage, 'data'>,
+    msg: PartialTransportMessage & { seq: number },
     reason: string,
   ) => void;
   onInvalidMessage: (reason: string) => void;
@@ -75,7 +75,7 @@ export class SessionConnected<
     const encodeResult = this.encodeMsg(msg);
     if (!encodeResult.ok) {
       this.listeners.onMessageSendFailure(
-        { id: 'unknown', seq: this.seq },
+        { ...msg, seq: this.seq },
         encodeResult.reason,
       );
 
@@ -90,7 +90,7 @@ export class SessionConnected<
     if (!sent) {
       const reason = 'failed to send message';
       this.listeners.onMessageSendFailure(
-        { id: encodedMsg.id, seq: encodedMsg.seq },
+        { ...encodedMsg.msg, seq: encodedMsg.seq },
         reason,
       );
 
@@ -131,7 +131,7 @@ export class SessionConnected<
         if (!sent) {
           const reason = 'failed to send buffered message';
           this.listeners.onMessageSendFailure(
-            { id: msg.id, seq: msg.seq },
+            { ...msg.msg, seq: msg.seq },
             reason,
           );
 

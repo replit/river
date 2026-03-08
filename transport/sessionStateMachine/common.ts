@@ -285,6 +285,7 @@ export abstract class IdentifiedSession extends CommonSession {
       value: {
         id: msg.id,
         seq: msg.seq,
+        msg: partialMsg,
         data: encoded.value,
       },
     };
