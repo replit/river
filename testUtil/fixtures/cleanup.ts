@@ -1,8 +1,7 @@
-import { expect, vi } from 'vitest';
+import { assert, expect, vi } from 'vitest';
 import {
   ClientTransport,
   Connection,
-  OpaqueTransportMessage,
   ServerTransport,
   Transport,
 } from '../../transport';
@@ -68,14 +67,17 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
         [...t.sessions]
           .map(([client, sess]) => {
             // get all messages that are not heartbeats
-            const buff = sess.sendBuffer.filter((msg) => {
-              return !Value.Check(ControlMessageAckSchema, msg.payload);
+            const buff = sess.sendBuffer.filter((encodedMsg) => {
+              const decoded = sess.codec.fromBuffer(encodedMsg.data);
+              assert(decoded.ok);
+
+              return !Value.Check(
+                ControlMessageAckSchema,
+                decoded.value.payload,
+              );
             });
 
-            return [client, buff] as [
-              string,
-              ReadonlyArray<OpaqueTransportMessage>,
-            ];
+            return [client, buff] as const;
           })
           .filter((entry) => entry[1].length > 0),
       ),

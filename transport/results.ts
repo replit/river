@@ -1,4 +1,4 @@
-import { OpaqueTransportMessage } from './message';
+import { EncodedTransportMessage, OpaqueTransportMessage } from './message';
 
 // internal use only, not to be used in public API
 type SessionApiResult<T> =
@@ -13,5 +13,6 @@ type SessionApiResult<T> =
 
 export type SendResult = SessionApiResult<string>;
 export type SendBufferResult = SessionApiResult<undefined>;
+export type EncodeResult = SessionApiResult<EncodedTransportMessage>;
 export type SerializeResult = SessionApiResult<Uint8Array>;
 export type DeserializeResult = SessionApiResult<OpaqueTransportMessage>;

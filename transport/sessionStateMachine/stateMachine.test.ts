@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { assert, describe, expect, test, vi } from 'vitest';
 import {
   payloadToTransportMessage,
   testingSessionOptions,
@@ -1866,8 +1866,11 @@ describe('session state machine', () => {
       expect(onConnectionClosed).not.toHaveBeenCalled();
       expect(onConnectionErrored).not.toHaveBeenCalled();
 
-      const msg = session.constructMsg(payloadToTransportMessage('hello'));
-      session.conn.emitData(session.options.codec.toBuffer(msg));
+      const encodeResult = session.encodeMsg(
+        payloadToTransportMessage('hello'),
+      );
+      assert(encodeResult.ok);
+      session.conn.emitData(encodeResult.value.data);
 
       await waitFor(async () => {
         expect(onMessage).toHaveBeenCalledTimes(1);

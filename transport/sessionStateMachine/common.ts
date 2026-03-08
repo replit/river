@@ -1,7 +1,7 @@
 import { Logger, MessageMetadata } from '../../logging';
 import { TelemetryInfo } from '../../tracing';
 import {
-  OpaqueTransportMessage,
+  EncodedTransportMessage,
   PartialTransportMessage,
   ProtocolVersion,
   TransportClientId,
@@ -10,7 +10,7 @@ import {
 import { Codec, CodecMessageAdapter } from '../../codec';
 import { generateId } from '../id';
 import { Tracer } from '@opentelemetry/api';
-import { SendResult } from '../results';
+import { EncodeResult, SendResult } from '../results';
 import { Connection } from '../connection';
 
 export const enum SessionState {
@@ -174,7 +174,15 @@ export abstract class CommonSession extends StateMachineState {
 
 export type InheritedProperties = Pick<
   IdentifiedSession,
-  'id' | 'from' | 'to' | 'seq' | 'ack' | 'sendBuffer' | 'telemetry' | 'options'
+  | 'id'
+  | 'from'
+  | 'to'
+  | 'seq'
+  | 'ack'
+  | 'seqSent'
+  | 'sendBuffer'
+  | 'telemetry'
+  | 'options'
 >;
 
 export type SessionId = string;
@@ -186,7 +194,7 @@ export interface IdentifiedSessionProps extends CommonSessionProps {
   seq: number;
   ack: number;
   seqSent: number;
-  sendBuffer: Array<OpaqueTransportMessage>;
+  sendBuffer: Array<EncodedTransportMessage>;
   telemetry: TelemetryInfo;
   protocolVersion: ProtocolVersion;
 }
@@ -211,7 +219,7 @@ export abstract class IdentifiedSession extends CommonSession {
    * Number of unique messages we've received this session (excluding handshake)
    */
   ack: number;
-  sendBuffer: Array<OpaqueTransportMessage>;
+  sendBuffer: Array<EncodedTransportMessage>;
 
   constructor(props: IdentifiedSessionProps) {
     const {
@@ -255,9 +263,7 @@ export abstract class IdentifiedSession extends CommonSession {
     return metadata;
   }
 
-  constructMsg<Payload>(
-    partialMsg: PartialTransportMessage<Payload>,
-  ): TransportMessage<Payload> {
+  encodeMsg(partialMsg: PartialTransportMessage): EncodeResult {
     const msg = {
       ...partialMsg,
       id: generateId(),
@@ -267,9 +273,21 @@ export abstract class IdentifiedSession extends CommonSession {
       ack: this.ack,
     };
 
+    const encoded = this.codec.toBuffer(msg);
+    if (!encoded.ok) {
+      return encoded;
+    }
+
     this.seq++;
 
-    return msg;
+    return {
+      ok: true,
+      value: {
+        id: msg.id,
+        seq: msg.seq,
+        data: encoded.value,
+      },
+    };
   }
 
   nextSeq(): number {
@@ -277,12 +295,16 @@ export abstract class IdentifiedSession extends CommonSession {
   }
 
   send(msg: PartialTransportMessage): SendResult {
-    const constructedMsg = this.constructMsg(msg);
-    this.sendBuffer.push(constructedMsg);
+    const encodeResult = this.encodeMsg(msg);
+    if (!encodeResult.ok) {
+      return encodeResult;
+    }
+
+    this.sendBuffer.push(encodeResult.value);
 
     return {
       ok: true,
-      value: constructedMsg.id,
+      value: encodeResult.value.id,
     };
   }
 

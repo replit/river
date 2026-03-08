@@ -1,4 +1,4 @@
-import { OpaqueTransportMessage, TransportClientId } from '..';
+import { TransportClientId } from '..';
 import {
   SessionConnecting,
   SessionConnectingListeners,
@@ -38,7 +38,7 @@ import {
   SessionBackingOff,
   SessionBackingOffListeners,
 } from './SessionBackingOff';
-import { ProtocolVersion } from '../message';
+import { EncodedTransportMessage, ProtocolVersion } from '../message';
 import { Tracer } from '@opentelemetry/api';
 import { CodecMessageAdapter } from '../../codec';
 
@@ -84,7 +84,7 @@ export const SessionStateGraph = {
     ) => {
       const id = `session-${generateId()}`;
       const telemetry = createSessionTelemetryInfo(tracer, id, to, from);
-      const sendBuffer: Array<OpaqueTransportMessage> = [];
+      const sendBuffer: Array<EncodedTransportMessage> = [];
 
       const session = new SessionNoConnection({
         listeners,

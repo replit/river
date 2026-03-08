@@ -281,6 +281,17 @@ export type OpaqueTransportMessage = TransportMessage;
 export type TransportClientId = string;
 
 /**
+ * An encoded message that is ready to be sent over the transport.
+ * The seq number is kept to track which messages have been
+ * acked by the peer and can be dropped from the send buffer.
+ */
+export interface EncodedTransportMessage {
+  id: string;
+  seq: number;
+  data: Uint8Array;
+}
+
+/**
  * Checks if the given control flag (usually found in msg.controlFlag) is an ack message.
  * @param controlFlag - The control flag to check.
  * @returns True if the control flag contains the AckBit, false otherwise.
