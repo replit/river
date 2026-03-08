@@ -105,6 +105,7 @@ describe('unserializable values in procedure handlers', () => {
 
         // sending a Symbol as init payload will fail encoding on the client side
         expect(() =>
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
           client.svc.returnSymbol.rpc({ extra: Symbol('x') } as any),
         ).toThrow();
 

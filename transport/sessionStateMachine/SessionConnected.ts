@@ -74,6 +74,8 @@ export class SessionConnected<
   send(msg: PartialTransportMessage): SendResult {
     const encodeResult = this.encodeMsg(msg);
     if (!encodeResult.ok) {
+      // safety: onMessageSendFailure tears down the session via protocol error,
+      // which emits sessionStatus 'closing' and cleans up all procedure listeners.
       this.listeners.onMessageSendFailure(
         { ...msg, seq: this.seq },
         encodeResult.reason,
