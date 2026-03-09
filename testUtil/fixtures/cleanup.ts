@@ -1,4 +1,4 @@
-import { assert, expect, vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import {
   ClientTransport,
   Connection,
@@ -8,8 +8,7 @@ import {
 import { Server } from '../../router';
 import { AnyServiceSchemaMap, MaybeDisposable } from '../../router/services';
 import { numberOfConnections, testingSessionOptions } from '..';
-import { Value } from '@sinclair/typebox/value';
-import { ControlMessageAckSchema } from '../../transport/message';
+import { isAck } from '../../transport/message';
 
 const waitUntilOptions = {
   timeout: 500, // account for possibility of conn backoff
@@ -67,15 +66,9 @@ export async function ensureTransportBuffersAreEventuallyEmpty(
         [...t.sessions]
           .map(([client, sess]) => {
             // get all messages that are not heartbeats
-            const buff = sess.sendBuffer.filter((encodedMsg) => {
-              const decoded = sess.codec.fromBuffer(encodedMsg.data);
-              assert(decoded.ok);
-
-              return !Value.Check(
-                ControlMessageAckSchema,
-                decoded.value.payload,
-              );
-            });
+            const buff = sess.sendBuffer.filter(
+              (encodedMsg) => !isAck(encodedMsg.controlFlags),
+            );
 
             return [client, buff] as const;
           })

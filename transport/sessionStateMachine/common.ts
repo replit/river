@@ -301,6 +301,7 @@ export abstract class IdentifiedSession extends CommonSession {
       value: {
         id: msg.id,
         seq: msg.seq,
+        controlFlags: msg.controlFlags,
         msg: partialMsg,
         data: encoded.value,
       },

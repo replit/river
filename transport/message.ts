@@ -288,6 +288,7 @@ export type TransportClientId = string;
 export interface EncodedTransportMessage {
   id: string;
   seq: number;
+  controlFlags: number;
   msg: PartialTransportMessage;
   data: Uint8Array;
 }
