@@ -1,0 +1,11 @@
+"""Generated River service clients."""
+
+{% for mod, cls in imports %}
+from {{ mod }} import {{ cls }}
+{% endfor %}
+
+__all__ = [
+{% for _, cls in imports %}
+    "{{ cls }}",
+{% endfor %}
+]
