@@ -1,7 +1,7 @@
 import { assert, describe, expect, test } from 'vitest';
 import { Procedure } from '../router/procedures';
 import { createServiceSchema } from '../router/services';
-import { Type } from '@sinclair/typebox';
+import { Type } from 'typebox';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import {

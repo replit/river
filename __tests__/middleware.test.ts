@@ -16,7 +16,7 @@ import {
   Middleware,
 } from '../router';
 import { createMockTransportNetwork } from '../testUtil/fixtures/mockTransport';
-import { Type } from '@sinclair/typebox';
+import { Type } from 'typebox';
 
 describe('middleware test', () => {
   let mockTransportNetwork: ReturnType<typeof createMockTransportNetwork>;

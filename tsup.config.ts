@@ -11,6 +11,7 @@ export default defineConfig({
     'transport/impls/ws/server.ts',
     'transport/impls/uds/client.ts',
     'transport/impls/uds/server.ts',
+    'customSchemas/index.ts',
   ],
   format: ['esm', 'cjs'],
   sourcemap: true,
