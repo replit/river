@@ -75,21 +75,14 @@ export function DateType(
   const schema = Type.Refine(
     Type.Unsafe<Date>({
       type: 'Date',
-      ...options,
+      ...(min !== undefined ? { minimumTimestamp: min } : {}),
+      ...(max !== undefined ? { maximumTimestamp: max } : {}),
     }),
     (value): value is Date => {
       if (!(value instanceof Date)) return false;
       if (isNaN(value.getTime())) return false;
-      if (
-        typeof options.minimumTimestamp === 'number' &&
-        value.getTime() < options.minimumTimestamp
-      )
-        return false;
-      if (
-        typeof options.maximumTimestamp === 'number' &&
-        value.getTime() > options.maximumTimestamp
-      )
-        return false;
+      if (typeof min === 'number' && value.getTime() < min) return false;
+      if (typeof max === 'number' && value.getTime() > max) return false;
 
       return true;
     },
