@@ -20,7 +20,7 @@ import {
   handshakeRequestMessage,
 } from '../transport/message';
 import { NaiveJsonCodec } from '../codec';
-import { Static } from '@sinclair/typebox';
+import { Static } from 'typebox';
 import { WebSocketClientTransport } from '../transport/impls/ws/client';
 import { ProtocolError } from '../transport/events';
 import NodeWs from 'ws';

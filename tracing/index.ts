@@ -13,7 +13,7 @@ import { Connection } from '../transport';
 import { MessageMetadata } from '../logging';
 import { ClientSession } from '../transport/sessionStateMachine/transitions';
 import { IdentifiedSession } from '../transport/sessionStateMachine/common';
-import { Static } from '@sinclair/typebox';
+import { Static } from 'typebox';
 
 export interface PropagationContext {
   traceparent: string;

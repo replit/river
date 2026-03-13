@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
-import { Static, TNever, TSchema, Type } from '@sinclair/typebox';
+import { Static, TNever, TSchema, Type } from 'typebox';
 import { ProcedureHandlerContext } from './context';
 import { Result } from './result';
 import { Readable, Writable } from './streams';
@@ -352,14 +352,12 @@ function rpc({
   responseData: PayloadType;
   responseError?: ProcedureErrorSchemaType;
   description?: string;
-  handler: RpcProcedure<
-    object,
-    object,
-    object,
-    PayloadType,
-    PayloadType,
-    ProcedureErrorSchemaType
-  >['handler'];
+  // In TypeBox 1.0, TSchema is {} so Static<TSchema> doesn't resolve the same way
+  // as in 0.34. Using `any` for schema type params in the implementation signature
+  // is safe because the public overload signatures still enforce correct types for
+  // all callers. The implementation body doesn't inspect handler types at runtime.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handler: RpcProcedure<any, any, any, any, any, any>['handler'];
 }) {
   return {
     ...(description ? { description } : {}),
@@ -459,15 +457,9 @@ function upload({
   responseData: PayloadType;
   responseError?: ProcedureErrorSchemaType;
   description?: string;
-  handler: UploadProcedure<
-    object,
-    object,
-    object,
-    PayloadType,
-    PayloadType,
-    PayloadType,
-    ProcedureErrorSchemaType
-  >['handler'];
+  // See comment in rpc() implementation above for why `any` is used here.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handler: UploadProcedure<any, any, any, any, any, any, any>['handler'];
 }) {
   return {
     type: 'upload',

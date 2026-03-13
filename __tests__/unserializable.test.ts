@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { Type } from '@sinclair/typebox';
+import { Type } from 'typebox';
 import {
   Procedure,
   createServiceSchema,

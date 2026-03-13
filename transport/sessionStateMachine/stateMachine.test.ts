@@ -11,7 +11,7 @@ import {
   handshakeRequestMessage,
 } from '../message';
 import { ERR_CONSUMED, IdentifiedSession, SessionState } from './common';
-import { Static } from '@sinclair/typebox';
+import { Static } from 'typebox';
 import {
   SessionHandshaking,
   SessionHandshakingListeners,

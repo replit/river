@@ -5,7 +5,7 @@ import {
   TestServiceSchema,
 } from '../testUtil/fixtures/services';
 import { serializeSchema } from '../router';
-import { Type } from '@sinclair/typebox';
+import { Type } from 'typebox';
 
 describe('serialize server to jsonschema', () => {
   test('serialize entire service schema', () => {

@@ -1,8 +1,10 @@
-import { Type } from '@sinclair/typebox';
+import { Type } from 'typebox';
 import { createServiceSchema } from '../../router/services';
 import { Err, Ok, unwrapOrThrow } from '../../router/result';
 import { Observable } from '../observable/observable';
 import { Procedure } from '../../router';
+import { flattenErrorType } from '../../router/errors';
+import { Uint8ArrayType } from '../../customSchemas';
 
 const ServiceSchema = createServiceSchema();
 
@@ -189,7 +191,7 @@ export const OrderingServiceSchema = ServiceSchema.define(
 export const BinaryFileServiceSchema = ServiceSchema.define({
   getFile: Procedure.rpc({
     requestInit: Type.Object({ file: Type.String() }),
-    responseData: Type.Object({ contents: Type.Uint8Array() }),
+    responseData: Type.Object({ contents: Uint8ArrayType() }),
     async handler({ reqInit: { file } }) {
       const bytes: Uint8Array = Buffer.from(`contents for file ${file}`);
 
@@ -205,19 +207,21 @@ export const FallibleServiceSchema = ServiceSchema.define({
   divide: Procedure.rpc({
     requestInit: Type.Object({ a: Type.Number(), b: Type.Number() }),
     responseData: Type.Object({ result: Type.Number() }),
-    responseError: Type.Union([
-      Type.Object({
-        code: Type.Literal(DIV_BY_ZERO),
-        message: Type.String(),
-        extras: Type.Object({ test: Type.String() }),
-      }),
+    responseError: flattenErrorType(
       Type.Union([
         Type.Object({
-          code: Type.Literal('INFINITY'),
+          code: Type.Literal(DIV_BY_ZERO),
           message: Type.String(),
+          extras: Type.Object({ test: Type.String() }),
         }),
+        Type.Union([
+          Type.Object({
+            code: Type.Literal('INFINITY'),
+            message: Type.String(),
+          }),
+        ]),
       ]),
-    ]),
+    ),
     async handler({ reqInit: { a, b } }) {
       if (b === 0) {
         return Err({
@@ -344,11 +348,14 @@ export const UploadableServiceSchema = ServiceSchema.define({
   }),
 });
 
-const RecursivePayload = Type.Recursive((This) =>
-  Type.Object({
-    n: Type.Number(),
-    next: Type.Optional(This),
-  }),
+const RecursivePayload = Type.Cyclic(
+  {
+    RecursivePayload: Type.Object({
+      n: Type.Number(),
+      next: Type.Optional(Type.Ref('RecursivePayload')),
+    }),
+  },
+  'RecursivePayload',
 );
 
 export const NonObjectSchemas = ServiceSchema.define({

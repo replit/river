@@ -3,7 +3,7 @@ import { TransportClientId } from '../transport/message';
 import { SessionId } from '../transport/sessionStateMachine/common';
 import { ErrResult } from './result';
 import { CancelErrorSchema } from './errors';
-import { Static } from '@sinclair/typebox';
+import { Static } from 'typebox';
 
 /**
  * This is passed to every procedure handler and contains various context-level

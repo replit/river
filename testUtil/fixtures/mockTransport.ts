@@ -8,7 +8,7 @@ import { TestSetupHelpers, TestTransportOptions } from './transports';
 import { Duplex } from 'node:stream';
 import { duplexPair } from '../duplex/duplexPair';
 import { nanoid } from 'nanoid';
-import { TSchema } from '@sinclair/typebox';
+import { TSchema } from 'typebox';
 import { ServerHandshakeOptions } from '../../router/handshake';
 
 export class InMemoryConnection extends Connection {
