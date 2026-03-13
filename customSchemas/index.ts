@@ -1,5 +1,8 @@
 import { Type } from 'typebox';
 
+export type TUint8Array = Type.TUnsafe<Uint8Array>;
+const uint8ArrayCache = new Map<string, TUint8Array>();
+
 /**
  * Creates a TypeBox schema for `Uint8Array` values with optional byte length constraints.
  * This replaces the removed `Type.Uint8Array()` from TypeBox 0.34.x.
@@ -16,28 +19,35 @@ export function Uint8ArrayType(
     maxByteLength?: number;
   } = {},
 ) {
-  return Type.Refine(
+  const min = options.minByteLength;
+  const max = options.maxByteLength;
+
+  const key = `${min ?? ''}:${max ?? ''}`;
+  const existing = uint8ArrayCache.get(key);
+  if (existing) return existing;
+
+  const schema = Type.Refine(
     Type.Unsafe<Uint8Array>({
       type: 'Uint8Array',
-      ...options,
+      ...(min !== undefined ? { minByteLength: min } : {}),
+      ...(max !== undefined ? { maxByteLength: max } : {}),
     }),
     (value): value is Uint8Array => {
       if (!(value instanceof Uint8Array)) return false;
-      if (
-        typeof options.minByteLength === 'number' &&
-        value.byteLength < options.minByteLength
-      )
-        return false;
-      if (
-        typeof options.maxByteLength === 'number' &&
-        value.byteLength > options.maxByteLength
-      )
-        return false;
+      if (min !== undefined && value.byteLength < min) return false;
+      if (max !== undefined && value.byteLength > max) return false;
 
       return true;
     },
   );
+
+  uint8ArrayCache.set(key, schema);
+
+  return schema;
 }
+
+export type TDate = Type.TUnsafe<Date>;
+const dateCache = new Map<string, TDate>();
 
 /**
  * Creates a TypeBox schema for `Date` values.
@@ -54,8 +64,15 @@ export function DateType(
     minimumTimestamp?: number;
     maximumTimestamp?: number;
   } = {},
-) {
-  return Type.Refine(
+): TDate {
+  const min = options.minimumTimestamp;
+  const max = options.maximumTimestamp;
+
+  const key = `${min ?? ''}:${max ?? ''}`;
+  const existing = dateCache.get(key);
+  if (existing) return existing;
+
+  const schema = Type.Refine(
     Type.Unsafe<Date>({
       type: 'Date',
       ...options,
@@ -77,4 +94,8 @@ export function DateType(
       return true;
     },
   );
+
+  dateCache.set(key, schema);
+
+  return schema;
 }
