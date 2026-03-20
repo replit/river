@@ -304,9 +304,22 @@ function handleProc(
     return getPreClosedReturnForProc(procType);
   }
 
-  const session =
-    transport.sessions.get(serverId) ??
-    transport.createUnconnectedSession(serverId);
+  const existingSession = transport.sessions.get(serverId);
+
+  // If there's no existing session and the transport has given up reconnecting
+  // (reconnect disabled AND retry budget exhausted), don't create a new
+  // unconnected session — it would become a zombie (sitting in NoConnection
+  // until its grace period expires, never transitioning, then cycling
+  // indefinitely as new RPCs re-create it via this code path).
+  if (
+    !existingSession &&
+    !transport.reconnectOnConnectionDrop &&
+    !transport.retryBudget.hasBudget()
+  ) {
+    return getPreClosedReturnForProc(procType);
+  }
+
+  const session = existingSession ?? transport.createUnconnectedSession(serverId);
   const sessionScopedSend = transport.getSessionBoundSendFn(
     serverId,
     session.id,
