@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { WebSocketConnection } from './connection';
 import { describe, test, expect, beforeEach } from 'vitest';
 import {
   createWebSocketServer,
@@ -176,7 +177,7 @@ describe('sending and receiving across websockets works', async () => {
 
     // unclean client disconnect
     for (const conn of getTransportConnections(clientTransport)) {
-      (conn.ws as NodeWs).terminate();
+      ((conn as WebSocketConnection).ws as NodeWs).terminate();
     }
 
     // by this point the client should have reconnected
@@ -216,7 +217,7 @@ describe('sending and receiving across websockets works', async () => {
     // `onclose`, but (some?) browsers call the `onerror` handler before it since it was an unclean
     // exit.
     for (const conn of getTransportConnections(clientTransport)) {
-      (conn.ws as NodeWs).terminate();
+      ((conn as WebSocketConnection).ws as NodeWs).terminate();
     }
 
     // by this point the client should have reconnected

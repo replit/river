@@ -23,35 +23,37 @@ import { Value } from '@sinclair/typebox/value';
 import { ProtocolError } from './events';
 import { Connection } from './connection';
 import { MessageMetadata } from '../logging';
-import { SessionWaitingForHandshake } from './sessionStateMachine/SessionWaitingForHandshake';
-import { SessionState } from './sessionStateMachine/common';
+import { Session, SessionState } from './session';
+import { CodecMessageAdapter } from '../codec';
 import {
-  ServerSession,
-  ServerSessionStateGraph,
-} from './sessionStateMachine/transitions';
+  createSessionTelemetryInfo,
+  createConnectionTelemetryInfo,
+} from '../tracing';
+import { withResolvers, call } from 'effection';
+import type { Operation, Task } from 'effection';
+
+/**
+ * Tracks a pending connection that is waiting for the client to send
+ * a handshake request. This replaces the old SessionWaitingForHandshake class.
+ */
+interface PendingConnection<ConnType extends Connection> {
+  conn: ConnType;
+  codec: CodecMessageAdapter;
+  handshakeTimeout?: ReturnType<typeof setTimeout>;
+  task?: Task<void>;
+}
 
 export abstract class ServerTransport<
   ConnType extends Connection,
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
 > extends Transport<ConnType> {
-  /**
-   * The options for this transport.
-   */
   protected options: ServerTransportOptions;
-
-  /**
-   * Optional handshake options for the server.
-   */
   handshakeExtensions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>;
-
-  /**
-   * A map of session handshake data for each session.
-   */
   sessionHandshakeMetadata = new Map<TransportClientId, ParsedMetadata>();
 
-  sessions = new Map<TransportClientId, ServerSession<ConnType>>();
-  pendingSessions = new Set<SessionWaitingForHandshake<ConnType>>();
+  sessions = new Map<TransportClientId, Session>();
+  pendingSessions = new Set<PendingConnection<ConnType>>();
 
   constructor(
     clientId: TransportClientId,
@@ -76,17 +78,23 @@ export abstract class ServerTransport<
   }
 
   protected deletePendingSession(
-    pendingSession: SessionWaitingForHandshake<ConnType>,
+    pending: PendingConnection<ConnType>,
   ) {
-    pendingSession.close();
-    // we don't dispatch a session disconnect event
-    // for a non-identified session, just delete directly
-
-    this.pendingSessions.delete(pendingSession);
+    pending.conn.close();
+    if (pending.handshakeTimeout) {
+      clearTimeout(pending.handshakeTimeout);
+    }
+    pending.conn.removeDataListener();
+    pending.conn.removeCloseListener();
+    pending.conn.removeErrorListener();
+    if (pending.task) {
+      void pending.task.halt();
+    }
+    this.pendingSessions.delete(pending);
   }
 
   protected deleteSession(
-    session: ServerSession<ConnType>,
+    session: Session,
     options?: DeleteSessionOptions,
   ): void {
     this.sessionHandshakeMetadata.delete(session.to);
@@ -101,87 +109,89 @@ export abstract class ServerTransport<
       clientId: this.clientId,
     });
 
-    let receivedHandshake = false;
-    const pendingSession = ServerSessionStateGraph.entrypoint(
-      this.clientId,
+    const codec = new CodecMessageAdapter(this.options.codec);
+    const pending: PendingConnection<ConnType> = {
       conn,
-      {
-        onConnectionClosed: () => {
-          this.log?.warn(
-            `connection from unknown closed before handshake finished`,
-            pendingSession.loggingMetadata,
-          );
+      codec,
+    };
+    this.pendingSessions.add(pending);
 
-          this.deletePendingSession(pendingSession);
-        },
-        onConnectionErrored: (err) => {
-          const errorString = coerceErrorString(err);
-          this.log?.warn(
-            `connection from unknown errored before handshake finished: ${errorString}`,
-            pendingSession.loggingMetadata,
-          );
+    let receivedHandshake = false;
 
-          this.deletePendingSession(pendingSession);
-        },
-        onHandshakeTimeout: () => {
-          this.log?.warn(
-            `connection from unknown timed out before handshake finished`,
-            pendingSession.loggingMetadata,
-          );
+    // Set up listeners for the pending connection
+    conn.setCloseListener(() => {
+      this.log?.warn(
+        `connection from unknown closed before handshake finished`,
+        { clientId: this.clientId, connId: conn.id },
+      );
+      this.deletePendingSession(pending);
+    });
 
-          this.deletePendingSession(pendingSession);
-        },
-        onHandshake: (msg) => {
-          if (receivedHandshake) {
-            this.log?.error(
-              `received multiple handshake messages from pending session`,
-              {
-                ...pendingSession.loggingMetadata,
-                connectedTo: msg.from,
-                transportMessage: msg,
-              },
-            );
+    conn.setErrorListener((err: Error) => {
+      const errorString = coerceErrorString(err);
+      this.log?.warn(
+        `connection from unknown errored before handshake finished: ${errorString}`,
+        { clientId: this.clientId, connId: conn.id },
+      );
+      this.deletePendingSession(pending);
+    });
 
-            this.deletePendingSession(pendingSession);
+    conn.setDataListener((raw: Uint8Array) => {
+      const parsedMsgRes = codec.fromBuffer(raw);
+      if (!parsedMsgRes.ok) {
+        this.log?.error(
+          `invalid handshake: could not parse handshake message: ${parsedMsgRes.reason}`,
+          { clientId: this.clientId, connId: conn.id },
+        );
+        this.deletePendingSession(pending);
+        this.protocolError({
+          type: ProtocolError.HandshakeFailed,
+          code: 'MALFORMED_HANDSHAKE',
+          message: `could not parse handshake message: ${parsedMsgRes.reason}`,
+        });
+        return;
+      }
 
-            return;
-          }
+      if (receivedHandshake) {
+        this.log?.error(
+          `received multiple handshake messages from pending session`,
+          {
+            clientId: this.clientId,
+            connId: conn.id,
+            connectedTo: parsedMsgRes.value.from,
+            transportMessage: parsedMsgRes.value,
+          },
+        );
+        this.deletePendingSession(pending);
+        return;
+      }
 
-          // let this resolve async, we just need to make sure its only
-          // called once so we don't race while transitioning to connected
-          // onHandshakeRequest is async as custom validation may be async
-          receivedHandshake = true;
-          void this.onHandshakeRequest(pendingSession, msg);
-        },
-        onInvalidHandshake: (reason, code) => {
-          this.log?.error(
-            `invalid handshake: ${reason}`,
-            pendingSession.loggingMetadata,
-          );
-          this.deletePendingSession(pendingSession);
-          this.protocolError({
-            type: ProtocolError.HandshakeFailed,
-            code,
-            message: reason,
-          });
-        },
-      },
-      this.options,
-      this.tracer,
-      this.log,
-    );
+      receivedHandshake = true;
+      // Process handshake asynchronously (custom validation may be async)
+      const task = this.scope.run(() =>
+        this.processHandshakeRequest(pending, parsedMsgRes.value),
+      );
+      pending.task = task;
+    });
 
-    this.pendingSessions.add(pendingSession);
+    // Handshake timeout
+    pending.handshakeTimeout = setTimeout(() => {
+      this.log?.warn(
+        `connection from unknown timed out before handshake finished`,
+        { clientId: this.clientId, connId: conn.id },
+      );
+      this.deletePendingSession(pending);
+    }, this.options.handshakeTimeoutMs);
   }
 
   private rejectHandshakeRequest(
-    session: SessionWaitingForHandshake<ConnType>,
+    pending: PendingConnection<ConnType>,
     to: TransportClientId,
     reason: string,
     code: Static<typeof HandshakeErrorResponseCodes>,
     metadata: MessageMetadata,
   ) {
-    session.conn.telemetry?.span.setStatus({
+    pending.conn.telemetry?.span.setStatus({
       code: SpanStatusCode.ERROR,
       message: reason,
     });
@@ -198,19 +208,25 @@ export abstract class ServerTransport<
       },
     });
 
-    const res = session.sendHandshake(responseMsg);
-    if (!res.ok) {
-      this.log?.error(`failed to send handshake response: ${res.reason}`, {
-        ...session.loggingMetadata,
-        transportMessage: responseMsg,
-      });
-
+    const buff = pending.codec.toBuffer(responseMsg);
+    if (!buff.ok) {
+      this.log?.error(`failed to encode handshake response: ${buff.reason}`, metadata);
       this.protocolError({
         type: ProtocolError.MessageSendFailure,
-        message: res.reason,
+        message: buff.reason,
       });
-      this.deletePendingSession(session);
+      this.deletePendingSession(pending);
+      return;
+    }
 
+    const sent = pending.conn.send(buff.value);
+    if (!sent) {
+      this.log?.error(`failed to send handshake response`, metadata);
+      this.protocolError({
+        type: ProtocolError.MessageSendFailure,
+        message: 'failed to send handshake response',
+      });
+      this.deletePendingSession(pending);
       return;
     }
 
@@ -219,72 +235,76 @@ export abstract class ServerTransport<
       code,
       message: reason,
     });
-    this.deletePendingSession(session);
+    this.deletePendingSession(pending);
   }
 
-  protected async onHandshakeRequest(
-    session: SessionWaitingForHandshake<ConnType>,
+  private *processHandshakeRequest(
+    pending: PendingConnection<ConnType>,
     msg: OpaqueTransportMessage,
-  ) {
-    // invariant: msg is a handshake request
-    if (!Value.Check(ControlMessageHandshakeRequestSchema, msg.payload)) {
+  ): Operation<void> {
+    const conn = pending.conn;
+
+    // Validate handshake request schema
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const payload = msg.payload as any;
+    if (!Value.Check(ControlMessageHandshakeRequestSchema, payload)) {
       this.rejectHandshakeRequest(
-        session,
+        pending,
         msg.from,
         'received invalid handshake request',
         'MALFORMED_HANDSHAKE',
         {
-          ...session.loggingMetadata,
-          transportMessage: msg,
+          clientId: this.clientId,
+          connId: conn.id,
           connectedTo: msg.from,
+          transportMessage: msg,
           validationErrors: [
-            ...Value.Errors(ControlMessageHandshakeRequestSchema, msg.payload),
+            ...Value.Errors(ControlMessageHandshakeRequestSchema, payload),
           ],
         },
       );
-
       return;
     }
 
-    // invariant: handshake request passes all the validation
-    const gotVersion = msg.payload.protocolVersion;
+    // Validate protocol version
+    const gotVersion = payload.protocolVersion;
     if (!isAcceptedProtocolVersion(gotVersion)) {
       this.rejectHandshakeRequest(
-        session,
+        pending,
         msg.from,
         `expected protocol version oneof [${acceptedProtocolVersions.toString()}], got ${gotVersion}`,
         'PROTOCOL_VERSION_MISMATCH',
         {
-          ...session.loggingMetadata,
+          clientId: this.clientId,
+          connId: conn.id,
           connectedTo: msg.from,
           transportMessage: msg,
         },
       );
-
       return;
     }
 
-    // invariant: must pass custom validation if defined
+    // Validate custom handshake metadata
     let parsedMetadata: ParsedMetadata = {} as ParsedMetadata;
     if (this.handshakeExtensions) {
-      if (!Value.Check(this.handshakeExtensions.schema, msg.payload.metadata)) {
+      if (!Value.Check(this.handshakeExtensions.schema, payload.metadata)) {
         this.rejectHandshakeRequest(
-          session,
+          pending,
           msg.from,
           'received malformed handshake metadata',
           'MALFORMED_HANDSHAKE_META',
           {
-            ...session.loggingMetadata,
+            clientId: this.clientId,
+            connId: conn.id,
             connectedTo: msg.from,
             validationErrors: [
               ...Value.Errors(
                 this.handshakeExtensions.schema,
-                msg.payload.metadata,
+                payload.metadata,
               ),
             ],
           },
         );
-
         return;
       }
 
@@ -292,19 +312,13 @@ export abstract class ServerTransport<
         msg.from,
       );
 
-      const parsedMetadataOrFailureCode =
-        await this.handshakeExtensions.validate(
-          msg.payload.metadata,
+      const parsedMetadataOrFailureCode = yield* call(() =>
+        this.handshakeExtensions!.validate(
+          payload.metadata,
           previousParsedMetadata,
-        );
+        ),
+      );
 
-      // double-check to make sure we haven't transitioned the session yet
-      if (session._isConsumed) {
-        // bail out, don't need to do anything
-        return;
-      }
-
-      // handler rejected the connection
       if (
         Value.Check(
           HandshakeErrorCustomHandlerFatalResponseCodes,
@@ -312,130 +326,92 @@ export abstract class ServerTransport<
         )
       ) {
         this.rejectHandshakeRequest(
-          session,
+          pending,
           msg.from,
           'rejected by handshake handler',
           parsedMetadataOrFailureCode,
           {
-            ...session.loggingMetadata,
-            connectedTo: msg.from,
             clientId: this.clientId,
+            connId: conn.id,
+            connectedTo: msg.from,
           },
         );
-
         return;
       }
 
-      // success!
       parsedMetadata = parsedMetadataOrFailureCode as ParsedMetadata;
     }
 
-    // 4 connect cases
-    // 1. new session
-    //    we dont have a session and the client is requesting a new one
-    //    we can create the session as normal
-    // 2. client is reconnecting to an existing session but we don't have it
-    //    reject this handshake, there's nothing we can do to salvage it
-    // 3. transparent reconnect (old session exists and is the same as the client wants)
-    //    assign to old session
-    // 4. hard reconnect (oldSession exists but but the client wants a new one)
-    //    we close the old session and create a new one
+    // Determine connect case
+    const clientNextExpectedSeq =
+      payload.expectedSessionState.nextExpectedSeq;
+    const clientNextSentSeq = payload.expectedSessionState.nextSentSeq;
+
     let connectCase:
       | 'new session'
       | 'unknown session'
       | 'transparent reconnection'
       | 'hard reconnection' = 'new session';
-    const clientNextExpectedSeq =
-      msg.payload.expectedSessionState.nextExpectedSeq;
-    const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq;
 
     let oldSession = this.sessions.get(msg.from);
+
     if (
       this.options.enableTransparentSessionReconnects &&
       oldSession &&
-      oldSession.id === msg.payload.sessionId
+      oldSession.id === payload.sessionId
     ) {
       connectCase = 'transparent reconnection';
 
-      // invariant: ordering must be correct
       const ourNextSeq = oldSession.nextSeq();
       const ourAck = oldSession.ack;
 
-      // two incorrect cases where we cannot permit a reconnect:
-      // - if the client is about to send a message in the future w.r.t to the server
-      //  - client.seq > server.ack => nextSentSeq > oldSession.ack
       if (clientNextSentSeq > ourAck) {
         this.rejectHandshakeRequest(
-          session,
+          pending,
           msg.from,
           `client is in the future: server wanted next message to be ${ourAck} but client would have sent ${clientNextSentSeq}`,
           'SESSION_STATE_MISMATCH',
           {
-            ...session.loggingMetadata,
+            clientId: this.clientId,
+            connId: conn.id,
             connectedTo: msg.from,
             transportMessage: msg,
           },
         );
-
         return;
       }
 
-      // - if the server is about to send a message in the future w.r.t to the client
-      //  - server.seq > client.ack => oldSession.nextSeq() > nextExpectedSeq
       if (ourNextSeq > clientNextExpectedSeq) {
         this.rejectHandshakeRequest(
-          session,
+          pending,
           msg.from,
           `server is in the future: client wanted next message to be ${clientNextExpectedSeq} but server would have sent ${ourNextSeq}`,
           'SESSION_STATE_MISMATCH',
           {
-            ...session.loggingMetadata,
+            clientId: this.clientId,
+            connId: conn.id,
             connectedTo: msg.from,
             transportMessage: msg,
           },
         );
-
         return;
       }
 
-      // transparent reconnect seems ok, proceed by transitioning old session
-      // to not connected
-      if (oldSession.state !== SessionState.NoConnection) {
-        const noConnectionSession =
-          ServerSessionStateGraph.transition.ConnectedToNoConnection(
-            oldSession,
-            {
-              onSessionGracePeriodElapsed: () => {
-                this.onSessionGracePeriodElapsed(noConnectionSession);
-              },
-              onMessageSendFailure: (msg, reason) => {
-                this.log?.error(`failed to send message: ${reason}`, {
-                  ...noConnectionSession.loggingMetadata,
-                  transportMessage: msg,
-                });
-
-                this.protocolError({
-                  type: ProtocolError.MessageSendFailure,
-                  message: reason,
-                });
-                this.deleteSession(noConnectionSession, { unhealthy: true });
-              },
-            },
-          );
-
-        oldSession = noConnectionSession;
-        this.updateSession(oldSession);
+      // Close old connection if still active
+      if (oldSession.conn) {
+        oldSession.conn.close();
+        oldSession.conn = null;
       }
+      oldSession._state = SessionState.NoConnection;
     } else if (oldSession) {
       connectCase = 'hard reconnection';
-
-      // just nuke the old session entirely and proceed as if this was new
       this.log?.info(
-        `client is reconnecting to a new session (${msg.payload.sessionId}) with an old session (${oldSession.id}) already existing, closing old session`,
+        `client is reconnecting to a new session (${payload.sessionId}) with an old session (${oldSession.id}) already existing, closing old session`,
         {
-          ...session.loggingMetadata,
+          clientId: this.clientId,
+          connId: conn.id,
           connectedTo: msg.from,
-          sessionId: msg.payload.sessionId,
+          sessionId: payload.sessionId,
         },
       );
       this.deleteSession(oldSession);
@@ -443,35 +419,33 @@ export abstract class ServerTransport<
     }
 
     if (!oldSession && (clientNextSentSeq > 0 || clientNextExpectedSeq > 0)) {
-      // we don't have a session, but the client is trying to reconnect
-      // to an old session. we can't do anything about this, so we reject
       connectCase = 'unknown session';
-
       const rejectionMessage = this.options.enableTransparentSessionReconnects
-        ? `client is trying to reconnect to a session the server don't know about: ${msg.payload.sessionId}`
-        : `client is attempting a transparent reconnect to a session but the server does not support it: ${msg.payload.sessionId}`;
+        ? `client is trying to reconnect to a session the server don't know about: ${payload.sessionId}`
+        : `client is attempting a transparent reconnect to a session but the server does not support it: ${payload.sessionId}`;
 
       this.rejectHandshakeRequest(
-        session,
+        pending,
         msg.from,
         rejectionMessage,
         'SESSION_STATE_MISMATCH',
         {
-          ...session.loggingMetadata,
+          clientId: this.clientId,
+          connId: conn.id,
           connectedTo: msg.from,
           transportMessage: msg,
         },
       );
-
       return;
     }
 
-    // from this point on, we're committed to connecting
-    const sessionId = msg.payload.sessionId;
+    // Send handshake response
+    const sessionId = payload.sessionId;
     this.log?.info(
       `handshake from ${msg.from} ok (${connectCase}), responding with handshake success`,
       {
-        ...session.loggingMetadata,
+        clientId: this.clientId,
+        connId: conn.id,
         connectedTo: msg.from,
       },
     );
@@ -485,91 +459,282 @@ export abstract class ServerTransport<
       },
     });
 
-    const res = session.sendHandshake(responseMsg);
-    if (!res.ok) {
-      this.log?.error(`failed to send handshake response: ${res.reason}`, {
-        ...session.loggingMetadata,
-        transportMessage: responseMsg,
+    const buff = pending.codec.toBuffer(responseMsg);
+    if (!buff.ok) {
+      this.log?.error(`failed to encode handshake response: ${buff.reason}`, {
+        clientId: this.clientId,
+        connId: conn.id,
       });
-
       this.protocolError({
         type: ProtocolError.MessageSendFailure,
-        message: res.reason,
+        message: buff.reason,
       });
-      this.deletePendingSession(session);
-
+      this.deletePendingSession(pending);
       return;
     }
 
-    // transition
-    this.pendingSessions.delete(session);
-    const connectedSession =
-      ServerSessionStateGraph.transition.WaitingForHandshakeToConnected(
-        session,
-        // by this point oldSession is either no connection or we dont have an old session
-        oldSession,
+    const sent = conn.send(buff.value);
+    if (!sent) {
+      this.log?.error(`failed to send handshake response`, {
+        clientId: this.clientId,
+        connId: conn.id,
+      });
+      this.protocolError({
+        type: ProtocolError.MessageSendFailure,
+        message: 'failed to send handshake response',
+      });
+      this.deletePendingSession(pending);
+      return;
+    }
+
+    // Clean up pending session state (but don't close the connection)
+    if (pending.handshakeTimeout) {
+      clearTimeout(pending.handshakeTimeout);
+    }
+    conn.removeDataListener();
+    conn.removeCloseListener();
+    conn.removeErrorListener();
+    this.pendingSessions.delete(pending);
+
+    // Create or update session
+    let session: Session;
+    if (oldSession) {
+      // Transparent reconnect - reuse existing session
+      session = oldSession;
+      session.conn = conn;
+      session._state = SessionState.Connected;
+
+      conn.telemetry = createConnectionTelemetryInfo(
+        session.tracer,
+        conn,
+        session.telemetry,
+      );
+    } else {
+      // New session
+      const telemetry = createSessionTelemetryInfo(
+        this.tracer,
         sessionId,
         msg.from,
+        this.clientId,
         msg.tracing,
-        {
-          onConnectionErrored: (err) => {
-            // just log, when we error we also emit close
-            const errStr = coerceErrorString(err);
-            this.log?.warn(
-              `connection to ${connectedSession.to} errored: ${errStr}`,
-              connectedSession.loggingMetadata,
-            );
-          },
-          onConnectionClosed: () => {
-            this.log?.info(
-              `connection to ${connectedSession.to} closed`,
-              connectedSession.loggingMetadata,
-            );
-            this.onConnClosed(connectedSession);
-          },
-          onMessage: (msg) => {
-            this.handleMsg(msg);
-          },
-          onInvalidMessage: (reason) => {
-            this.log?.error(`invalid message: ${reason}`, {
-              ...connectedSession.loggingMetadata,
-              transportMessage: msg,
-            });
-
-            this.protocolError({
-              type: ProtocolError.InvalidMessage,
-              message: reason,
-            });
-            this.deleteSession(connectedSession, { unhealthy: true });
-          },
-          onMessageSendFailure: (msg, reason) => {
-            this.log?.error(`failed to send message: ${reason}`, {
-              ...connectedSession.loggingMetadata,
-              transportMessage: msg,
-            });
-
-            this.protocolError({
-              type: ProtocolError.MessageSendFailure,
-              message: reason,
-            });
-            this.deleteSession(connectedSession, { unhealthy: true });
-          },
-        },
-        gotVersion,
       );
 
-    const bufferSendRes = connectedSession.sendBufferedMessages();
-    if (!bufferSendRes.ok) {
+      session = new Session({
+        id: sessionId,
+        from: this.clientId,
+        to: msg.from,
+        seq: 0,
+        ack: 0,
+        seqSent: 0,
+        sendBuffer: [],
+        telemetry,
+        options: this.options,
+        protocolVersion: gotVersion,
+        tracer: this.tracer,
+        log: this.log,
+        codec: new CodecMessageAdapter(this.options.codec),
+        state: SessionState.Connected,
+      });
+
+      session.conn = conn;
+      conn.telemetry = createConnectionTelemetryInfo(
+        session.tracer,
+        conn,
+        session.telemetry,
+      );
+
+      this.createSessionEntry(session);
+    }
+
+    if (oldSession) {
+      // Transparent reconnect - session already in map, just dispatch transition
+      this.dispatchSessionTransition(session);
+    }
+
+    this.log?.info(
+      `session ${session.id} transition to Connected`,
+      {
+        ...session.loggingMetadata,
+        tags: ['state-transition'],
+      },
+    );
+
+    // Send buffered messages
+    const bufRes = session.sendBufferedMessages();
+    if (!bufRes.ok) {
+      this.log?.error(`failed to send buffered messages: ${bufRes.reason}`, session.loggingMetadata);
+      this.protocolError({
+        type: ProtocolError.MessageSendFailure,
+        message: bufRes.reason,
+      });
+      this.deleteSession(session, { unhealthy: true });
       return;
     }
 
-    this.sessionHandshakeMetadata.set(connectedSession.to, parsedMetadata);
-    if (oldSession) {
-      this.updateSession(connectedSession);
-    } else {
-      this.createSession(connectedSession);
+    this.sessionHandshakeMetadata.set(session.to, parsedMetadata);
+
+    // Run connected phase with active heartbeat (server-side)
+    // Handle disconnect synchronously via the close listener
+    const self = this;
+
+    const onDisconnect = () => {
+      if (session._isConsumed) {
+        return;
+      }
+
+      self.log?.info(
+        `connection to ${session.to} closed`,
+        session.loggingMetadata,
+      );
+
+      session.conn = null;
+      session._state = SessionState.NoConnection;
+      self.dispatchSessionTransition(session);
+
+      // Start grace period for transparent reconnection
+      const graceMs = session.options.sessionDisconnectGraceMs;
+      const graceTimeout = setTimeout(() => {
+        if (!session._isConsumed) {
+          self.log?.info(
+            `session to ${session.to} grace period elapsed, closing`,
+            session.loggingMetadata,
+          );
+          self.deleteSession(session);
+        }
+      }, graceMs);
+
+      // Store grace timeout so it can be cleaned up if session reconnects
+      self.sessionTasks.get(session.to);
+    };
+
+    const connectedTask = this.scope.run(function* () {
+      yield* self.runConnectedPhase(session, conn, true, onDisconnect);
+    });
+    this.sessionTasks.set(session.to, connectedTask);
+  }
+
+  /**
+   * Run the connected phase with heartbeat and message handling.
+   * Reuses the ClientTransport implementation via the base class.
+   */
+  protected *runConnectedPhase(
+    session: Session,
+    conn: ConnType,
+    isActivelyHeartbeating: boolean,
+    onDisconnect?: () => void,
+  ): Operation<void> {
+    const { operation: disconnectOp, resolve: resolveDisconnect } =
+      withResolvers<void>();
+
+    let heartbeatMissTimeout: ReturnType<typeof setTimeout> | undefined;
+    let heartbeatHandle: ReturnType<typeof setInterval> | undefined;
+
+    const resetHeartbeatTimeout = () => {
+      if (heartbeatMissTimeout) {
+        clearTimeout(heartbeatMissTimeout);
+      }
+
+      const maxMisses = session.options.heartbeatsUntilDead;
+      const missDuration = maxMisses * session.options.heartbeatIntervalMs;
+      heartbeatMissTimeout = setTimeout(() => {
+        session.log?.info(
+          `closing connection to ${session.to} due to inactivity (missed ${maxMisses} heartbeats which is ${missDuration}ms)`,
+          session.loggingMetadata,
+        );
+        session.telemetry.span.addEvent(
+          'closing connection due to missing heartbeat',
+        );
+        conn.close();
+      }, missDuration);
+    };
+
+    resetHeartbeatTimeout();
+
+    if (isActivelyHeartbeating) {
+      heartbeatHandle = setInterval(() => {
+        const res = session.sendHeartbeat();
+        if (!res.ok) {
+          this.log?.error(`failed to send heartbeat: ${res.reason}`, session.loggingMetadata);
+          this.protocolError({
+            type: ProtocolError.MessageSendFailure,
+            message: res.reason,
+          });
+          this.deleteSession(session, { unhealthy: true });
+        }
+      }, session.options.heartbeatIntervalMs);
     }
 
-    connectedSession.startActiveHeartbeat();
+    conn.setDataListener((raw: Uint8Array) => {
+      const parsedMsg = session.processIncomingData(
+        raw,
+        (reason) => {
+          this.log?.error(`invalid message: ${reason}`, {
+            ...session.loggingMetadata,
+          });
+          this.protocolError({
+            type: ProtocolError.InvalidMessage,
+            message: reason,
+          });
+          this.deleteSession(session, { unhealthy: true });
+        },
+        isActivelyHeartbeating,
+        (reason) => {
+          this.log?.error(`failed to send message: ${reason}`, session.loggingMetadata);
+          this.protocolError({
+            type: ProtocolError.MessageSendFailure,
+            message: reason,
+          });
+          this.deleteSession(session, { unhealthy: true });
+        },
+      );
+
+      if (parsedMsg) {
+        resetHeartbeatTimeout();
+        this.handleMsg(parsedMsg);
+      } else if (session.ack > 0) {
+        resetHeartbeatTimeout();
+      }
+    });
+
+    conn.setErrorListener((err: Error) => {
+      const errStr = coerceErrorString(err);
+      this.log?.warn(
+        `connection to ${session.to} errored: ${errStr}`,
+        session.loggingMetadata,
+      );
+    });
+
+    conn.setCloseListener(() => {
+      // Clean up immediately on close (synchronous)
+      conn.removeDataListener();
+      conn.removeCloseListener();
+      conn.removeErrorListener();
+
+      if (heartbeatMissTimeout) {
+        clearTimeout(heartbeatMissTimeout);
+        heartbeatMissTimeout = undefined;
+      }
+
+      if (heartbeatHandle) {
+        clearInterval(heartbeatHandle);
+        heartbeatHandle = undefined;
+      }
+
+      // Call the synchronous disconnect handler
+      onDisconnect?.();
+
+      resolveDisconnect();
+    });
+
+    yield* disconnectOp;
+  }
+
+  close() {
+    // Clean up pending sessions
+    for (const pending of this.pendingSessions) {
+      this.deletePendingSession(pending);
+    }
+
+    super.close();
   }
 }

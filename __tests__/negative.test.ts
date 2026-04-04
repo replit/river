@@ -26,7 +26,7 @@ import { ProtocolError } from '../transport/events';
 import NodeWs from 'ws';
 import { createPostTestCleanups } from '../testUtil/fixtures/cleanup';
 import { generateId } from '../transport/id';
-import { SessionState } from '../transport/sessionStateMachine/common';
+import { SessionState } from '../transport/session';
 
 describe('should handle incompatabilities', async () => {
   let server: http.Server;
@@ -323,8 +323,8 @@ describe('should handle incompatabilities', async () => {
     const fatalError = new FatalConnectionError(
       'simulated fatal connection error',
     );
-    session.conn.onError(fatalError);
-    session.conn.onClose();
+    session.conn!.onError(fatalError);
+    session.conn!.onClose();
 
     await advanceFakeTimersBySessionGrace();
     expect(numberOfConnections(clientTransport)).toBe(0);

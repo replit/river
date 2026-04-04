@@ -15,31 +15,21 @@ import {
   EventHandler,
   EventMap,
   EventTypes,
-  ProtocolError,
 } from './events';
 import {
   ProvidedTransportOptions,
   TransportOptions,
   defaultTransportOptions,
 } from './options';
-import {
-  SessionConnected,
-  SessionConnecting,
-  SessionHandshaking,
-  SessionNoConnection,
-  SessionNoConnectionListeners,
-  SessionState,
-} from './sessionStateMachine';
+import { Session } from './session';
 import { Connection } from './connection';
-import { Session, SessionStateGraph } from './sessionStateMachine/transitions';
-import { SessionId } from './sessionStateMachine/common';
 import { Tracer } from '@opentelemetry/api';
 import { getTracer } from '../tracing';
+import { createScope } from 'effection';
+import type { Scope, Task, Future } from 'effection';
 
 /**
  * Represents the possible states of a transport.
- * @property {'open'} open - The transport is open and operational (note that this doesn't mean it is actively connected)
- * @property {'closed'} closed - The transport is permanently closed and cannot be reopened.
  */
 export type TransportStatus = 'open' | 'closed';
 
@@ -50,56 +40,29 @@ export interface DeleteSessionOptions {
 export type SessionBoundSendFn = (msg: PartialTransportMessage) => string;
 
 /**
- * Transports manage the lifecycle (creation/deletion) of sessions
+ * Transports manage the lifecycle (creation/deletion) of sessions.
  *
- * ```plaintext
- *            ▲
- *  incoming  │
- *  messages  │
- *            ▼
- *      ┌─────────────┐   1:N   ┌───────────┐   1:1*  ┌────────────┐
- *      │  Transport  │ ◄─────► │  Session  │ ◄─────► │ Connection │
- *      └─────────────┘         └───────────┘         └────────────┘
- *            ▲                               * (may or may not be initialized yet)
- *            │
- *            ▼
- *      ┌───────────┐
- *      │ Message   │
- *      │ Listeners │
- *      └───────────┘
- * ```
- * @abstract
+ * In the Effection architecture, each transport owns an Effection scope.
+ * Session lifecycle tasks (connection, handshake, heartbeat, reconnection)
+ * run as operations within this scope. When the transport is closed,
+ * the scope is destroyed, halting all session tasks.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export abstract class Transport<ConnType extends Connection> {
-  /**
-   * The status of the transport.
-   */
   private status: TransportStatus;
-
-  /**
-   * The client ID of this transport.
-   */
   clientId: TransportClientId;
-
-  /**
-   * The event dispatcher for handling events of type EventTypes.
-   */
   eventDispatcher: EventDispatcher<EventTypes>;
-
-  /**
-   * The options for this transport.
-   */
   protected options: TransportOptions;
   log?: Logger;
   tracer: Tracer;
 
-  sessions: Map<TransportClientId, Session<ConnType>>;
+  sessions: Map<TransportClientId, Session>;
 
-  /**
-   * Creates a new Transport instance.
-   * @param codec The codec used to encode and decode messages.
-   * @param clientId The client ID of this transport.
-   */
+  // Effection scope for managing session lifecycle tasks
+  protected scope: Scope;
+  private destroyScope: () => Future<void>;
+  protected sessionTasks: Map<TransportClientId, Task<void>>;
+
   constructor(
     clientId: TransportClientId,
     providedOptions?: ProvidedTransportOptions,
@@ -110,35 +73,25 @@ export abstract class Transport<ConnType extends Connection> {
     this.status = 'open';
     this.sessions = new Map();
     this.tracer = getTracer();
+
+    // Create Effection scope for this transport's lifecycle
+    [this.scope, this.destroyScope] = createScope();
+    this.sessionTasks = new Map();
   }
 
   bindLogger(fn: LogFn | Logger, level?: LoggingLevel) {
-    // construct logger from fn
     if (typeof fn === 'function') {
       this.log = createLogProxy(new BaseLogger(fn, level));
-
       return;
     }
-
-    // object case, just assign
     this.log = createLogProxy(fn);
   }
 
-  /**
-   * Called when a message is received by this transport.
-   * You generally shouldn't need to override this in downstream transport implementations.
-   * @param message The received message.
-   */
   protected handleMsg(message: OpaqueTransportMessage) {
     if (this.getStatus() !== 'open') return;
     this.eventDispatcher.dispatchEvent('message', message);
   }
 
-  /**
-   * Adds a listener to this transport.
-   * @param the type of event to listen for
-   * @param handler The message handler to add.
-   */
   addEventListener<K extends EventTypes, T extends EventHandler<K>>(
     type: K,
     handler: T,
@@ -146,11 +99,6 @@ export abstract class Transport<ConnType extends Connection> {
     this.eventDispatcher.addEventListener(type, handler);
   }
 
-  /**
-   * Removes a listener from this transport.
-   * @param the type of event to un-listen on
-   * @param handler The message handler to remove.
-   */
   removeEventListener<K extends EventTypes, T extends EventHandler<K>>(
     type: K,
     handler: T,
@@ -162,11 +110,6 @@ export abstract class Transport<ConnType extends Connection> {
     this.eventDispatcher.dispatchEvent('protocolError', message);
   }
 
-  /**
-   * Default close implementation for transports. You should override this in the downstream
-   * implementation if you need to do any additional cleanup and call super.close() at the end.
-   * Closes the transport. Any messages sent while the transport is closed will be silently discarded.
-   */
   close() {
     this.status = 'closed';
 
@@ -181,14 +124,16 @@ export abstract class Transport<ConnType extends Connection> {
 
     this.eventDispatcher.removeAllListeners();
     this.log?.info(`manually closed transport`, { clientId: this.clientId });
+
+    // Destroy Effection scope - halts all session tasks
+    void this.destroyScope();
   }
 
   getStatus(): TransportStatus {
     return this.status;
   }
 
-  // state transitions
-  protected createSession<S extends Session<ConnType>>(session: S): void {
+  protected createSessionEntry(session: Session): void {
     const activeSession = this.sessions.get(session.to);
     if (activeSession) {
       const msg = `attempt to create session for ${session.to} but active session (${activeSession.id}) already exists`;
@@ -211,27 +156,7 @@ export abstract class Transport<ConnType extends Connection> {
     } as EventMap['sessionTransition']);
   }
 
-  protected updateSession<S extends Session<ConnType>>(session: S): void {
-    const activeSession = this.sessions.get(session.to);
-    if (!activeSession) {
-      const msg = `attempt to transition session for ${session.to} but no active session exists`;
-      this.log?.error(msg, {
-        ...session.loggingMetadata,
-        tags: ['invariant-violation'],
-      });
-      throw new Error(msg);
-    }
-
-    if (activeSession.id !== session.id) {
-      const msg = `attempt to transition active session for ${session.to} but active session (${activeSession.id}) is different from handle (${session.id})`;
-      this.log?.error(msg, {
-        ...session.loggingMetadata,
-        tags: ['invariant-violation'],
-      });
-      throw new Error(msg);
-    }
-
-    this.sessions.set(session.to, session);
+  protected dispatchSessionTransition(session: Session): void {
     this.eventDispatcher.dispatchEvent('sessionTransition', {
       state: session.state,
       id: session.id,
@@ -239,10 +164,9 @@ export abstract class Transport<ConnType extends Connection> {
   }
 
   protected deleteSession(
-    session: Session<ConnType>,
+    session: Session,
     options?: DeleteSessionOptions,
   ) {
-    // ensure idempotency esp re: dispatching events
     if (session._isConsumed) return;
 
     const loggingMetadata = session.loggingMetadata;
@@ -259,103 +183,26 @@ export abstract class Transport<ConnType extends Connection> {
     const to = session.to;
     session.close();
     this.sessions.delete(to);
+
+    // Halt the Effection task managing this session
+    const task = this.sessionTasks.get(to);
+    if (task) {
+      void task.halt();
+      this.sessionTasks.delete(to);
+    }
+
     this.eventDispatcher.dispatchEvent('sessionStatus', {
       status: 'closed',
       session: { id: session.id, to: to },
     });
   }
 
-  // common listeners
-  protected onSessionGracePeriodElapsed(session: Session<ConnType>) {
-    this.log?.info(
-      `session to ${session.to} grace period elapsed, closing`,
-      session.loggingMetadata,
-    );
-
-    this.deleteSession(session);
-  }
-
-  protected onConnectingFailed(
-    session: SessionConnecting<ConnType>,
-  ): SessionNoConnection {
-    // transition to no connection
-    const noConnectionSession =
-      SessionStateGraph.transition.ConnectingToNoConnection(session, {
-        onSessionGracePeriodElapsed: () => {
-          this.onSessionGracePeriodElapsed(noConnectionSession);
-        },
-        onMessageSendFailure: (msg, reason) => {
-          this.log?.error(`failed to send message: ${reason}`, {
-            ...noConnectionSession.loggingMetadata,
-            transportMessage: msg,
-          });
-
-          this.protocolError({
-            type: ProtocolError.MessageSendFailure,
-            message: reason,
-          });
-          this.deleteSession(noConnectionSession, { unhealthy: true });
-        },
-      });
-
-    this.updateSession(noConnectionSession);
-
-    return noConnectionSession;
-  }
-
-  protected onConnClosed(
-    session: SessionHandshaking<ConnType> | SessionConnected<ConnType>,
-  ): SessionNoConnection {
-    // transition to no connection
-    let noConnectionSession: SessionNoConnection;
-    const listeners: SessionNoConnectionListeners = {
-      onSessionGracePeriodElapsed: () => {
-        this.onSessionGracePeriodElapsed(noConnectionSession);
-      },
-      onMessageSendFailure: (msg, reason) => {
-        this.log?.error(`failed to send message: ${reason}`, {
-          ...noConnectionSession.loggingMetadata,
-          transportMessage: msg,
-        });
-
-        this.protocolError({
-          type: ProtocolError.MessageSendFailure,
-          message: reason,
-        });
-        this.deleteSession(noConnectionSession, { unhealthy: true });
-      },
-    };
-
-    if (session.state === SessionState.Handshaking) {
-      noConnectionSession =
-        SessionStateGraph.transition.HandshakingToNoConnection(
-          session,
-          listeners,
-        );
-    } else {
-      noConnectionSession =
-        SessionStateGraph.transition.ConnectedToNoConnection(
-          session,
-          listeners,
-        );
-    }
-
-    this.updateSession(noConnectionSession);
-
-    return noConnectionSession;
-  }
-
   /**
-   * Gets a send closure scoped to a specific session. Sending using the returned
-   * closure after the session has transitioned to a different state will be a noop.
-   *
-   * Session objects themselves can become stale as they transition between
-   * states. As stale sessions cannot be used again (and will throw), holding
-   * onto a session object is not recommended.
+   * Gets a send closure scoped to a specific session.
    */
   getSessionBoundSendFn(
     to: TransportClientId,
-    sessionId: SessionId,
+    sessionId: string,
   ): SessionBoundSendFn {
     if (this.getStatus() !== 'open') {
       throw new Error('cannot get a bound send function on a closed transport');

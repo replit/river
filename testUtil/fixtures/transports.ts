@@ -68,7 +68,7 @@ export const transports: Array<TransportMatrixEntry> = [
         simulatePhantomDisconnect() {
           for (const transport of transports) {
             for (const conn of getTransportConnections(transport)) {
-              conn.ws.onmessage = null;
+              (conn as import('../../transport/impls/ws/connection').WebSocketConnection).ws.onmessage = null;
             }
           }
         },

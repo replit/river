@@ -14,8 +14,9 @@ import {
   defaultTransportOptions,
 } from '../transport/options';
 import { Connection } from '../transport/connection';
-import { SessionState } from '../transport/sessionStateMachine/common';
-import { SessionStateGraph } from '../transport/sessionStateMachine/transitions';
+import { SessionState, Session } from '../transport/session';
+import { CodecMessageAdapter } from '../codec';
+import { createSessionTelemetryInfo } from '../tracing';
 import { BaseErrorSchemaType } from '../router/errors';
 import { ClientTransport } from '../transport/client';
 import { ServerTransport } from '../transport/server';
@@ -177,21 +178,24 @@ export const testingSessionOptions = defaultTransportOptions;
 export const testingClientSessionOptions = defaultClientTransportOptions;
 
 export function dummySession() {
-  return SessionStateGraph.entrypoints.NoConnection(
-    'client',
-    'server',
-    {
-      onSessionGracePeriodElapsed: () => {
-        /* noop */
-      },
-      onMessageSendFailure: () => {
-        /* noop */
-      },
-    },
-    testingSessionOptions,
-    currentProtocolVersion,
-    getTracer(),
-  );
+  const tracer = getTracer();
+  const id = 'session-dummy';
+  const telemetry = createSessionTelemetryInfo(tracer, id, 'server', 'client');
+  return new Session({
+    id,
+    from: 'client',
+    to: 'server',
+    seq: 0,
+    ack: 0,
+    seqSent: 0,
+    sendBuffer: [],
+    telemetry,
+    options: testingSessionOptions,
+    protocolVersion: currentProtocolVersion,
+    tracer,
+    codec: new CodecMessageAdapter(testingSessionOptions.codec),
+    state: SessionState.NoConnection,
+  });
 }
 
 export function getClientSendFn(
@@ -226,10 +230,10 @@ export function getServerSendFn(
 export function getTransportConnections<ConnType extends Connection>(
   transport: Transport<ConnType>,
 ): Array<ConnType> {
-  const connections = [];
+  const connections: ConnType[] = [];
   for (const session of transport.sessions.values()) {
-    if (session.state === SessionState.Connected) {
-      connections.push(session.conn);
+    if (session.state === SessionState.Connected && session.conn) {
+      connections.push(session.conn as ConnType);
     }
   }
 

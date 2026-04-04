@@ -10,12 +10,13 @@ export type {
 export {
   Session,
   SessionState,
-  type SessionNoConnection,
-  type SessionConnecting,
-  type SessionHandshaking,
-  type SessionConnected,
-  type SessionWaitingForHandshake,
-} from './sessionStateMachine';
+} from './session';
+// Backward compat type aliases - all session states are now the same Session class
+export type { Session as SessionNoConnection } from './session';
+export type { Session as SessionConnecting } from './session';
+export type { Session as SessionHandshaking } from './session';
+export type { Session as SessionConnected } from './session';
+export type { Session as SessionWaitingForHandshake } from './session';
 export { Connection } from './connection';
 export {
   WebSocketCloseError,

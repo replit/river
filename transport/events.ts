@@ -1,8 +1,7 @@
 import { type Static } from '@sinclair/typebox';
-import { Connection } from './connection';
 import { OpaqueTransportMessage, HandshakeErrorResponseCodes } from './message';
-import { Session, SessionState } from './sessionStateMachine';
-import { SessionId } from './sessionStateMachine/common';
+import { Session, SessionState } from './session';
+import { SessionId } from './session';
 import { TransportStatus } from './transport';
 
 export const ProtocolError = {
@@ -21,11 +20,11 @@ export interface EventMap {
   sessionStatus:
     | {
         status: 'created' | 'closing';
-        session: Session<Connection>;
+        session: Session;
       }
     | {
         status: 'closed';
-        session: Pick<Session<Connection>, 'id' | 'to'>;
+        session: Pick<Session, 'id' | 'to'>;
       };
   sessionTransition:
     | { state: SessionState.Connected; id: SessionId }

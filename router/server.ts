@@ -46,7 +46,7 @@ import { ServerHandshakeOptions } from './handshake';
 import { Connection } from '../transport/connection';
 import { ServerTransport } from '../transport/server';
 import { ReadableImpl, WritableImpl } from './streams';
-import { IdentifiedSession } from '../transport/sessionStateMachine/common';
+import { Session as IdentifiedSession } from '../transport/session';
 import { SessionBoundSendFn } from '../transport/transport';
 
 type StreamId = string;

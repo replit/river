@@ -1,6 +1,6 @@
 import { Span } from '@opentelemetry/api';
 import { TransportClientId } from '../transport/message';
-import { SessionId } from '../transport/sessionStateMachine/common';
+import { SessionId } from '../transport/session';
 import { ErrResult } from './result';
 import { CancelErrorSchema } from './errors';
 import { Static } from '@sinclair/typebox';

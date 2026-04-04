@@ -11,8 +11,8 @@ import {
 import { BaseErrorSchemaType, RIVER_VERSION, ValidProcType } from '../router';
 import { Connection } from '../transport';
 import { MessageMetadata } from '../logging';
-import { ClientSession } from '../transport/sessionStateMachine/transitions';
-import { IdentifiedSession } from '../transport/sessionStateMachine/common';
+import { Session as ClientSession } from '../transport/session';
+import { Session as IdentifiedSession } from '../transport/session';
 import { Static } from '@sinclair/typebox';
 
 export interface PropagationContext {
@@ -90,7 +90,7 @@ export function createConnectionTelemetryInfo(
 
 export function createProcTelemetryInfo(
   tracer: Tracer,
-  session: ClientSession<Connection>,
+  session: ClientSession,
   kind: ValidProcType,
   serviceName: string,
   procedureName: string,
