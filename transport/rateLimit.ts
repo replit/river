@@ -127,6 +127,11 @@ export class LeakyBucketRateLimit {
     this.intervalHandle = undefined;
   }
 
+  resetBudget() {
+    this.stopLeak();
+    this.budgetConsumed = 0;
+  }
+
   close() {
     this.stopLeak();
   }
