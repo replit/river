@@ -89,6 +89,26 @@ describe('LeakyBucketRateLimit', () => {
     expect(backoffMs3).toBeGreaterThan(backoffMs2);
   });
 
+  test('resetBudget zeroes consumed budget and stops restore', () => {
+    const rateLimit = new LeakyBucketRateLimit(options);
+    rateLimit.consumeBudget();
+    rateLimit.consumeBudget();
+    rateLimit.consumeBudget();
+    expect(rateLimit.getBudgetConsumed()).toBe(3);
+    expect(rateLimit.hasBudget()).toBe(true);
+
+    rateLimit.startRestoringBudget();
+
+    rateLimit.resetBudget();
+    expect(rateLimit.getBudgetConsumed()).toBe(0);
+    expect(rateLimit.hasBudget()).toBe(true);
+    expect(rateLimit.getBackoffMs()).toBe(0);
+
+    // restore interval should be stopped — advancing time shouldn't change anything
+    vi.advanceTimersByTime(options.budgetRestoreIntervalMs * 5);
+    expect(rateLimit.getBudgetConsumed()).toBe(0);
+  });
+
   test('reports remaining budget correctly', () => {
     const maxAttempts = 3;
     const rateLimit = new LeakyBucketRateLimit({
