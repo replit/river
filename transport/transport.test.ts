@@ -166,6 +166,133 @@ describe.each(testMatrix())(
       });
     });
 
+    test('out-of-order messages delete poisoned sessions before reconnect', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      clientTransport.connect(serverTransport.clientId);
+
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(numberOfConnections(clientTransport)).toBe(1);
+        expect(numberOfConnections(serverTransport)).toBe(1);
+      });
+
+      const clientSession = clientTransport.sessions.get('SERVER');
+      assert(clientSession);
+      expect(clientSession.state).toBe(SessionState.Connected);
+
+      if (clientSession.state !== SessionState.Connected) {
+        throw new Error('expected a connected client session');
+      }
+
+      const badMsgRes = clientSession.codec.toBuffer({
+        id: 'bad-msg',
+        to: serverTransport.clientId,
+        from: clientTransport.clientId,
+        seq: clientSession.seq + 1,
+        ack: clientSession.ack,
+        streamId: 'stream',
+        controlFlags: 0,
+        payload: { msg: 'bad' },
+      });
+      expect(badMsgRes.ok).toBe(true);
+
+      if (!badMsgRes.ok) {
+        throw new Error('expected out-of-order message to encode');
+      }
+
+      expect(clientSession.conn.send(badMsgRes.value)).toBe(true);
+
+      await waitFor(() =>
+        expect(serverTransport.sessions.has('client')).toBe(false),
+      );
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+
+      await advanceFakeTimersByConnectionBackoff();
+      await waitFor(() => {
+        expect(numberOfConnections(clientTransport)).toBe(1);
+        expect(numberOfConnections(serverTransport)).toBe(1);
+      });
+
+      const sendFn = getClientSendFn(clientTransport, serverTransport);
+      const msg = createDummyTransportMessage();
+      const msgId = sendFn(msg);
+      await expect(
+        waitForMessage(serverTransport, (recv) => recv.id === msgId),
+      ).resolves.toStrictEqual(msg.payload);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
+    test('client hard reconnects after receiving out-of-order messages', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      clientTransport.connect(serverTransport.clientId);
+
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(numberOfConnections(clientTransport)).toBe(1);
+        expect(numberOfConnections(serverTransport)).toBe(1);
+      });
+
+      const serverSession = serverTransport.sessions.get('client');
+      assert(serverSession);
+      expect(serverSession.state).toBe(SessionState.Connected);
+
+      if (serverSession.state !== SessionState.Connected) {
+        throw new Error('expected a connected server session');
+      }
+
+      const badMsgRes = serverSession.codec.toBuffer({
+        id: 'bad-msg',
+        to: clientTransport.clientId,
+        from: serverTransport.clientId,
+        seq: serverSession.seq + 1,
+        ack: serverSession.ack,
+        streamId: 'stream',
+        controlFlags: 0,
+        payload: { msg: 'bad' },
+      });
+      expect(badMsgRes.ok).toBe(true);
+
+      if (!badMsgRes.ok) {
+        throw new Error('expected out-of-order message to encode');
+      }
+
+      expect(serverSession.conn.send(badMsgRes.value)).toBe(true);
+
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+
+      await advanceFakeTimersByConnectionBackoff();
+      await waitFor(() => {
+        expect(numberOfConnections(clientTransport)).toBe(1);
+        expect(numberOfConnections(serverTransport)).toBe(1);
+      });
+
+      const sendFn = getServerSendFn(serverTransport, clientTransport);
+      const msg = createDummyTransportMessage();
+      const msgId = sendFn(msg);
+      await expect(
+        waitForMessage(clientTransport, (recv) => recv.id === msgId),
+      ).resolves.toStrictEqual(msg.payload);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
     test('idle transport cleans up nicely', async () => {
       const clientTransport = getClientTransport('client');
       const serverTransport = getServerTransport();

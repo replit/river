@@ -328,10 +328,12 @@ export abstract class ClientTransport<
         onMessage: (msg) => {
           this.handleMsg(msg);
         },
-        onInvalidMessage: (reason) => {
+        onInvalidMessage: (reason, transportMessage, options) => {
+          const sessionTo = connectedSession.to;
+
           this.log?.error(`invalid message: ${reason}`, {
             ...connectedSession.loggingMetadata,
-            transportMessage: msg,
+            transportMessage: transportMessage ?? msg,
           });
 
           this.protocolError({
@@ -339,6 +341,9 @@ export abstract class ClientTransport<
             message: reason,
           });
           this.deleteSession(connectedSession, { unhealthy: true });
+          if (options?.reconnect) {
+            this.tryReconnecting(sessionTo);
+          }
         },
         onMessageSendFailure: (msg, reason) => {
           this.log?.error(`failed to send message: ${reason}`, {

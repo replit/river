@@ -530,10 +530,10 @@ export abstract class ServerTransport<
           onMessage: (msg) => {
             this.handleMsg(msg);
           },
-          onInvalidMessage: (reason) => {
+          onInvalidMessage: (reason, transportMessage) => {
             this.log?.error(`invalid message: ${reason}`, {
               ...connectedSession.loggingMetadata,
-              transportMessage: msg,
+              transportMessage: transportMessage ?? msg,
             });
 
             this.protocolError({

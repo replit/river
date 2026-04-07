@@ -21,7 +21,11 @@ export interface SessionConnectedListeners extends IdentifiedSessionListeners {
   onConnectionErrored: (err: unknown) => void;
   onConnectionClosed: () => void;
   onMessage: (msg: OpaqueTransportMessage) => void;
-  onInvalidMessage: (reason: string) => void;
+  onInvalidMessage: (
+    reason: string,
+    transportMessage?: OpaqueTransportMessage,
+    options?: { reconnect: boolean },
+  ) => void;
 }
 
 export interface SessionConnectedProps<ConnType extends Connection>
@@ -203,11 +207,10 @@ export class SessionConnected<
           },
         );
       } else {
-        const reason = `received out-of-order msg, closing connection (got seq: ${parsedMsg.seq}, wanted seq: ${this.ack})`;
+        const reason = `received out-of-order msg, closing session (got seq: ${parsedMsg.seq}, wanted seq: ${this.ack})`;
         this.log?.error(reason, {
           ...this.loggingMetadata,
           transportMessage: parsedMsg,
-          tags: ['invariant-violation'],
         });
 
         this.telemetry.span.setStatus({
@@ -215,9 +218,7 @@ export class SessionConnected<
           message: reason,
         });
 
-        // try to recover by closing the connection and re-handshaking
-        // with the session intact
-        this.conn.close();
+        this.listeners.onInvalidMessage(reason, parsedMsg, { reconnect: true });
       }
 
       return;

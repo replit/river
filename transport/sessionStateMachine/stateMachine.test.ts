@@ -1982,6 +1982,64 @@ describe('session state machine', () => {
       // should not have transitioned to the next state
       expect(session.state).toBe(SessionState.Connected);
     });
+
+    test('connected event listeners: parse failures are invalid without reconnect hints', async () => {
+      const sessionHandle = await createSessionConnected();
+      const session = sessionHandle.session;
+      const conn = session.conn;
+
+      conn.emitData(new Uint8Array([255]));
+
+      await waitFor(async () => {
+        expect(sessionHandle.onInvalidMessage).toHaveBeenCalledTimes(1);
+        expect(sessionHandle.onInvalidMessage).toHaveBeenCalledWith(
+          expect.stringContaining('could not parse message:'),
+        );
+        expect(sessionHandle.onConnectionClosed).not.toHaveBeenCalled();
+      });
+
+      expect(conn.status).toBe('open');
+      expect(session.state).toBe(SessionState.Connected);
+    });
+
+    test('connected event listeners: out-of-order messages are invalid', async () => {
+      const sessionHandle = await createSessionConnected();
+      const session = sessionHandle.session;
+      const conn = session.conn;
+      const reason =
+        'received out-of-order msg, closing session (got seq: 1, wanted seq: 0)';
+
+      conn.emitData(
+        session.options.codec.toBuffer({
+          id: 'msgid',
+          to: session.from,
+          from: session.to,
+          seq: 1,
+          ack: 0,
+          streamId: 'stream',
+          controlFlags: 0,
+          payload: 'hello',
+        }),
+      );
+
+      await waitFor(async () => {
+        expect(sessionHandle.onInvalidMessage).toHaveBeenCalledTimes(1);
+        expect(sessionHandle.onInvalidMessage).toHaveBeenCalledWith(
+          reason,
+          expect.objectContaining({
+            seq: 1,
+            ack: 0,
+            streamId: 'stream',
+          }),
+          { reconnect: true },
+        );
+        expect(sessionHandle.onConnectionClosed).not.toHaveBeenCalled();
+        expect(sessionHandle.onMessage).not.toHaveBeenCalled();
+      });
+
+      expect(conn.status).toBe('open');
+      expect(session.state).toBe(SessionState.Connected);
+    });
   });
 
   describe('heartbeats', () => {
