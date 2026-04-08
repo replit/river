@@ -1,5 +1,4 @@
 import {
-  Kind,
   Static,
   TEnum,
   TLiteral,
@@ -9,8 +8,8 @@ import {
   TString,
   TUnion,
   Type,
-} from '@sinclair/typebox';
-import { ValueErrorIterator } from '@sinclair/typebox/errors';
+} from 'typebox';
+import { type TLocalizedValidationError } from 'typebox/error';
 
 /**
  * {@link UNCAUGHT_ERROR_CODE} is the code that is used when an error is thrown
@@ -33,7 +32,7 @@ export const CANCEL_CODE = 'CANCEL';
 
 type TLiteralString = TLiteral<string>;
 
-type TEnumString = TEnum<Record<string, string>>;
+type TEnumString = TEnum<Array<string>>;
 
 export type BaseErrorSchemaType =
   | TObject<{
@@ -62,12 +61,12 @@ const ValidationErrorDetails = Type.Object({
 
 export const ValidationErrors = Type.Array(ValidationErrorDetails);
 export function castTypeboxValueErrors(
-  errors: ValueErrorIterator,
+  errors: Array<TLocalizedValidationError>,
 ): Static<typeof ValidationErrors> {
   const result = [];
   for (const error of errors) {
     result.push({
-      path: error.path,
+      path: error.schemaPath,
       message: error.message,
     });
   }
@@ -135,19 +134,16 @@ type NestableProcedureErrorSchemaType =
 interface NestableProcedureErrorSchemaTypeArray
   extends Array<NestableProcedureErrorSchemaType> {}
 
-function isUnion(schema: TSchema): schema is TUnion {
-  return schema[Kind] === 'Union';
-}
-
-export type Flatten<T> = T extends BaseErrorSchemaType
+type Flatten<T> = T extends BaseErrorSchemaType
   ? T
   : T extends TUnion<Array<infer U extends TSchema>>
   ? Flatten<U>
   : unknown;
 
 /**
- * In the case where API consumers for some god-forsaken reason want to use
- * arbitrarily nested unions, this helper flattens them to a single level.
+ * Flattens a union-nested error schema into a single level in order to
+ * satisfy ProcedureErrorSchemaType which accepts only a single level of union
+ * so that we can enforce a schema validation on the error schema.
  *
  * Note that loses some metadata information on the nested unions like
  * nested description fields, etc.
@@ -161,22 +157,5 @@ export function flattenErrorType<T extends NestableProcedureErrorSchemaType>(
 export function flattenErrorType(
   errType: NestableProcedureErrorSchemaType,
 ): ProcedureErrorSchemaType {
-  if (!isUnion(errType)) {
-    return errType;
-  }
-
-  const flattenedTypes: Array<BaseErrorSchemaType> = [];
-  function flatten(type: NestableProcedureErrorSchemaType) {
-    if (isUnion(type)) {
-      for (const t of type.anyOf) {
-        flatten(t);
-      }
-    } else {
-      flattenedTypes.push(type);
-    }
-  }
-
-  flatten(errType);
-
-  return Type.Union(flattenedTypes);
+  return Type.Evaluate(errType) as ProcedureErrorSchemaType;
 }

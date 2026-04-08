@@ -5,7 +5,7 @@ import { WsLike } from './wslike';
 import { ServerTransport } from '../../server';
 import { ProvidedServerTransportOptions } from '../../options';
 import { type IncomingMessage } from 'http';
-import { TSchema } from '@sinclair/typebox';
+import { TSchema } from 'typebox';
 
 function cleanHeaders(
   headers: IncomingMessage['headers'],

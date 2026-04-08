@@ -1,4 +1,4 @@
-import { Static } from '@sinclair/typebox';
+import { Static } from 'typebox';
 import { Err, Result } from './result';
 import { BaseErrorSchemaType } from './errors';
 

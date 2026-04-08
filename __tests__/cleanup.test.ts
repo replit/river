@@ -30,7 +30,7 @@ import {
 import { testMatrix } from '../testUtil/fixtures/matrix';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 import { ControlFlags } from '../transport/message';
-import { Type } from '@sinclair/typebox';
+import { Type } from 'typebox';
 import { nanoid } from 'nanoid';
 
 describe.each(testMatrix())(

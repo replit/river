@@ -7,7 +7,7 @@ import {
   test,
   vi,
 } from 'vitest';
-import { Type } from '@sinclair/typebox';
+import { Type } from 'typebox';
 import {
   createClient,
   createServer,

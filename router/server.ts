@@ -1,4 +1,4 @@
-import { Static, TSchema } from '@sinclair/typebox';
+import { Static, TSchema } from 'typebox';
 import { PayloadType, AnyProcedure } from './procedures';
 import {
   ReaderErrorSchema,
@@ -31,7 +31,7 @@ import {
 } from '../transport/message';
 import { ProcedureHandlerContext } from './context';
 import { Logger } from '../logging/log';
-import { Value } from '@sinclair/typebox/value';
+import { Value } from 'typebox/value';
 import { Err, Result, Ok, ErrResult } from './result';
 import { EventMap } from '../transport/events';
 import { coerceErrorString } from '../transport/stringifyError';
@@ -324,9 +324,9 @@ class RiverServer<
           this.log?.warn('got stream cancel without a valid protocol error', {
             ...loggingMetadata,
             transportMessage: msg,
-            validationErrors: [
-              ...Value.Errors(CancelResultSchema, msg.payload),
-            ],
+            validationErrors: castTypeboxValueErrors(
+              Value.Errors(CancelResultSchema, msg.payload),
+            ),
             tags: ['invalid-request'],
           });
         }

@@ -1,4 +1,4 @@
-import { Type } from '@sinclair/typebox';
+import { Type } from 'typebox';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   Err,
@@ -354,7 +354,10 @@ describe('cancels invalid request', () => {
       service: ServiceSchema.define({
         stream: Procedure.stream({
           requestInit: Type.Object({}),
-          requestData: Type.Object({ mustSendThings: Type.String() }),
+          requestData: Type.Object({
+            mustSendThings: Type.String(),
+            shouldBeNumber: Type.Number(),
+          }),
           responseData: Type.Object({}),
           handler: async () => undefined,
         }),
@@ -376,7 +379,9 @@ describe('cancels invalid request', () => {
 
     clientSendFn({
       streamId,
-      payload: {},
+      payload: {
+        shouldBeNumber: '1',
+      },
       controlFlags: 0,
     });
 
@@ -396,14 +401,16 @@ describe('cancels invalid request', () => {
           message: 'message in requestData position did not match schema',
           extras: {
             totalErrors: 2,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            firstValidationErrors: expect.arrayContaining([
+            firstValidationErrors: [
               {
-                path: '/mustSendThings',
-                message: 'Expected required property',
+                path: '#',
+                message: 'must have required properties mustSendThings',
               },
-              { path: '/mustSendThings', message: 'Expected string' },
-            ]),
+              {
+                message: 'must be number',
+                path: '#/properties/shouldBeNumber',
+              },
+            ],
           },
         }),
       }),
@@ -463,11 +470,27 @@ describe('cancels invalid request', () => {
             code: INVALID_REQUEST_CODE,
             message: 'message in control payload position did not match schema',
             extras: {
-              totalErrors: 1,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              firstValidationErrors: expect.arrayContaining([
-                { path: '', message: 'Expected union value' },
-              ]),
+              totalErrors: 5,
+              firstValidationErrors: [
+                {
+                  path: '#/anyOf/0',
+                  message: 'must have required properties type',
+                },
+                {
+                  path: '#/anyOf/1',
+                  message: 'must have required properties type',
+                },
+                {
+                  path: '#/anyOf/2',
+                  message:
+                    'must have required properties type, protocolVersion, sessionId, expectedSessionState',
+                },
+                {
+                  path: '#/anyOf/3',
+                  message: 'must have required properties type, status',
+                },
+                { path: '#', message: 'must match a schema in anyOf' },
+              ],
             },
           }),
         }),
@@ -583,7 +606,7 @@ describe('cancels invalid request', () => {
 
     // @ts-expect-error monkey-patched incompatible change :D
     services.service.procedures.stream.requestData = Type.Object({
-      newRequiredField: Type.String(),
+      newRequiredField: Type.Object({ a: Type.String() }),
     });
 
     const { reqWritable, resReadable } = client.service.stream.stream({});
@@ -597,15 +620,13 @@ describe('cancels invalid request', () => {
           'message in requestData position did not match schema',
         ),
         extras: {
-          totalErrors: 2,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          firstValidationErrors: expect.arrayContaining([
+          totalErrors: 1,
+          firstValidationErrors: [
             {
-              path: '/newRequiredField',
-              message: 'Expected required property',
+              path: '#',
+              message: 'must have required properties newRequiredField',
             },
-            { path: '/newRequiredField', message: 'Expected string' },
-          ]),
+          ],
         },
       }),
     ]);

@@ -18,11 +18,12 @@ import {
 } from './options';
 import { DeleteSessionOptions, Transport } from './transport';
 import { coerceErrorString } from './stringifyError';
-import { Static, TSchema } from '@sinclair/typebox';
-import { Value } from '@sinclair/typebox/value';
+import { Static, TSchema } from 'typebox';
+import { Value } from 'typebox/value';
 import { ProtocolError } from './events';
 import { Connection } from './connection';
 import { MessageMetadata } from '../logging';
+import { castTypeboxValueErrors } from '../router/errors';
 import { SessionWaitingForHandshake } from './sessionStateMachine/SessionWaitingForHandshake';
 import { SessionState } from './sessionStateMachine/common';
 import {
@@ -237,9 +238,9 @@ export abstract class ServerTransport<
           ...session.loggingMetadata,
           transportMessage: msg,
           connectedTo: msg.from,
-          validationErrors: [
-            ...Value.Errors(ControlMessageHandshakeRequestSchema, msg.payload),
-          ],
+          validationErrors: castTypeboxValueErrors(
+            Value.Errors(ControlMessageHandshakeRequestSchema, msg.payload),
+          ),
         },
       );
 
@@ -276,12 +277,12 @@ export abstract class ServerTransport<
           {
             ...session.loggingMetadata,
             connectedTo: msg.from,
-            validationErrors: [
-              ...Value.Errors(
+            validationErrors: castTypeboxValueErrors(
+              Value.Errors(
                 this.handshakeExtensions.schema,
                 msg.payload.metadata,
               ),
-            ],
+            ),
           },
         );
 

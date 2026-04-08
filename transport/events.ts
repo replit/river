@@ -1,4 +1,4 @@
-import { type Static } from '@sinclair/typebox';
+import { type Static } from 'typebox';
 import { Connection } from './connection';
 import { OpaqueTransportMessage, HandshakeErrorResponseCodes } from './message';
 import { Session, SessionState } from './sessionStateMachine';
