@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+.coverage
+# esbuild build artifacts (built from .ts at test time)
+tests/*.mjs

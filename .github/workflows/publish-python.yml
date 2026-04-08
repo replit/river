@@ -1,0 +1,47 @@
+name: Build and Publish Python Package
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-and-publish:
+    # Only run for Python releases
+    if: startsWith(github.event.release.tag_name, 'river-client-py/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check if version already published
+        working-directory: python-client
+        id: check
+        run: |
+          version=$(python -c "
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              print(tomllib.load(f)['project']['version'])
+          ")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if uv pip install --dry-run "river-client==$version" 2>/dev/null; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and publish
+        if: steps.check.outputs.skip == 'false'
+        working-directory: python-client
+        run: |
+          uv build
+          UV_PUBLISH_TOKEN="${{ secrets.PYPI_TOKEN }}" \
+          uv publish

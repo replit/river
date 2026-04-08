@@ -1,0 +1,118 @@
+{
+  "services": {
+    "test": {
+      "procedures": {
+        "echo": {
+          "init": {
+            "type": "object",
+            "properties": {
+              "msg": {
+                "type": "string"
+              }
+            },
+            "required": ["msg"]
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "response": {
+                "type": "string"
+              }
+            },
+            "required": ["response"]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": ["code", "message"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": ["code", "message"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["path", "message"]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": ["firstValidationErrors", "totalErrors"]
+                  }
+                },
+                "required": ["code", "message"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": ["code", "message"]
+              }
+            ]
+          },
+          "type": "rpc"
+        }
+      }
+    }
+  },
+  "handshakeSchema": {
+    "type": "object",
+    "properties": {
+      "token": {
+        "type": "string"
+      }
+    },
+    "required": ["token"]
+  }
+}

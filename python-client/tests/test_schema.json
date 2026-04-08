@@ -1,0 +1,2918 @@
+{
+  "services": {
+    "test": {
+      "procedures": {
+        "add": {
+          "init": {
+            "type": "object",
+            "properties": {
+              "n": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "n"
+            ]
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "result"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "rpc"
+        },
+        "echo": {
+          "init": {
+            "type": "object",
+            "properties": {}
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "response": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "response"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "stream",
+          "input": {
+            "type": "object",
+            "properties": {
+              "msg": {
+                "type": "string"
+              },
+              "ignore": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "msg"
+            ]
+          }
+        },
+        "echoWithPrefix": {
+          "init": {
+            "type": "object",
+            "properties": {
+              "prefix": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "prefix"
+            ]
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "response": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "response"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "stream",
+          "input": {
+            "type": "object",
+            "properties": {
+              "msg": {
+                "type": "string"
+              },
+              "ignore": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "msg"
+            ]
+          }
+        },
+        "echoBinary": {
+          "init": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "Uint8Array"
+              }
+            },
+            "required": [
+              "data"
+            ]
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "Uint8Array"
+              },
+              "length": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "data",
+              "length"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "rpc"
+        },
+        "echoRecursive": {
+          "init": {
+            "$id": "T0",
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "children": {
+                "type": "array",
+                "items": {
+                  "$ref": "T0"
+                }
+              }
+            },
+            "required": [
+              "value"
+            ]
+          },
+          "output": {
+            "$id": "T0",
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "children": {
+                "type": "array",
+                "items": {
+                  "$ref": "T0"
+                }
+              }
+            },
+            "required": [
+              "value"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "rpc"
+        }
+      }
+    },
+    "ordering": {
+      "procedures": {
+        "add": {
+          "init": {
+            "type": "object",
+            "properties": {
+              "n": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "n"
+            ]
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "n": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "n"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "rpc"
+        },
+        "getAll": {
+          "init": {
+            "type": "object",
+            "properties": {}
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "msgs": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            "required": [
+              "msgs"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "rpc"
+        }
+      }
+    },
+    "fallible": {
+      "procedures": {
+        "divide": {
+          "init": {
+            "type": "object",
+            "properties": {
+              "a": {
+                "type": "number"
+              },
+              "b": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "a",
+              "b"
+            ]
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "result"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "DIV_BY_ZERO",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INFINITY",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "rpc"
+        },
+        "echo": {
+          "init": {
+            "type": "object",
+            "properties": {}
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "response": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "response"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "STREAM_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "stream",
+          "input": {
+            "type": "object",
+            "properties": {
+              "msg": {
+                "type": "string"
+              },
+              "throwResult": {
+                "type": "boolean"
+              },
+              "throwError": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "msg"
+            ]
+          }
+        }
+      }
+    },
+    "subscribable": {
+      "procedures": {
+        "add": {
+          "init": {
+            "type": "object",
+            "properties": {
+              "n": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "n"
+            ]
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "result"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "rpc"
+        },
+        "value": {
+          "init": {
+            "type": "object",
+            "properties": {}
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "count"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "subscription"
+        }
+      }
+    },
+    "uploadable": {
+      "procedures": {
+        "addMultiple": {
+          "init": {
+            "type": "object",
+            "properties": {}
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "result"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "upload",
+          "input": {
+            "type": "object",
+            "properties": {
+              "n": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "n"
+            ]
+          }
+        },
+        "addMultipleWithPrefix": {
+          "init": {
+            "type": "object",
+            "properties": {
+              "prefix": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "prefix"
+            ]
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "result"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "upload",
+          "input": {
+            "type": "object",
+            "properties": {
+              "n": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "n"
+            ]
+          }
+        },
+        "cancellableAdd": {
+          "init": {
+            "type": "object",
+            "properties": {}
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "result"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "upload",
+          "input": {
+            "type": "object",
+            "properties": {
+              "n": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "n"
+            ]
+          }
+        }
+      }
+    },
+    "cancel": {
+      "procedures": {
+        "blockingRpc": {
+          "init": {
+            "type": "object",
+            "properties": {}
+          },
+          "output": {
+            "type": "object",
+            "properties": {}
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "rpc"
+        },
+        "blockingStream": {
+          "init": {
+            "type": "object",
+            "properties": {}
+          },
+          "output": {
+            "type": "object",
+            "properties": {}
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "stream",
+          "input": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "blockingUpload": {
+          "init": {
+            "type": "object",
+            "properties": {}
+          },
+          "output": {
+            "type": "object",
+            "properties": {}
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "upload",
+          "input": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "blockingSubscription": {
+          "init": {
+            "type": "object",
+            "properties": {}
+          },
+          "output": {
+            "type": "object",
+            "properties": {}
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "subscription"
+        },
+        "immediateRpc": {
+          "init": {
+            "type": "object",
+            "properties": {}
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "done": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "done"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "rpc"
+        },
+        "immediateStream": {
+          "init": {
+            "type": "object",
+            "properties": {}
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "done": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "done"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "stream",
+          "input": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "immediateUpload": {
+          "init": {
+            "type": "object",
+            "properties": {}
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "done": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "done"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "upload",
+          "input": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "immediateSubscription": {
+          "init": {
+            "type": "object",
+            "properties": {}
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "done": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "done"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "subscription"
+        },
+        "countedStream": {
+          "init": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "total"
+            ]
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "i": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "i"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNCAUGHT_ERROR",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "UNEXPECTED_DISCONNECT",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "INVALID_REQUEST",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "firstValidationErrors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "message"
+                          ]
+                        }
+                      },
+                      "totalErrors": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "firstValidationErrors",
+                      "totalErrors"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "const": "CANCEL",
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
+            ]
+          },
+          "type": "stream",
+          "input": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      }
+    }
+  }
+}

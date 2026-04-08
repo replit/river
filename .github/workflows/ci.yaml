@@ -52,3 +52,32 @@ jobs:
           name: Test Report (${{ matrix.os }})
           path: ./test-results.xml
           reporter: java-junit
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        working-directory: python-client
+        run: pip install -e ".[dev]" ty
+
+      - name: Python lint
+        working-directory: python-client
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Python type check
+        working-directory: python-client
+        run: ty check river/
+
+      - name: Python tests
+        working-directory: python-client
+        run: python -m pytest tests/ -v
+
+      - name: Python type check generated clients
+        working-directory: python-client
+        run: |
+          ty check tests/generated/
+          ty check tests/test_codegen.py
