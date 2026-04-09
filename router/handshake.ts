@@ -60,7 +60,7 @@ export function createClientHandshakeOptions<
 >(
   schema: MetadataSchema,
   construct: ConstructHandshake<MetadataSchema>,
-): ClientHandshakeOptions {
+): ClientHandshakeOptions<MetadataSchema> {
   return { schema, construct };
 }
 
