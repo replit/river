@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package replit.river.internal.v1;
+
+/**
+ * OpenTelemetry propagation context forwarded between peers.
+ */
+message PropagationContext {
+  string traceparent = 1;
+  string tracestate = 2;
+}
+
+/**
+ * Internal protobuf envelope used by the proto codec to carry River transport
+ * messages.
+ */
+message TransportEnvelope {
+  string id = 1;
+  string from = 2;
+  string to = 3;
+  uint32 seq = 4;
+  uint32 ack = 5;
+  string stream_id = 6;
+  uint32 control_flags = 7;
+  string service_name = 8;
+  string procedure_name = 9;
+  PropagationContext tracing = 10;
+
+  oneof payload_kind {
+    bytes payload_bytes = 11;
+    bytes payload_msgpack = 12;
+  }
+}

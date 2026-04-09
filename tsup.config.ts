@@ -3,6 +3,8 @@ import { defineConfig } from 'tsup';
 export default defineConfig({
   entry: [
     'router/index.ts',
+    'protobuf/index.ts',
+    'protobuf/codec.ts',
     'logging/index.ts',
     'codec/index.ts',
     'testUtil/index.ts',
