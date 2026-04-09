@@ -8,12 +8,12 @@ import {
   trace,
   Tracer,
 } from '@opentelemetry/api';
-import { BaseErrorSchemaType, RIVER_VERSION, ValidProcType } from '../router';
+import { RIVER_VERSION, ValidProcType } from '../router';
+import { ErrorPayload } from '../router/result';
 import { Connection } from '../transport';
 import { MessageMetadata } from '../logging';
 import { ClientSession } from '../transport/sessionStateMachine/transitions';
 import { IdentifiedSession } from '../transport/sessionStateMachine/common';
-import { Static } from '@sinclair/typebox';
 
 export interface PropagationContext {
   traceparent: string;
@@ -168,10 +168,7 @@ export function createHandlerSpan<Fn extends (span: Span) => unknown>(
   );
 }
 
-export function recordRiverError(
-  span: Span,
-  error: Static<BaseErrorSchemaType>,
-): void {
+export function recordRiverError(span: Span, error: ErrorPayload): void {
   span.setStatus({
     code: SpanStatusCode.ERROR,
     message: error.message,

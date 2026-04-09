@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package river.test;
+
+service TestService {
+  rpc Echo(EchoRequest) returns (EchoResponse);
+  rpc CountUp(CountRequest) returns (stream CountResponse);
+  rpc Sum(stream SumChunk) returns (SumResponse);
+  rpc Chat(stream ChatMessage) returns (stream ChatMessage);
+}
+
+message EchoRequest {
+  string text = 1;
+}
+
+message EchoResponse {
+  string text = 1;
+}
+
+message CountRequest {
+  uint32 limit = 1;
+}
+
+message CountResponse {
+  uint32 value = 1;
+}
+
+message SumChunk {
+  uint32 value = 1;
+}
+
+message SumResponse {
+  uint32 total = 1;
+}
+
+message ChatMessage {
+  string text = 1;
+}
+
+message AuthHandshake {
+  string token = 1;
+}

@@ -1,26 +1,24 @@
-import { Static } from '@sinclair/typebox';
-import { Err, Result } from './result';
-import { BaseErrorSchemaType } from './errors';
+import { Err, ErrorPayload, Result } from './result';
 
 export const ReadableBrokenError = {
   code: 'READABLE_BROKEN',
   message: 'Readable was broken before it is fully consumed',
-} as const satisfies Static<BaseErrorSchemaType>;
+} as const satisfies ErrorPayload;
 
 /**
  * Similar to {@link Result} but with an extra error to handle cases where {@link Readable.break} is called
  */
-export type ReadableResult<
+export type ReadableResult<T, E extends ErrorPayload = ErrorPayload> = Result<
   T,
-  E extends Static<BaseErrorSchemaType> = Static<BaseErrorSchemaType>,
-> = Result<T, E | typeof ReadableBrokenError>;
+  E | typeof ReadableBrokenError
+>;
 
 /**
  * A simple {@link AsyncIterator} used in {@link Readable}
  * that doesn't have a the extra "return" and "throw" methods, and
  * the doesn't have a "done value" (TReturn).
  */
-export interface ReadableIterator<T, E extends Static<BaseErrorSchemaType>>
+export interface ReadableIterator<T, E extends ErrorPayload>
   extends AsyncIterator<ReadableResult<T, E>> {
   next(): Promise<
     | {
@@ -45,7 +43,7 @@ export interface ReadableIterator<T, E extends Static<BaseErrorSchemaType>>
  * A {@link Readable} can only have one consumer (iterator or {@link collect}) for the {@link Readable}'s
  * lifetime, in essense, reading from a {@link Readable} locks it forever.
  */
-export interface Readable<T, E extends Static<BaseErrorSchemaType>> {
+export interface Readable<T, E extends ErrorPayload> {
   /**
    * {@link Readable} implements AsyncIterator API and can be consumed via
    * for-await-of loops. Iteration locks the Readable. Exiting the loop
@@ -150,9 +148,7 @@ function createPromiseWithResolvers<T>(): PromiseWithResolvers<T> {
  * to 'tee' a {@link Readable} to create a copy of the stream but
  * this is not the common case.
  */
-export class ReadableImpl<T, E extends Static<BaseErrorSchemaType>>
-  implements Readable<T, E>
-{
+export class ReadableImpl<T, E extends ErrorPayload> implements Readable<T, E> {
   /**
    * Whether the {@link Readable} is closed.
    *

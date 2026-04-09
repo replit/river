@@ -22,17 +22,27 @@ export const AnyResultSchema = Type.Union([
   }),
 ]);
 
+/**
+ * The minimum error shape supported by river's `Result` and stream primitives.
+ *
+ * The existing TypeBox router uses schema-derived object types for this, while
+ * the protobuf router can use a richer structural error type.
+ */
+export interface ErrorPayload {
+  code: string;
+  message: string;
+  extras?: unknown;
+}
+
 export interface OkResult<T> {
   ok: true;
   payload: T;
 }
-export interface ErrResult<Err extends Static<BaseErrorSchemaType>> {
+export interface ErrResult<Err extends ErrorPayload> {
   ok: false;
   payload: Err;
 }
-export type Result<T, Err extends Static<BaseErrorSchemaType>> =
-  | OkResult<T>
-  | ErrResult<Err>;
+export type Result<T, Err extends ErrorPayload> = OkResult<T> | ErrResult<Err>;
 
 export function Ok<const T extends Array<unknown>>(p: T): OkResult<T>;
 export function Ok<const T extends ReadonlyArray<unknown>>(p: T): OkResult<T>;
@@ -44,7 +54,7 @@ export function Ok<const T>(payload: T): OkResult<T> {
   };
 }
 
-export function Err<const Err extends Static<BaseErrorSchemaType>>(
+export function Err<const Err extends ErrorPayload>(
   error: Err,
 ): ErrResult<Err> {
   return {
@@ -66,7 +76,7 @@ export type ResultUnwrapOk<R> = R extends Result<infer T, infer __E>
  * @param result - The result to unwrap.
  * @throws Will throw an error if the result is not ok.
  */
-export function unwrapOrThrow<T, Err extends Static<BaseErrorSchemaType>>(
+export function unwrapOrThrow<T, Err extends ErrorPayload>(
   result: Result<T, Err>,
 ): T {
   if (result.ok) {
