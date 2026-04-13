@@ -292,11 +292,27 @@ export abstract class ServerTransport<
         msg.from,
       );
 
-      const parsedMetadataOrFailureCode =
-        await this.handshakeExtensions.validate(
+      let parsedMetadataOrFailureCode;
+      try {
+        parsedMetadataOrFailureCode = await this.handshakeExtensions.validate(
           msg.payload.metadata,
           previousParsedMetadata,
         );
+      } catch (err) {
+        this.rejectHandshakeRequest(
+          session,
+          msg.from,
+          `handshake validation threw: ${coerceErrorString(err)}`,
+          'REJECTED_BY_CUSTOM_HANDLER',
+          {
+            ...session.loggingMetadata,
+            connectedTo: msg.from,
+            clientId: this.clientId,
+          },
+        );
+
+        return;
+      }
 
       // double-check to make sure we haven't transitioned the session yet
       if (session._isConsumed) {

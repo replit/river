@@ -713,6 +713,53 @@ async handler(ctx, ...args) {
 }
 ```
 
+## Protobuf Services (Experimental)
+
+River also supports defining services using Protocol Buffers. Instead of TypeBox schemas, you define your service in a `.proto` file and use the generated descriptors directly.
+
+```protobuf
+// greeter.proto
+syntax = "proto3";
+package myapp;
+
+service Greeter {
+  rpc SayHello(HelloRequest) returns (HelloResponse);
+  rpc ServerStream(HelloRequest) returns (stream HelloResponse);
+}
+
+message HelloRequest { string name = 1; }
+message HelloResponse { string message = 1; }
+```
+
+```ts
+import {
+  createProtoService,
+  createServer,
+  createClient,
+  Ok,
+  ProtoCodec,
+} from '@replit/river/protobuf';
+import { Greeter } from './gen/greeter_pb';
+
+const ProtoService = createProtoService();
+
+const greeterSvc = ProtoService.define(Greeter, {
+  sayHello: (request, ctx) => Ok({ message: `Hello, ${request.name}!` }),
+  // serverStream left unimplemented → returns UNIMPLEMENTED at runtime
+});
+
+// server
+const server = createServer(transport, [greeterSvc]);
+
+// client
+const client = createClient(Greeter, clientTransport, serverId);
+const result = await client.sayHello({ name: 'World' });
+```
+
+The protobuf router uses `ProtoCodec` for wire encoding (protobuf envelopes with msgpack fallback for control payloads) and supports the same features as the TypeBox router: context, disposable state, middleware, handshakes, and OpenTelemetry tracing.
+
+> **Note:** The protobuf router is experimental and its API may change.
+
 ### Further examples
 
 We've also provided an end-to-end testing environment using `Next.js`, and a simple backend connected with the WebSocket transport that you can [play with on Replit](https://replit.com/@jzhao-replit/riverbed).
