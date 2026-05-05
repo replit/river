@@ -422,6 +422,151 @@ describe.each(testMatrix())(
       });
     });
 
+    test('defaultCallOptions provides signal when caller omits it', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = { subscribable: SubscribableServiceSchema };
+      const server = createServer(serverTransport, services);
+      const abortController = new AbortController();
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+        { defaultCallOptions: { signal: abortController.signal } },
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // No signal passed at the call site — comes from defaultCallOptions.
+      const { resReadable } = client.subscribable.value.subscribe({});
+      let result = await readNextResult(resReadable);
+      expect(result).toStrictEqual({ ok: true, payload: { result: 0 } });
+
+      abortController.abort();
+      result = await readNextResult(resReadable);
+      expect(result).toStrictEqual({
+        ok: false,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        payload: expect.objectContaining({ code: CANCEL_CODE }),
+      });
+      expect(await isReadableDone(resReadable)).toEqual(true);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('caller-supplied signal overrides defaultCallOptions', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = { subscribable: SubscribableServiceSchema };
+      const server = createServer(serverTransport, services);
+      const defaultAc = new AbortController();
+      const callerAc = new AbortController();
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+        { defaultCallOptions: { signal: defaultAc.signal } },
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // Caller signal is the one that should drive cancellation.
+      const { resReadable } = client.subscribable.value.subscribe(
+        {},
+        { signal: callerAc.signal },
+      );
+      let result = await readNextResult(resReadable);
+      expect(result).toStrictEqual({ ok: true, payload: { result: 0 } });
+
+      // Aborting the default-options signal must NOT cancel — caller wins.
+      defaultAc.abort();
+      const add1 = await client.subscribable.add.rpc({ n: 1 });
+      expect(add1).toMatchObject({ ok: true });
+      result = await readNextResult(resReadable);
+      expect(result).toStrictEqual({ ok: true, payload: { result: 1 } });
+
+      // Aborting the caller signal cancels.
+      callerAc.abort();
+      result = await readNextResult(resReadable);
+      expect(result).toStrictEqual({
+        ok: false,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        payload: expect.objectContaining({ code: CANCEL_CODE }),
+      });
+      expect(await isReadableDone(resReadable)).toEqual(true);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('function-form defaultCallOptions is resolved per call', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = { subscribable: SubscribableServiceSchema };
+      const server = createServer(serverTransport, services);
+      let currentSignal: AbortSignal | undefined;
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+        { defaultCallOptions: () => ({ signal: currentSignal }) },
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      // Each subscribe resolves the getter at call time, so each call
+      // captures whatever signal is current.
+      const ac1 = new AbortController();
+      currentSignal = ac1.signal;
+      const sub1 = client.subscribable.value.subscribe({});
+
+      const ac2 = new AbortController();
+      currentSignal = ac2.signal;
+      const sub2 = client.subscribable.value.subscribe({});
+
+      let r1 = await readNextResult(sub1.resReadable);
+      let r2 = await readNextResult(sub2.resReadable);
+      expect(r1).toStrictEqual({ ok: true, payload: { result: 0 } });
+      expect(r2).toStrictEqual({ ok: true, payload: { result: 0 } });
+
+      // ac1 cancels sub1 only — sub2 keeps streaming.
+      ac1.abort();
+      r1 = await readNextResult(sub1.resReadable);
+      expect(r1).toStrictEqual({
+        ok: false,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        payload: expect.objectContaining({ code: CANCEL_CODE }),
+      });
+      expect(await isReadableDone(sub1.resReadable)).toEqual(true);
+
+      const add1 = await client.subscribable.add.rpc({ n: 1 });
+      expect(add1).toMatchObject({ ok: true });
+      r2 = await readNextResult(sub2.resReadable);
+      expect(r2).toStrictEqual({ ok: true, payload: { result: 1 } });
+
+      ac2.abort();
+      r2 = await readNextResult(sub2.resReadable);
+      expect(r2).toStrictEqual({
+        ok: false,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        payload: expect.objectContaining({ code: CANCEL_CODE }),
+      });
+      expect(await isReadableDone(sub2.resReadable)).toEqual(true);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
     test('subscription idempotent close', async () => {
       // setup
       const clientTransport = getClientTransport('client');

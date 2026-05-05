@@ -37,7 +37,7 @@ import {
   UNEXPECTED_DISCONNECT_CODE,
 } from './errors';
 
-interface CallOptions {
+export interface CallOptions {
   signal?: AbortSignal;
 }
 
@@ -205,6 +205,16 @@ function _createRecursiveProxy(
 export interface ClientOptions {
   connectOnInvoke: boolean;
   eagerlyConnect: boolean;
+  /**
+   * Default options merged into every leaf call (`rpc`, `stream`,
+   * `upload`, `subscribe`). Caller-supplied `options` win field-by-field,
+   * so a caller can override `signal` while keeping other defaults.
+   *
+   * Pass a function form when the default needs to be re-resolved per
+   * call (e.g. an ambient signal that changes between invocations of
+   * the same client).
+   */
+  defaultCallOptions?: CallOptions | (() => CallOptions);
 }
 
 const defaultClientOptions: ClientOptions = {
@@ -273,6 +283,11 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap<any>>(
       );
     }
 
+    const merged = mergeCallOptions(
+      clientOptions.defaultCallOptions,
+      callOptions as CallOptions | undefined,
+    );
+
     return handleProc(
       procMethod === 'subscribe' ? 'subscription' : procMethod,
       transport,
@@ -280,9 +295,19 @@ export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap<any>>(
       init,
       serviceName,
       procName,
-      callOptions ? (callOptions as CallOptions).signal : undefined,
+      merged.signal,
     );
   }, []) as Client<ServiceSchemaMap>;
+}
+
+function mergeCallOptions(
+  defaults: ClientOptions['defaultCallOptions'],
+  caller: CallOptions | undefined,
+): CallOptions {
+  const resolved = typeof defaults === 'function' ? defaults() : defaults ?? {};
+
+  // Caller fields win: spread defaults first, caller second.
+  return { ...resolved, ...caller };
 }
 
 type AnyProcReturn =

@@ -43,7 +43,7 @@ export {
   BaseErrorSchemaType,
 } from './errors';
 export { createClient } from './client';
-export type { Client } from './client';
+export type { CallOptions, Client, ClientOptions } from './client';
 export { createServer } from './server';
 export type {
   Server,
