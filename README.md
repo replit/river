@@ -47,7 +47,7 @@ Before proceeding, ensure you have TypeScript 5 installed and configured appropr
    To use River, install the required packages using npm:
 
    ```bash
-   npm i @replit/river @sinclair/typebox
+   npm i @replit/river typebox
    ```
 
 ## Writing services
@@ -72,7 +72,7 @@ First, we create a service:
 
 ```ts
 import { createServiceSchema, Procedure, Ok } from '@replit/river';
-import { Type } from '@sinclair/typebox';
+import { Type } from 'typebox';
 
 const ServiceSchema = createServiceSchema();
 export const ExampleService = ServiceSchema.define(
