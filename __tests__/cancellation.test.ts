@@ -1,4 +1,4 @@
-import { TNever, TObject, Type } from '@sinclair/typebox';
+import { TNever, TObject, Type } from 'typebox';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   Err,

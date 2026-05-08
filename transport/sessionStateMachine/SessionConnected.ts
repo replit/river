@@ -1,4 +1,4 @@
-import { Static } from '@sinclair/typebox';
+import type { Static } from 'typebox';
 import {
   ControlFlags,
   ControlMessageAckSchema,

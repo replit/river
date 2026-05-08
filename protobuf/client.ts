@@ -6,7 +6,7 @@ import type {
   MessageInitShape,
   MessageShape,
 } from '@bufbuild/protobuf';
-import { Value } from '@sinclair/typebox/value';
+import { Value } from 'typebox/value';
 import { ClientTransport } from '../transport/client';
 import { Connection } from '../transport/connection';
 import { EventMap } from '../transport/events';

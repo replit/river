@@ -1,6 +1,6 @@
 import NodeWs, { WebSocketServer } from 'ws';
 import http from 'node:http';
-import { Static } from '@sinclair/typebox';
+import type { Static } from 'typebox';
 import {
   OpaqueTransportMessage,
   PartialTransportMessage,

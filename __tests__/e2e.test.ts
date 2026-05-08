@@ -29,7 +29,7 @@ import {
   waitFor,
 } from '../testUtil/fixtures/cleanup';
 import { testMatrix } from '../testUtil/fixtures/matrix';
-import { Type } from '@sinclair/typebox';
+import { Type } from 'typebox';
 import {
   Procedure,
   createServiceSchema,

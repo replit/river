@@ -4,8 +4,8 @@ import type {
   MessageInitShape,
   MessageShape,
 } from '@bufbuild/protobuf';
-import { TSchema } from '@sinclair/typebox';
-import { Value } from '@sinclair/typebox/value';
+import type { TSchema } from 'typebox';
+import { Value } from 'typebox/value';
 import { context as otelContext, trace, type Span } from '@opentelemetry/api';
 import { Logger } from '../logging';
 import { ServerHandshakeOptions } from '../router/handshake';

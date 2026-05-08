@@ -1,4 +1,4 @@
-import { Static } from '@sinclair/typebox';
+import type { Static } from 'typebox';
 import { Connection } from '../connection';
 import {
   OpaqueTransportMessage,

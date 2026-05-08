@@ -6,7 +6,7 @@ import {
 import { testMatrix } from '../testUtil/fixtures/matrix';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 import { Ok, Procedure, createClient, createServer } from '../router';
-import { Type } from '@sinclair/typebox';
+import { Type } from 'typebox';
 import { createServiceSchema } from '../router/services';
 
 describe('should handle incompatabilities', async () => {

@@ -20,7 +20,7 @@ import { TransportClientId } from '../../transport/message';
 import { ClientTransport } from '../../transport/client';
 import { Connection } from '../../transport/connection';
 import { ServerTransport } from '../../transport/server';
-import { TSchema } from '@sinclair/typebox';
+import type { TSchema } from 'typebox';
 
 export type ValidTransports = 'ws' | 'mock';
 

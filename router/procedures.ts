@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
-import { Static, TNever, TSchema, Type } from '@sinclair/typebox';
+import { type Static, type TNever, type TSchema, Type } from 'typebox';
 import { ProcedureHandlerContext } from './context';
 import { Result } from './result';
 import { Readable, Writable } from './streams';
@@ -352,14 +352,8 @@ function rpc({
   responseData: PayloadType;
   responseError?: ProcedureErrorSchemaType;
   description?: string;
-  handler: RpcProcedure<
-    object,
-    object,
-    object,
-    PayloadType,
-    PayloadType,
-    ProcedureErrorSchemaType
-  >['handler'];
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  handler: Function;
 }) {
   return {
     ...(description ? { description } : {}),
@@ -459,15 +453,8 @@ function upload({
   responseData: PayloadType;
   responseError?: ProcedureErrorSchemaType;
   description?: string;
-  handler: UploadProcedure<
-    object,
-    object,
-    object,
-    PayloadType,
-    PayloadType,
-    PayloadType,
-    ProcedureErrorSchemaType
-  >['handler'];
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  handler: Function;
 }) {
   return {
     type: 'upload',

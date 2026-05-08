@@ -18,7 +18,7 @@ import {
   closeStreamMessage,
   cancelMessage,
 } from '../transport/message';
-import { Static } from '@sinclair/typebox';
+import type { Static } from 'typebox';
 import { Err, Result, AnyResultSchema } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/connection';
@@ -28,7 +28,7 @@ import { ClientHandshakeOptions } from './handshake';
 import { ClientTransport } from '../transport/client';
 import { generateId } from '../transport/id';
 import { Readable, ReadableImpl, Writable, WritableImpl } from './streams';
-import { Value } from '@sinclair/typebox/value';
+import { Value } from 'typebox/value';
 import { PayloadType, ValidProcType } from './procedures';
 import {
   BaseErrorSchemaType,
@@ -450,9 +450,10 @@ function handleProc(
           {
             clientId: transport.clientId,
             transportMessage: msg,
-            validationErrors: [
-              ...Value.Errors(ReaderErrorResultSchema, msg.payload),
-            ],
+            validationErrors: Value.Errors(
+              ReaderErrorResultSchema,
+              msg.payload,
+            ).map((e) => ({ path: e.instancePath, message: e.message })),
           },
         );
       }
@@ -487,7 +488,9 @@ function handleProc(
           {
             clientId: transport.clientId,
             transportMessage: msg,
-            validationErrors: [...Value.Errors(AnyResultSchema, msg.payload)],
+            validationErrors: Value.Errors(AnyResultSchema, msg.payload).map(
+              (e) => ({ path: e.instancePath, message: e.message }),
+            ),
           },
         );
       }

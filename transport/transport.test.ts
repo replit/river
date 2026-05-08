@@ -21,7 +21,7 @@ import {
 } from '../testUtil/fixtures/cleanup';
 import { testMatrix } from '../testUtil/fixtures/matrix';
 import { PartialTransportMessage } from './message';
-import { Type } from '@sinclair/typebox';
+import { Type } from 'typebox';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 import { createPostTestCleanups } from '../testUtil/fixtures/cleanup';
 import { SessionState } from './sessionStateMachine';

@@ -1,4 +1,4 @@
-import { Static, TSchema } from '@sinclair/typebox';
+import type { Static, TSchema } from 'typebox';
 import { HandshakeErrorCustomHandlerFatalResponseCodes } from '../transport/message';
 
 type ConstructHandshake<T extends TSchema> = () =>

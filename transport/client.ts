@@ -17,7 +17,7 @@ import { LeakyBucketRateLimit } from './rateLimit';
 import { Transport } from './transport';
 import { coerceErrorString } from './stringifyError';
 import { ProtocolError } from './events';
-import { Value } from '@sinclair/typebox/value';
+import { Value } from 'typebox/value';
 import { getPropagationContext } from '../tracing';
 import { Connection } from './connection';
 import { MessageMetadata } from '../logging';
@@ -243,9 +243,10 @@ export abstract class ClientTransport<
       this.rejectHandshakeResponse(session, reason, {
         ...session.loggingMetadata,
         transportMessage: msg,
-        validationErrors: [
-          ...Value.Errors(ControlMessageHandshakeResponseSchema, msg.payload),
-        ],
+        validationErrors: Value.Errors(
+          ControlMessageHandshakeResponseSchema,
+          msg.payload,
+        ).map((e) => ({ path: e.instancePath, message: e.message })),
       });
 
       return;

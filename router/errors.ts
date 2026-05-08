@@ -1,16 +1,15 @@
 import {
-  Kind,
-  Static,
-  TEnum,
-  TLiteral,
-  TNever,
-  TObject,
-  TSchema,
-  TString,
-  TUnion,
+  type Static,
+  type TEnum,
+  type TLiteral,
+  type TNever,
+  type TObject,
+  type TSchema,
+  type TString,
+  type TUnion,
   Type,
-} from '@sinclair/typebox';
-import { ValueErrorIterator } from '@sinclair/typebox/errors';
+} from 'typebox';
+import type { TLocalizedValidationError } from 'typebox/error';
 
 /**
  * {@link UNCAUGHT_ERROR_CODE} is the code that is used when an error is thrown
@@ -33,7 +32,7 @@ export const CANCEL_CODE = 'CANCEL';
 
 type TLiteralString = TLiteral<string>;
 
-type TEnumString = TEnum<Record<string, string>>;
+type TEnumString = TEnum<string[]>;
 
 export type BaseErrorSchemaType =
   | TObject<{
@@ -62,12 +61,12 @@ const ValidationErrorDetails = Type.Object({
 
 export const ValidationErrors = Type.Array(ValidationErrorDetails);
 export function castTypeboxValueErrors(
-  errors: ValueErrorIterator,
+  errors: TLocalizedValidationError[],
 ): Static<typeof ValidationErrors> {
   const result = [];
   for (const error of errors) {
     result.push({
-      path: error.path,
+      path: error.instancePath,
       message: error.message,
     });
   }
@@ -136,7 +135,7 @@ interface NestableProcedureErrorSchemaTypeArray
   extends Array<NestableProcedureErrorSchemaType> {}
 
 function isUnion(schema: TSchema): schema is TUnion {
-  return schema[Kind] === 'Union';
+  return Type.IsUnion(schema);
 }
 
 export type Flatten<T> = T extends BaseErrorSchemaType

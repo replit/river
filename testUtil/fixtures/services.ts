@@ -1,4 +1,13 @@
-import { Type } from '@sinclair/typebox';
+import { Type } from 'typebox';
+
+class TUint8Array extends Type.Base<Uint8Array> {
+  public override Check(value: unknown): value is Uint8Array {
+    return value instanceof Uint8Array;
+  }
+  public override Clone(): TUint8Array {
+    return new TUint8Array();
+  }
+}
 import { createServiceSchema } from '../../router/services';
 import { Err, Ok, unwrapOrThrow } from '../../router/result';
 import { Observable } from '../observable/observable';
@@ -189,7 +198,7 @@ export const OrderingServiceSchema = ServiceSchema.define(
 export const BinaryFileServiceSchema = ServiceSchema.define({
   getFile: Procedure.rpc({
     requestInit: Type.Object({ file: Type.String() }),
-    responseData: Type.Object({ contents: Type.Uint8Array() }),
+    responseData: Type.Object({ contents: new TUint8Array() }),
     async handler({ reqInit: { file } }) {
       const bytes: Uint8Array = Buffer.from(`contents for file ${file}`);
 
@@ -211,12 +220,10 @@ export const FallibleServiceSchema = ServiceSchema.define({
         message: Type.String(),
         extras: Type.Object({ test: Type.String() }),
       }),
-      Type.Union([
-        Type.Object({
-          code: Type.Literal('INFINITY'),
-          message: Type.String(),
-        }),
-      ]),
+      Type.Object({
+        code: Type.Literal('INFINITY'),
+        message: Type.String(),
+      }),
     ]),
     async handler({ reqInit: { a, b } }) {
       if (b === 0) {
@@ -344,11 +351,14 @@ export const UploadableServiceSchema = ServiceSchema.define({
   }),
 });
 
-const RecursivePayload = Type.Recursive((This) =>
-  Type.Object({
-    n: Type.Number(),
-    next: Type.Optional(This),
-  }),
+const RecursivePayload = Type.Cyclic(
+  {
+    RecursivePayload: Type.Object({
+      n: Type.Number(),
+      next: Type.Optional(Type.Ref('RecursivePayload')),
+    }),
+  },
+  'RecursivePayload',
 );
 
 export const NonObjectSchemas = ServiceSchema.define({

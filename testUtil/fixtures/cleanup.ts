@@ -8,7 +8,7 @@ import {
 import { Server } from '../../router';
 import { AnyServiceSchemaMap, MaybeDisposable } from '../../router/services';
 import { numberOfConnections, testingSessionOptions } from '..';
-import { Value } from '@sinclair/typebox/value';
+import { Value } from 'typebox/value';
 import { ControlMessageAckSchema } from '../../transport/message';
 
 const waitUntilOptions = {

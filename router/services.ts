@@ -1,4 +1,4 @@
-import { Type, TSchema, Static, Kind } from '@sinclair/typebox';
+import { Type, type TSchema, type Static } from 'typebox';
 import {
   Branded,
   ProcedureMap,
@@ -623,7 +623,7 @@ export function getSerializedProcErrors(
 ): ProcedureErrorSchemaType {
   if (
     !('responseError' in procDef) ||
-    procDef.responseError[Kind] === 'Never'
+    Type.IsNever(procDef.responseError)
   ) {
     return Strict(ReaderErrorSchema);
   }

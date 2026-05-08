@@ -1,4 +1,4 @@
-import { Type, TSchema, Static } from '@sinclair/typebox';
+import { Type, type TSchema, type Static } from 'typebox';
 import { PropagationContext } from '../tracing';
 import { generateId } from './id';
 import { ErrResult } from '../router';
