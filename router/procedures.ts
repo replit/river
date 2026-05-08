@@ -258,6 +258,12 @@ export type AnyProcedure<
   ProcedureErrorSchemaType
 >;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyRpcProcedure = RpcProcedure<any, any, any, any, any, any>;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyUploadProcedure = UploadProcedure<any, any, any, any, any, any, any>;
+
 /**
  * Represents a map of {@link Procedure}s.
  *
@@ -352,8 +358,7 @@ function rpc({
   responseData: PayloadType;
   responseError?: ProcedureErrorSchemaType;
   description?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handler: RpcProcedure<any, any, any, any, any, any>['handler'];
+  handler: AnyRpcProcedure['handler'];
 }) {
   return {
     ...(description ? { description } : {}),
@@ -453,8 +458,7 @@ function upload({
   responseData: PayloadType;
   responseError?: ProcedureErrorSchemaType;
   description?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handler: UploadProcedure<any, any, any, any, any, any, any>['handler'];
+  handler: AnyUploadProcedure['handler'];
 }) {
   return {
     type: 'upload',
