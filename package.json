@@ -4,46 +4,16 @@
   "version": "0.216.1",
   "type": "module",
   "exports": {
-    ".": {
-      "import": "./dist/router/index.js",
-      "require": "./dist/router/index.cjs"
-    },
-    "./logging": {
-      "import": "./dist/logging/index.js",
-      "require": "./dist/logging/index.cjs"
-    },
-    "./protobuf": {
-      "import": "./dist/protobuf/index.js",
-      "require": "./dist/protobuf/index.cjs"
-    },
-    "./protobuf/codec": {
-      "import": "./dist/protobuf/codec.js",
-      "require": "./dist/protobuf/codec.cjs"
-    },
-    "./codec": {
-      "import": "./dist/codec/index.js",
-      "require": "./dist/codec/index.cjs"
-    },
-    "./transport": {
-      "import": "./dist/transport/index.js",
-      "require": "./dist/transport/index.cjs"
-    },
-    "./transport/ws/client": {
-      "import": "./dist/transport/impls/ws/client.js",
-      "require": "./dist/transport/impls/ws/client.cjs"
-    },
-    "./transport/ws/server": {
-      "import": "./dist/transport/impls/ws/server.js",
-      "require": "./dist/transport/impls/ws/server.cjs"
-    },
-    "./test-util": {
-      "import": "./dist/testUtil/index.js",
-      "require": "./dist/testUtil/index.cjs"
-    },
-    "./customSchemas": {
-      "import": "./dist/customSchemas/index.js",
-      "require": "./dist/customSchemas/index.cjs"
-    }
+    ".": "./dist/router/index.js",
+    "./logging": "./dist/logging/index.js",
+    "./protobuf": "./dist/protobuf/index.js",
+    "./protobuf/codec": "./dist/protobuf/codec.js",
+    "./codec": "./dist/codec/index.js",
+    "./transport": "./dist/transport/index.js",
+    "./transport/ws/client": "./dist/transport/impls/ws/client.js",
+    "./transport/ws/server": "./dist/transport/impls/ws/server.js",
+    "./test-util": "./dist/testUtil/index.js",
+    "./customSchemas": "./dist/customSchemas/index.js"
   },
   "sideEffects": [
     "./dist/logging/index.js"

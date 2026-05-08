@@ -9,7 +9,13 @@ import {
   type TUnion,
   Type,
 } from 'typebox';
-import type { TLocalizedValidationError, TRequiredError } from 'typebox/error';
+import type {
+  TAdditionalPropertiesError,
+  TLocalizedValidationError,
+  TPropertyNamesError,
+  TRequiredError,
+  TUnevaluatedPropertiesError,
+} from 'typebox/error';
 
 /**
  * {@link UNCAUGHT_ERROR_CODE} is the code that is used when an error is thrown
@@ -63,10 +69,27 @@ export const ValidationErrors = Type.Array(ValidationErrorDetails);
 export function validationErrorToRiverErrors(
   error: TLocalizedValidationError,
 ): Array<{ path: string; message: string }> {
-  if (error.keyword === 'required') {
-    const { requiredProperties } = (error as TRequiredError).params;
+  let propertyNames: Array<string> | undefined;
 
-    return requiredProperties.map((prop) => ({
+  switch (error.keyword) {
+    case 'required':
+      propertyNames = (error as TRequiredError).params.requiredProperties;
+      break;
+    case 'additionalProperties':
+      propertyNames = (error as TAdditionalPropertiesError).params
+        .additionalProperties;
+      break;
+    case 'propertyNames':
+      propertyNames = (error as TPropertyNamesError).params.propertyNames;
+      break;
+    case 'unevaluatedProperties':
+      propertyNames = (error as TUnevaluatedPropertiesError).params
+        .unevaluatedProperties as Array<string>;
+      break;
+  }
+
+  if (propertyNames) {
+    return propertyNames.map((prop) => ({
       path: `${error.instancePath}/${prop}`,
       message: error.message,
     }));
