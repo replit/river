@@ -621,10 +621,7 @@ export function createServiceSchema<
 export function getSerializedProcErrors(
   procDef: AnyProcedure,
 ): ProcedureErrorSchemaType {
-  if (
-    !('responseError' in procDef) ||
-    Type.IsNever(procDef.responseError)
-  ) {
+  if (!('responseError' in procDef) || Type.IsNever(procDef.responseError)) {
     return Strict(ReaderErrorSchema);
   }
 
