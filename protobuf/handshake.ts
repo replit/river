@@ -17,6 +17,7 @@ class TUint8Array extends Type.Base<Uint8Array> {
   public override Check(value: unknown): value is Uint8Array {
     return value instanceof Uint8Array;
   }
+
   public override Clone(): TUint8Array {
     return new TUint8Array();
   }

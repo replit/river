@@ -32,7 +32,7 @@ export const CANCEL_CODE = 'CANCEL';
 
 type TLiteralString = TLiteral<string>;
 
-type TEnumString = TEnum<string[]>;
+type TEnumString = TEnum<Array<string>>;
 
 export type BaseErrorSchemaType =
   | TObject<{
@@ -61,7 +61,7 @@ const ValidationErrorDetails = Type.Object({
 
 export const ValidationErrors = Type.Array(ValidationErrorDetails);
 export function castTypeboxValueErrors(
-  errors: TLocalizedValidationError[],
+  errors: Array<TLocalizedValidationError>,
 ): Static<typeof ValidationErrors> {
   const result = [];
   for (const error of errors) {
