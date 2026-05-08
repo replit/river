@@ -352,8 +352,8 @@ function rpc({
   responseData: PayloadType;
   responseError?: ProcedureErrorSchemaType;
   description?: string;
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  handler: Function;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handler: RpcProcedure<any, any, any, any, any, any>['handler'];
 }) {
   return {
     ...(description ? { description } : {}),
@@ -453,8 +453,8 @@ function upload({
   responseData: PayloadType;
   responseError?: ProcedureErrorSchemaType;
   description?: string;
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  handler: Function;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handler: UploadProcedure<any, any, any, any, any, any, any>['handler'];
 }) {
   return {
     type: 'upload',

@@ -3,7 +3,7 @@ import type {
   MessageInitShape,
   MessageShape,
 } from '@bufbuild/protobuf';
-import { type Static, Type } from 'typebox';
+import { type Static } from 'typebox';
 import {
   createClientHandshakeOptions as createTransportClientHandshakeOptions,
   createServerHandshakeOptions as createTransportServerHandshakeOptions,
@@ -12,20 +12,9 @@ import {
 } from '../router/handshake';
 import { HandshakeErrorCustomHandlerFatalResponseCodes } from '../transport/message';
 import { decodeMessageBytes, encodeMessageBytes } from './shared';
+import { Uint8ArrayType } from '../customSchemas';
 
-class TUint8Array extends Type.Base<Uint8Array> {
-  public readonly type = 'Uint8Array';
-
-  public override Check(value: unknown): value is Uint8Array {
-    return value instanceof Uint8Array;
-  }
-
-  public override Clone(): TUint8Array {
-    return new TUint8Array();
-  }
-}
-
-const HandshakeBytesSchema = new TUint8Array();
+const HandshakeBytesSchema = Uint8ArrayType();
 
 type ProtobufHandshakeFailureCode = Static<
   typeof HandshakeErrorCustomHandlerFatalResponseCodes

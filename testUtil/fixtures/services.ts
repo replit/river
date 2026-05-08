@@ -1,20 +1,9 @@
 import { Type } from 'typebox';
-
-class TUint8Array extends Type.Base<Uint8Array> {
-  public readonly type = 'Uint8Array';
-
-  public override Check(value: unknown): value is Uint8Array {
-    return value instanceof Uint8Array;
-  }
-
-  public override Clone(): TUint8Array {
-    return new TUint8Array();
-  }
-}
 import { createServiceSchema } from '../../router/services';
 import { Err, Ok, unwrapOrThrow } from '../../router/result';
 import { Observable } from '../observable/observable';
 import { Procedure } from '../../router';
+import { Uint8ArrayType } from '../../customSchemas';
 
 const ServiceSchema = createServiceSchema();
 
@@ -201,7 +190,7 @@ export const OrderingServiceSchema = ServiceSchema.define(
 export const BinaryFileServiceSchema = ServiceSchema.define({
   getFile: Procedure.rpc({
     requestInit: Type.Object({ file: Type.String() }),
-    responseData: Type.Object({ contents: new TUint8Array() }),
+    responseData: Type.Object({ contents: Uint8ArrayType() }),
     async handler({ reqInit: { file } }) {
       const bytes: Uint8Array = Buffer.from(`contents for file ${file}`);
 

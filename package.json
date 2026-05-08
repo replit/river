@@ -39,6 +39,10 @@
     "./test-util": {
       "import": "./dist/testUtil/index.js",
       "require": "./dist/testUtil/index.cjs"
+    },
+    "./customSchemas": {
+      "import": "./dist/customSchemas/index.js",
+      "require": "./dist/customSchemas/index.cjs"
     }
   },
   "sideEffects": [
