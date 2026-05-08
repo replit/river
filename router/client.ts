@@ -35,6 +35,7 @@ import {
   CANCEL_CODE,
   ReaderErrorResultSchema,
   UNEXPECTED_DISCONNECT_CODE,
+  validationErrorToRiverErrors,
 } from './errors';
 
 export interface CallOptions {
@@ -453,7 +454,7 @@ function handleProc(
             validationErrors: Value.Errors(
               ReaderErrorResultSchema,
               msg.payload,
-            ).map((e) => ({ path: e.instancePath, message: e.message })),
+            ).flatMap(validationErrorToRiverErrors),
           },
         );
       }
@@ -488,9 +489,10 @@ function handleProc(
           {
             clientId: transport.clientId,
             transportMessage: msg,
-            validationErrors: Value.Errors(AnyResultSchema, msg.payload).map(
-              (e) => ({ path: e.instancePath, message: e.message }),
-            ),
+            validationErrors: Value.Errors(
+              AnyResultSchema,
+              msg.payload,
+            ).flatMap(validationErrorToRiverErrors),
           },
         );
       }

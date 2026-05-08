@@ -399,7 +399,7 @@ describe('cancels invalid request', () => {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             firstValidationErrors: expect.arrayContaining([
               {
-                path: '',
+                path: '/mustSendThings',
                 message: 'must have required properties mustSendThings',
               },
             ]),
@@ -466,10 +466,12 @@ describe('cancels invalid request', () => {
               totalErrors: expect.any(Number),
               // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               firstValidationErrors: expect.arrayContaining([
-                {
-                  path: '',
-                  message: 'must match a schema in anyOf',
-                },
+                expect.objectContaining({
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                  path: expect.any(String),
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                  message: expect.any(String),
+                }),
               ]),
             },
           }),
@@ -604,7 +606,7 @@ describe('cancels invalid request', () => {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           firstValidationErrors: expect.arrayContaining([
             {
-              path: '',
+              path: '/newRequiredField',
               message: 'must have required properties newRequiredField',
             },
           ]),

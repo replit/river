@@ -14,6 +14,8 @@ import { HandshakeErrorCustomHandlerFatalResponseCodes } from '../transport/mess
 import { decodeMessageBytes, encodeMessageBytes } from './shared';
 
 class TUint8Array extends Type.Base<Uint8Array> {
+  public readonly type = 'Uint8Array';
+
   public override Check(value: unknown): value is Uint8Array {
     return value instanceof Uint8Array;
   }

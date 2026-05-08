@@ -10,6 +10,7 @@ import {
   ValidationErrors,
   castTypeboxValueErrors,
   CancelResultSchema,
+  validationErrorToRiverErrors,
 } from './errors';
 import {
   AnyService,
@@ -324,9 +325,10 @@ class RiverServer<
           this.log?.warn('got stream cancel without a valid protocol error', {
             ...loggingMetadata,
             transportMessage: msg,
-            validationErrors: Value.Errors(CancelResultSchema, msg.payload).map(
-              (e) => ({ path: e.instancePath, message: e.message }),
-            ),
+            validationErrors: Value.Errors(
+              CancelResultSchema,
+              msg.payload,
+            ).flatMap(validationErrorToRiverErrors),
             tags: ['invalid-request'],
           });
         }

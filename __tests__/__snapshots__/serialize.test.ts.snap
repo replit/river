@@ -3199,7 +3199,9 @@ exports[`serialize service to jsonschema > serialize service with binary 1`] = `
       },
       "output": {
         "properties": {
-          "contents": {},
+          "contents": {
+            "type": "Uint8Array",
+          },
         },
         "required": [
           "contents",

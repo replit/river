@@ -9,7 +9,7 @@ import {
   type TUnion,
   Type,
 } from 'typebox';
-import type { TLocalizedValidationError } from 'typebox/error';
+import type { TLocalizedValidationError, TRequiredError } from 'typebox/error';
 
 /**
  * {@link UNCAUGHT_ERROR_CODE} is the code that is used when an error is thrown
@@ -60,18 +60,25 @@ const ValidationErrorDetails = Type.Object({
 });
 
 export const ValidationErrors = Type.Array(ValidationErrorDetails);
+export function validationErrorToRiverErrors(
+  error: TLocalizedValidationError,
+): Array<{ path: string; message: string }> {
+  if (error.keyword === 'required') {
+    const { requiredProperties } = (error as TRequiredError).params;
+
+    return requiredProperties.map((prop) => ({
+      path: `${error.instancePath}/${prop}`,
+      message: error.message,
+    }));
+  }
+
+  return [{ path: error.instancePath, message: error.message }];
+}
+
 export function castTypeboxValueErrors(
   errors: Array<TLocalizedValidationError>,
 ): Static<typeof ValidationErrors> {
-  const result = [];
-  for (const error of errors) {
-    result.push({
-      path: error.instancePath,
-      message: error.message,
-    });
-  }
-
-  return result;
+  return errors.flatMap(validationErrorToRiverErrors);
 }
 
 /**

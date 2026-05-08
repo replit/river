@@ -1,5 +1,6 @@
 import { SpanStatusCode } from '@opentelemetry/api';
 import { ServerHandshakeOptions } from '../router/handshake';
+import { validationErrorToRiverErrors } from '../router/errors';
 import {
   ControlMessageHandshakeRequestSchema,
   HandshakeErrorCustomHandlerFatalResponseCodes,
@@ -240,7 +241,7 @@ export abstract class ServerTransport<
           validationErrors: Value.Errors(
             ControlMessageHandshakeRequestSchema,
             msg.payload,
-          ).map((e) => ({ path: e.instancePath, message: e.message })),
+          ).flatMap(validationErrorToRiverErrors),
         },
       );
 
@@ -280,7 +281,7 @@ export abstract class ServerTransport<
             validationErrors: Value.Errors(
               this.handshakeExtensions.schema,
               msg.payload.metadata,
-            ).map((e) => ({ path: e.instancePath, message: e.message })),
+            ).flatMap(validationErrorToRiverErrors),
           },
         );
 
