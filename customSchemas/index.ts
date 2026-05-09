@@ -97,10 +97,10 @@ export function DateType(
     },
     (value) => {
       if (!(value instanceof Date)) return 'expected Date';
-      if (isNaN((value as Date).getTime())) return 'expected valid Date';
-      if (typeof min === 'number' && (value as Date).getTime() < min)
+      if (isNaN(value.getTime())) return 'expected valid Date';
+      if (typeof min === 'number' && value.getTime() < min)
         return `Date timestamp must be >= ${min}`;
-      if (typeof max === 'number' && (value as Date).getTime() > max)
+      if (typeof max === 'number' && value.getTime() > max)
         return `Date timestamp must be <= ${max}`;
 
       return 'invalid Date';
