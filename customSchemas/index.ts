@@ -39,6 +39,15 @@ export function Uint8ArrayType(
 
       return true;
     },
+    (value) => {
+      if (!(value instanceof Uint8Array)) return 'expected Uint8Array';
+      if (min !== undefined && value.byteLength < min)
+        return `Uint8Array byteLength must be >= ${min}`;
+      if (max !== undefined && value.byteLength > max)
+        return `Uint8Array byteLength must be <= ${max}`;
+
+      return 'invalid Uint8Array';
+    },
   );
 
   uint8ArrayCache.set(key, schema);
@@ -85,6 +94,16 @@ export function DateType(
       if (typeof max === 'number' && value.getTime() > max) return false;
 
       return true;
+    },
+    (value) => {
+      if (!(value instanceof Date)) return 'expected Date';
+      if (isNaN((value as Date).getTime())) return 'expected valid Date';
+      if (typeof min === 'number' && (value as Date).getTime() < min)
+        return `Date timestamp must be >= ${min}`;
+      if (typeof max === 'number' && (value as Date).getTime() > max)
+        return `Date timestamp must be <= ${max}`;
+
+      return 'invalid Date';
     },
   );
 

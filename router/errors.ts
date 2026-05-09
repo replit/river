@@ -90,7 +90,7 @@ export function validationErrorToRiverErrors(
 
   if (propertyNames) {
     return propertyNames.map((prop) => ({
-      path: `${error.instancePath}/${prop}`,
+      path: `${error.instancePath}/${prop.replace(/~/g, '~0').replace(/\//g, '~1')}`,
       message: error.message,
     }));
   }
