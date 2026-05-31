@@ -5,6 +5,8 @@ import {
   EncodedTransportMessage,
   OpaqueTransportMessage,
   PartialTransportMessage,
+  RehandshakeStreamId,
+  rehandshakeRequestMessage,
   isAck,
 } from '../message';
 import {
@@ -21,6 +23,17 @@ export interface SessionConnectedListeners extends IdentifiedSessionListeners {
   onConnectionErrored: (err: unknown) => void;
   onConnectionClosed: () => void;
   onMessage: (msg: OpaqueTransportMessage) => void;
+  /**
+   * A frame arrived on the reserved re-handshake stream. The transport consumes
+   * it to drive the follow-up handshake rather than surfacing it to the router.
+   */
+  onRehandshake: (msg: OpaqueTransportMessage) => void;
+  /**
+   * A scheduled re-handshake went unanswered within its deadline. Only the server
+   * arms this (via {@link SessionConnected.scheduleRehandshake}); it tears the
+   * session down rather than keep serving a credential past its expiry.
+   */
+  onRehandshakeTimeout?: () => void;
   onInvalidMessage: (reason: string) => void;
 }
 
@@ -44,6 +57,8 @@ export class SessionConnected<
   private heartbeatHandle?: ReturnType<typeof setInterval> | undefined;
   private heartbeatMissTimeout?: ReturnType<typeof setTimeout> | undefined;
   private isActivelyHeartbeating = false;
+  private rehandshakeTimer?: ReturnType<typeof setTimeout> | undefined;
+  private credentialExpiry?: number | undefined;
 
   updateBookkeeping(ack: number, seq: number) {
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
@@ -180,6 +195,77 @@ export class SessionConnected<
     this.send(heartbeat);
   }
 
+  /**
+   * Schedules the next proactive re-handshake from the credential's expiry. The
+   * server calls this after each (re)validation, mirroring {@link startActiveHeartbeat}:
+   * once armed the session drives the exchange itself — one handshake window before
+   * expiry it sends a re-handshake request and waits for the response, firing
+   * {@link SessionConnectedListeners.onRehandshakeTimeout} if none arrives in time.
+   * Passing `undefined` (a credential that never expires) cancels any schedule.
+   */
+  scheduleRehandshake(expiry: number | undefined) {
+    this.clearRehandshakeTimer();
+    this.credentialExpiry = expiry;
+    if (expiry === undefined) {
+      return;
+    }
+
+    // re-handshake one window before expiry so the exchange resolves (a refresh
+    // lands, or the deadline below tears the session down) by the time it expires
+    const delayMs = expiry - this.options.handshakeTimeoutMs - Date.now();
+    this.rehandshakeTimer = setTimeout(
+      () => {
+        this.rehandshakeTimer = undefined;
+        this.sendRehandshakeRequest();
+      },
+      Math.max(0, delayMs),
+    );
+  }
+
+  /**
+   * Sends a re-handshake request immediately and arms the response deadline,
+   * bypassing the expiry schedule. Returns false if the request couldn't be sent.
+   */
+  requestRehandshakeNow(): boolean {
+    this.clearRehandshakeTimer();
+
+    return this.sendRehandshakeRequest();
+  }
+
+  private sendRehandshakeRequest(): boolean {
+    const res = this.send(rehandshakeRequestMessage());
+    if (!res.ok) {
+      // the send failure already tore the session down via onMessageSendFailure
+      return false;
+    }
+
+    // clamp the deadline to the credential's remaining life, so one validated with
+    // little time left is still torn down by expiry rather than a full window later
+    const deadlineMs =
+      this.credentialExpiry !== undefined
+        ? Math.min(
+            this.options.handshakeTimeoutMs,
+            this.credentialExpiry - Date.now(),
+          )
+        : this.options.handshakeTimeoutMs;
+    this.rehandshakeTimer = setTimeout(
+      () => {
+        this.rehandshakeTimer = undefined;
+        this.listeners.onRehandshakeTimeout?.();
+      },
+      Math.max(0, deadlineMs),
+    );
+
+    return true;
+  }
+
+  clearRehandshakeTimer() {
+    if (this.rehandshakeTimer) {
+      clearTimeout(this.rehandshakeTimer);
+      this.rehandshakeTimer = undefined;
+    }
+  }
+
   onMessageData = (msg: Uint8Array) => {
     const parsedMsgRes = this.codec.fromBuffer(msg);
     if (!parsedMsgRes.ok) {
@@ -242,6 +328,14 @@ export class SessionConnected<
 
     // dispatch directly if its not an explicit ack
     if (!isAck(parsedMsg.controlFlags)) {
+      // re-handshake frames ride a reserved stream and are consumed by the
+      // transport, never surfaced to the router (same as the acks handled below)
+      if (parsedMsg.streamId === RehandshakeStreamId) {
+        this.listeners.onRehandshake(parsedMsg);
+
+        return;
+      }
+
       this.listeners.onMessage(parsedMsg);
 
       return;
@@ -275,6 +369,8 @@ export class SessionConnected<
       clearTimeout(this.heartbeatMissTimeout);
       this.heartbeatMissTimeout = undefined;
     }
+
+    this.clearRehandshakeTimer();
   }
 
   _handleClose(): void {

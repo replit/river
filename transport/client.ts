@@ -3,11 +3,13 @@ import { ClientHandshakeOptions } from '../router/handshake';
 import { validationErrorToRiverErrors } from '../router/errors';
 import {
   ControlMessageHandshakeResponseSchema,
+  ControlMessageRehandshakeRequestSchema,
   HandshakeErrorRetriableResponseCodes,
   OpaqueTransportMessage,
   TransportClientId,
   currentProtocolVersion,
   handshakeRequestMessage,
+  rehandshakeResponseMessage,
 } from './message';
 import {
   ClientTransportOptions,
@@ -73,6 +75,75 @@ export abstract class ClientTransport<
 
   extendHandshake(options: ClientHandshakeOptions) {
     this.handshakeExtensions = options;
+  }
+
+  protected handleRehandshakeMessage(message: OpaqueTransportMessage): void {
+    if (!Value.Check(ControlMessageRehandshakeRequestSchema, message.payload)) {
+      this.log?.warn(
+        `ignoring malformed re-handshake request from ${message.from}`,
+        { clientId: this.clientId, connectedTo: message.from },
+      );
+
+      return;
+    }
+
+    void this.sendRehandshake(message.from);
+  }
+
+  /**
+   * Re-constructs handshake metadata via the configured handshake extension and
+   * sends it back to the server so it can replace the metadata for this session.
+   * Triggered by a server {@link ControlMessageRehandshakeRequestSchema}.
+   */
+  private async sendRehandshake(to: TransportClientId) {
+    if (!this.handshakeExtensions) {
+      this.log?.warn(
+        `got re-handshake request from ${to} but no handshake extensions are configured, ignoring`,
+        { clientId: this.clientId, connectedTo: to },
+      );
+
+      return;
+    }
+
+    const session = this.sessions.get(to);
+    if (!session || session.state !== SessionState.Connected) {
+      return;
+    }
+
+    const loggingMetadata = session.loggingMetadata;
+    const sessionId = session.id;
+
+    let metadata: unknown;
+    try {
+      metadata = await this.handshakeExtensions.construct();
+    } catch (err) {
+      this.log?.error(
+        `failed to construct re-handshake metadata for ${to}: ${coerceErrorString(
+          err,
+        )}`,
+        loggingMetadata,
+      );
+
+      return;
+    }
+
+    // bind the send to the session that asked to re-handshake: a hard reconnect
+    // during construct() makes the send throw rather than delivering stale
+    // metadata to the freshly handshaked session that replaced it
+    try {
+      const send = this.getSessionBoundSendFn(to, sessionId);
+      send(rehandshakeResponseMessage(metadata));
+    } catch (err) {
+      const reason = coerceErrorString(err);
+      this.log?.error(
+        `failed to send re-handshake metadata to ${to}: ${reason}`,
+        loggingMetadata,
+      );
+      this.protocolError({
+        type: ProtocolError.MessageSendFailure,
+        message: reason,
+      });
+    }
   }
 
   /**
@@ -329,6 +400,9 @@ export abstract class ClientTransport<
         },
         onMessage: (msg) => {
           this.handleMsg(msg);
+        },
+        onRehandshake: (msg) => {
+          this.handleRehandshakeMessage(msg);
         },
         onInvalidMessage: (reason) => {
           this.log?.error(`invalid message: ${reason}`, {

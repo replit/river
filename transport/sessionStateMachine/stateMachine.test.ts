@@ -136,6 +136,7 @@ function createSessionHandshakingListeners(): SessionHandshakingListeners {
 function createSessionConnectedListeners(): SessionConnectedListeners {
   return {
     onMessage: vi.fn(),
+    onRehandshake: vi.fn(),
     onConnectionClosed: vi.fn(),
     onConnectionErrored: vi.fn(),
     onInvalidMessage: vi.fn(),

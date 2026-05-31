@@ -3,6 +3,7 @@ import { ServerHandshakeOptions } from '../router/handshake';
 import { validationErrorToRiverErrors } from '../router/errors';
 import {
   ControlMessageHandshakeRequestSchema,
+  ControlMessageRehandshakeResponseSchema,
   HandshakeErrorCustomHandlerFatalResponseCodes,
   HandshakeErrorResponseCodes,
   OpaqueTransportMessage,
@@ -92,6 +93,176 @@ export abstract class ServerTransport<
   ): void {
     this.sessionHandshakeMetadata.delete(session.to);
     super.deleteSession(session, options);
+  }
+
+  /**
+   * Asks the connected client to re-handshake — re-construct and resend its
+   * handshake metadata (e.g. a refreshed token). Returns false if there is no
+   * live connection to send the request over.
+   *
+   * On a successful re-handshake the stored metadata is replaced and observed by
+   * subsequent procedure calls. If the client does not respond with metadata that
+   * re-validates before the response deadline — the shorter of
+   * {@link SessionOptions.handshakeTimeoutMs} and the credential's remaining
+   * lifetime — the session is torn down.
+   */
+  requestRehandshake(to: TransportClientId): boolean {
+    const session = this.sessions.get(to);
+    if (!session || session.state !== SessionState.Connected) {
+      return false;
+    }
+
+    return session.requestRehandshakeNow();
+  }
+
+  /**
+   * Stores freshly validated handshake metadata for a client and hands the
+   * credential's expiry to the session, which schedules and runs the next
+   * re-handshake itself. Called on every successful (re)handshake, so the schedule
+   * perpetuates itself and survives transparent reconnects.
+   */
+  private storeSessionMetadata(
+    session: ServerSession<ConnType>,
+    parsed: ParsedMetadata,
+  ) {
+    this.sessionHandshakeMetadata.set(session.to, parsed);
+
+    if (session.state === SessionState.Connected) {
+      session.scheduleRehandshake(
+        this.handshakeExtensions?.expiry?.(parsed)?.getTime(),
+      );
+    }
+  }
+
+  protected handleRehandshakeMessage(message: OpaqueTransportMessage): void {
+    if (
+      !Value.Check(ControlMessageRehandshakeResponseSchema, message.payload)
+    ) {
+      // a frame on the reserved re-handshake stream that isn't a valid response
+      // is a protocol violation by the authenticated peer; fail the refresh
+      const session = this.sessions.get(message.from);
+      if (session) {
+        this.teardownForFailedRehandshake(
+          session,
+          'received malformed re-handshake control message',
+        );
+      }
+
+      return;
+    }
+
+    void this.onRehandshakeResponse(message.from, message.payload.metadata);
+  }
+
+  /**
+   * Re-validates handshake metadata sent by the client during a re-handshake and
+   * replaces the stored metadata on success. Any failure (malformed metadata,
+   * rejection, or a thrown validator) tears the session down.
+   */
+  private async onRehandshakeResponse(
+    from: TransportClientId,
+    metadata: unknown,
+  ) {
+    const handshakeExtensions = this.handshakeExtensions;
+    if (!handshakeExtensions) {
+      return;
+    }
+
+    const session = this.sessions.get(from);
+    if (!session) {
+      return;
+    }
+
+    if (!Value.Check(handshakeExtensions.schema, metadata)) {
+      this.teardownForFailedRehandshake(
+        session,
+        'received malformed handshake metadata during re-handshake',
+      );
+
+      return;
+    }
+
+    const previousParsedMetadata = this.sessionHandshakeMetadata.get(from);
+
+    let parsedMetadataOrFailureCode;
+    try {
+      parsedMetadataOrFailureCode = await handshakeExtensions.validate(
+        metadata,
+        previousParsedMetadata,
+        from,
+      );
+    } catch (err) {
+      // teardownForFailedRehandshake no-ops if this session was already replaced
+      // (e.g. a transparent reconnect) while we awaited validation
+      this.teardownForFailedRehandshake(
+        session,
+        `handshake validation threw during re-handshake: ${coerceErrorString(
+          err,
+        )}`,
+      );
+
+      return;
+    }
+
+    if (
+      Value.Check(
+        HandshakeErrorCustomHandlerFatalResponseCodes,
+        parsedMetadataOrFailureCode,
+      )
+    ) {
+      this.teardownForFailedRehandshake(
+        session,
+        're-handshake metadata rejected by handshake handler',
+      );
+
+      return;
+    }
+
+    // a reconnect/teardown during validation may have replaced this exact session
+    // (a transparent reconnect keeps the same id); only store and reschedule if
+    // it's still the one we validated against, so we don't clobber fresher metadata
+    if (this.sessions.get(from) !== session) {
+      return;
+    }
+
+    this.storeSessionMetadata(
+      session,
+      parsedMetadataOrFailureCode as ParsedMetadata,
+    );
+
+    this.log?.info(`re-handshake from ${from} ok`, {
+      ...session.loggingMetadata,
+      connectedTo: from,
+    });
+  }
+
+  /**
+   * Tears down a session whose re-handshake failed (rejected, malformed, timed
+   * out, or a thrown validator). No-ops if {@link session} is no longer the live
+   * session for its peer — a transparent reconnect keeps the same id, so callers
+   * reaching here after an async gap can't accidentally close the session that
+   * replaced it.
+   */
+  private teardownForFailedRehandshake(
+    session: ServerSession<ConnType>,
+    reason: string,
+  ) {
+    if (this.sessions.get(session.to) !== session) {
+      return;
+    }
+
+    const to = session.to;
+    this.log?.warn(`tearing down session to ${to}: ${reason}`, {
+      ...session.loggingMetadata,
+      connectedTo: to,
+    });
+
+    this.protocolError({
+      type: ProtocolError.HandshakeFailed,
+      code: 'REJECTED_BY_CUSTOM_HANDLER',
+      message: reason,
+    });
+    this.deleteSession(session, { unhealthy: true });
   }
 
   protected handleConnection(conn: ConnType) {
@@ -547,6 +718,15 @@ export abstract class ServerTransport<
           onMessage: (msg) => {
             this.handleMsg(msg);
           },
+          onRehandshake: (msg) => {
+            this.handleRehandshakeMessage(msg);
+          },
+          onRehandshakeTimeout: () => {
+            this.teardownForFailedRehandshake(
+              connectedSession,
+              're-handshake timed out',
+            );
+          },
           onInvalidMessage: (reason) => {
             this.log?.error(`invalid message: ${reason}`, {
               ...connectedSession.loggingMetadata,
@@ -580,7 +760,7 @@ export abstract class ServerTransport<
       return;
     }
 
-    this.sessionHandshakeMetadata.set(connectedSession.to, parsedMetadata);
+    this.storeSessionMetadata(connectedSession, parsedMetadata);
     if (oldSession) {
       this.updateSession(connectedSession);
     } else {

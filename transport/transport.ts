@@ -131,6 +131,7 @@ export abstract class Transport<ConnType extends Connection> {
    */
   protected handleMsg(message: OpaqueTransportMessage) {
     if (this.getStatus() !== 'open') return;
+
     this.eventDispatcher.dispatchEvent('message', message);
   }
 

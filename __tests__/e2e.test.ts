@@ -5,6 +5,7 @@ import {
   isReadableDone,
   numberOfConnections,
   readNextResult,
+  testingSessionOptions,
 } from '../testUtil';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
@@ -29,7 +30,7 @@ import {
   waitFor,
 } from '../testUtil/fixtures/cleanup';
 import { testMatrix } from '../testUtil/fixtures/matrix';
-import { Type } from 'typebox';
+import { Static, Type } from 'typebox';
 import {
   Procedure,
   createServiceSchema,
@@ -42,6 +43,7 @@ import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,
 } from '../router/handshake';
+import { RehandshakeStreamId } from '../transport/message';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 
 describe.each(testMatrix())(
@@ -1315,6 +1317,438 @@ describe.each(testMatrix())(
       });
     });
 
+    test('server can refresh handshake metadata over a live connection', async () => {
+      const requestSchema = Type.Object({ token: Type.String() });
+
+      type ParsedMetadata = Static<typeof requestSchema>;
+
+      let token = 'token-v1';
+      const construct = vi.fn(() => ({ token }));
+      const clientTransport = getClientTransport(
+        'client',
+        createClientHandshakeOptions(requestSchema, construct),
+      );
+      const validate = vi.fn(
+        (
+          metadata: ParsedMetadata,
+          _prev?: ParsedMetadata,
+          _from?: string,
+        ): ParsedMetadata => ({ token: metadata.token }),
+      );
+      const serverTransport = getServerTransport(
+        'SERVER',
+        createServerHandshakeOptions<typeof requestSchema, ParsedMetadata>(
+          requestSchema,
+          validate,
+        ),
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      const ServiceSchema = createServiceSchema<
+        MaybeDisposable,
+        ParsedMetadata
+      >();
+      const services = {
+        test: ServiceSchema.define({
+          getToken: Procedure.rpc({
+            requestInit: Type.Object({}),
+            responseData: Type.Object({ token: Type.String() }),
+            handler: async ({ ctx }) => Ok({ token: ctx.metadata.token }),
+          }),
+        }),
+      };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+
+      // establish the session with the initial token
+      const before = await client.test.getToken.rpc({});
+      expect(before).toStrictEqual({
+        ok: true,
+        payload: { token: 'token-v1' },
+      });
+
+      // ask the client to refresh; construct now hands back the new token
+      token = 'token-v2';
+      expect(serverTransport.requestRehandshake('client')).toBe(true);
+
+      await waitFor(() =>
+        expect(
+          serverTransport.sessionHandshakeMetadata.get('client'),
+        ).toStrictEqual({ token: 'token-v2' }),
+      );
+
+      // the initial handshake and the re-handshake both bind to the client id
+      expect(validate.mock.calls.map((call) => call[2])).toEqual([
+        'client',
+        'client',
+      ]);
+
+      // subsequent calls observe the refreshed metadata
+      const after = await client.test.getToken.rpc({});
+      expect(after).toStrictEqual({ ok: true, payload: { token: 'token-v2' } });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('server proactively re-handshakes via expiry', async () => {
+      const requestSchema = Type.Object({ token: Type.String() });
+
+      type ParsedMetadata = Static<typeof requestSchema>;
+
+      let token = 'token-v1';
+      const construct = vi.fn(() => ({ token }));
+      const clientTransport = getClientTransport(
+        'client',
+        createClientHandshakeOptions(requestSchema, construct),
+      );
+      const validate = vi.fn((metadata: ParsedMetadata) => ({
+        token: metadata.token,
+      }));
+      const serverTransport = getServerTransport(
+        'SERVER',
+        createServerHandshakeOptions(
+          requestSchema,
+          validate,
+          // expire the first token soon, so the server re-handshakes shortly
+          // after connecting (one handshake window before this), then stop
+          (parsed) =>
+            parsed.token === 'token-v1'
+              ? new Date(
+                  Date.now() + testingSessionOptions.handshakeTimeoutMs + 100,
+                )
+              : undefined,
+        ),
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      const ServiceSchema = createServiceSchema<
+        MaybeDisposable,
+        ParsedMetadata
+      >();
+      const services = {
+        test: ServiceSchema.define({
+          getToken: Procedure.rpc({
+            requestInit: Type.Object({}),
+            responseData: Type.Object({ token: Type.String() }),
+            handler: async ({ ctx }) => Ok({ token: ctx.metadata.token }),
+          }),
+        }),
+      };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+
+      const before = await client.test.getToken.rpc({});
+      expect(before).toStrictEqual({
+        ok: true,
+        payload: { token: 'token-v1' },
+      });
+
+      // the scheduled refresh fires on its own; construct now returns v2
+      token = 'token-v2';
+      await waitFor(() =>
+        expect(
+          serverTransport.sessionHandshakeMetadata.get('client'),
+        ).toStrictEqual({ token: 'token-v2' }),
+      );
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('a rejected metadata refresh tears down the session', async () => {
+      const requestSchema = Type.Object({ token: Type.String() });
+
+      type ParsedMetadata = Static<typeof requestSchema>;
+
+      let token = 'token-v1';
+      const construct = vi.fn(() => ({ token }));
+      const clientTransport = getClientTransport(
+        'client',
+        createClientHandshakeOptions(requestSchema, construct),
+      );
+      const validate = vi.fn(
+        (
+          metadata: ParsedMetadata,
+        ): ParsedMetadata | 'REJECTED_BY_CUSTOM_HANDLER' =>
+          metadata.token === 'token-v1'
+            ? { token: metadata.token }
+            : 'REJECTED_BY_CUSTOM_HANDLER',
+      );
+      const serverTransport = getServerTransport<
+        typeof requestSchema,
+        ParsedMetadata
+      >(
+        'SERVER',
+        createServerHandshakeOptions<typeof requestSchema, ParsedMetadata>(
+          requestSchema,
+          validate,
+        ),
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      const ServiceSchema = createServiceSchema<
+        MaybeDisposable,
+        ParsedMetadata
+      >();
+      const services = {
+        test: ServiceSchema.define({
+          getToken: Procedure.rpc({
+            requestInit: Type.Object({}),
+            responseData: Type.Object({ token: Type.String() }),
+            handler: async ({ ctx }) => Ok({ token: ctx.metadata.token }),
+          }),
+        }),
+      };
+      createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+
+      await client.test.getToken.rpc({});
+      expect(numberOfConnections(serverTransport)).toEqual(1);
+
+      // the client would otherwise reconnect with the same bad token; keep it
+      // offline so we can assert the teardown deterministically
+      clientTransport.reconnectOnConnectionDrop = false;
+
+      // the refreshed token is rejected, so the server tears the session down
+      token = 'token-v2';
+      serverTransport.requestRehandshake('client');
+
+      await waitFor(() =>
+        expect(serverTransport.sessions.has('client')).toBe(false),
+      );
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+
+      // let the client's now-disconnected session lapse before cleanup
+      await advanceFakeTimersBySessionGrace();
+    });
+
+    test('an in-flight handler observes refreshed metadata mid-stream', async () => {
+      const requestSchema = Type.Object({ token: Type.String() });
+
+      type ParsedMetadata = Static<typeof requestSchema>;
+
+      let token = 'token-v1';
+      const construct = vi.fn(() => ({ token }));
+      const clientTransport = getClientTransport(
+        'client',
+        createClientHandshakeOptions(requestSchema, construct),
+      );
+      const validate = vi.fn((metadata: ParsedMetadata) => ({
+        token: metadata.token,
+      }));
+      const serverTransport = getServerTransport(
+        'SERVER',
+        createServerHandshakeOptions(requestSchema, validate),
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      const ServiceSchema = createServiceSchema<
+        MaybeDisposable,
+        ParsedMetadata
+      >();
+      const services = {
+        test: ServiceSchema.define({
+          // echoes the current metadata token for every request it receives,
+          // so a single long-lived handler can be observed across a refresh
+          echoToken: Procedure.stream({
+            requestInit: Type.Object({}),
+            requestData: Type.Object({}),
+            responseData: Type.Object({ token: Type.String() }),
+            handler: async ({ ctx, reqReadable, resWritable }) => {
+              for await (const msg of reqReadable) {
+                if (!msg.ok) break;
+                resWritable.write(Ok({ token: ctx.metadata.token }));
+              }
+              resWritable.close();
+            },
+          }),
+        }),
+      };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+
+      const { reqWritable, resReadable } = client.test.echoToken.stream({});
+
+      reqWritable.write({});
+      expect(await readNextResult(resReadable)).toStrictEqual({
+        ok: true,
+        payload: { token: 'token-v1' },
+      });
+
+      // refresh while the stream handler is still running
+      token = 'token-v2';
+      expect(serverTransport.requestRehandshake('client')).toBe(true);
+      await waitFor(() =>
+        expect(
+          serverTransport.sessionHandshakeMetadata.get('client'),
+        ).toStrictEqual({ token: 'token-v2' }),
+      );
+
+      // the same handler now sees the refreshed token
+      reqWritable.write({});
+      expect(await readNextResult(resReadable)).toStrictEqual({
+        ok: true,
+        payload: { token: 'token-v2' },
+      });
+
+      reqWritable.close();
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
+
+    test('a refresh the client never answers tears the session down', async () => {
+      const requestSchema = Type.Object({ token: Type.String() });
+
+      type ParsedMetadata = Static<typeof requestSchema>;
+
+      let failRefresh = false;
+      const construct = vi.fn(() => {
+        if (failRefresh) {
+          // a client that refuses to hand back a fresh token
+          throw new Error('client refuses to refresh');
+        }
+
+        return { token: 'token-v1' };
+      });
+      const clientTransport = getClientTransport(
+        'client',
+        createClientHandshakeOptions(requestSchema, construct),
+      );
+      const validate = vi.fn((metadata: ParsedMetadata) => ({
+        token: metadata.token,
+      }));
+      const serverTransport = getServerTransport(
+        'SERVER',
+        createServerHandshakeOptions(requestSchema, validate),
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      const ServiceSchema = createServiceSchema<
+        MaybeDisposable,
+        ParsedMetadata
+      >();
+      const services = {
+        test: ServiceSchema.define({
+          getToken: Procedure.rpc({
+            requestInit: Type.Object({}),
+            responseData: Type.Object({ token: Type.String() }),
+            handler: async ({ ctx }) => Ok({ token: ctx.metadata.token }),
+          }),
+        }),
+      };
+      createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+
+      await client.test.getToken.rpc({});
+      expect(numberOfConnections(serverTransport)).toEqual(1);
+
+      // the client will ignore the refresh; keep it offline so the teardown is
+      // observable rather than racing a reconnect
+      failRefresh = true;
+      clientTransport.reconnectOnConnectionDrop = false;
+
+      serverTransport.requestRehandshake('client');
+
+      // with no valid response, the deadline elapses and the server tears the
+      // session down rather than trusting the stale metadata indefinitely
+      await vi.advanceTimersByTimeAsync(
+        testingSessionOptions.handshakeTimeoutMs + 1,
+      );
+      await waitFor(() =>
+        expect(serverTransport.sessions.has('client')).toBe(false),
+      );
+
+      await advanceFakeTimersBySessionGrace();
+    });
+
+    test('a malformed re-handshake frame tears the session down', async () => {
+      const requestSchema = Type.Object({ token: Type.String() });
+
+      type ParsedMetadata = Static<typeof requestSchema>;
+
+      const construct = vi.fn(() => ({ token: 'token-v1' }));
+      const clientTransport = getClientTransport(
+        'client',
+        createClientHandshakeOptions(requestSchema, construct),
+      );
+      const validate = vi.fn((metadata: ParsedMetadata) => ({
+        token: metadata.token,
+      }));
+      const serverTransport = getServerTransport(
+        'SERVER',
+        createServerHandshakeOptions(requestSchema, validate),
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      clientTransport.connect(serverTransport.clientId);
+      await waitFor(() => {
+        expect(serverTransport.sessions.has('client')).toBe(true);
+        expect(numberOfConnections(clientTransport)).toBe(1);
+      });
+
+      // keep the client offline so the teardown is observable, not racing a reconnect
+      clientTransport.reconnectOnConnectionDrop = false;
+
+      // a connected peer sends a garbage payload on the reserved re-handshake
+      // stream; the server treats the protocol violation as a failed re-handshake
+      const clientSession = clientTransport.sessions.get(
+        serverTransport.clientId,
+      );
+      assert(clientSession);
+      const send = clientTransport.getSessionBoundSendFn(
+        serverTransport.clientId,
+        clientSession.id,
+      );
+      send({
+        streamId: RehandshakeStreamId,
+        controlFlags: 0,
+        payload: { type: 'NOT_A_REHANDSHAKE_RESPONSE' },
+      });
+
+      await waitFor(() =>
+        expect(serverTransport.sessions.has('client')).toBe(false),
+      );
+
+      await advanceFakeTimersBySessionGrace();
+    });
+
     test('validate receives the connecting client id', async () => {
       const requestSchema = Type.Object({});
 
@@ -1322,18 +1756,21 @@ describe.each(testMatrix())(
         seenFrom: string;
       }
 
+      const construct = vi.fn(() => ({}));
       const clientTransport = getClientTransport(
         'client',
-        createClientHandshakeOptions(requestSchema, () => ({})),
+        createClientHandshakeOptions(requestSchema, construct),
+      );
+      const validate = vi.fn(
+        (
+          _metadata: Static<typeof requestSchema>,
+          _prev?: ParsedMetadata,
+          from?: string,
+        ): ParsedMetadata => ({ seenFrom: from ?? '<none>' }),
       );
       const serverTransport = getServerTransport(
         'SERVER',
-        createServerHandshakeOptions(
-          requestSchema,
-          (_metadata, _prev, from) => ({
-            seenFrom: from ?? '<none>',
-          }),
-        ),
+        createServerHandshakeOptions(requestSchema, validate),
       );
       addPostTestCleanup(async () => {
         await cleanupTransports([clientTransport, serverTransport]);

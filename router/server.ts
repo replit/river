@@ -637,6 +637,22 @@ class RiverServer<
       closeReadable();
     }
 
+    // metadata is live: handlers re-reading ctx.metadata observe values
+    // refreshed mid-stream (see requestRehandshake). We scope the lookup to
+    // this stream's session so a handler never observes a different session's
+    // metadata after a hard reconnect; once the session changes or ends we fall
+    // back to the snapshot captured when the stream opened. Handlers that want a
+    // frozen value can destructure (e.g. `const { token } = ctx.metadata`).
+    const transport = this.transport;
+    const currentMetadata = (): ParsedMetadata => {
+      const session = transport.sessions.get(from);
+      if (session?.id === sessionId) {
+        return transport.sessionHandshakeMetadata.get(from) ?? sessionMetadata;
+      }
+
+      return sessionMetadata;
+    };
+
     const handlerContextWithSpan: ProcedureHandlerContext<
       object,
       object,
@@ -645,7 +661,9 @@ class RiverServer<
       ...serviceContext,
       from: from,
       sessionId,
-      metadata: sessionMetadata,
+      get metadata() {
+        return currentMetadata();
+      },
       span,
       cancel: (message?: string) => {
         const errRes = {
@@ -665,6 +683,9 @@ class RiverServer<
       ...serviceContext,
       sessionId,
       from,
+      // middleware runs once at stream start, before any re-handshake, so it
+      // sees the metadata as of invocation; the handler ctx above is the live
+      // view
       metadata: sessionMetadata,
       span,
       deferCleanup,

@@ -713,6 +713,38 @@ async handler(ctx, ...args) {
 }
 ```
 
+#### Re-handshaking (refreshing handshake metadata)
+
+For long-lived sessions with short-lived credentials (e.g. a JWT), the server can ask a connected client to re-handshake — a follow-up handshake that refreshes its metadata without dropping the session. The client re-runs the same `construct` function it used during the original handshake, and the server re-runs `validate` on the result and replaces the stored metadata.
+
+`ctx.metadata` is live: a handler that re-reads it (including a long-running stream or subscription that was already in flight when the re-handshake happened) observes the new value. This is the point of re-handshaking — the operations that outlive a token are exactly the ones that need the new token. If you want a value fixed for the lifetime of a call, destructure it once (e.g. `const { token } = ctx.metadata`). Because `validate` receives the previous parsed metadata, it can enforce that a re-handshake stays the same principal.
+
+A re-handshake can be triggered manually from the server transport:
+
+```ts
+serverTransport.requestRehandshake('client-id');
+```
+
+More commonly, let the server schedule re-handshakes automatically by passing a third argument to `createServerHandshakeOptions` — a `Date` for when the credential expires. The server re-handshakes shortly before it:
+
+```ts
+createServerHandshakeOptions(
+  handshakeSchema,
+  (metadata) => ({
+    parsedToken: metadata.token,
+    expiresAt: getExpiry(metadata.token),
+  }),
+  // when this credential expires
+  (parsed) => parsed.expiresAt,
+);
+```
+
+The server fires the re-handshake one `handshakeTimeoutMs` before the expiry you return, so the exchange resolves by then: either the refresh lands, or — if the client never answers — its deadline elapses and the session is torn down. Net effect: the session never serves past expiry. (This assumes `handshakeTimeoutMs` is comfortably shorter than the credential's lifetime, which holds for any realistic token.)
+
+If the client fails to return valid metadata (rejected by `validate`, malformed, or no response before the handshake timeout), the server tears the session down. The client then reconnects with a fresh handshake, which re-establishes the schedule.
+
+Re-handshaking is scheduling, not request gating — it doesn't pause in-flight requests — so still reject already-expired credentials in `validate` and/or by checking the live `ctx.metadata` in your handlers.
+
 ## Protobuf Services (Experimental)
 
 River also supports defining services using Protocol Buffers. Instead of TypeBox schemas, you define your service in a `.proto` file and use the generated descriptors directly.

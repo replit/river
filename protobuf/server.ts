@@ -612,13 +612,29 @@ class ProtobufServer<
       },
     };
 
+    // metadata is live: handlers re-reading ctx.metadata observe values
+    // refreshed mid-stream, scoped to this stream's session so a hard reconnect
+    // can't surface another session's metadata. See the TypeBox router for the
+    // fuller explanation.
+    const transport = this.transport;
+    const currentMetadata = (): object => {
+      const session = transport.sessions.get(from);
+      if (session?.id === sessionId) {
+        return transport.sessionHandshakeMetadata.get(from) ?? sessionMetadata;
+      }
+
+      return sessionMetadata;
+    };
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
     const handlerContext: ProtobufHandlerContext<any, any, any> = {
       ...serviceContext,
       state: serviceState,
       from,
       sessionId,
-      metadata: sessionMetadata,
+      get metadata() {
+        return currentMetadata();
+      },
       span,
       service,
       method,
@@ -635,6 +651,9 @@ class ProtobufServer<
       signal: finishedController.signal,
     };
 
+    // middleware runs once at stream start, before any re-handshake; the spread
+    // copies metadata by value (the live getter above is evaluated once), so it
+    // sees the metadata as of invocation. The handler ctx is the live view.
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const middlewareContext: MiddlewareContext<ParsedMetadata> = {
       ...handlerContext,

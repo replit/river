@@ -58,6 +58,18 @@ export interface ServerHandshakeOptions<
    *   returning parsed metadata.
    */
   validate: ValidateHandshake<MetadataSchema, ParsedMetadata>;
+
+  /**
+   * When the credential expires (or undefined if it never does). The server
+   * re-handshakes one `handshakeTimeoutMs` beforehand — re-validating fresh
+   * metadata and live-replacing the stored value — so the session never serves
+   * past expiry: a refresh lands first, or an unanswered re-handshake tears the
+   * session down by then. Re-evaluated on every (re)validation.
+   *
+   * Scheduling only — it does not gate requests, so reject already-expired
+   * credentials in {@link validate} or against the live `ctx.metadata`.
+   */
+  expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined;
 }
 
 export function createClientHandshakeOptions<
@@ -75,6 +87,7 @@ export function createServerHandshakeOptions<
 >(
   schema: MetadataSchema,
   validate: ValidateHandshake<MetadataSchema, ParsedMetadata>,
+  expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined,
 ): ServerHandshakeOptions<MetadataSchema, ParsedMetadata> {
-  return { schema, validate };
+  return { schema, validate, expiry };
 }

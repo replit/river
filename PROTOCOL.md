@@ -196,7 +196,7 @@ type ProtocolError = UncaughtError | InvalidRequestError | CancelError;
 
 `ProtocolError`s, just like service-level errors, are wrapped with a `Result`, which is further wrapped with `TransportMessage` and MUST have a `StreamCancelBit` flag. Please note that these are separate from user-defined errors, which should be treated just like any response message.
 
-There are 4 `Control` payloads:
+There are 6 `Control` payloads:
 
 ```ts
 // Used in cases where we want to send a close without
@@ -241,11 +241,28 @@ interface ControlHandshakeResponse {
       };
 }
 
+// Sent by the server to ask the client to re-handshake — re-construct its
+// handshake metadata (e.g. fetch a fresh token) over the live connection. Sent
+// on the reserved `rehandshake` streamId with no control flags.
+interface ControlRehandshakeRequest {
+  type: 'REHANDSHAKE_REQ';
+}
+
+// Sent by the client in response to a ControlRehandshakeRequest, carrying
+// freshly constructed handshake metadata for the server to re-validate. Sent on
+// the reserved `rehandshake` streamId with no control flags.
+interface ControlRehandshakeResponse {
+  type: 'REHANDSHAKE_RESP';
+  metadata?: unknown;
+}
+
 type Control =
   | ControlClose
   | ControlAck
   | ControlHandshakeRequest
-  | ControlHandshakeResponse;
+  | ControlHandshakeResponse
+  | ControlRehandshakeRequest
+  | ControlRehandshakeResponse;
 ```
 
 `Control` is a payload that is wrapped with `TransportMessage`.
@@ -305,6 +322,7 @@ When a message is received, it MUST be validated before being processed.
 
 - Match the JSON schema for the `TransportMessage` type.
 - Have an existing session for the transport `clientId` in the `from` field (see the 'Transports, Sessions, and Connections' heading for more information on sessions and transports).
+- The `from` field MUST match the authenticated peer of the session/connection that delivered the message (the identity established at handshake). A message whose `from` names a different client is a protocol violation — it MUST NOT be processed, and the delivering connection MUST be torn down. Without this check a connected client could spoof `from` to act as another client (using that client's metadata/identity).
 - The `to` field of the message MUST match the transport's `clientId`.
 - Have the expected `seq` number (see the 'Handling Transparent Reconnections' heading for more information on seq/ack).
 - Is not an explicit heartbeat (i.e. the `AckBit` is not set).
@@ -582,6 +600,18 @@ The server will send an error response if either:
   - server is in the future (`server.seq > client.nextExpectedSeq`)
 
 When the client receives a status with `ok: false`, it should consider the handshake failed and close the connection.
+
+### Re-handshaking (live credential refresh)
+
+Handshake metadata (e.g. an auth token) can be refreshed over an already-established connection without dropping the session — a "follow-up handshake". This lets a server keep long-lived sessions alive across short-lived credentials.
+
+The exchange reuses the heartbeat mechanism: control messages on the reserved `rehandshake` streamId that update transport-level bookkeeping like any other message but are consumed by the transport and never surfaced to procedure handlers.
+
+1. The server sends a `ControlRehandshakeRequest` to ask the client to re-handshake. When to do this is up to the server (e.g. shortly before a token's expiry).
+2. The client re-runs the same metadata construction it used during the original handshake and replies with a `ControlRehandshakeResponse` carrying the new metadata.
+3. The server re-validates the metadata exactly as it would during a handshake. On success it replaces the metadata stored for the session (which the application surfaces to its handlers); on failure (malformed, rejected, or no response within the handshake timeout) it tears the session down.
+
+Because the metadata is re-validated on every (re)handshake as well, the re-handshake schedule naturally re-establishes itself after a transparent reconnect.
 
 ### Transparent reconnections
 

@@ -137,11 +137,38 @@ export const ControlMessageHandshakeResponseSchema = Type.Object({
   ]),
 });
 
+/**
+ * Reserved stream id for the follow-up handshake (re-handshake) control
+ * messages, analogous to the reserved `heartbeat` stream id used for acks.
+ * Messages on this stream are consumed by the transport itself and never
+ * surface to the router.
+ */
+export const RehandshakeStreamId = 'rehandshake';
+
+/**
+ * Sent by the server over a live connection to ask the client to re-handshake,
+ * i.e. re-construct its handshake metadata (e.g. fetch a fresh token).
+ */
+export const ControlMessageRehandshakeRequestSchema = Type.Object({
+  type: Type.Literal('REHANDSHAKE_REQ'),
+});
+
+/**
+ * Sent by the client in response to a {@link ControlMessageRehandshakeRequestSchema},
+ * carrying freshly constructed handshake metadata for the server to re-validate.
+ */
+export const ControlMessageRehandshakeResponseSchema = Type.Object({
+  type: Type.Literal('REHANDSHAKE_RESP'),
+  metadata: Type.Optional(Type.Unknown()),
+});
+
 export const ControlMessagePayloadSchema = Type.Union([
   ControlMessageCloseSchema,
   ControlMessageAckSchema,
   ControlMessageHandshakeRequestSchema,
   ControlMessageHandshakeResponseSchema,
+  ControlMessageRehandshakeRequestSchema,
+  ControlMessageRehandshakeResponseSchema,
 ]);
 
 /**
@@ -259,6 +286,29 @@ export function closeStreamMessage(streamId: string): PartialTransportMessage {
     controlFlags: ControlFlags.StreamClosedBit,
     payload: {
       type: 'CLOSE' as const,
+    } satisfies Static<typeof ControlMessagePayloadSchema>,
+  };
+}
+
+export function rehandshakeRequestMessage(): PartialTransportMessage {
+  return {
+    streamId: RehandshakeStreamId,
+    controlFlags: 0,
+    payload: {
+      type: 'REHANDSHAKE_REQ' as const,
+    } satisfies Static<typeof ControlMessagePayloadSchema>,
+  };
+}
+
+export function rehandshakeResponseMessage(
+  metadata: unknown,
+): PartialTransportMessage {
+  return {
+    streamId: RehandshakeStreamId,
+    controlFlags: 0,
+    payload: {
+      type: 'REHANDSHAKE_RESP' as const,
+      metadata,
     } satisfies Static<typeof ControlMessagePayloadSchema>,
   };
 }

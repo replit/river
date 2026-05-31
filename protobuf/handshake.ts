@@ -62,6 +62,7 @@ export function createServerHandshakeOptions<
 >(
   schema: Schema,
   validate: ValidateHandshake<Schema, ParsedMetadata>,
+  expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined,
 ): ServerHandshakeOptions<typeof HandshakeBytesSchema, ParsedMetadata> {
   return createTransportServerHandshakeOptions(
     HandshakeBytesSchema,
@@ -75,5 +76,6 @@ export function createServerHandshakeOptions<
 
       return await validate(decoded, previousParsedMetadata, from);
     },
+    expiry,
   );
 }
