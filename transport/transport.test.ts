@@ -1762,6 +1762,7 @@ describe.each(testMatrix())(
           discarded: 'discarded',
         },
         undefined,
+        clientTransport.clientId,
       );
 
       const session = serverTransport.sessions.get(clientTransport.clientId);
@@ -1791,6 +1792,7 @@ describe.each(testMatrix())(
         {
           kept: 'kept',
         },
+        clientTransport.clientId,
       );
 
       await testFinishesCleanly({

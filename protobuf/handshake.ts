@@ -10,7 +10,10 @@ import {
   type ClientHandshakeOptions,
   type ServerHandshakeOptions,
 } from '../router/handshake';
-import { HandshakeErrorCustomHandlerFatalResponseCodes } from '../transport/message';
+import {
+  HandshakeErrorCustomHandlerFatalResponseCodes,
+  type TransportClientId,
+} from '../transport/message';
 import { decodeMessageBytes, encodeMessageBytes } from './shared';
 import { Uint8ArrayType } from '../customSchemas';
 
@@ -27,6 +30,7 @@ type ConstructHandshake<Schema extends DescMessage> = () =>
 type ValidateHandshake<Schema extends DescMessage, ParsedMetadata> = (
   metadata: MessageShape<Schema>,
   previousParsedMetadata?: ParsedMetadata,
+  from?: TransportClientId,
 ) =>
   | ParsedMetadata
   | ProtobufHandshakeFailureCode
@@ -61,7 +65,7 @@ export function createServerHandshakeOptions<
 ): ServerHandshakeOptions<typeof HandshakeBytesSchema, ParsedMetadata> {
   return createTransportServerHandshakeOptions(
     HandshakeBytesSchema,
-    async (metadata, previousParsedMetadata) => {
+    async (metadata, previousParsedMetadata, from) => {
       let decoded;
       try {
         decoded = decodeMessageBytes(schema, metadata);
@@ -69,7 +73,7 @@ export function createServerHandshakeOptions<
         return 'REJECTED_BY_CUSTOM_HANDLER' as ProtobufHandshakeFailureCode;
       }
 
-      return await validate(decoded, previousParsedMetadata);
+      return await validate(decoded, previousParsedMetadata, from);
     },
   );
 }

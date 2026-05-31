@@ -1,5 +1,8 @@
 import type { Static, TSchema } from 'typebox';
-import { HandshakeErrorCustomHandlerFatalResponseCodes } from '../transport/message';
+import {
+  HandshakeErrorCustomHandlerFatalResponseCodes,
+  type TransportClientId,
+} from '../transport/message';
 
 type ConstructHandshake<T extends TSchema> = () =>
   | Static<T>
@@ -8,6 +11,7 @@ type ConstructHandshake<T extends TSchema> = () =>
 type ValidateHandshake<T extends TSchema, ParsedMetadata> = (
   metadata: Static<T>,
   previousParsedMetadata?: ParsedMetadata,
+  from?: TransportClientId,
 ) =>
   | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
   | ParsedMetadata
@@ -42,15 +46,16 @@ export interface ServerHandshakeOptions<
   schema: MetadataSchema;
 
   /**
-   * Parses the {@link HandshakeRequestMetadata} sent by the client, transforming
-   * it into {@link ParsedHandshakeMetadata}.
-   *
-   * May return `false` if the client should be rejected.
+   * Parses the metadata sent by the client during the handshake into the
+   * server-side {@link ParsedMetadata}, or returns a handshake failure code to
+   * reject the connection.
    *
    * @param metadata - The metadata sent by the client.
-   * @param session - The session that the client would be associated with.
-   * @param isReconnect - Whether the client is reconnecting to the session,
-   *                      or if this is a new session.
+   * @param previousParsedMetadata - The parsed metadata from the previous
+   *   connection on this session, if any (e.g. on reconnect).
+   * @param from - The client id the peer presented in its handshake. Use it to
+   *   confirm the presented id is the one the metadata authorizes before
+   *   returning parsed metadata.
    */
   validate: ValidateHandshake<MetadataSchema, ParsedMetadata>;
 }
