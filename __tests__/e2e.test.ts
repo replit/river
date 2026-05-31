@@ -1314,5 +1314,61 @@ describe.each(testMatrix())(
         server,
       });
     });
+
+    test('validate receives the connecting client id', async () => {
+      const requestSchema = Type.Object({});
+
+      interface ParsedMetadata {
+        seenFrom: string;
+      }
+
+      const clientTransport = getClientTransport(
+        'client',
+        createClientHandshakeOptions(requestSchema, () => ({})),
+      );
+      const serverTransport = getServerTransport(
+        'SERVER',
+        createServerHandshakeOptions(
+          requestSchema,
+          (_metadata, _prev, from) => ({
+            seenFrom: from ?? '<none>',
+          }),
+        ),
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      const ServiceSchema = createServiceSchema<
+        MaybeDisposable,
+        ParsedMetadata
+      >();
+      const services = {
+        test: ServiceSchema.define({
+          whoami: Procedure.rpc({
+            requestInit: Type.Object({}),
+            responseData: Type.Object({ seenFrom: Type.String() }),
+            handler: async ({ ctx }) => Ok({ seenFrom: ctx.metadata.seenFrom }),
+          }),
+        }),
+      };
+      const server = createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+
+      const result = await client.test.whoami.rpc({});
+      expect(result).toStrictEqual({
+        ok: true,
+        payload: { seenFrom: 'client' },
+      });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+        server,
+      });
+    });
   },
 );

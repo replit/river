@@ -192,6 +192,15 @@ export class SessionConnected<
 
     const parsedMsg = parsedMsgRes.value;
 
+    // messages must originate from this session's peer
+    if (parsedMsg.from !== this.to) {
+      this.listeners.onInvalidMessage(
+        `received message with 'from' (${parsedMsg.from}) that does not match the session peer (${this.to})`,
+      );
+
+      return;
+    }
+
     // check message ordering here
     if (parsedMsg.seq !== this.ack) {
       if (parsedMsg.seq < this.ack) {

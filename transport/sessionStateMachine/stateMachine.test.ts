@@ -1967,11 +1967,17 @@ describe('session state machine', () => {
       expect(onConnectionClosed).not.toHaveBeenCalled();
       expect(onConnectionErrored).not.toHaveBeenCalled();
 
-      const encodeResult = session.encodeMsg(
-        payloadToTransportMessage('hello'),
+      // an incoming frame carries the peer's id in `from`
+      session.conn.emitData(
+        session.options.codec.toBuffer({
+          id: 'msgid',
+          from: session.to,
+          to: session.from,
+          seq: 0,
+          ack: 0,
+          ...payloadToTransportMessage('hello'),
+        }),
       );
-      assert(encodeResult.ok);
-      session.conn.emitData(encodeResult.value.data);
 
       await waitFor(async () => {
         expect(onMessage).toHaveBeenCalledTimes(1);
@@ -2021,8 +2027,8 @@ describe('session state machine', () => {
       conn.onData(
         session.options.codec.toBuffer({
           id: 'msgid',
-          to: 'SERVER',
-          from: 'client',
+          to: session.from,
+          from: session.to,
           seq: 0,
           ack: 0,
           streamId: 'heartbeat',
@@ -2048,8 +2054,8 @@ describe('session state machine', () => {
       conn.onData(
         session.options.codec.toBuffer({
           id: 'msgid',
-          to: 'SERVER',
-          from: 'client',
+          to: session.from,
+          from: session.to,
           seq: 0,
           ack: 0,
           streamId: 'heartbeat',
@@ -2060,6 +2066,29 @@ describe('session state machine', () => {
         }),
       );
 
+      expect(sessionHandle.onMessage).not.toHaveBeenCalled();
+    });
+
+    test('rejects a message whose from does not match the session peer', async () => {
+      const sessionHandle = await createSessionConnected();
+      const session = sessionHandle.session;
+      const conn = session.conn;
+
+      // a frame whose `from` isn't this session's peer is rejected
+      conn.onData(
+        session.options.codec.toBuffer({
+          id: 'msgid',
+          to: session.from,
+          from: 'someone-else',
+          seq: 0,
+          ack: 0,
+          streamId: 'stream',
+          controlFlags: 0,
+          payload: { type: 'ACK' },
+        }),
+      );
+
+      expect(sessionHandle.onInvalidMessage).toHaveBeenCalledTimes(1);
       expect(sessionHandle.onMessage).not.toHaveBeenCalled();
     });
   });

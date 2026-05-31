@@ -297,6 +297,7 @@ export abstract class ServerTransport<
         parsedMetadataOrFailureCode = await this.handshakeExtensions.validate(
           msg.payload.metadata,
           previousParsedMetadata,
+          msg.from,
         );
       } catch (err) {
         this.rejectHandshakeRequest(
