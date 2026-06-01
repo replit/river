@@ -42,6 +42,7 @@ type ValidateHandshake<Schema extends DescMessage, ParsedMetadata> = (
 export function createClientHandshakeOptions<Schema extends DescMessage>(
   schema: Schema,
   construct: ConstructHandshake<Schema>,
+  eager?: boolean,
 ): ClientHandshakeOptions<typeof HandshakeBytesSchema> {
   return createTransportClientHandshakeOptions(
     HandshakeBytesSchema,
@@ -50,6 +51,7 @@ export function createClientHandshakeOptions<Schema extends DescMessage>(
 
       return encodeMessageBytes(schema, metadata);
     },
+    eager,
   );
 }
 

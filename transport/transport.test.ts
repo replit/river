@@ -1535,6 +1535,91 @@ describe.each(testMatrix())(
       });
     });
 
+    test('eager fetches handshake metadata concurrently with the connection', async () => {
+      const schema = Type.Object({ foo: Type.String() });
+
+      const serverTransport = getServerTransport('SERVER', {
+        schema,
+        validate: async (metadata: { foo: string }) => ({ foo: metadata.foo }),
+      });
+      const clientTransport = getClientTransport('client');
+
+      // record the client session state at the moment construct() is invoked; an
+      // eager fetch runs while still connecting, before the handshaking state
+      let stateAtConstruct: SessionState | undefined;
+      const get = vi.fn(async () => {
+        stateAtConstruct = clientTransport.sessions.get(
+          serverTransport.clientId,
+        )?.state;
+
+        return { foo: 'bar' };
+      });
+      clientTransport.extendHandshake({
+        schema,
+        construct: get,
+        eager: true,
+      });
+
+      clientTransport.connect(serverTransport.clientId);
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(serverTransport.sessions.size).toBe(1);
+        expect(get).toHaveBeenCalledTimes(1);
+      });
+
+      // the token fetch began before the connection reached the handshaking state,
+      // so it overlapped the dial rather than running after it
+      expect([SessionState.BackingOff, SessionState.Connecting]).toContain(
+        stateAtConstruct,
+      );
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
+    test('constructs handshake metadata after connecting by default', async () => {
+      const schema = Type.Object({ foo: Type.String() });
+
+      const serverTransport = getServerTransport('SERVER', {
+        schema,
+        validate: async (metadata: { foo: string }) => ({ foo: metadata.foo }),
+      });
+      const clientTransport = getClientTransport('client');
+
+      let stateAtConstruct: SessionState | undefined;
+      const get = vi.fn(async () => {
+        stateAtConstruct = clientTransport.sessions.get(
+          serverTransport.clientId,
+        )?.state;
+
+        return { foo: 'bar' };
+      });
+      clientTransport.extendHandshake({ schema, construct: get });
+
+      clientTransport.connect(serverTransport.clientId);
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(serverTransport.sessions.size).toBe(1);
+        expect(get).toHaveBeenCalledTimes(1);
+      });
+
+      // without opting in, construct only runs once the connection is established
+      expect(stateAtConstruct).toBe(SessionState.Handshaking);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
     test('client checks request schema on construction', async () => {
       const schema = Type.Object({
         foo: Type.String(),

@@ -17,7 +17,7 @@ import {
   defaultClientTransportOptions,
 } from './options';
 import { LeakyBucketRateLimit } from './rateLimit';
-import { Transport } from './transport';
+import { DeleteSessionOptions, Transport } from './transport';
 import { coerceErrorString } from './stringifyError';
 import { ProtocolError } from './events';
 import { Value } from 'typebox/value';
@@ -30,10 +30,23 @@ import { SessionConnected } from './sessionStateMachine/SessionConnected';
 import {
   ClientSession,
   ClientSessionStateGraph,
+  Session,
 } from './sessionStateMachine/transitions';
 import { SessionState } from './sessionStateMachine/common';
 import { SessionNoConnection } from './sessionStateMachine/SessionNoConnection';
 import { SessionBackingOff } from './sessionStateMachine/SessionBackingOff';
+
+/**
+ * Outcome of constructing client handshake metadata, kept as a value (rather than a
+ * rejecting promise) so it can be prefetched when a connection attempt starts and
+ * awaited later even if that attempt is abandoned before the handshake is sent.
+ */
+type ConstructedHandshakeMetadata =
+  | {
+      ok: true;
+      metadata: Awaited<ReturnType<ClientHandshakeOptions['construct']>>;
+    }
+  | { ok: false; reason: string };
 
 export abstract class ClientTransport<
   ConnType extends Connection,
@@ -57,6 +70,18 @@ export abstract class ClientTransport<
    * Optional handshake options for this client.
    */
   handshakeExtensions?: ClientHandshakeOptions;
+
+  /**
+   * Handshake-metadata constructions prefetched when a connection attempt begins
+   * (only when {@link ClientHandshakeOptions.eager} is set), so the
+   * token fetch overlaps the dial instead of following it. Keyed by the peer being
+   * connected to; consumed when the handshake is sent and cleared when an attempt
+   * is abandoned.
+   */
+  private pendingHandshakeMetadata = new Map<
+    TransportClientId,
+    Promise<ConstructedHandshakeMetadata>
+  >();
 
   sessions: Map<TransportClientId, ClientSession<ConnType>>;
 
@@ -201,6 +226,15 @@ export abstract class ClientTransport<
     this.createSession(session);
 
     return session;
+  }
+
+  protected deleteSession(
+    session: Session<ConnType>,
+    options?: DeleteSessionOptions,
+  ): void {
+    // drop any handshake metadata prefetched for an attempt that's being torn down
+    this.pendingHandshakeMetadata.delete(session.to);
+    super.deleteSession(session, options);
   }
 
   // listeners
@@ -545,6 +579,15 @@ export abstract class ClientTransport<
       },
     );
 
+    // when opted in, kick off the handshake-metadata construction now so a slow
+    // token fetch overlaps establishing the connection instead of running after it
+    if (this.handshakeExtensions?.eager) {
+      this.pendingHandshakeMetadata.set(
+        session.to,
+        this.constructHandshakeMetadata(),
+      );
+    }
+
     // transition to connecting
     const connectingSession =
       ClientSessionStateGraph.transition.BackingOffToConnecting(
@@ -600,27 +643,48 @@ export abstract class ClientTransport<
     this.updateSession(connectingSession);
   }
 
+  /**
+   * Constructs handshake metadata via the configured handshake extension, capturing
+   * a failure as a value so a prefetched result can be awaited without rejecting.
+   */
+  private async constructHandshakeMetadata(): Promise<ConstructedHandshakeMetadata> {
+    if (!this.handshakeExtensions) {
+      return { ok: true, metadata: undefined };
+    }
+
+    try {
+      return { ok: true, metadata: await this.handshakeExtensions.construct() };
+    } catch (err) {
+      return { ok: false, reason: coerceErrorString(err) };
+    }
+  }
+
   private async sendHandshake(session: SessionHandshaking<ConnType>) {
     let metadata: unknown = undefined;
 
     if (this.handshakeExtensions) {
-      try {
-        metadata = await this.handshakeExtensions.construct();
-      } catch (err) {
-        const errStr = coerceErrorString(err);
+      // consume the metadata prefetched when the connection attempt began, falling
+      // back to constructing now if none is in flight (e.g. a direct transition)
+      const pending = this.pendingHandshakeMetadata.get(session.to);
+      this.pendingHandshakeMetadata.delete(session.to);
+      const result = await (pending ?? this.constructHandshakeMetadata());
+
+      if (!result.ok) {
         this.log?.error(
-          `failed to construct handshake metadata for session to ${session.to}: ${errStr}`,
+          `failed to construct handshake metadata for session to ${session.to}: ${result.reason}`,
           session.loggingMetadata,
         );
 
         this.protocolError({
           type: ProtocolError.HandshakeFailed,
-          message: `failed to construct handshake metadata: ${errStr}`,
+          message: `failed to construct handshake metadata: ${result.reason}`,
         });
         this.deleteSession(session, { unhealthy: true });
 
         return;
       }
+
+      metadata = result.metadata;
     }
 
     // double-check to make sure we haven't transitioned the session yet

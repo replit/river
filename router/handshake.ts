@@ -33,6 +33,16 @@ export interface ClientHandshakeOptions<
    * Gets the {@link HandshakeRequestMetadata} to send to the server.
    */
   construct: ConstructHandshake<MetadataSchema>;
+
+  /**
+   * When true, the client constructs handshake metadata as soon as it begins
+   * dialing, so a slow {@link construct} (e.g. fetching a fresh token) overlaps
+   * establishing the connection rather than running after it. The trade-off is
+   * that `construct` then runs on every connection attempt, including ones that
+   * never connect, so leave it unset when constructing is expensive or
+   * rate-limited.
+   */
+  eager?: boolean;
 }
 
 export interface ServerHandshakeOptions<
@@ -77,8 +87,9 @@ export function createClientHandshakeOptions<
 >(
   schema: MetadataSchema,
   construct: ConstructHandshake<MetadataSchema>,
+  eager?: boolean,
 ): ClientHandshakeOptions<MetadataSchema> {
-  return { schema, construct };
+  return { schema, construct, eager };
 }
 
 export function createServerHandshakeOptions<
