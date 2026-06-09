@@ -15,7 +15,12 @@ import {
 } from '@opentelemetry/sdk-trace-base';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { AsyncHooksContextManager } from '@opentelemetry/context-async-hooks';
-import { createSessionTelemetryInfo, getPropagationContext } from './index';
+import {
+  createHandlerSpan,
+  createProcTelemetryInfo,
+  createSessionTelemetryInfo,
+  getPropagationContext,
+} from './index';
 import { testMatrix } from '../testUtil/fixtures/matrix';
 import {
   cleanupTransports,
@@ -64,6 +69,64 @@ describe('Basic tracing tests', () => {
         Symbol.for('OpenTelemetry Context Key SPAN'),
       ) as Span,
     ).toBeTruthy();
+  });
+
+  test('procedure spans include rpc classification attributes', () => {
+    spanExporter.reset();
+    const tracer = trace.getTracer('test');
+    const session = dummySession();
+
+    const { span: clientSpan } = createProcTelemetryInfo(
+      tracer,
+      session,
+      'subscription',
+      'example',
+      'watch',
+      'client-stream-id',
+    );
+    clientSpan.end();
+
+    createHandlerSpan(
+      tracer,
+      session,
+      'stream',
+      'example',
+      'chat',
+      'server-stream-id',
+      undefined,
+      (span) => {
+        span.end();
+      },
+    );
+
+    const spans = spanExporter.getFinishedSpans();
+    const clientProcSpan = spans.find(
+      (span) => span.name === 'river.client.example.watch',
+    );
+    const serverProcSpan = spans.find(
+      (span) => span.name === 'river.server.example.chat',
+    );
+
+    expect(clientProcSpan?.attributes).toMatchObject({
+      'rpc.system': 'river',
+      'rpc.service': 'example',
+      'rpc.method': 'watch',
+      'river.method.kind': 'subscription',
+      'river.rpc.kind': 'subscription',
+      'river.rpc.streaming': true,
+      'river.streamId': 'client-stream-id',
+      'span.kind': 'client',
+    });
+    expect(serverProcSpan?.attributes).toMatchObject({
+      'rpc.system': 'river',
+      'rpc.service': 'example',
+      'rpc.method': 'chat',
+      'river.method.kind': 'stream',
+      'river.rpc.kind': 'stream',
+      'river.rpc.streaming': true,
+      'river.streamId': 'server-stream-id',
+      'span.kind': 'server',
+    });
   });
 });
 

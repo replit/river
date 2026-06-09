@@ -25,6 +25,26 @@ export interface TelemetryInfo {
   ctx: Context;
 }
 
+function createProcedureAttributes(
+  kind: ValidProcType,
+  serviceName: string,
+  procedureName: string,
+  streamId: string,
+) {
+  return {
+    component: 'river',
+    'rpc.system': 'river',
+    'rpc.service': serviceName,
+    'rpc.method': procedureName,
+    'river.method.kind': kind,
+    'river.method.service': serviceName,
+    'river.method.name': procedureName,
+    'river.rpc.kind': kind,
+    'river.rpc.streaming': kind !== 'rpc',
+    'river.streamId': streamId,
+  };
+}
+
 export function getPropagationContext(
   ctx: Context,
 ): PropagationContext | undefined {
@@ -101,11 +121,12 @@ export function createProcTelemetryInfo(
     `river.client.${serviceName}.${procedureName}`,
     {
       attributes: {
-        component: 'river',
-        'river.method.kind': kind,
-        'river.method.service': serviceName,
-        'river.method.name': procedureName,
-        'river.streamId': streamId,
+        ...createProcedureAttributes(
+          kind,
+          serviceName,
+          procedureName,
+          streamId,
+        ),
         'span.kind': 'client',
       },
       links: [{ context: session.telemetry.span.spanContext() }],
@@ -153,11 +174,12 @@ export function createHandlerSpan<Fn extends (span: Span) => unknown>(
     `river.server.${serviceName}.${procedureName}`,
     {
       attributes: {
-        component: 'river',
-        'river.method.kind': kind,
-        'river.method.service': serviceName,
-        'river.method.name': procedureName,
-        'river.streamId': streamId,
+        ...createProcedureAttributes(
+          kind,
+          serviceName,
+          procedureName,
+          streamId,
+        ),
         'span.kind': 'server',
       },
       links: [{ context: session.telemetry.span.spanContext() }],
