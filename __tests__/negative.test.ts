@@ -107,6 +107,46 @@ describe('should handle incompatabilities', async () => {
     });
   });
 
+  test('fatal connection attempt error should prevent reconnection', async () => {
+    class FatalConnectionError extends Error {
+      constructor(message: string) {
+        super(message);
+        this.name = 'FatalConnectionError';
+      }
+    }
+
+    const createClientSpy = vi.fn(() =>
+      Promise.reject(new FatalConnectionError('fake fatal connection failure')),
+    );
+    const clientTransport = new WebSocketClientTransport(
+      createClientSpy,
+      'client',
+      {
+        isFatalConnectionError: (err) => err instanceof FatalConnectionError,
+      },
+    );
+    const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
+    const errMock = vi.fn();
+    clientTransport.addEventListener('protocolError', errMock);
+    addPostTestCleanup(async () => {
+      clientTransport.removeEventListener('protocolError', errMock);
+      await cleanupTransports([clientTransport, serverTransport]);
+    });
+
+    clientTransport.connect(serverTransport.clientId);
+    await vi.runAllTimersAsync();
+
+    expect(clientTransport.reconnectOnConnectionDrop).toBe(false);
+    expect(clientTransport.sessions.size).toBe(0);
+    expect(createClientSpy).toHaveBeenCalledTimes(1);
+    expect(errMock).not.toHaveBeenCalled();
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
+  });
+
   test('calling connect consecutively should reuse the same connection', async () => {
     let connectCalls = 0;
     const clientTransport = new WebSocketClientTransport(
