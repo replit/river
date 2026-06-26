@@ -238,8 +238,19 @@ export abstract class ClientTransport<
   }
 
   // listeners
-  protected onConnectingFailed(session: SessionConnecting<ConnType>) {
+  protected onConnectingFailed(
+    session: SessionConnecting<ConnType>,
+    error?: unknown,
+  ) {
     const noConnectionSession = super.onConnectingFailed(session);
+
+    if (error instanceof Error && this.options.isFatalConnectionError(error)) {
+      this.reconnectOnConnectionDrop = false;
+      this.deleteSession(noConnectionSession, { unhealthy: true });
+
+      return noConnectionSession;
+    }
+
     this.tryReconnecting(noConnectionSession.to);
 
     return noConnectionSession;
@@ -613,7 +624,7 @@ export abstract class ClientTransport<
               `error connecting to ${connectingSession.to}: ${errStr}`,
               connectingSession.loggingMetadata,
             );
-            this.onConnectingFailed(connectingSession);
+            this.onConnectingFailed(connectingSession, error);
           },
           onConnectionTimeout: () => {
             this.log?.error(
