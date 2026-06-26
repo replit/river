@@ -810,16 +810,7 @@ You can find more service examples in the [E2E test fixtures](https://github.com
 
 ## Releasing
 
-River uses [Release Drafter](https://github.com/release-drafter/release-drafter) for GitHub release notes and npm trusted publishing for NPM publishing.
-
-The npm package should have a trusted publisher configured with these values:
-
-- Publisher: GitHub Actions
-- Organization or user: `replit`
-- Repository: `river`
-- Workflow filename: `publish.yml`
-- Environment name: `npm`
-- Allowed actions: `npm publish`
+River uses [Release Drafter](https://github.com/release-drafter/release-drafter) for GitHub release notes and a GitHub Actions workflow for NPM publishing.
 
 ### Automated Release Process (Recommended)
 
@@ -847,7 +838,7 @@ The npm package should have a trusted publisher configured with these values:
 4. **Automation takes over**:
 
    - Publishing the release automatically triggers the "Build and Publish" workflow
-   - The workflow runs in the `npm` GitHub environment and publishes `@replit/river` to NPM without a long-lived npm token
+   - The workflow publishes `@replit/river` to NPM
 
 5. **If publishing fails**:
    - Fix the workflow or package issue, then re-run the failed GitHub Actions job
