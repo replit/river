@@ -191,6 +191,7 @@ describe.each(testMatrix())(
       const result = await readNextResult(resReadable);
       expect(result).toStrictEqual({
         ok: false,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
       });
     });
