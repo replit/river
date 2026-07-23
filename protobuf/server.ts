@@ -347,6 +347,10 @@ class ProtobufServer<
       from,
       sessionId,
     );
+    const sessionBackpressure = this.transport.getSessionBackpressure(
+      from,
+      sessionId,
+    );
 
     const deferredCleanups: Array<() => void | Promise<void>> = [];
     let cleanupsHaveRun = false;
@@ -451,6 +455,7 @@ class ProtobufServer<
           cleanup();
         }
       },
+      backpressure: sessionBackpressure,
     });
 
     const cancelStream = (error: ClientError) => {

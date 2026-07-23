@@ -392,4 +392,105 @@ describe('Writable unit', () => {
     writable.close();
     expect(() => writable.write(1)).toThrowError(Error);
   });
+
+  describe('backpressure', () => {
+    it('write should return true without a backpressure source', () => {
+      const writable = new WritableImpl<number>({
+        writeCb: () => undefined,
+        closeCb: () => undefined,
+      });
+
+      expect(writable.write(1)).toBe(true);
+    });
+
+    it('write should return false when the send buffer is full but still write', () => {
+      const writeCb = vi.fn();
+      const writable = new WritableImpl<number>({
+        writeCb,
+        closeCb: () => undefined,
+        backpressure: {
+          isSendBufferFull: () => true,
+          waitForSendBufferDrain: () => Promise.resolve(),
+        },
+      });
+
+      expect(writable.write(1)).toBe(false);
+      expect(writeCb).toHaveBeenCalledWith(1);
+    });
+
+    it('waitForWriteReady should resolve immediately when not backpressured', async () => {
+      const waitForSendBufferDrain = vi.fn(() => Promise.resolve());
+      const writable = new WritableImpl<number>({
+        writeCb: () => undefined,
+        closeCb: () => undefined,
+        backpressure: {
+          isSendBufferFull: () => false,
+          waitForSendBufferDrain,
+        },
+      });
+
+      await expect(writable.waitForWriteReady()).resolves.toBeUndefined();
+      expect(waitForSendBufferDrain).toHaveBeenCalledOnce();
+    });
+
+    it('waitForWriteReady should stay pending until the buffer drains', async () => {
+      let drain: () => void = () => undefined;
+      const writable = new WritableImpl<number>({
+        writeCb: () => undefined,
+        closeCb: () => undefined,
+        backpressure: {
+          isSendBufferFull: () => true,
+          waitForSendBufferDrain: () =>
+            new Promise<void>((resolve) => {
+              drain = resolve;
+            }),
+        },
+      });
+
+      let resolved = false;
+      const ready = writable.waitForWriteReady().then(() => {
+        resolved = true;
+      });
+
+      await Promise.resolve();
+      expect(resolved).toBe(false);
+
+      drain();
+      await ready;
+      expect(resolved).toBe(true);
+    });
+
+    it('waitForWriteReady should resolve immediately on a closed writable', async () => {
+      const waitForSendBufferDrain = vi.fn(
+        () => new Promise<void>(() => undefined),
+      );
+      const writable = new WritableImpl<number>({
+        writeCb: () => undefined,
+        closeCb: () => undefined,
+        backpressure: {
+          isSendBufferFull: () => true,
+          waitForSendBufferDrain,
+        },
+      });
+
+      writable.close();
+      await expect(writable.waitForWriteReady()).resolves.toBeUndefined();
+      expect(waitForSendBufferDrain).not.toHaveBeenCalled();
+    });
+
+    it('close with a final value should write regardless of backpressure', () => {
+      const writeCb = vi.fn();
+      const writable = new WritableImpl<number>({
+        writeCb,
+        closeCb: () => undefined,
+        backpressure: {
+          isSendBufferFull: () => true,
+          waitForSendBufferDrain: () => Promise.resolve(),
+        },
+      });
+
+      writable.close(42);
+      expect(writeCb).toHaveBeenCalledWith(42);
+    });
+  });
 });

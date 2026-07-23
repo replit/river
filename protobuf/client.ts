@@ -261,6 +261,10 @@ function startMethodCall<Method extends DescMethod>(
     serverId,
     session.id,
   );
+  const sessionBackpressure = transport.getSessionBackpressure(
+    serverId,
+    session.id,
+  );
 
   const streamId = generateId();
   const { span, ctx } = createProcTelemetryInfo(
@@ -292,6 +296,7 @@ function startMethodCall<Method extends DescMethod>(
         cleanup();
       }
     },
+    backpressure: sessionBackpressure,
   });
 
   const resReadable = new ReadableImpl<

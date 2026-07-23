@@ -50,6 +50,15 @@ export interface DeleteSessionOptions {
 export type SessionBoundSendFn = (msg: PartialTransportMessage) => string;
 
 /**
+ * Advisory backpressure accessors scoped to a specific session,
+ * see {@link Transport.getSessionBackpressure}.
+ */
+export interface SessionBackpressure {
+  isSendBufferFull: () => boolean;
+  waitForSendBufferDrain: () => Promise<void>;
+}
+
+/**
  * Transports manage the lifecycle (creation/deletion) of sessions
  *
  * ```plaintext
@@ -383,6 +392,33 @@ export abstract class Transport<ConnType extends Connection> {
       }
 
       return res.value;
+    };
+  }
+
+  /**
+   * Gets advisory backpressure accessors scoped to a specific session, for
+   * use by {@link Writable}s writing to that session. Unlike
+   * {@link getSessionBoundSendFn}, these never throw once the session scope
+   * has ended — they report "not full" / resolve immediately instead, since
+   * the writable is torn down separately via session status events.
+   */
+  getSessionBackpressure(
+    to: TransportClientId,
+    sessionId: SessionId,
+  ): SessionBackpressure {
+    const currentSession = () => {
+      const session = this.sessions.get(to);
+      if (!session || session.id !== sessionId || session._isConsumed) {
+        return undefined;
+      }
+
+      return session;
+    };
+
+    return {
+      isSendBufferFull: () => currentSession()?.isSendBufferFull() ?? false,
+      waitForSendBufferDrain: () =>
+        currentSession()?.waitForSendBufferDrain() ?? Promise.resolve(),
     };
   }
 }

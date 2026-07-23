@@ -137,6 +137,13 @@ export interface SessionOptions {
    */
   enableTransparentSessionReconnects: boolean;
   /**
+   * Number of messages in the session's send buffer at or above which
+   * {@link Writable.write} reports backpressure (returns false). This is
+   * purely advisory: writes are never dropped or blocked regardless of
+   * this value.
+   */
+  sendBufferHighWaterMark: number;
+  /**
    * The codec to use for encoding/decoding messages over the wire
    */
   codec: Codec;
@@ -179,6 +186,7 @@ export type InheritedProperties = Pick<
   | 'ack'
   | 'seqSent'
   | 'sendBuffer'
+  | 'sendBufferDrainListeners'
   | 'telemetry'
   | 'options'
 >;
@@ -200,6 +208,7 @@ export interface IdentifiedSessionProps extends CommonSessionProps {
   ack: number;
   seqSent: number;
   sendBuffer: Array<EncodedTransportMessage>;
+  sendBufferDrainListeners: Set<() => void>;
   telemetry: TelemetryInfo;
   protocolVersion: ProtocolVersion;
   listeners: IdentifiedSessionListeners;
@@ -228,6 +237,12 @@ export abstract class IdentifiedSession extends CommonSession {
   ack: number;
   sendBuffer: Array<EncodedTransportMessage>;
 
+  /**
+   * Resolvers for pending {@link waitForSendBufferDrain} promises. Carried
+   * across session state transitions alongside {@link sendBuffer}.
+   */
+  sendBufferDrainListeners: Set<() => void>;
+
   constructor(props: IdentifiedSessionProps) {
     const {
       id,
@@ -235,6 +250,7 @@ export abstract class IdentifiedSession extends CommonSession {
       seq,
       ack,
       sendBuffer,
+      sendBufferDrainListeners,
       telemetry,
       log,
       protocolVersion,
@@ -247,6 +263,7 @@ export abstract class IdentifiedSession extends CommonSession {
     this.seq = seq;
     this.ack = ack;
     this.sendBuffer = sendBuffer;
+    this.sendBufferDrainListeners = sendBufferDrainListeners;
     this.telemetry = telemetry;
     this.log = log;
     this.protocolVersion = protocolVersion;
@@ -311,6 +328,34 @@ export abstract class IdentifiedSession extends CommonSession {
     return this.sendBuffer.length > 0 ? this.sendBuffer[0].seq : this.seq;
   }
 
+  isSendBufferFull(): boolean {
+    return this.sendBuffer.length >= this.options.sendBufferHighWaterMark;
+  }
+
+  /**
+   * Resolves once the send buffer drops back below
+   * {@link SessionOptions.sendBufferHighWaterMark}, or immediately if it
+   * already is. Also resolves (never rejects) when the session closes so
+   * waiting producers don't hang forever.
+   */
+  waitForSendBufferDrain(): Promise<void> {
+    if (!this.isSendBufferFull()) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      this.sendBufferDrainListeners.add(resolve);
+    });
+  }
+
+  protected notifySendBufferDrain(): void {
+    for (const resolve of this.sendBufferDrainListeners) {
+      resolve();
+    }
+
+    this.sendBufferDrainListeners.clear();
+  }
+
   send(msg: PartialTransportMessage): SendResult {
     const encodeResult = this.encodeMsg(msg);
     if (!encodeResult.ok) {
@@ -332,6 +377,9 @@ export abstract class IdentifiedSession extends CommonSession {
   _handleClose(): void {
     // zero out the buffer
     this.sendBuffer.length = 0;
+    // wake any producers waiting for drain so they don't hang forever,
+    // they should check isWritable/isSendBufferFull before writing again
+    this.notifySendBufferDrain();
     this.telemetry.span.end();
   }
 }

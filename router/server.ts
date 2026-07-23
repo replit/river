@@ -449,6 +449,10 @@ class RiverServer<
       from,
       sessionId,
     );
+    const sessionBackpressure = this.transport.getSessionBackpressure(
+      from,
+      sessionId,
+    );
 
     const cancelStream = (
       streamId: StreamId,
@@ -602,6 +606,7 @@ class RiverServer<
           cleanup();
         }
       },
+      backpressure: sessionBackpressure,
     });
 
     const onHandlerError = (err: unknown, span: Span) => {

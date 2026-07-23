@@ -144,13 +144,13 @@ function createSessionConnectedListeners(): SessionConnectedListeners {
   };
 }
 
-function createSessionNoConnection() {
+function createSessionNoConnection(options = testingSessionOptions) {
   const listeners = createSessionNoConnectionListeners();
   const session = SessionStateGraph.entrypoints.NoConnection(
     'to',
     'from',
     listeners,
-    testingSessionOptions,
+    options,
     currentProtocolVersion,
     getTracer(),
   );
@@ -2092,5 +2092,84 @@ describe('session state machine', () => {
       expect(sessionHandle.onInvalidMessage).toHaveBeenCalledTimes(1);
       expect(sessionHandle.onMessage).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('send buffer backpressure', () => {
+  const optionsWithSmallHwm = {
+    ...testingSessionOptions,
+    sendBufferHighWaterMark: 2,
+  };
+
+  test('isSendBufferFull and waitForSendBufferDrain reflect buffer size', async () => {
+    const { session } = createSessionNoConnection(optionsWithSmallHwm);
+    expect(session.isSendBufferFull()).toBe(false);
+    await expect(session.waitForSendBufferDrain()).resolves.toBeUndefined();
+
+    session.send(payloadToTransportMessage('hello'));
+    expect(session.isSendBufferFull()).toBe(false);
+
+    session.send(payloadToTransportMessage('world'));
+    expect(session.isSendBufferFull()).toBe(true);
+  });
+
+  test('drain waiters survive state transitions and resolve when acks trim the buffer', async () => {
+    const oldSessionHandle = createSessionNoConnection(optionsWithSmallHwm);
+    const oldSession = oldSessionHandle.session;
+    oldSession.send(payloadToTransportMessage('hello'));
+    oldSession.send(payloadToTransportMessage('world'));
+    expect(oldSession.isSendBufferFull()).toBe(true);
+
+    // multiple streams on the same session can wait concurrently
+    let drainCount = 0;
+    const waiter1 = oldSession.waitForSendBufferDrain().then(() => {
+      drainCount++;
+    });
+    const waiter2 = oldSession.waitForSendBufferDrain().then(() => {
+      drainCount++;
+    });
+
+    const pendingSessionHandle = createSessionWaitingForHandshake();
+    const session = SessionStateGraph.transition.WaitingForHandshakeToConnected(
+      pendingSessionHandle.session,
+      oldSession,
+      'clientSessionId',
+      'to',
+      undefined,
+      createSessionConnectedListeners(),
+      currentProtocolVersion,
+    );
+
+    // waiters registered before the transition are still pending after it
+    await Promise.resolve();
+    expect(drainCount).toBe(0);
+    expect(session.isSendBufferFull()).toBe(true);
+
+    // peer acks both buffered messages
+    session.conn.emitData(
+      session.options.codec.toBuffer({
+        id: 'msgid',
+        from: session.to,
+        to: session.from,
+        seq: 0,
+        ack: 2,
+        ...payloadToTransportMessage('hello'),
+      }),
+    );
+
+    await Promise.all([waiter1, waiter2]);
+    expect(drainCount).toBe(2);
+    expect(session.isSendBufferFull()).toBe(false);
+  });
+
+  test('drain waiters resolve when the session closes', async () => {
+    const { session } = createSessionNoConnection(optionsWithSmallHwm);
+    session.send(payloadToTransportMessage('hello'));
+    session.send(payloadToTransportMessage('world'));
+    expect(session.isSendBufferFull()).toBe(true);
+
+    const waiter = session.waitForSendBufferDrain();
+    session.close();
+    await expect(waiter).resolves.toBeUndefined();
   });
 });

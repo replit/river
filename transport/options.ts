@@ -13,6 +13,7 @@ export const defaultTransportOptions: TransportOptions = {
   connectionTimeoutMs: 2_000,
   handshakeTimeoutMs: 1_000,
   enableTransparentSessionReconnects: true,
+  sendBufferHighWaterMark: 1_024,
   codec: NaiveJsonCodec,
 };
 

@@ -64,6 +64,10 @@ export class SessionConnected<
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
     this.ack = seq + 1;
 
+    if (this.sendBuffer.length < this.options.sendBufferHighWaterMark) {
+      this.notifySendBufferDrain();
+    }
+
     if (this.heartbeatMissTimeout) {
       clearTimeout(this.heartbeatMissTimeout);
     }
