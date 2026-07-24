@@ -53,6 +53,7 @@ function inheritSharedSession(
     ack: session.ack,
     seqSent: session.seqSent,
     sendBuffer: session.sendBuffer,
+    sendBufferDrainWaiter: session.sendBufferDrainWaiter,
     telemetry: session.telemetry,
     options: session.options,
     log: session.log,
@@ -96,6 +97,7 @@ export const SessionStateGraph = {
         seqSent: 0,
         graceExpiryTime: Date.now() + options.sessionDisconnectGraceMs,
         sendBuffer,
+        sendBufferDrainWaiter: undefined,
         telemetry,
         options,
         protocolVersion,
@@ -267,6 +269,7 @@ export const SessionStateGraph = {
             ack: 0,
             seqSent: 0,
             sendBuffer: [],
+            sendBufferDrainWaiter: undefined,
             telemetry: createSessionTelemetryInfo(
               pendingSession.tracer,
               sessionId,

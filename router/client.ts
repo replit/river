@@ -337,6 +337,10 @@ function handleProc(
     serverId,
     session.id,
   );
+  const sessionBackpressure = transport.getSessionBackpressure(
+    serverId,
+    session.id,
+  );
 
   const procClosesWithInit = procType === 'rpc' || procType === 'subscription';
   const streamId = generateId();
@@ -369,6 +373,7 @@ function handleProc(
         cleanup();
       }
     },
+    backpressure: sessionBackpressure,
   });
 
   const resReadable = new ReadableImpl<

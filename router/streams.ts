@@ -1,4 +1,9 @@
 import { Err, ErrorPayload, Result } from './result';
+import type { SessionBackpressure } from '../transport/transport';
+import {
+  createPromiseWithResolvers,
+  PromiseWithResolvers,
+} from '../transport/promises';
 
 export const ReadableBrokenError = {
   code: 'READABLE_BROKEN',
@@ -86,8 +91,27 @@ export interface Readable<T, E extends ErrorPayload> {
 export interface Writable<T> {
   /**
    * {@link write} writes a value to the pipe. An error is thrown if writing to a closed {@link Writable}.
+   *
+   * Returns `false` if the underlying session's send buffer is at or above
+   * its high-water mark, signalling that the producer should stop writing
+   * until {@link waitForWriteReady} resolves. This is purely advisory —
+   * the value is still buffered and will be delivered, exactly like
+   * node's `stream.Writable.write`.
    */
-  write(value: T): undefined;
+  write(value: T): boolean;
+  /**
+   * {@link waitForWriteReady} resolves once the underlying session's send
+   * buffer has drained back below its high-water mark and it is productive
+   * to call {@link write} again.
+   *
+   * Resolves immediately if there is no backpressure or if this
+   * {@link Writable} is already closed. Never rejects. Note that a promise
+   * that is already pending when this {@link Writable} closes stays pending
+   * until the underlying session drains or closes (the latter is bounded by
+   * the session grace period) — producers should re-check {@link isWritable}
+   * after awaiting.
+   */
+  waitForWriteReady(): Promise<void>;
   /**
    * {@link close} signals the closure of the {@link Writeable}, informing the {@link Readable} end that
    * all data has been transmitted and we've cleanly closed.
@@ -110,35 +134,6 @@ export interface Writable<T> {
  *
  * @see {@link createPromiseWithResolvers}
  */
-interface PromiseWithResolvers<T> {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (reason: unknown) => void;
-}
-
-/**
- * @internal
- *
- * Same as https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/withResolvers
- * but we support versions where it doesn't exist
- */
-function createPromiseWithResolvers<T>(): PromiseWithResolvers<T> {
-  let resolve: (value: T) => void;
-  let reject: (reason: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-
-  return {
-    promise,
-    // @ts-expect-error promise callbacks are sync
-    resolve,
-    // @ts-expect-error promise callbacks are sync
-    reject,
-  };
-}
-
 /**
  * Internal implementation of a {@link Readable}.
  * This should generally not be constructed directly by consumers
@@ -346,6 +341,11 @@ export class ReadableImpl<T, E extends ErrorPayload> implements Readable<T, E> {
   }
 }
 
+const noBackpressure: SessionBackpressure = {
+  isSendBufferFull: () => false,
+  waitForSendBufferDrain: () => Promise.resolve(),
+};
+
 /**
  * Internal implementation of a {@link Writable}.
  * This won't be exposed as an interface to river
@@ -362,21 +362,41 @@ export class WritableImpl<T> implements Writable<T> {
    */
   private closeCb: (value?: T) => void;
   /**
+   * Advisory backpressure signal from the underlying session. Defaults to
+   * an inert implementation that never reports pressure.
+   */
+  private backpressure: SessionBackpressure;
+  /**
    * Whether {@link close} was called, and {@link Writable} is not writable anymore.
    */
   private closed = false;
 
-  constructor(callbacks: { writeCb: (value: T) => void; closeCb: () => void }) {
+  constructor(callbacks: {
+    writeCb: (value: T) => void;
+    closeCb: () => void;
+    backpressure?: SessionBackpressure;
+  }) {
     this.writeCb = callbacks.writeCb;
     this.closeCb = callbacks.closeCb;
+    this.backpressure = callbacks.backpressure ?? noBackpressure;
   }
 
-  public write(value: T): undefined {
+  public write(value: T): boolean {
     if (this.closed) {
       throw new Error('Cannot write to closed Writable');
     }
 
     this.writeCb(value);
+
+    return !this.backpressure.isSendBufferFull();
+  }
+
+  public waitForWriteReady(): Promise<void> {
+    if (this.closed) {
+      return Promise.resolve();
+    }
+
+    return this.backpressure.waitForSendBufferDrain();
   }
 
   public isWritable(): boolean {
@@ -396,6 +416,7 @@ export class WritableImpl<T> implements Writable<T> {
     this.writeCb = () => undefined;
     this.closeCb();
     this.closeCb = () => undefined;
+    this.backpressure = noBackpressure;
   }
 
   /**
