@@ -104,9 +104,12 @@ export interface Writable<T> {
    * buffer has drained back below its high-water mark and it is productive
    * to call {@link write} again.
    *
-   * Resolves immediately if there is no backpressure. Also resolves (never
-   * rejects) if this {@link Writable} or the underlying session closes —
-   * producers should re-check {@link isWritable} after awaiting.
+   * Resolves immediately if there is no backpressure or if this
+   * {@link Writable} is already closed. Never rejects. Note that a promise
+   * that is already pending when this {@link Writable} closes stays pending
+   * until the underlying session drains or closes (the latter is bounded by
+   * the session grace period) — producers should re-check {@link isWritable}
+   * after awaiting.
    */
   waitForWriteReady(): Promise<void>;
   /**

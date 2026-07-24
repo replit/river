@@ -141,7 +141,9 @@ export interface SessionOptions {
    * Number of messages in the session's send buffer at or above which
    * {@link Writable.write} reports backpressure (returns false). This is
    * purely advisory: writes are never dropped or blocked regardless of
-   * this value.
+   * this value. Must be at least 1 — with a value of 0 the buffer can
+   * never drain below the mark and waiters would only resolve on
+   * session close.
    */
   sendBufferHighWaterMark: number;
   /**
