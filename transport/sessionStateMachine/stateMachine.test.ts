@@ -2111,6 +2111,11 @@ describe('send buffer backpressure', () => {
 
     session.send(payloadToTransportMessage('world'));
     expect(session.isSendBufferFull()).toBe(true);
+
+    // all waiters of a pressure episode share a single promise
+    expect(session.waitForSendBufferDrain()).toBe(
+      session.waitForSendBufferDrain(),
+    );
   });
 
   test('drain waiters survive state transitions and resolve when acks trim the buffer', async () => {

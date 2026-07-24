@@ -1,5 +1,9 @@
 import { Err, ErrorPayload, Result } from './result';
 import type { SessionBackpressure } from '../transport/transport';
+import {
+  createPromiseWithResolvers,
+  PromiseWithResolvers,
+} from '../transport/promises';
 
 export const ReadableBrokenError = {
   code: 'READABLE_BROKEN',
@@ -127,35 +131,6 @@ export interface Writable<T> {
  *
  * @see {@link createPromiseWithResolvers}
  */
-interface PromiseWithResolvers<T> {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (reason: unknown) => void;
-}
-
-/**
- * @internal
- *
- * Same as https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/withResolvers
- * but we support versions where it doesn't exist
- */
-function createPromiseWithResolvers<T>(): PromiseWithResolvers<T> {
-  let resolve: (value: T) => void;
-  let reject: (reason: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-
-  return {
-    promise,
-    // @ts-expect-error promise callbacks are sync
-    resolve,
-    // @ts-expect-error promise callbacks are sync
-    reject,
-  };
-}
-
 /**
  * Internal implementation of a {@link Readable}.
  * This should generally not be constructed directly by consumers

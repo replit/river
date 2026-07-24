@@ -10,6 +10,7 @@ import { Codec, CodecMessageAdapter } from '../../codec';
 import { generateId } from '../id';
 import { Tracer } from '@opentelemetry/api';
 import { EncodeResult, SendResult } from '../results';
+import { createPromiseWithResolvers, PromiseWithResolvers } from '../promises';
 
 export const enum SessionState {
   NoConnection = 'NoConnection',
@@ -186,7 +187,7 @@ export type InheritedProperties = Pick<
   | 'ack'
   | 'seqSent'
   | 'sendBuffer'
-  | 'sendBufferDrainListeners'
+  | 'sendBufferDrainWaiter'
   | 'telemetry'
   | 'options'
 >;
@@ -208,7 +209,7 @@ export interface IdentifiedSessionProps extends CommonSessionProps {
   ack: number;
   seqSent: number;
   sendBuffer: Array<EncodedTransportMessage>;
-  sendBufferDrainListeners: Set<() => void>;
+  sendBufferDrainWaiter: PromiseWithResolvers<void> | undefined;
   telemetry: TelemetryInfo;
   protocolVersion: ProtocolVersion;
   listeners: IdentifiedSessionListeners;
@@ -238,10 +239,11 @@ export abstract class IdentifiedSession extends CommonSession {
   sendBuffer: Array<EncodedTransportMessage>;
 
   /**
-   * Resolvers for pending {@link waitForSendBufferDrain} promises. Carried
-   * across session state transitions alongside {@link sendBuffer}.
+   * Shared promise for pending {@link waitForSendBufferDrain} calls, created
+   * lazily on the first waiter of a pressure episode and cleared on drain.
+   * Carried across session state transitions alongside {@link sendBuffer}.
    */
-  sendBufferDrainListeners: Set<() => void>;
+  sendBufferDrainWaiter: PromiseWithResolvers<void> | undefined;
 
   constructor(props: IdentifiedSessionProps) {
     const {
@@ -250,7 +252,7 @@ export abstract class IdentifiedSession extends CommonSession {
       seq,
       ack,
       sendBuffer,
-      sendBufferDrainListeners,
+      sendBufferDrainWaiter,
       telemetry,
       log,
       protocolVersion,
@@ -263,7 +265,7 @@ export abstract class IdentifiedSession extends CommonSession {
     this.seq = seq;
     this.ack = ack;
     this.sendBuffer = sendBuffer;
-    this.sendBufferDrainListeners = sendBufferDrainListeners;
+    this.sendBufferDrainWaiter = sendBufferDrainWaiter;
     this.telemetry = telemetry;
     this.log = log;
     this.protocolVersion = protocolVersion;
@@ -343,17 +345,14 @@ export abstract class IdentifiedSession extends CommonSession {
       return Promise.resolve();
     }
 
-    return new Promise((resolve) => {
-      this.sendBufferDrainListeners.add(resolve);
-    });
+    this.sendBufferDrainWaiter ??= createPromiseWithResolvers();
+
+    return this.sendBufferDrainWaiter.promise;
   }
 
   protected notifySendBufferDrain(): void {
-    for (const resolve of this.sendBufferDrainListeners) {
-      resolve();
-    }
-
-    this.sendBufferDrainListeners.clear();
+    this.sendBufferDrainWaiter?.resolve();
+    this.sendBufferDrainWaiter = undefined;
   }
 
   send(msg: PartialTransportMessage): SendResult {
