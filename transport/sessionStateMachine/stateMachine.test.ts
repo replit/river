@@ -2046,6 +2046,52 @@ describe('session state machine', () => {
       });
     });
 
+    test('closes the connection once nothing arrives before the deadline', async () => {
+      const sessionHandle = await createSessionConnected();
+      const missDuration =
+        testingSessionOptions.heartbeatsUntilDead *
+        testingSessionOptions.heartbeatIntervalMs;
+
+      await vi.advanceTimersByTimeAsync(missDuration - 1);
+      expect(sessionHandle.onConnectionClosed).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(
+        testingSessionOptions.heartbeatIntervalMs,
+      );
+      expect(sessionHandle.onConnectionClosed).toHaveBeenCalledTimes(1);
+    });
+
+    test('inbound messages keep the connection past the deadline', async () => {
+      const sessionHandle = await createSessionConnected();
+      const session = sessionHandle.session;
+
+      // stay quiet for just under the deadline between each message, so the
+      // session only survives if every message pushes the deadline out
+      const missDuration =
+        testingSessionOptions.heartbeatsUntilDead *
+        testingSessionOptions.heartbeatIntervalMs;
+      for (let seq = 0; seq < 5; seq++) {
+        session.conn.onData(
+          session.options.codec.toBuffer({
+            id: `msgid-${seq}`,
+            to: session.from,
+            from: session.to,
+            seq,
+            ack: 0,
+            streamId: 'heartbeat',
+            controlFlags: ControlFlags.AckBit,
+            payload: {
+              type: 'ACK',
+            } satisfies Static<typeof ControlMessageAckSchema>,
+          }),
+        );
+
+        await vi.advanceTimersByTimeAsync(missDuration - 1);
+      }
+
+      expect(sessionHandle.onConnectionClosed).not.toHaveBeenCalled();
+    });
+
     test('does not dispatch acks', async () => {
       const sessionHandle = await createSessionConnected();
       const session = sessionHandle.session;
