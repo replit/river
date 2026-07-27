@@ -55,7 +55,8 @@ export class SessionConnected<
   listeners: SessionConnectedListeners;
 
   private heartbeatHandle?: ReturnType<typeof setInterval> | undefined;
-  private heartbeatMissTimeout?: ReturnType<typeof setTimeout> | undefined;
+  private heartbeatWatchdog?: ReturnType<typeof setInterval> | undefined;
+  private lastInboundAt = Date.now();
   private isActivelyHeartbeating = false;
   private rehandshakeTimer?: ReturnType<typeof setTimeout> | undefined;
   private credentialExpiry?: number | undefined;
@@ -63,16 +64,11 @@ export class SessionConnected<
   updateBookkeeping(ack: number, seq: number) {
     this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
     this.ack = seq + 1;
+    this.lastInboundAt = Date.now();
 
     if (this.sendBuffer.length < this.options.sendBufferHighWaterMark) {
       this.notifySendBufferDrain();
     }
-
-    if (this.heartbeatMissTimeout) {
-      clearTimeout(this.heartbeatMissTimeout);
-    }
-
-    this.startMissingHeartbeatTimeout();
   }
 
   private assertSendOrdering(encodedMsg: EncodedTransportMessage) {
@@ -163,10 +159,26 @@ export class SessionConnected<
     };
   }
 
-  startMissingHeartbeatTimeout() {
+  /**
+   * Arms the watchdog that closes the connection once the peer stops sending.
+   *
+   * A single interval for the lifetime of the session compares wall time against
+   * the last inbound message, so a busy session does not allocate a timer per
+   * frame. Elapsed time comes from {@link Date.now}, thus a throttled or suspended
+   * timer can only delay detection of a dead connection, never report a heartbeat
+   * as missed while messages keep arriving.
+   */
+  startHeartbeatWatchdog() {
     const maxMisses = this.options.heartbeatsUntilDead;
     const missDuration = maxMisses * this.options.heartbeatIntervalMs;
-    this.heartbeatMissTimeout = setTimeout(() => {
+    this.heartbeatWatchdog = setInterval(() => {
+      if (Date.now() - this.lastInboundAt < missDuration) {
+        return;
+      }
+
+      // the peer is gone, so nothing will refresh the deadline: stop checking
+      this.clearHeartbeatWatchdog();
+
       this.log?.info(
         `closing connection to ${this.to} due to inactivity (missed ${maxMisses} heartbeats which is ${missDuration}ms)`,
         this.loggingMetadata,
@@ -176,7 +188,14 @@ export class SessionConnected<
       );
 
       this.conn.close();
-    }, missDuration);
+    }, this.options.heartbeatIntervalMs);
+  }
+
+  private clearHeartbeatWatchdog() {
+    if (this.heartbeatWatchdog) {
+      clearInterval(this.heartbeatWatchdog);
+      this.heartbeatWatchdog = undefined;
+    }
   }
 
   startActiveHeartbeat() {
@@ -369,11 +388,7 @@ export class SessionConnected<
       this.heartbeatHandle = undefined;
     }
 
-    if (this.heartbeatMissTimeout) {
-      clearTimeout(this.heartbeatMissTimeout);
-      this.heartbeatMissTimeout = undefined;
-    }
-
+    this.clearHeartbeatWatchdog();
     this.clearRehandshakeTimer();
   }
 

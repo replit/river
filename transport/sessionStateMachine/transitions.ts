@@ -234,7 +234,7 @@ export const SessionStateGraph = {
         ...carriedState,
       });
 
-      session.startMissingHeartbeatTimeout();
+      session.startHeartbeatWatchdog();
 
       session.log?.info(
         `session ${session.id} transition from Handshaking to Connected`,
@@ -293,7 +293,7 @@ export const SessionStateGraph = {
         ...carriedState,
       });
 
-      session.startMissingHeartbeatTimeout();
+      session.startHeartbeatWatchdog();
 
       conn.telemetry = createConnectionTelemetryInfo(
         session.tracer,
