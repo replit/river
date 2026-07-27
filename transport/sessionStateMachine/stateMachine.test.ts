@@ -3,7 +3,11 @@ import {
   payloadToTransportMessage,
   testingSessionOptions,
 } from '../../testUtil';
-import { waitFor } from '../../testUtil/fixtures/cleanup';
+import {
+  advanceFakeTimersByDisconnectGrace,
+  advanceFakeTimersByHeartbeat,
+  waitFor,
+} from '../../testUtil/fixtures/cleanup';
 import {
   ControlFlags,
   ControlMessageAckSchema,
@@ -2048,16 +2052,15 @@ describe('session state machine', () => {
 
     test('closes the connection once nothing arrives before the deadline', async () => {
       const sessionHandle = await createSessionConnected();
-      const missDuration =
-        testingSessionOptions.heartbeatsUntilDead *
-        testingSessionOptions.heartbeatIntervalMs;
 
-      await vi.advanceTimersByTimeAsync(missDuration - 1);
+      // a heartbeat of silence is still well inside the deadline
+      await advanceFakeTimersByHeartbeat();
       expect(sessionHandle.onConnectionClosed).not.toHaveBeenCalled();
 
-      await vi.advanceTimersByTimeAsync(
-        testingSessionOptions.heartbeatIntervalMs,
-      );
+      await advanceFakeTimersByDisconnectGrace();
+
+      // the watchdog stops itself once it fires, so the peer is only declared
+      // dead once rather than on every subsequent check
       expect(sessionHandle.onConnectionClosed).toHaveBeenCalledTimes(1);
     });
 
@@ -2065,11 +2068,8 @@ describe('session state machine', () => {
       const sessionHandle = await createSessionConnected();
       const session = sessionHandle.session;
 
-      // stay quiet for just under the deadline between each message, so the
-      // session only survives if every message pushes the deadline out
-      const missDuration =
-        testingSessionOptions.heartbeatsUntilDead *
-        testingSessionOptions.heartbeatIntervalMs;
+      // a message every heartbeat for well past the deadline: the session only
+      // survives if each one pushes the deadline out
       for (let seq = 0; seq < 5; seq++) {
         session.conn.onData(
           session.options.codec.toBuffer({
@@ -2086,7 +2086,7 @@ describe('session state machine', () => {
           }),
         );
 
-        await vi.advanceTimersByTimeAsync(missDuration - 1);
+        await advanceFakeTimersByHeartbeat();
       }
 
       expect(sessionHandle.onConnectionClosed).not.toHaveBeenCalled();
