@@ -1,10 +1,16 @@
-import { afterAll, assert, bench, describe } from 'vitest';
+import { afterAll, assert, bench, describe, vi } from 'vitest';
 import { getClientSendFn, waitForMessage } from '../testUtil';
 import { TestServiceSchema } from '../testUtil/fixtures/services';
 import { createServer } from '../router/server';
 import { createClient } from '../router/client';
 import { transports } from '../testUtil/fixtures/transports';
 import { nanoid } from 'nanoid';
+
+// The global setup installs fake timers, which fake `performance.now` -- what
+// tinybench measures with. Under them every sample lands on either 0ms or a
+// clock tick, so the numbers describe event-loop turns rather than elapsed
+// time. Benchmarks need the real clock.
+vi.useRealTimers();
 
 let n = 0;
 const dummyPayloadSmall = () => ({

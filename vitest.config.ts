@@ -12,6 +12,11 @@ export default defineConfig({
         '**/.claude/**',
       ],
     },
+    // benchmark globbing is separate from test globbing, so it needs the same
+    // exclusions spelled out again
+    benchmark: {
+      exclude: [...configDefaults.exclude, '**/.direnv/**', '**/.claude/**'],
+    },
     sequence: {
       hooks: 'stack',
     },
