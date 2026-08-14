@@ -37,6 +37,7 @@
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.67.0",
+    "@hegeldev/hegel": "^0.4.5",
     "@opentelemetry/api": "^1.7.0",
     "@opentelemetry/context-async-hooks": "^1.26.0",
     "@opentelemetry/core": "^1.7.0",
@@ -73,7 +74,7 @@
     "bench": "vitest bench"
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=20.11.0"
   },
   "keywords": [
     "rpc",

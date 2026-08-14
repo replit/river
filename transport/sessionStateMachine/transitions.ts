@@ -42,6 +42,12 @@ import { EncodedTransportMessage, ProtocolVersion } from '../message';
 import { Tracer } from '@opentelemetry/api';
 import { CodecMessageAdapter } from '../../codec';
 
+/**
+ * Only the server compiles its inbound validator: compiling generates code at
+ * runtime, which a strict CSP blocks, and the client may be a browser.
+ */
+const serverValidation = { precompileValidator: true };
+
 function inheritSharedSession(
   session: IdentifiedSession,
 ): Omit<IdentifiedSessionProps, 'listeners'> {
@@ -128,7 +134,7 @@ export const SessionStateGraph = {
         options,
         tracer,
         log,
-        codec: new CodecMessageAdapter(options.codec),
+        codec: new CodecMessageAdapter(options.codec, serverValidation),
       });
 
       session.log?.info(`session created in WaitingForHandshake state`, {
@@ -281,7 +287,7 @@ export const SessionStateGraph = {
             tracer: pendingSession.tracer,
             log: pendingSession.log,
             protocolVersion,
-            codec: new CodecMessageAdapter(options.codec),
+            codec: new CodecMessageAdapter(options.codec, serverValidation),
           } satisfies Omit<IdentifiedSessionProps, 'listeners'>);
 
       pendingSession._handleStateExit();

@@ -1,7 +1,8 @@
 import { Type, type TSchema, type Static } from 'typebox';
 import { PropagationContext } from '../tracing';
 import { generateId } from './id';
-import { ErrResult } from '../router';
+// type-only: a value import closes a transport <-> router require cycle
+import type { ErrResult } from '../router';
 import type { ErrorPayload } from '../router/result';
 
 /**

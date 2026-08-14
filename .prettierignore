@@ -1,4 +1,5 @@
 .cache
 node_modules
+.claude
 protobuf/gen
 testUtil/fixtures/gen

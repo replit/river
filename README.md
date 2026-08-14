@@ -453,6 +453,8 @@ for await (const msg of resReadable) {
 River supports client-side cancellation using AbortController. All procedure calls accept an optional `signal` parameter:
 
 ```ts
+import { CANCEL_CODE } from '@replit/river';
+
 const controller = new AbortController();
 const rpcResult = client.example.longRunning.rpc(
   { data: 'hello world' },
@@ -464,7 +466,7 @@ controller.abort();
 
 // all cancelled operations will receive an error with CANCEL_CODE
 const result = await rpcResult;
-if (!result.ok && result.payload.code === 'CANCEL_CODE') {
+if (!result.ok && result.payload.code === CANCEL_CODE) {
   console.log('Operation was cancelled');
 }
 ```
@@ -474,7 +476,7 @@ When a client cancels an operation, the server handler receives the cancellation
 ```ts
 const ExampleService = ServiceSchema.define({
   longRunning: Procedure.rpc({
-    requestInit: Type.Object({}),
+    requestInit: Type.Object({ data: Type.String() }),
     responseData: Type.Object({ result: Type.String() }),
     async handler({ ctx }) {
       ctx.signal.addEventListener('abort', () => {
@@ -510,6 +512,112 @@ const ExampleService = ServiceSchema.define({
 ```
 
 Worth noting that the `ctx.signal` is triggered regardless of the reason the procedure has ended.
+
+#### Cleaning up after a procedure
+
+`ctx.signal` fires synchronously and does not await its listeners, so several async
+listeners will interleave rather than each running to completion. When cleanup is
+async, use `ctx.deferCleanup` instead:
+
+```ts
+async handler({ ctx }) {
+  const conn = await pool.acquire();
+  ctx.deferCleanup(async () => {
+    await conn.release();
+  });
+
+  // ...
+}
+```
+
+Deferred cleanups run after the handler finishes — whether it returned, threw, or
+was cancelled — in reverse registration order, and each one is awaited before the
+next begins. If one throws, the error is recorded on the cleanup span and the rest
+still run.
+
+#### Backpressure
+
+`write` returns `false` when the underlying session's send buffer is at or above
+its high-water mark (`sendBufferHighWaterMark`, a transport option). This is
+advisory, exactly like node's `stream.Writable.write`: the value is still buffered
+and still delivered. Ignoring it is safe, it just means you may buffer without
+bound if you produce faster than the transport drains.
+
+To apply backpressure, await `waitForWriteReady()`:
+
+```ts
+for (const chunk of chunks) {
+  if (!reqWritable.write(chunk)) {
+    await reqWritable.waitForWriteReady();
+  }
+}
+```
+
+`waitForWriteReady()` resolves once the buffer drains below the high-water mark,
+and immediately if there is no backpressure or the writable is already closed. It
+never rejects. A promise that was already pending when the writable closes stays
+pending until the session drains or closes, so re-check `isWritable()` after
+awaiting if you need to know whether writing is still possible.
+
+#### Middleware
+
+Middleware runs before procedure handlers and can inspect (but not modify) incoming
+requests — useful for logging, metrics, and tracing:
+
+```ts
+import type { Middleware } from '@replit/river';
+
+const logRequests: Middleware = ({ ctx, reqInit, next }) => {
+  console.log(`${ctx.serviceName}.${ctx.procedureName}`, {
+    from: ctx.from,
+    sessionId: ctx.sessionId,
+    reqInit,
+  });
+
+  next();
+};
+
+const server = createServer(transport, services, {
+  middlewares: [logRequests],
+});
+```
+
+Each middleware must call `next()` to continue the chain. `ctx` is the same
+handler context minus `cancel`, plus `streamId`, `serviceName`, and `procedureName`.
+
+#### Splitting a service across files
+
+`ServiceSchema.scaffold` separates a service's configuration from its procedures,
+which helps when a service is too large for one file:
+
+```ts
+// scaffold.ts
+export const CounterScaffold = ServiceSchema.scaffold({
+  initializeState: () => ({ count: 0 }),
+});
+
+// increment.ts
+export const incrementProcedures = CounterScaffold.procedures({
+  increment: Procedure.rpc({
+    requestInit: Type.Object({ amount: Type.Number() }),
+    responseData: Type.Object({ current: Type.Number() }),
+    async handler({ ctx, reqInit }) {
+      ctx.state.count += reqInit.amount;
+
+      return Ok({ current: ctx.state.count });
+    },
+  }),
+});
+
+// service.ts
+export const CounterService = CounterScaffold.finalize({
+  ...incrementProcedures,
+  // you can also define procedures directly here
+});
+```
+
+It also works as a builder if you just prefer that shape:
+`ServiceSchema.scaffold({ ... }).finalize({ ... })`.
 
 #### Codecs
 
@@ -634,7 +742,7 @@ const client = createClient<ServiceSurface>(clientTransport, 'SERVER');
 River provides utilities for testing your services:
 
 ```ts
-import { createMockTransportNetwork } from '@replit/river/testUtil';
+import { createMockTransportNetwork } from '@replit/river/test-util';
 
 describe('My Service', () => {
   // create mock transport network
@@ -642,7 +750,7 @@ describe('My Service', () => {
     createMockTransportNetwork();
   afterEach(cleanup);
 
-  test('should add numbers correctly', async () => {
+  test('should divide numbers correctly', async () => {
     // setup server
     const serverTransport = getServerTransport('SERVER');
     const services = {
@@ -655,7 +763,7 @@ describe('My Service', () => {
     const client = createClient<typeof services>(clientTransport, 'SERVER');
 
     // test the service
-    const result = await client.math.add.rpc({ a: 1, b: 2 });
+    const result = await client.math.divide.rpc({ a: 6, b: 2 });
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.payload.result).toBe(3);
@@ -679,7 +787,7 @@ const ServiceSchema = createServiceSchema<ContextType, ParsedMetadata>();
 const services = { ... }; // use custom ServiceSchema builder here
 
 const handshakeSchema = Type.Object({ token: Type.String() });
-createClient<typeof services>(new MockClientTransport('client'), 'SERVER', {
+createClient<typeof services>(clientTransport, 'SERVER', {
   eagerlyConnect: false,
   handshakeOptions: createClientHandshakeOptions(handshakeSchema, async () => ({
     // the type of this function is
@@ -688,26 +796,40 @@ createClient<typeof services>(new MockClientTransport('client'), 'SERVER', {
   })),
 });
 
-createServer(new MockServerTransport('SERVER'), services, {
+createServer(serverTransport, services, {
   handshakeOptions: createServerHandshakeOptions(
     handshakeSchema,
-    (metadata, previousMetadata) => {
+    (metadata, previousMetadata, from) => {
       // the type of this function is
-      // (metadata: Static<typeof<handshakeSchema>, previousMetadata?: ParsedMetadata) =>
-      //   | false | Promise<false> (if you reject it)
-      //   | ParsedMetadata | Promise<ParsedMetadata> (if you allow it)
+      // (
+      //   metadata: Static<typeof handshakeSchema>,
+      //   previousMetadata?: ParsedMetadata,
+      //   from?: TransportClientId,
+      // ) =>
+      //   | 'REJECTED_BY_CUSTOM_HANDLER' | 'REJECTED_UNSUPPORTED_CLIENT' (if you reject it)
+      //   | ParsedMetadata (if you allow it)
+      //   | a Promise of either
+      //
       // next time a connection happens on the same session, previousMetadata will
-      // be populated with the last returned value
+      // be populated with the last returned value. `from` is the client id the peer
+      // presented in its handshake — check it against what the metadata authorizes
+      // before returning parsed metadata.
       return { parsedToken: metadata.token };
     },
   ),
 });
 ```
 
+`createClientHandshakeOptions` also takes an optional third `eager` argument. When set, the
+client constructs handshake metadata as soon as it starts dialing, so a slow `construct`
+(e.g. fetching a fresh token) overlaps establishing the connection instead of running after
+it. The trade-off is that `construct` then runs on every connection attempt, including ones
+that never connect, so leave it unset when constructing is expensive or rate-limited.
+
 You can then access the `ParsedMetadata` in your procedure handlers:
 
 ```ts
-async handler(ctx, ...args) {
+async handler({ ctx }) {
   // this contains the parsed metadata
   console.log(ctx.metadata)
 }
@@ -769,7 +891,6 @@ import {
   createServer,
   createClient,
   Ok,
-  ProtoCodec,
 } from '@replit/river/protobuf';
 import { Greeter } from './gen/greeter_pb';
 
@@ -788,7 +909,17 @@ const client = createClient(Greeter, clientTransport, serverId);
 const result = await client.sayHello({ name: 'World' });
 ```
 
-The protobuf router uses `ProtoCodec` for wire encoding (protobuf envelopes with msgpack fallback for control payloads) and supports the same features as the TypeBox router: context, disposable state, middleware, handshakes, and OpenTelemetry tracing.
+The protobuf router supports the same features as the TypeBox router: context, disposable state, middleware, handshakes, and OpenTelemetry tracing. It runs over any codec, but `@replit/river/protobuf` also ships `ProtoCodec`, which encodes transport messages as protobuf envelopes (falling back to msgpack for error results and control payloads). Opt into it on the transport like any other codec:
+
+```ts
+import { ProtoCodec } from '@replit/river/protobuf';
+
+const transport = new WebSocketClientTransport(
+  async () => new WebSocket('ws://localhost:3000'),
+  'my-client-id',
+  { codec: ProtoCodec },
+);
+```
 
 > **Note:** The protobuf router is experimental and its API may change.
 
@@ -796,15 +927,15 @@ The protobuf router uses `ProtoCodec` for wire encoding (protobuf envelopes with
 
 We've also provided an end-to-end testing environment using `Next.js`, and a simple backend connected with the WebSocket transport that you can [play with on Replit](https://replit.com/@jzhao-replit/riverbed).
 
-You can find more service examples in the [E2E test fixtures](https://github.com/replit/river/blob/main/__tests__/fixtures/services.ts)
+You can find more service examples in the [E2E test fixtures](https://github.com/replit/river/blob/main/testUtil/fixtures/services.ts)
 
 ## Developing
 
 [![Run on Repl.it](https://replit.com/badge/github/replit/river)](https://replit.com/new/github/replit/river)
 
 - `npm i` -- install dependencies
-- `npm run check` -- lint
-- `npm run format` -- format
+- `npm run check` -- typecheck, then check formatting and lint (this is what CI runs)
+- `npm run fix` -- auto-fix formatting and lint errors
 - `npm run test` -- run tests
 - `npm run build` -- build the package
 
