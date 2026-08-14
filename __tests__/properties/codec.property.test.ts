@@ -20,7 +20,10 @@ const codecs: Array<{ name: string; codec: Codec }> = [
 
 // Every constraint on the generators below is a real limitation, each pinned by
 // a test in 'documented codec limitations'. Widening them should fail.
-const UNROUNDTRIPPABLE_KEYS = ['$t', '$b', '__proto__'];
+//
+// `$t`/`$b` used to live here too -- NaiveJsonCodec's markers collided with
+// application data -- until the codec started escaping them.
+const UNROUNDTRIPPABLE_KEYS = ['__proto__'];
 const MAX_UINT32 = 0xffffffff;
 
 const identifiers = gs.text({ codec: 'utf-8', minSize: 1, maxSize: 24 });
@@ -261,45 +264,76 @@ describe('A8: seq and ack outside the wire format range', () => {
 });
 
 /**
+ * A1 covers marker escaping across generated payloads. These are the specific
+ * cases that used to be broken, plus the compatibility edges that a property
+ * over well-formed messages can't reach.
+ */
+describe('NaiveJsonCodec marker escaping', () => {
+  test('a payload key of `$t` survives instead of decoding as binary', () => {
+    const msg = { payload: { $t: 'aGVsbG8=' } };
+
+    expect(
+      NaiveJsonCodec.fromBuffer(NaiveJsonCodec.toBuffer(msg)),
+    ).toStrictEqual(msg);
+  });
+
+  test('a payload key of `$b` survives instead of throwing', () => {
+    const msg = { payload: { $b: 'not-a-number' } };
+
+    expect(
+      NaiveJsonCodec.fromBuffer(NaiveJsonCodec.toBuffer(msg)),
+    ).toStrictEqual(msg);
+  });
+
+  test('escaping is stable under nesting', () => {
+    // a key that is already escape-shaped must not collide with the escaping
+    const msg = {
+      payload: { $$t: 1, $$$b: 2, $t: { $b: 'x' }, plain: '$t' },
+    };
+
+    expect(
+      NaiveJsonCodec.fromBuffer(NaiveJsonCodec.toBuffer(msg)),
+    ).toStrictEqual(msg);
+  });
+
+  test('real binary and bigint values still round-trip', () => {
+    const msg = {
+      payload: { bin: Uint8Array.from([0, 42, 255]), big: 2n ** 70n },
+    };
+
+    expect(
+      NaiveJsonCodec.fromBuffer(NaiveJsonCodec.toBuffer(msg)),
+    ).toStrictEqual(msg);
+  });
+
+  test('a marker written by an older peer still decodes as binary', () => {
+    // an unescaped `{ $t: <base64> }` on the wire is what pre-escaping river
+    // emitted for a Uint8Array, so it has to keep decoding that way
+    const legacy = new TextEncoder().encode(
+      JSON.stringify({ payload: { $t: 'aGVsbG8=' } }),
+    );
+
+    const decoded = NaiveJsonCodec.fromBuffer(legacy) as { payload: unknown };
+
+    expect(decoded.payload).toBeInstanceOf(Uint8Array);
+  });
+});
+
+/**
  * Bugs, not endorsements. Pinned so that changing any of them is a visible,
  * intentional act, and so the generators above have something to point at.
  */
 describe('documented codec limitations', () => {
-  test('NaiveJsonCodec reinterprets a payload key of `$t` as binary', () => {
-    // `$t` is its escape marker for Uint8Array
-    const msg = { payload: { $t: 'aGVsbG8=' } };
-
-    const decoded = NaiveJsonCodec.fromBuffer(NaiveJsonCodec.toBuffer(msg)) as {
-      payload: unknown;
-    };
-
-    expect(decoded.payload).toBeInstanceOf(Uint8Array);
-    expect(decoded.payload).not.toStrictEqual(msg.payload);
-
-    // BinaryCodec has no such escape hatch and round-trips it faithfully
-    expect(BinaryCodec.fromBuffer(BinaryCodec.toBuffer(msg))).toStrictEqual(
-      msg,
-    );
-  });
-
-  test('NaiveJsonCodec throws when a payload key of `$b` is not a number', () => {
-    // `$b` is its escape marker for bigint, and the reviver calls BigInt()
-    // unconditionally
-    const msg = { payload: { $b: 'not-a-number' } };
-    const encoded = NaiveJsonCodec.toBuffer(msg);
-
-    expect(() => NaiveJsonCodec.fromBuffer(encoded)).toThrow(
-      /Cannot convert not-a-number to a BigInt/,
-    );
-
-    expect(BinaryCodec.fromBuffer(BinaryCodec.toBuffer(msg))).toStrictEqual(
-      msg,
-    );
-  });
-
   test('msgpack-based codecs encode a `__proto__` payload key but cannot decode it', () => {
     // msgpack guards prototype pollution on decode but not encode, so these
-    // produce bytes they then reject -- on the wire, a torn-down connection
+    // produce bytes they then reject -- on the wire, a torn-down connection.
+    //
+    // Left unfixed deliberately. NaiveJsonCodec could escape its markers for
+    // ~1.6% because JSON.stringify's replacer already visits every property;
+    // msgpack exposes no equivalent hook and its `__proto__` check runs before
+    // `mapKeyConverter`, so the only fix is a second full traversal of every
+    // payload on encode -- in the codec chosen for throughput, to defend a key
+    // that does not appear in real payloads.
     const msg = messageWithPayload(Object.fromEntries([['__proto__', 'x']]));
 
     for (const codec of [BinaryCodec, ProtoCodec]) {

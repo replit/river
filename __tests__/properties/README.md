@@ -37,23 +37,32 @@ bytes. Everything above it assumes that.
 | A7  | `fromBuffer` on arbitrary bytes either throws or returns an object — it never returns a non-object and never hangs.                       |
 | A8  | `seq`/`ack` outside the wire format's range are either carried exactly or refused at encode time — never silently truncated.              |
 
-Writing A1 surfaced three inputs that are _not_ round-trippable today. The
-generators above are scoped around them, and each is pinned by an explicit test
-in `documented codec limitations` so that changing the behavior is a visible,
-intentional act rather than a silent one:
+Writing A1 surfaced three inputs that were not round-trippable. Two are now
+fixed in `NaiveJsonCodec`, which is the default codec:
 
-- **`NaiveJsonCodec` (the default codec) reinterprets a payload key of `$t`.**
-  `$t` is its escape marker for `Uint8Array`, so an application payload that
-  happens to use that key silently decodes as binary — data corruption, no error.
-- **`NaiveJsonCodec` throws on a payload key of `$b` whose value is not numeric.**
-  `$b` is its escape marker for `bigint` and the reviver calls `BigInt()`
-  unconditionally, so `{ $b: 'x' }` makes `fromBuffer` throw. A decode failure is
-  treated as an invalid message, which tears the connection down.
+- **A payload key of `$t` used to decode as binary.** `$t` is the codec's escape
+  marker for `Uint8Array`, so an application payload using that key was silently
+  decoded as binary — corruption with no error.
+- **A payload key of `$b` with a non-numeric value used to throw.** `$b` is the
+  marker for `bigint` and the reviver called `BigInt()` unconditionally, so
+  `{ $b: 'x' }` made `fromBuffer` throw. A decode failure is treated as an
+  invalid message, which tears the connection down — reachable from ordinary
+  application data.
+
+Both are fixed by escaping: any key that could be mistaken for a marker gains an
+extra `$` on the way out and loses it on the way back in. `NaiveJsonCodec marker
+escaping` covers the specific cases and the older-peer compatibility edge.
+
+The third is still open, and the generators are scoped around it:
+
 - **`BinaryCodec` and `ProtoCodec` encode a `__proto__` payload key but cannot
-  decode it.** msgpack guards against prototype pollution on the way in but not
-  on the way out, so these codecs can produce bytes they will then reject.
-  `NaiveJsonCodec` round-trips it fine, so whether a given payload is deliverable
-  depends on which codec the transport was configured with.
+  decode it.** msgpack guards prototype pollution on the way in but not on the
+  way out, so these codecs produce bytes they will then reject. `NaiveJsonCodec`
+  round-trips it fine, so whether a payload is deliverable depends on which codec
+  the transport was configured with. Escaping was cheap for `NaiveJsonCodec`
+  (~1.6%, since `JSON.stringify`'s replacer already visits every property);
+  msgpack exposes no equivalent hook, so the same fix there means a second full
+  traversal of every payload on encode.
 
 A8 checks the boundary where `TransportMessageSchema` (an unbounded
 `Type.Integer()`) and ProtoCodec's envelope (`uint32`) disagree about what is
