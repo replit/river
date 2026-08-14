@@ -10,7 +10,9 @@ import {
 } from '@opentelemetry/api';
 import { RIVER_VERSION, ValidProcType } from '../router';
 import { ErrorPayload } from '../router/result';
-import { Connection } from '../transport';
+// deep + type-only: transport.ts imports getTracer from here, so importing the
+// transport barrel as a value would cycle
+import type { Connection } from '../transport/connection';
 import { MessageMetadata } from '../logging';
 import { ClientSession } from '../transport/sessionStateMachine/transitions';
 import { IdentifiedSession } from '../transport/sessionStateMachine/common';

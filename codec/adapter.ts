@@ -1,8 +1,10 @@
 import { Value } from 'typebox/value';
+// deep import: the transport barrel pulls in the client and server transports,
+// which are themselves built on a codec
 import {
-  OpaqueTransportMessage,
+  type OpaqueTransportMessage,
   OpaqueTransportMessageSchema,
-} from '../transport';
+} from '../transport/message';
 import { Codec } from './types';
 import { DeserializeResult, SerializeResult } from '../transport/results';
 import { coerceErrorString } from '../transport/stringifyError';
