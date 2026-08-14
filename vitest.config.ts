@@ -3,9 +3,14 @@ import { configDefaults, coverageConfigDefaults } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    exclude: [...configDefaults.exclude, '**/.direnv/**'],
+    // .claude holds scratch git worktrees: stale checkouts of this same repo
+    exclude: [...configDefaults.exclude, '**/.direnv/**', '**/.claude/**'],
     coverage: {
-      exclude: [...coverageConfigDefaults.exclude, '**/.direnv/**'],
+      exclude: [
+        ...coverageConfigDefaults.exclude,
+        '**/.direnv/**',
+        '**/.claude/**',
+      ],
     },
     sequence: {
       hooks: 'stack',
