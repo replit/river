@@ -293,8 +293,8 @@ export function serializeSchema(
  *   add: Procedure.rpc({
  *     requestInit: Type.Object({ a: Type.Number(), b: Type.Number() }),
  *     responseData: Type.Object({ result: Type.Number() }),
- *     async handler(ctx, init) {
- *       return Ok({ result: init.a + init.b });
+ *     async handler({ ctx, reqInit }) {
+ *       return Ok({ result: reqInit.a + reqInit.b });
  *     }
  *   }),
  *   getUserId: Procedure.rpc({
@@ -367,8 +367,8 @@ export function createServiceSchema<
      *   increment: Procedure.rpc({
      *     requestInit: Type.Object({ amount: Type.Number() }),
      *     responseData: Type.Object({ current: Type.Number() }),
-     *     async handler(ctx, init) {
-     *       ctx.state.count += init.amount;
+     *     async handler({ ctx, reqInit }) {
+     *       ctx.state.count += reqInit.amount;
      *       return Ok({ current: ctx.state.count });
      *     }
      *   }),
@@ -394,8 +394,8 @@ export function createServiceSchema<
      *     increment: Procedure.rpc({
      *       requestInit: Type.Object({ amount: Type.Number() }),
      *       responseData: Type.Object({ current: Type.Number() }),
-     *       async handler(ctx, init) {
-     *         ctx.state.count += init.amount;
+     *       async handler({ ctx, reqInit }) {
+     *         ctx.state.count += reqInit.amount;
      *         return Ok({ current: ctx.state.count });
      *       }
      *     }),
@@ -429,8 +429,8 @@ export function createServiceSchema<
      *     increment: Procedure.rpc({
      *       requestInit: Type.Object({ amount: Type.Number() }),
      *       responseData: Type.Object({ current: Type.Number() }),
-     *       async handler(ctx, init) {
-     *         ctx.state.count += init.amount;
+     *       async handler({ ctx, reqInit }) {
+     *         ctx.state.count += reqInit.amount;
      *         return Ok({ current: ctx.state.count });
      *       }
      *     }),
@@ -464,8 +464,8 @@ export function createServiceSchema<
      *   add: Procedure.rpc({
      *     requestInit: Type.Object({ a: Type.Number(), b: Type.Number() }),
      *     responseData: Type.Object({ result: Type.Number() }),
-     *     async handler(ctx, init) {
-     *       return Ok({ result: init.a + init.b });
+     *     async handler({ ctx, reqInit }) {
+     *       return Ok({ result: reqInit.a + reqInit.b });
      *     }
      *   }),
      * });

@@ -20,7 +20,7 @@ The River protocol enables communication between clients and servers via remote 
 ┌────────────┐                                            ┌────────────┐
 │ Client     │                                            │     Server │
 ├────────────┤        emitted events                      ├────────────┤
-│ Transport  │ ─────► (message, connectionStatus, etc.)   │  Transport │
+│ Transport  │ ─────► (message, sessionStatus, etc.)      │  Transport │
 └────────────┘                                            └────────────┘
       ▼ 1:n    (transport can have multiple sessions)           ▼ 1:n
 ┌────────────┐                                            ┌────────────┐
@@ -45,7 +45,7 @@ The design of the protocol emphasizes three things in descending priority:
 The protocol specification defines semantics around:
 
 - How clients connect to servers.
-- How they negotiate a connection an start a session.
+- How they negotiate a connection and start a session.
 - How messages in a session are serialized and deserialized.
   - Dealing with message retransmission and deduplication.
 
@@ -64,7 +64,7 @@ Note that this protocol specification does NOT detail the language-level specifi
 1. `subscription`: the client sends 1 message, the server responds with m messages.
 
 A server (also called a router) is made up of multiple 'services'. Each 'service' has multiple 'procedures'.
-A procedure declares its type (`rpc | stream | upload | subscription`), an initial message (`Init`), a response message type (`Response`), an error type (`Error`), and the associated handler. `upload` and `stream` may define an request message type (`Request`), which means they accept further messages from the client.
+A procedure declares its type (`rpc | stream | upload | subscription`), an initial message (`Init`), a response message type (`Response`), an error type (`Error`), and the associated handler. `upload` and `stream` may define a request message type (`Request`), which means they accept further messages from the client.
 
 _Note: all types in this document are expressed roughly in TypeScript._
 
@@ -88,7 +88,7 @@ interface BaseError {
   // This can be any string
   message: string;
   // Any extra metadata
-  extra?: any;
+  extras?: unknown;
 }
 ```
 
@@ -100,7 +100,7 @@ type Result<SuccessPayload, ErrorPayload extends BaseError> =
   | { ok: false; payload: ErrorPayload };
 ```
 
-The messages in either direction must also contain additional information so that the receiving party knows where to route the message payload. This wrapper message is referred to as a `TransportMessage` and its payload can be a `Control`, a `Result`, an `Init`, an `Request`, or an `Response`. The schema for the transport message is as follows:
+The messages in either direction must also contain additional information so that the receiving party knows where to route the message payload. This wrapper message is referred to as a `TransportMessage` and its payload can be a `Control`, a `Result`, an `Init`, a `Request`, or a `Response`. The schema for the transport message is as follows:
 
 ```ts
 interface TransportMessage<Payload> {
@@ -126,6 +126,13 @@ interface TransportMessage<Payload> {
   // unique id for each specific instantiation of an RPC call
   // a stream of TransportMessage is grouped by streamId
   streamId: string;
+
+  // optional W3C trace context, propagated so a procedure call
+  // can be stitched into a distributed trace
+  tracing?: {
+    traceparent: string;
+    tracestate: string;
+  };
 
   // special flags
   // we will cover this later
@@ -155,25 +162,31 @@ All messages MUST have no control flags set (i.e., the `controlFlags` field is `
   - The client must set `serviceName` and `procedureName` as the correct string for the associated service and procedure.
     - All further messages MAY omit `serviceName` and `procedureName` as they are implied by the first message and are constant throughout the lifetime of a stream.
 - It is the last message of a stream, in which case the `StreamClosedBit` MUST be set.
-  - If this is sent with no payload, it is a control message the payload MUST Be a `ControlClose`.
+  - If there is no application-level payload to send with the close, it is a control message and the payload MUST be a `ControlClose`.
 - It is a message cancelling the stream, in which case the `StreamCancelBit` MUST be set.
   - This message MUST contain a `ProtocolError` payload.
 - It is an explicit heartbeat, so the `AckBit` MUST be the only bit set.
   - The payload MUST be `{ type: 'ACK' }`.
   - Because this is a control message that is not associated with a specific stream, you MUST NOT set `serviceName` or `procedureName` and `streamId` can be something arbitrary (e.g. `heartbeat`).
 
-There are 4 error payloads that are defined in the protocol sent from server to client, these codes are reserved:
+There are 4 reserved error codes. Three of them are `ProtocolError`s that travel on the wire; the fourth (`UNEXPECTED_DISCONNECT`) is never transmitted and is synthesized locally by each side when the session backing an in-flight stream dies.
 
 ```ts
 // When a client sends a malformed request. This can be
 // for a variety of reasons which would  be included
-// in the message.
+// in the message. Sent from server to client.
 interface InvalidRequestError extends BaseError {
   code: 'INVALID_REQUEST';
   message: string;
+  // present when the request failed schema validation
+  extras?: {
+    firstValidationErrors: Array<{ path: string; message: string }>;
+    totalErrors: number;
+  };
 }
 
 // This is sent when an exception happens in the handler of a stream.
+// Sent from server to client.
 interface UncaughtError extends BaseError {
   code: 'UNCAUGHT_ERROR';
   message: string;
@@ -181,17 +194,21 @@ interface UncaughtError extends BaseError {
 
 // This is sent when one side wishes to cancel the stream
 // abruptly from user-space. Handling this is up to the procedure
-// implementation or the caller.
+// implementation or the caller. Sent in either direction.
 interface CancelError extends BaseError {
   code: 'CANCEL';
   message: string;
 }
 
-// This is sent when the server encounters an internal error
-// i.e. an invariant has been violated
-interface;
-
 type ProtocolError = UncaughtError | InvalidRequestError | CancelError;
+
+// Never sent over the wire. Each side raises this locally into any stream
+// that was still in flight when its session was lost (a hard disconnect),
+// so waiting callers and handlers observe a result instead of hanging.
+interface UnexpectedDisconnectError extends BaseError {
+  code: 'UNEXPECTED_DISCONNECT';
+  message: string;
+}
 ```
 
 `ProtocolError`s, just like service-level errors, are wrapped with a `Result`, which is further wrapped with `TransportMessage` and MUST have a `StreamCancelBit` flag. Please note that these are separate from user-defined errors, which should be treated just like any response message.
@@ -212,7 +229,8 @@ interface ControlAck {
 
 interface ControlHandshakeRequest {
   type: 'HANDSHAKE_REQ';
-  protocolVersion: 'v0' | 'v1' | 'v1.1' | 'v2.0';
+  // the current implementation sends 'v2.0' and accepts 'v1.1' | 'v2.0'
+  protocolVersion: 'v1.1' | 'v2.0';
   sessionId: string;
   expectedSessionState: {
     nextExpectedSeq: number; // integer
@@ -237,7 +255,9 @@ interface ControlHandshakeResponse {
           | 'MALFORMED_HANDSHAKE_META'
           | 'MALFORMED_HANDSHAKE'
           | 'PROTOCOL_VERSION_MISMATCH'
-          | 'REJECTED_BY_CUSTOM_HANDLER';
+          // fatal, returned by the custom handshake handler
+          | 'REJECTED_BY_CUSTOM_HANDLER'
+          | 'REJECTED_UNSUPPORTED_CLIENT';
       };
 }
 
@@ -429,7 +449,7 @@ server:  -  -- - !
 
 ##### Upload
 
-An `upload` procedure starts with the client sending a single message with `StreamOpenBit` set and remains open until the client manually closes the request stream by sending `CloseControl` message. The server MUST send a final `Result` message with the `StreamClosedBit`.
+An `upload` procedure starts with the client sending a single message with `StreamOpenBit` set and remains open until the client manually closes the request stream by sending a `ControlClose` message. The server MUST send a final `Result` message with the `StreamClosedBit`.
 
 Client finalizes upload:
 
@@ -454,7 +474,7 @@ server:          !
 
 ##### Subscription
 
-A `subscription` procedure starts with the client sending a single message with the `StreamOpenBit` set and remains open until either side ends the stream by sending a `ControlClose` message. The party receiving the `ControlClose` message must respond with a final `CloseControl` message. If the client initiates the closing, it MUST continue to accept data until the other side sends a `ControlClose` message.
+A `subscription` procedure starts with the client sending a single message with the `StreamOpenBit` set and remains open until either side ends the stream by sending a `ControlClose` message. The party receiving the `ControlClose` message must respond with a final `ControlClose` message. If the client initiates the closing, it MUST continue to accept data until the other side sends a `ControlClose` message.
 
 Client initiated close:
 
@@ -485,13 +505,15 @@ The TypeScript implementation utilizes a `Codec` class to handle the encoding an
 
 The TypeScript implementation has two main codecs:
 
-1. `NaiveCodec`: a simple codec that uses JSON.stringify and JSON.parse to encode and decode messages directly to utf-8 bytes.
+1. `NaiveJsonCodec`: a simple codec that uses JSON.stringify and JSON.parse to encode and decode messages directly to utf-8 bytes.
 2. `BinaryCodec`: a more efficient codec that uses the [`msgpack`](https://msgpack.org/) format to encode and decode messages to and from raw bytes.
+
+It also ships `ProtoCodec` (from `@replit/river/protobuf`), which encodes transport messages as protobuf envelopes and falls back to msgpack for error results and control payloads.
 
 Depending on whether the underlying transport does message framing, the codec may need to handle message framing and deframing as well.
 For example, the WebSocket protocol has built-in message framing, so the codec only needs to handle encoding and decoding messages to and from raw bytes.
-On the other hand, the UDS protocol does not have built-in message framing, so the codec must handle message framing and deframing as well.
-The TypeScript implementation uses `uint32`-big-endian-length-prefixed message framing.
+On the other hand, a transport like UDS does not have built-in message framing, so the codec must handle message framing and deframing as well.
+WebSocket is the only transport shipped with the TypeScript implementation, so none of the built-in codecs do their own framing.
 
 ## Transports, sessions, and connections
 
@@ -526,7 +548,7 @@ The process differs slightly between the client and server:
     - If the server detected a session state mismatch, any previous `Session`s will be destroyed.
   - Otherwise, consider the handshake successful and proceed to the next step.
   - The client should check for an existing `Session` for the `clientId` associated with the `Connection`.
-    - If an existing `Session` is found and that `Session`, it is verified whether the last `sessionId` associated with the previous `Session` matches the `sessionId` in the handshake response.
+    - If an existing `Session` is found, it is verified whether the `sessionId` associated with the previous `Session` matches the `sessionId` in the handshake response.
       - A match in `sessionId` means a reconnection to the same session, and that the server still has the state for this session.
         - The stale `Connection` object associated with the `Session` is closed, and replaced with the new `Connection` object.
         - Any buffered messages are resent.
@@ -562,19 +584,25 @@ The process differs slightly between the client and server:
                            1. SessionNoConnection         ◄──┐
                            │  reconnect / connect attempt    │
                            ▼                                 │
-                           2. SessionConnecting              │
-                           │  connect success  ──────────────┤ connect failure
+                           2. SessionBackingOff              │
+                           │  backoff elapsed                │
                            ▼                                 │
-                           3. SessionHandshaking             │
+                           3. SessionConnecting              │
+                           │  connect success  ──────────────┤ connect failure
+                           ▼                                 │ connect timeout
+                           4. SessionHandshaking             │
                            │  handshake success       ┌──────╪─ connection drop
- 5. WaitingForHandshake    │  handshake failure  ─────┤      │
+ 6. WaitingForHandshake    │  handshake failure  ─────┤      │ handshake timeout
  │  handshake success      ▼                          │      │ connection drop
- ├───────────────────────► 4. SessionConnected        │      │ heartbeat misses
+ ├───────────────────────► 5. SessionConnected        │      │ heartbeat misses
  │                         │  invalid message  ───────╫──────┘
  │                         ▼                          │
  └───────────────────────► x. Destroy Session   ◄─────┘
    handshake failure
 ```
+
+A session in any non-destroyed state is torn down once the `sessionDisconnectGraceMs` grace
+period elapses without reconnecting.
 
 ### Handshake
 
@@ -653,7 +681,7 @@ It is important to note that this implies that there are two types of 'reconnect
 1. Transparent reconnects: the connection dropped and reconnected but the session metadata is intact so resending the buffered messages will restore order. At the application level, nothing happened.
 2. Hard reconnect: the other transport has lost all state and current transport should invalidate all state and start from scratch.
 
-The TypeScript implementation of the transport explicitly emits `connectionStatus` events for transparent reconnects and `sessionStatus` events for hard reconnects which the client and server can listen to.
+The TypeScript implementation of the transport explicitly emits `sessionTransition` events as a session moves between connection states (a transparent reconnect shows up as a sequence of these) and `sessionStatus` events for session creation and teardown, i.e. hard reconnects. Both can be listened to by the client and the server.
 
 Both clients and servers should listen for `sessionStatus` events to do some error handling:
 
@@ -673,8 +701,9 @@ The `seq` and `ack` of the message should match that of the session itself and o
 
 Clients SHOULD echo back a heartbeat in the same format as soon as it receives a server heartbeat.
 
-We track the number of heartbeats that we've sent to the other side without hearing a message. When the number of heartbeat misses exceeds some threshold `heartbeatsUntilDead` (also a parameter of the transport),
-close the connection in that session. See the 'On disconnect' section above for more details on how to handle this.
+Both sides run a liveness watchdog over the connection. Each side records when it last received _any_ message from its peer, and closes the connection once that timestamp falls further behind than `heartbeatsUntilDead * heartbeatIntervalMs` (both parameters of the transport). See the 'On disconnect' section above for more details on how to handle this.
+
+The TypeScript implementation runs this as a single interval for the lifetime of the connection that compares wall-clock time against the last inbound message, rather than arming a timer per sent heartbeat. Since it measures elapsed wall-clock time, a throttled or suspended timer can only delay detection of a dead connection — it can never report a heartbeat as missed while messages are still arriving.
 
 This explicit ack serves three purposes:
 
