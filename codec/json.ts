@@ -24,18 +24,47 @@ const DOLLAR = '$'.charCodeAt(0);
 /** What `bigint.toString()` can produce, so a marker is never a guess. */
 const BIGINT_DIGITS = /^-?\d+$/;
 
+/**
+ * `btoa`/`atob` dominate base64 conversion, and building the intermediate
+ * binary string a character at a time makes it worse -- on a 64KB payload that
+ * combination cost ~1.4ms per direction. Node's Buffer does the same work in
+ * single-digit microseconds, so use it where it exists and keep a chunked
+ * `btoa` path for browsers.
+ */
+const hasBuffer = typeof Buffer !== 'undefined';
+// how many bytes to hand String.fromCharCode at once without risking the stack
+const FROM_CHAR_CODE_CHUNK = 0x8000;
+
 // Convert Uint8Array to base64
 function uint8ArrayToBase64(uint8Array: Uint8Array) {
+  if (hasBuffer) {
+    return Buffer.from(
+      uint8Array.buffer,
+      uint8Array.byteOffset,
+      uint8Array.byteLength,
+    ).toString('base64');
+  }
+
   let binary = '';
-  uint8Array.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
+  for (let i = 0; i < uint8Array.length; i += FROM_CHAR_CODE_CHUNK) {
+    binary += String.fromCharCode(
+      ...uint8Array.subarray(i, i + FROM_CHAR_CODE_CHUNK),
+    );
+  }
 
   return btoa(binary);
 }
 
 // Convert base64 to Uint8Array
 function base64ToUint8Array(base64: string) {
+  if (hasBuffer) {
+    const buf = Buffer.from(base64, 'base64');
+
+    // a view, not a copy -- but typed as Uint8Array rather than Buffer, since
+    // callers (and deep-equality in tests) distinguish the two by prototype
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  }
+
   const binaryString = atob(base64);
   const uint8Array = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {

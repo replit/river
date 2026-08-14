@@ -1,4 +1,11 @@
-import { DecodeError, ExtensionCodec, decode, encode } from '@msgpack/msgpack';
+import {
+  DecodeError,
+  Decoder,
+  Encoder,
+  ExtensionCodec,
+  decode,
+  encode,
+} from '@msgpack/msgpack';
 import { Codec } from './types';
 
 const BIGINT_EXT_TYPE = 0;
@@ -33,16 +40,25 @@ extensionCodec.register({
  * Binary codec, uses [msgpack](https://www.npmjs.com/package/@msgpack/msgpack) under the hood
  * @type {Codec}
  */
+// msgpack's top-level encode/decode build a fresh Encoder/Decoder per call, and
+// the Encoder constructor allocates a backing ArrayBuffer every time. Reusing
+// one of each drops that per-message allocation. Both classes guard reentrancy
+// by cloning themselves, so this stays correct under nested use, and
+// Encoder.encode (unlike encodeSharedRef) returns a copy -- which the send
+// buffer needs anyway, since it holds onto the bytes for retransmission.
+const encoder = new Encoder({
+  ignoreUndefined: true,
+  initialBufferSize: 512,
+  extensionCodec,
+});
+const decoder = new Decoder({ extensionCodec });
+
 export const BinaryCodec: Codec = {
   toBuffer(obj) {
-    return encode(obj, {
-      ignoreUndefined: true,
-      initialBufferSize: 512,
-      extensionCodec,
-    });
+    return encoder.encode(obj);
   },
   fromBuffer: (buff: Uint8Array) => {
-    const res = decode(buff, { extensionCodec });
+    const res = decoder.decode(buff);
     if (typeof res !== 'object' || res === null) {
       throw new Error('unpacked msg is not an object');
     }
