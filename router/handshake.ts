@@ -40,6 +40,11 @@ export function isHandshakeRejection(
   );
 }
 
+export type HandshakeValidationResult<ParsedMetadata> =
+  | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
+  | HandshakeRejection
+  | ParsedMetadata;
+
 type ConstructHandshake<T extends TSchema> = () =>
   | Static<T>
   | Promise<Static<T>>;
@@ -49,14 +54,8 @@ type ValidateHandshake<T extends TSchema, ParsedMetadata> = (
   previousParsedMetadata?: ParsedMetadata,
   from?: TransportClientId,
 ) =>
-  | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
-  | HandshakeRejection
-  | ParsedMetadata
-  | Promise<
-      | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
-      | HandshakeRejection
-      | ParsedMetadata
-    >;
+  | HandshakeValidationResult<ParsedMetadata>
+  | Promise<HandshakeValidationResult<ParsedMetadata>>;
 
 export interface ClientHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,

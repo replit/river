@@ -377,14 +377,15 @@ export abstract class ClientTransport<
       );
 
       const reason = `handshake failed: ${msg.payload.status.reason}`;
+      const { details } = msg.payload.status;
       const to = session.to;
       this.rejectHandshakeResponse(session, reason, {
         ...session.loggingMetadata,
         transportMessage: msg,
-        ...(msg.payload.status.details && {
+        ...(details && {
           extras: {
             ...session.loggingMetadata.extras,
-            handshakeRejectionDetails: msg.payload.status.details,
+            handshakeRejectionDetails: details,
           },
         }),
       });
@@ -396,9 +397,7 @@ export abstract class ClientTransport<
           type: ProtocolError.HandshakeFailed,
           code: msg.payload.status.code,
           message: reason,
-          ...(msg.payload.status.details && {
-            details: msg.payload.status.details,
-          }),
+          ...(details && { details }),
         });
       }
 

@@ -3,26 +3,18 @@ import type {
   MessageInitShape,
   MessageShape,
 } from '@bufbuild/protobuf';
-import { type Static } from 'typebox';
 import {
   createClientHandshakeOptions as createTransportClientHandshakeOptions,
   createServerHandshakeOptions as createTransportServerHandshakeOptions,
   type ClientHandshakeOptions,
-  type HandshakeRejection,
+  type HandshakeValidationResult,
   type ServerHandshakeOptions,
 } from '../router/handshake';
-import {
-  HandshakeErrorCustomHandlerFatalResponseCodes,
-  type TransportClientId,
-} from '../transport/message';
+import { type TransportClientId } from '../transport/message';
 import { decodeMessageBytes, encodeMessageBytes } from './shared';
 import { Uint8ArrayType } from '../customSchemas';
 
 const HandshakeBytesSchema = Uint8ArrayType();
-
-type ProtobufHandshakeFailureCode = Static<
-  typeof HandshakeErrorCustomHandlerFatalResponseCodes
->;
 
 type ConstructHandshake<Schema extends DescMessage> = () =>
   | MessageInitShape<Schema>
@@ -33,10 +25,8 @@ type ValidateHandshake<Schema extends DescMessage, ParsedMetadata> = (
   previousParsedMetadata?: ParsedMetadata,
   from?: TransportClientId,
 ) =>
-  | ParsedMetadata
-  | ProtobufHandshakeFailureCode
-  | HandshakeRejection
-  | Promise<ParsedMetadata | ProtobufHandshakeFailureCode | HandshakeRejection>;
+  | HandshakeValidationResult<ParsedMetadata>
+  | Promise<HandshakeValidationResult<ParsedMetadata>>;
 
 /**
  * Create client-side handshake options backed by a protobuf message type.
@@ -75,7 +65,7 @@ export function createServerHandshakeOptions<
       try {
         decoded = decodeMessageBytes(schema, metadata);
       } catch {
-        return 'REJECTED_BY_CUSTOM_HANDLER' as ProtobufHandshakeFailureCode;
+        return 'REJECTED_BY_CUSTOM_HANDLER';
       }
 
       return await validate(decoded, previousParsedMetadata, from);

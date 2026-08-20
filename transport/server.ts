@@ -188,9 +188,9 @@ export abstract class ServerTransport<
 
     const previousParsedMetadata = this.sessionHandshakeMetadata.get(from);
 
-    let parsedMetadataOrFailureCode;
+    let validationResult;
     try {
-      parsedMetadataOrFailureCode = await handshakeExtensions.validate(
+      validationResult = await handshakeExtensions.validate(
         metadata,
         previousParsedMetadata,
         from,
@@ -208,12 +208,12 @@ export abstract class ServerTransport<
       return;
     }
 
-    if (isHandshakeRejection(parsedMetadataOrFailureCode)) {
+    if (isHandshakeRejection(validationResult)) {
       this.teardownForFailedRehandshake(
         session,
         're-handshake metadata rejected by handshake handler',
-        parsedMetadataOrFailureCode.responseCode,
-        parsedMetadataOrFailureCode.details,
+        validationResult.responseCode,
+        validationResult.details,
       );
 
       return;
@@ -222,7 +222,7 @@ export abstract class ServerTransport<
     if (
       Value.Check(
         HandshakeErrorCustomHandlerFatalResponseCodes,
-        parsedMetadataOrFailureCode,
+        validationResult,
       )
     ) {
       this.teardownForFailedRehandshake(
@@ -240,10 +240,7 @@ export abstract class ServerTransport<
       return;
     }
 
-    this.storeSessionMetadata(
-      session,
-      parsedMetadataOrFailureCode as ParsedMetadata,
-    );
+    this.storeSessionMetadata(session, validationResult as ParsedMetadata);
 
     this.log?.info(`re-handshake from ${from} ok`, {
       ...session.loggingMetadata,
@@ -385,7 +382,16 @@ export abstract class ServerTransport<
       message: reason,
     });
 
-    this.log?.warn(reason, metadata);
+    const logMetadata = details
+      ? {
+          ...metadata,
+          extras: {
+            ...metadata.extras,
+            handshakeRejectionDetails: details,
+          },
+        }
+      : metadata;
+    this.log?.warn(reason, logMetadata);
 
     const responseMsg = handshakeResponseMessage({
       from: this.clientId,
@@ -492,9 +498,9 @@ export abstract class ServerTransport<
         msg.from,
       );
 
-      let parsedMetadataOrFailureCode;
+      let validationResult;
       try {
-        parsedMetadataOrFailureCode = await this.handshakeExtensions.validate(
+        validationResult = await this.handshakeExtensions.validate(
           msg.payload.metadata,
           previousParsedMetadata,
           msg.from,
@@ -522,22 +528,18 @@ export abstract class ServerTransport<
       }
 
       // handler rejected the connection
-      if (isHandshakeRejection(parsedMetadataOrFailureCode)) {
+      if (isHandshakeRejection(validationResult)) {
         this.rejectHandshakeRequest(
           session,
           msg.from,
           'rejected by handshake handler',
-          parsedMetadataOrFailureCode.responseCode,
+          validationResult.responseCode,
           {
             ...session.loggingMetadata,
             connectedTo: msg.from,
             clientId: this.clientId,
-            extras: {
-              ...session.loggingMetadata.extras,
-              handshakeRejectionDetails: parsedMetadataOrFailureCode.details,
-            },
           },
-          parsedMetadataOrFailureCode.details,
+          validationResult.details,
         );
 
         return;
@@ -546,14 +548,14 @@ export abstract class ServerTransport<
       if (
         Value.Check(
           HandshakeErrorCustomHandlerFatalResponseCodes,
-          parsedMetadataOrFailureCode,
+          validationResult,
         )
       ) {
         this.rejectHandshakeRequest(
           session,
           msg.from,
           'rejected by handshake handler',
-          parsedMetadataOrFailureCode,
+          validationResult,
           {
             ...session.loggingMetadata,
             connectedTo: msg.from,
@@ -565,7 +567,7 @@ export abstract class ServerTransport<
       }
 
       // success!
-      parsedMetadata = parsedMetadataOrFailureCode as ParsedMetadata;
+      parsedMetadata = validationResult as ParsedMetadata;
     }
 
     // 4 connect cases
