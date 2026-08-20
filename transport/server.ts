@@ -1,10 +1,14 @@
 import { SpanStatusCode } from '@opentelemetry/api';
-import { ServerHandshakeOptions } from '../router/handshake';
+import {
+  isHandshakeRejection,
+  type ServerHandshakeOptions,
+} from '../router/handshake';
 import { validationErrorToRiverErrors } from '../router/errors';
 import {
   ControlMessageHandshakeRequestSchema,
   ControlMessageRehandshakeResponseSchema,
   HandshakeErrorCustomHandlerFatalResponseCodes,
+  HandshakeRejectionDetailsSchema,
   HandshakeErrorResponseCodes,
   OpaqueTransportMessage,
   acceptedProtocolVersions,
@@ -204,6 +208,17 @@ export abstract class ServerTransport<
       return;
     }
 
+    if (isHandshakeRejection(parsedMetadataOrFailureCode)) {
+      this.teardownForFailedRehandshake(
+        session,
+        're-handshake metadata rejected by handshake handler',
+        parsedMetadataOrFailureCode.responseCode,
+        parsedMetadataOrFailureCode.details,
+      );
+
+      return;
+    }
+
     if (
       Value.Check(
         HandshakeErrorCustomHandlerFatalResponseCodes,
@@ -246,6 +261,10 @@ export abstract class ServerTransport<
   private teardownForFailedRehandshake(
     session: ServerSession<ConnType>,
     reason: string,
+    code: Static<
+      typeof HandshakeErrorCustomHandlerFatalResponseCodes
+    > = 'REJECTED_BY_CUSTOM_HANDLER',
+    details?: Static<typeof HandshakeRejectionDetailsSchema>,
   ) {
     if (this.sessions.get(session.to) !== session) {
       return;
@@ -255,12 +274,19 @@ export abstract class ServerTransport<
     this.log?.warn(`tearing down session to ${to}: ${reason}`, {
       ...session.loggingMetadata,
       connectedTo: to,
+      ...(details && {
+        extras: {
+          ...session.loggingMetadata.extras,
+          handshakeRejectionDetails: details,
+        },
+      }),
     });
 
     this.protocolError({
       type: ProtocolError.HandshakeFailed,
-      code: 'REJECTED_BY_CUSTOM_HANDLER',
+      code,
       message: reason,
+      ...(details && { details }),
     });
     this.deleteSession(session, { unhealthy: true });
   }
@@ -352,6 +378,7 @@ export abstract class ServerTransport<
     reason: string,
     code: Static<typeof HandshakeErrorResponseCodes>,
     metadata: MessageMetadata,
+    details?: Static<typeof HandshakeRejectionDetailsSchema>,
   ) {
     session.conn.telemetry?.span.setStatus({
       code: SpanStatusCode.ERROR,
@@ -367,6 +394,7 @@ export abstract class ServerTransport<
         ok: false,
         code,
         reason,
+        ...(details && { details }),
       },
     });
 
@@ -390,6 +418,7 @@ export abstract class ServerTransport<
       type: ProtocolError.HandshakeFailed,
       code,
       message: reason,
+      ...(details && { details }),
     });
     this.deletePendingSession(session);
   }
@@ -493,6 +522,27 @@ export abstract class ServerTransport<
       }
 
       // handler rejected the connection
+      if (isHandshakeRejection(parsedMetadataOrFailureCode)) {
+        this.rejectHandshakeRequest(
+          session,
+          msg.from,
+          'rejected by handshake handler',
+          parsedMetadataOrFailureCode.responseCode,
+          {
+            ...session.loggingMetadata,
+            connectedTo: msg.from,
+            clientId: this.clientId,
+            extras: {
+              ...session.loggingMetadata.extras,
+              handshakeRejectionDetails: parsedMetadataOrFailureCode.details,
+            },
+          },
+          parsedMetadataOrFailureCode.details,
+        );
+
+        return;
+      }
+
       if (
         Value.Check(
           HandshakeErrorCustomHandlerFatalResponseCodes,

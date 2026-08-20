@@ -8,6 +8,7 @@ import {
   createClientHandshakeOptions as createTransportClientHandshakeOptions,
   createServerHandshakeOptions as createTransportServerHandshakeOptions,
   type ClientHandshakeOptions,
+  type HandshakeRejection,
   type ServerHandshakeOptions,
 } from '../router/handshake';
 import {
@@ -34,7 +35,8 @@ type ValidateHandshake<Schema extends DescMessage, ParsedMetadata> = (
 ) =>
   | ParsedMetadata
   | ProtobufHandshakeFailureCode
-  | Promise<ParsedMetadata | ProtobufHandshakeFailureCode>;
+  | HandshakeRejection
+  | Promise<ParsedMetadata | ProtobufHandshakeFailureCode | HandshakeRejection>;
 
 /**
  * Create client-side handshake options backed by a protobuf message type.

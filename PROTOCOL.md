@@ -258,6 +258,13 @@ interface ControlHandshakeResponse {
           // fatal, returned by the custom handshake handler
           | 'REJECTED_BY_CUSTOM_HANDLER'
           | 'REJECTED_UNSUPPORTED_CLIENT';
+        // Application-defined rejection details. Older peers ignore this
+        // optional field.
+        details?: {
+          code: string;
+          message: string;
+          extras?: unknown;
+        };
       };
 }
 
@@ -628,6 +635,7 @@ The server will send an error response if either:
   - server is in the future (`server.seq > client.nextExpectedSeq`)
 
 When the client receives a status with `ok: false`, it should consider the handshake failed and close the connection.
+Custom handshake handlers can attach application-defined `details` to a rejection. River preserves its own `code` for protocol behavior and exposes `details` on the client's `handshake_failed` protocol error event. Applications can use `details.code` for decisions without parsing the human-readable `reason` or `message`.
 
 ### Re-handshaking (live credential refresh)
 

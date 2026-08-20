@@ -807,8 +807,9 @@ createServer(serverTransport, services, {
       //   from?: TransportClientId,
       // ) =>
       //   | 'REJECTED_BY_CUSTOM_HANDLER' | 'REJECTED_UNSUPPORTED_CLIENT' (if you reject it)
+      //   | HandshakeRejection (if you reject it with structured details)
       //   | ParsedMetadata (if you allow it)
-      //   | a Promise of either
+      //   | a Promise of any of the above
       //
       // next time a connection happens on the same session, previousMetadata will
       // be populated with the last returned value. `from` is the client id the peer
@@ -819,6 +820,27 @@ createServer(serverTransport, services, {
   ),
 });
 ```
+
+Use `rejectHandshake` when the client needs a machine-readable reason for an application-level rejection:
+
+```ts
+createServerHandshakeOptions(handshakeSchema, async (metadata) => {
+  const authenticated = await authenticate(metadata.token);
+  if (!authenticated.ok) {
+    return rejectHandshake({
+      code: 'TOKEN_EXPIRED',
+      message: 'The authentication token expired',
+      extras: { expiredAt: authenticated.expiredAt },
+    });
+  }
+
+  return { parsedToken: metadata.token };
+});
+```
+
+River sends these details on the optional `details` field of the failed handshake response and exposes them on the client's `handshake_failed` protocol error event. Existing failure codes remain available for simple handlers. Do not put secrets or raw internal errors in `message` or `extras` because River sends them to the peer.
+
+During a re-handshake, River exposes structured rejection details only on the server's `handshake_failed` event before it closes the session. The client's next fresh handshake can receive the details.
 
 `createClientHandshakeOptions` also takes an optional third `eager` argument. When set, the
 client constructs handshake metadata as soon as it starts dialing, so a slow `construct`

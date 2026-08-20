@@ -381,6 +381,12 @@ export abstract class ClientTransport<
       this.rejectHandshakeResponse(session, reason, {
         ...session.loggingMetadata,
         transportMessage: msg,
+        ...(msg.payload.status.details && {
+          extras: {
+            ...session.loggingMetadata.extras,
+            handshakeRejectionDetails: msg.payload.status.details,
+          },
+        }),
       });
 
       if (retriable) {
@@ -390,6 +396,9 @@ export abstract class ClientTransport<
           type: ProtocolError.HandshakeFailed,
           code: msg.payload.status.code,
           message: reason,
+          ...(msg.payload.status.details && {
+            details: msg.payload.status.details,
+          }),
         });
       }
 

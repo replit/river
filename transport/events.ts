@@ -1,6 +1,10 @@
 import type { Static } from 'typebox';
 import { Connection } from './connection';
-import { OpaqueTransportMessage, HandshakeErrorResponseCodes } from './message';
+import {
+  OpaqueTransportMessage,
+  HandshakeErrorResponseCodes,
+  HandshakeRejectionDetailsSchema,
+} from './message';
 import { Session, SessionState } from './sessionStateMachine';
 import { SessionId } from './sessionStateMachine/common';
 import { TransportStatus } from './transport';
@@ -38,6 +42,7 @@ export interface EventMap {
         type: (typeof ProtocolError)['HandshakeFailed'];
         code: Static<typeof HandshakeErrorResponseCodes>;
         message: string;
+        details?: Static<typeof HandshakeRejectionDetailsSchema>;
       }
     | {
         type: Omit<

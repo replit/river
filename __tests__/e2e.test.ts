@@ -42,6 +42,7 @@ import {
 import {
   createClientHandshakeOptions,
   createServerHandshakeOptions,
+  rejectHandshake,
 } from '../router/handshake';
 import { RehandshakeStreamId } from '../transport/message';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
@@ -1483,13 +1484,14 @@ describe.each(testMatrix())(
         'client',
         createClientHandshakeOptions(requestSchema, construct),
       );
-      const validate = vi.fn(
-        (
-          metadata: ParsedMetadata,
-        ): ParsedMetadata | 'REJECTED_BY_CUSTOM_HANDLER' =>
-          metadata.token === 'token-v1'
-            ? { token: metadata.token }
-            : 'REJECTED_BY_CUSTOM_HANDLER',
+      const rejectionDetails = {
+        code: 'TOKEN_EXPIRED',
+        message: 'The refreshed token expired',
+      };
+      const validate = vi.fn((metadata: ParsedMetadata) =>
+        metadata.token === 'token-v1'
+          ? { token: metadata.token }
+          : rejectHandshake(rejectionDetails),
       );
       const serverTransport = getServerTransport<
         typeof requestSchema,
@@ -1504,6 +1506,8 @@ describe.each(testMatrix())(
       addPostTestCleanup(async () => {
         await cleanupTransports([clientTransport, serverTransport]);
       });
+      const serverHandshakeFailed = vi.fn();
+      serverTransport.addEventListener('protocolError', serverHandshakeFailed);
 
       const ServiceSchema = createServiceSchema<
         MaybeDisposable,
@@ -1539,6 +1543,12 @@ describe.each(testMatrix())(
         expect(serverTransport.sessions.has('client')).toBe(false),
       );
       await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+      expect(serverHandshakeFailed).toHaveBeenCalledWith({
+        type: 'handshake_failed',
+        code: 'REJECTED_BY_CUSTOM_HANDLER',
+        message: 're-handshake metadata rejected by handshake handler',
+        details: rejectionDetails,
+      });
 
       // let the client's now-disconnected session lapse before cleanup
       await advanceFakeTimersBySessionGrace();

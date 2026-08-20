@@ -1,8 +1,44 @@
 import type { Static, TSchema } from 'typebox';
 import {
   HandshakeErrorCustomHandlerFatalResponseCodes,
+  HandshakeRejectionDetailsSchema,
   type TransportClientId,
 } from '../transport/message';
+
+const handshakeRejectionBrand: unique symbol = Symbol('handshakeRejection');
+
+export type HandshakeRejectionDetails = Static<
+  typeof HandshakeRejectionDetailsSchema
+>;
+
+export interface HandshakeRejection {
+  readonly [handshakeRejectionBrand]: true;
+  responseCode: Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>;
+  details: HandshakeRejectionDetails;
+}
+
+export function rejectHandshake(
+  details: HandshakeRejectionDetails,
+  responseCode: Static<
+    typeof HandshakeErrorCustomHandlerFatalResponseCodes
+  > = 'REJECTED_BY_CUSTOM_HANDLER',
+): HandshakeRejection {
+  return {
+    [handshakeRejectionBrand]: true,
+    responseCode,
+    details,
+  };
+}
+
+export function isHandshakeRejection(
+  value: unknown,
+): value is HandshakeRejection {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    handshakeRejectionBrand in value
+  );
+}
 
 type ConstructHandshake<T extends TSchema> = () =>
   | Static<T>
@@ -14,9 +50,11 @@ type ValidateHandshake<T extends TSchema, ParsedMetadata> = (
   from?: TransportClientId,
 ) =>
   | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
+  | HandshakeRejection
   | ParsedMetadata
   | Promise<
       | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
+      | HandshakeRejection
       | ParsedMetadata
     >;
 
@@ -57,8 +95,8 @@ export interface ServerHandshakeOptions<
 
   /**
    * Parses the metadata sent by the client during the handshake into the
-   * server-side {@link ParsedMetadata}, or returns a handshake failure code to
-   * reject the connection.
+   * server-side {@link ParsedMetadata}, or returns a handshake failure code or
+   * {@link HandshakeRejection} to reject the connection.
    *
    * @param metadata - The metadata sent by the client.
    * @param previousParsedMetadata - The parsed metadata from the previous

@@ -1,6 +1,8 @@
 import { TransportMessage } from '.';
 import {
+  ControlMessageHandshakeResponseSchema,
   ControlFlags,
+  HandshakeErrorResponseCodes,
   handshakeRequestMessage,
   handshakeResponseMessage,
   isAck,
@@ -8,6 +10,8 @@ import {
   isStreamOpen,
 } from './message';
 import { describe, test, expect } from 'vitest';
+import { Type } from 'typebox';
+import { Value } from 'typebox/value';
 
 const msg = (
   to: string,
@@ -103,6 +107,53 @@ describe('message helpers', () => {
     expect(mFail.from).toBe('a');
     expect(mFail.to).toBe('b');
     expect(mFail.payload.status.ok).toBe(false);
+  });
+
+  test('structured handshake rejections are compatible with older clients', () => {
+    const oldHandshakeResponseSchema = Type.Object({
+      type: Type.Literal('HANDSHAKE_RESP'),
+      status: Type.Union([
+        Type.Object({
+          ok: Type.Literal(true),
+          sessionId: Type.String(),
+        }),
+        Type.Object({
+          ok: Type.Literal(false),
+          reason: Type.String(),
+          code: HandshakeErrorResponseCodes,
+        }),
+      ]),
+    });
+    const payload = {
+      type: 'HANDSHAKE_RESP',
+      status: {
+        ok: false,
+        reason: 'rejected by handshake handler',
+        code: 'REJECTED_BY_CUSTOM_HANDLER',
+        details: {
+          code: 'TOKEN_EXPIRED',
+          message: 'The authentication token expired',
+        },
+      },
+    };
+
+    expect(Value.Check(oldHandshakeResponseSchema, payload)).toBe(true);
+    expect(Value.Check(ControlMessageHandshakeResponseSchema, payload)).toBe(
+      true,
+    );
+  });
+
+  test('handshake rejections without details remain valid', () => {
+    expect(
+      Value.Check(ControlMessageHandshakeResponseSchema, {
+        type: 'HANDSHAKE_RESP',
+        status: {
+          ok: false,
+          reason: 'rejected by handshake handler',
+          code: 'REJECTED_BY_CUSTOM_HANDLER',
+        },
+      }),
+    ).toBe(true);
   });
 
   test('default message has no control flags set', () => {

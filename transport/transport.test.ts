@@ -29,6 +29,7 @@ import {
   ProvidedClientTransportOptions,
   ProvidedTransportOptions,
 } from './options';
+import { rejectHandshake } from '../router/handshake';
 
 describe.each(testMatrix())(
   'transport connection behaviour tests ($transport.name transport, $codec.name codec)',
@@ -1937,6 +1938,63 @@ describe.each(testMatrix())(
           type: ProtocolError.HandshakeFailed,
           code: 'REJECTED_BY_CUSTOM_HANDLER',
           message: 'rejected by handshake handler',
+        });
+      });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
+    test('parse can reject connection with structured details', async () => {
+      const schema = Type.Object({ foo: Type.String() });
+      const details = {
+        code: 'TOKEN_EXPIRED',
+        message: 'The authentication token expired',
+        extras: { expiredAt: '2026-08-20T12:00:00Z' },
+      };
+      const serverTransport = getServerTransport('SERVER', {
+        schema,
+        validate: async () => rejectHandshake(details),
+      });
+      const clientTransport = getClientTransport('client', {
+        schema,
+        construct: async () => ({ foo: 'foo' }),
+      });
+      const clientHandshakeFailed = vi.fn();
+      clientTransport.addEventListener('protocolError', clientHandshakeFailed);
+      const serverRejectedConnection = vi.fn();
+      serverTransport.addEventListener(
+        'protocolError',
+        serverRejectedConnection,
+      );
+      clientTransport.connect(serverTransport.clientId);
+
+      addPostTestCleanup(async () => {
+        clientTransport.removeEventListener(
+          'protocolError',
+          clientHandshakeFailed,
+        );
+        serverTransport.removeEventListener(
+          'protocolError',
+          serverRejectedConnection,
+        );
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(clientHandshakeFailed).toHaveBeenCalledWith({
+          type: ProtocolError.HandshakeFailed,
+          code: 'REJECTED_BY_CUSTOM_HANDLER',
+          message: 'handshake failed: rejected by handshake handler',
+          details,
+        });
+        expect(serverRejectedConnection).toHaveBeenCalledWith({
+          type: ProtocolError.HandshakeFailed,
+          code: 'REJECTED_BY_CUSTOM_HANDLER',
+          message: 'rejected by handshake handler',
+          details,
         });
       });
 
