@@ -44,6 +44,8 @@ import {
   createServerHandshakeOptions,
 } from '../router/handshake';
 import { RehandshakeStreamId } from '../transport/message';
+import { createPromiseWithResolvers } from '../transport/promises';
+import { SessionState } from '../transport/sessionStateMachine';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 
 describe.each(testMatrix())(
@@ -1542,6 +1544,84 @@ describe.each(testMatrix())(
 
       // let the client's now-disconnected session lapse before cleanup
       await advanceFakeTimersBySessionGrace();
+    });
+
+    test('a rejected re-handshake after disconnect leaves cleanup to the replacement session', async () => {
+      const requestSchema = Type.Object({ token: Type.String() });
+
+      type ParsedMetadata = Static<typeof requestSchema>;
+
+      let token = 'token-v1';
+      const refreshValidation = createPromiseWithResolvers<
+        ParsedMetadata | 'REJECTED_BY_CUSTOM_HANDLER'
+      >();
+      const refreshValidated = vi.fn();
+      const construct = vi.fn(() => ({ token }));
+      const clientTransport = getClientTransport(
+        'client',
+        createClientHandshakeOptions(requestSchema, construct),
+      );
+      const validate = vi.fn(
+        async (
+          metadata: ParsedMetadata,
+        ): Promise<ParsedMetadata | 'REJECTED_BY_CUSTOM_HANDLER'> => {
+          if (metadata.token === 'token-v1') {
+            return { token: metadata.token };
+          }
+
+          const result = await refreshValidation.promise;
+          refreshValidated();
+
+          return result;
+        },
+      );
+      const serverTransport = getServerTransport<
+        typeof requestSchema,
+        ParsedMetadata
+      >(
+        'SERVER',
+        createServerHandshakeOptions<typeof requestSchema, ParsedMetadata>(
+          requestSchema,
+          validate,
+        ),
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      const protocolError = vi.fn();
+      serverTransport.addEventListener('protocolError', protocolError);
+      clientTransport.connect(serverTransport.clientId);
+      await waitFor(() =>
+        expect(serverTransport.sessions.get('client')?.state).toBe(
+          SessionState.Connected,
+        ),
+      );
+
+      clientTransport.reconnectOnConnectionDrop = false;
+      token = 'token-v2';
+      expect(serverTransport.requestRehandshake('client')).toBe(true);
+      await waitFor(() => expect(validate).toHaveBeenCalledTimes(2));
+
+      closeAllConnections(clientTransport);
+      await waitFor(() =>
+        expect(serverTransport.sessions.get('client')?.state).toBe(
+          SessionState.NoConnection,
+        ),
+      );
+
+      refreshValidation.resolve('REJECTED_BY_CUSTOM_HANDLER');
+      await waitFor(() => expect(refreshValidated).toHaveBeenCalledOnce());
+
+      expect(protocolError).not.toHaveBeenCalled();
+      expect(serverTransport.sessions.get('client')?.state).toBe(
+        SessionState.NoConnection,
+      );
+
+      await advanceFakeTimersBySessionGrace();
+      await waitFor(() =>
+        expect(serverTransport.sessions.has('client')).toBe(false),
+      );
     });
 
     test('an in-flight handler observes refreshed metadata mid-stream', async () => {

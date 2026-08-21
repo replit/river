@@ -238,20 +238,24 @@ export abstract class ServerTransport<
 
   /**
    * Tears down a session whose re-handshake failed (rejected, malformed, timed
-   * out, or a thrown validator). No-ops if {@link session} is no longer the live
-   * session for its peer — a transparent reconnect keeps the same id, so callers
-   * reaching here after an async gap can't accidentally close the session that
-   * replaced it.
+   * out, or a thrown validator). No-ops if {@link session} has been consumed or
+   * is no longer the live session for its peer — a transparent reconnect keeps
+   * the same id, so callers reaching here after an async gap can't accidentally
+   * close the session that replaced it.
    */
   private teardownForFailedRehandshake(
     session: ServerSession<ConnType>,
     reason: string,
   ) {
-    if (this.sessions.get(session.to) !== session) {
+    if (session._isConsumed) {
       return;
     }
 
     const to = session.to;
+    if (this.sessions.get(to) !== session) {
+      return;
+    }
+
     this.log?.warn(`tearing down session to ${to}: ${reason}`, {
       ...session.loggingMetadata,
       connectedTo: to,
