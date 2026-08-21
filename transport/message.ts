@@ -108,6 +108,13 @@ export const HandshakeErrorCustomHandlerFatalResponseCodes = Type.Union([
   Type.Literal('REJECTED_BY_CUSTOM_HANDLER'),
 ]);
 
+export const HandshakeErrorCustomHandlerResponseSchema = Type.Object({
+  ok: Type.Literal(false),
+  reason: Type.String(),
+  code: HandshakeErrorCustomHandlerFatalResponseCodes,
+  details: Type.Optional(Type.Unknown()),
+});
+
 export const HandshakeErrorFatalResponseCodes = Type.Union([
   HandshakeErrorCustomHandlerFatalResponseCodes,
   // The ciient sent a handshake that doesn't comply with the extended handshake metadata.
@@ -134,6 +141,7 @@ export const ControlMessageHandshakeResponseSchema = Type.Object({
       ok: Type.Literal(false),
       reason: Type.String(),
       code: HandshakeErrorResponseCodes,
+      details: Type.Optional(Type.Unknown()),
     }),
   ]),
 });

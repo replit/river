@@ -1945,5 +1945,98 @@ describe.each(testMatrix())(
         serverTransport,
       });
     });
+
+    test('structured rejection includes custom details and is terminal by default', async () => {
+      const schema = Type.Object({ token: Type.String() });
+      const validate = vi.fn(async () => ({
+        ok: false as const,
+        code: 'REJECTED_BY_CUSTOM_HANDLER' as const,
+        reason: 'token expired',
+        details: { authCode: 'expired' },
+      }));
+      const serverTransport = getServerTransport('SERVER', {
+        schema,
+        validate,
+      });
+      const clientTransport = getClientTransport('client', {
+        schema,
+        construct: async () => ({ token: 'old-token' }),
+      });
+      const clientHandshakeFailed = vi.fn();
+      const serverHandshakeFailed = vi.fn();
+      clientTransport.addEventListener('protocolError', clientHandshakeFailed);
+      serverTransport.addEventListener('protocolError', serverHandshakeFailed);
+      clientTransport.connect(serverTransport.clientId);
+
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(clientHandshakeFailed).toHaveBeenCalledWith({
+          type: ProtocolError.HandshakeFailed,
+          code: 'REJECTED_BY_CUSTOM_HANDLER',
+          message: 'handshake failed: token expired',
+          details: { authCode: 'expired' },
+        });
+        expect(serverHandshakeFailed).toHaveBeenCalledWith({
+          type: ProtocolError.HandshakeFailed,
+          code: 'REJECTED_BY_CUSTOM_HANDLER',
+          message: 'token expired',
+          details: { authCode: 'expired' },
+        });
+      });
+
+      await advanceFakeTimersByConnectionBackoff();
+      expect(validate).toHaveBeenCalledTimes(1);
+    });
+
+    test('custom rejection policy can retry with existing backoff', async () => {
+      const schema = Type.Object({ token: Type.String() });
+      const validate = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false as const,
+          code: 'REJECTED_BY_CUSTOM_HANDLER' as const,
+          reason: 'refresh token',
+          details: { authCode: 'expired' },
+        })
+        .mockResolvedValue({ accepted: true });
+      const onHandshakeRejected = vi.fn(() => 'retry' as const);
+      const serverTransport = getServerTransport('SERVER', {
+        schema,
+        validate,
+      });
+      const clientTransport = getClientTransport('client', {
+        schema,
+        construct: async () => ({ token: 'token' }),
+        onHandshakeRejected,
+      });
+      clientTransport.connect(serverTransport.clientId);
+
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(onHandshakeRejected).toHaveBeenCalledWith({
+          ok: false,
+          code: 'REJECTED_BY_CUSTOM_HANDLER',
+          reason: 'refresh token',
+          details: { authCode: 'expired' },
+        });
+      });
+
+      await advanceFakeTimersByConnectionBackoff();
+      await waitFor(() => {
+        expect(validate).toHaveBeenCalledTimes(2);
+        expect(serverTransport.sessions.size).toBe(1);
+      });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
   },
 );

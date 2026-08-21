@@ -5,6 +5,7 @@ import {
   ControlMessageHandshakeRequestSchema,
   ControlMessageRehandshakeResponseSchema,
   HandshakeErrorCustomHandlerFatalResponseCodes,
+  HandshakeErrorCustomHandlerResponseSchema,
   HandshakeErrorResponseCodes,
   OpaqueTransportMessage,
   acceptedProtocolVersions,
@@ -206,6 +207,22 @@ export abstract class ServerTransport<
 
     if (
       Value.Check(
+        HandshakeErrorCustomHandlerResponseSchema,
+        parsedMetadataOrFailureCode,
+      )
+    ) {
+      this.teardownForFailedRehandshake(
+        session,
+        parsedMetadataOrFailureCode.reason,
+        parsedMetadataOrFailureCode.code,
+        parsedMetadataOrFailureCode.details,
+      );
+
+      return;
+    }
+
+    if (
+      Value.Check(
         HandshakeErrorCustomHandlerFatalResponseCodes,
         parsedMetadataOrFailureCode,
       )
@@ -246,6 +263,10 @@ export abstract class ServerTransport<
   private teardownForFailedRehandshake(
     session: ServerSession<ConnType>,
     reason: string,
+    code: Static<
+      typeof HandshakeErrorCustomHandlerFatalResponseCodes
+    > = 'REJECTED_BY_CUSTOM_HANDLER',
+    details?: unknown,
   ) {
     if (this.sessions.get(session.to) !== session) {
       return;
@@ -259,8 +280,9 @@ export abstract class ServerTransport<
 
     this.protocolError({
       type: ProtocolError.HandshakeFailed,
-      code: 'REJECTED_BY_CUSTOM_HANDLER',
+      code,
       message: reason,
+      ...(details === undefined ? {} : { details }),
     });
     this.deleteSession(session, { unhealthy: true });
   }
@@ -352,6 +374,7 @@ export abstract class ServerTransport<
     reason: string,
     code: Static<typeof HandshakeErrorResponseCodes>,
     metadata: MessageMetadata,
+    details?: unknown,
   ) {
     session.conn.telemetry?.span.setStatus({
       code: SpanStatusCode.ERROR,
@@ -367,6 +390,7 @@ export abstract class ServerTransport<
         ok: false,
         code,
         reason,
+        ...(details === undefined ? {} : { details }),
       },
     });
 
@@ -390,6 +414,7 @@ export abstract class ServerTransport<
       type: ProtocolError.HandshakeFailed,
       code,
       message: reason,
+      ...(details === undefined ? {} : { details }),
     });
     this.deletePendingSession(session);
   }
@@ -493,6 +518,28 @@ export abstract class ServerTransport<
       }
 
       // handler rejected the connection
+      if (
+        Value.Check(
+          HandshakeErrorCustomHandlerResponseSchema,
+          parsedMetadataOrFailureCode,
+        )
+      ) {
+        this.rejectHandshakeRequest(
+          session,
+          msg.from,
+          parsedMetadataOrFailureCode.reason,
+          parsedMetadataOrFailureCode.code,
+          {
+            ...session.loggingMetadata,
+            connectedTo: msg.from,
+            clientId: this.clientId,
+          },
+          parsedMetadataOrFailureCode.details,
+        );
+
+        return;
+      }
+
       if (
         Value.Check(
           HandshakeErrorCustomHandlerFatalResponseCodes,

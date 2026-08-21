@@ -92,7 +92,8 @@ describe('message helpers', () => {
       status: {
         ok: false,
         reason: 'bad',
-        code: 'SESSION_STATE_MISMATCH',
+        code: 'REJECTED_BY_CUSTOM_HANDLER',
+        details: { authCode: 'expired' },
       },
     });
 
@@ -103,6 +104,9 @@ describe('message helpers', () => {
     expect(mFail.from).toBe('a');
     expect(mFail.to).toBe('b');
     expect(mFail.payload.status.ok).toBe(false);
+    expect(mFail.payload.status).toMatchObject({
+      details: { authCode: 'expired' },
+    });
   });
 
   test('default message has no control flags set', () => {

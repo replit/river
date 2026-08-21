@@ -814,11 +814,40 @@ createServer(serverTransport, services, {
       // be populated with the last returned value. `from` is the client id the peer
       // presented in its handshake — check it against what the metadata authorizes
       // before returning parsed metadata.
+      if (metadata.token === 'expired') {
+        return {
+          ok: false,
+          code: 'REJECTED_BY_CUSTOM_HANDLER',
+          reason: 'token expired',
+          details: { authCode: 'expired' },
+        };
+      }
       return { parsedToken: metadata.token };
     },
   ),
 });
 ```
+
+Structured rejections let the server send application-defined `details` with a
+human-readable `reason`. Details come from the network on the client, so validate or
+narrow them before use. Legacy string rejection returns remain supported.
+
+Custom-handler rejections are terminal by default. A client can classify one as
+retryable with the optional fourth argument to `createClientHandshakeOptions`:
+
+```ts
+createClientHandshakeOptions(
+  handshakeSchema,
+  async () => ({ token: await getToken() }),
+  false,
+  (rejection) =>
+    rejection.code === 'REJECTED_BY_CUSTOM_HANDLER' ? 'retry' : 'terminal',
+);
+```
+
+Retries use the transport's existing exponential backoff, jitter, and retry budget.
+This policy applies to the initial handshake only. A failed re-handshake still tears
+down the live session and follows the normal disconnect behavior.
 
 `createClientHandshakeOptions` also takes an optional third `eager` argument. When set, the
 client constructs handshake metadata as soon as it starts dialing, so a slow `construct`

@@ -1,8 +1,15 @@
 import type { Static, TSchema } from 'typebox';
 import {
   HandshakeErrorCustomHandlerFatalResponseCodes,
+  HandshakeErrorCustomHandlerResponseSchema,
   type TransportClientId,
 } from '../transport/message';
+
+export type HandshakeRejection = Static<
+  typeof HandshakeErrorCustomHandlerResponseSchema
+>;
+
+export type HandshakeRejectionAction = 'retry' | 'terminal';
 
 type ConstructHandshake<T extends TSchema> = () =>
   | Static<T>
@@ -14,9 +21,11 @@ type ValidateHandshake<T extends TSchema, ParsedMetadata> = (
   from?: TransportClientId,
 ) =>
   | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
+  | HandshakeRejection
   | ParsedMetadata
   | Promise<
       | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
+      | HandshakeRejection
       | ParsedMetadata
     >;
 
@@ -43,6 +52,14 @@ export interface ClientHandshakeOptions<
    * rate-limited.
    */
   eager?: boolean;
+
+  /**
+   * Classifies a custom-handler rejection. Retried handshakes use the
+   * transport's existing backoff and retry budget. Defaults to terminal.
+   */
+  onHandshakeRejected?: (
+    rejection: HandshakeRejection,
+  ) => HandshakeRejectionAction;
 }
 
 export interface ServerHandshakeOptions<
@@ -88,8 +105,9 @@ export function createClientHandshakeOptions<
   schema: MetadataSchema,
   construct: ConstructHandshake<MetadataSchema>,
   eager?: boolean,
+  onHandshakeRejected?: ClientHandshakeOptions['onHandshakeRejected'],
 ): ClientHandshakeOptions<MetadataSchema> {
-  return { schema, construct, eager };
+  return { schema, construct, eager, onHandshakeRejected };
 }
 
 export function createServerHandshakeOptions<

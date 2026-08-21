@@ -12,6 +12,7 @@ import {
 } from '../router/handshake';
 import {
   HandshakeErrorCustomHandlerFatalResponseCodes,
+  HandshakeErrorCustomHandlerResponseSchema,
   type TransportClientId,
 } from '../transport/message';
 import { decodeMessageBytes, encodeMessageBytes } from './shared';
@@ -21,6 +22,10 @@ const HandshakeBytesSchema = Uint8ArrayType();
 
 type ProtobufHandshakeFailureCode = Static<
   typeof HandshakeErrorCustomHandlerFatalResponseCodes
+>;
+
+type ProtobufHandshakeRejection = Static<
+  typeof HandshakeErrorCustomHandlerResponseSchema
 >;
 
 type ConstructHandshake<Schema extends DescMessage> = () =>
@@ -34,7 +39,10 @@ type ValidateHandshake<Schema extends DescMessage, ParsedMetadata> = (
 ) =>
   | ParsedMetadata
   | ProtobufHandshakeFailureCode
-  | Promise<ParsedMetadata | ProtobufHandshakeFailureCode>;
+  | ProtobufHandshakeRejection
+  | Promise<
+      ParsedMetadata | ProtobufHandshakeFailureCode | ProtobufHandshakeRejection
+    >;
 
 /**
  * Create client-side handshake options backed by a protobuf message type.

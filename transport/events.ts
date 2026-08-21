@@ -38,6 +38,7 @@ export interface EventMap {
         type: (typeof ProtocolError)['HandshakeFailed'];
         code: Static<typeof HandshakeErrorResponseCodes>;
         message: string;
+        details?: unknown;
       }
     | {
         type: Omit<

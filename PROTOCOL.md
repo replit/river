@@ -258,6 +258,8 @@ interface ControlHandshakeResponse {
           // fatal, returned by the custom handshake handler
           | 'REJECTED_BY_CUSTOM_HANDLER'
           | 'REJECTED_UNSUPPORTED_CLIENT';
+        // Optional application-defined context for custom-handler rejections.
+        details?: unknown;
       };
 }
 

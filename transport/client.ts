@@ -4,6 +4,7 @@ import { validationErrorToRiverErrors } from '../router/errors';
 import {
   ControlMessageHandshakeResponseSchema,
   ControlMessageRehandshakeRequestSchema,
+  HandshakeErrorCustomHandlerResponseSchema,
   HandshakeErrorRetriableResponseCodes,
   OpaqueTransportMessage,
   TransportClientId,
@@ -375,6 +376,12 @@ export abstract class ClientTransport<
         HandshakeErrorRetriableResponseCodes,
         msg.payload.status.code,
       );
+      const customHandlerRejection = Value.Check(
+        HandshakeErrorCustomHandlerResponseSchema,
+        msg.payload.status,
+      )
+        ? msg.payload.status
+        : undefined;
 
       const reason = `handshake failed: ${msg.payload.status.reason}`;
       const to = session.to;
@@ -383,14 +390,40 @@ export abstract class ClientTransport<
         transportMessage: msg,
       });
 
-      if (retriable) {
-        this.tryReconnecting(to);
-      } else {
+      let retryCustomHandlerRejection = false;
+      if (
+        customHandlerRejection &&
+        this.handshakeExtensions?.onHandshakeRejected
+      ) {
+        try {
+          retryCustomHandlerRejection =
+            this.handshakeExtensions.onHandshakeRejected(
+              customHandlerRejection,
+            ) === 'retry';
+        } catch (err) {
+          this.log?.warn(
+            `handshake rejection policy threw: ${coerceErrorString(err)}`,
+            {
+              ...session.loggingMetadata,
+              transportMessage: msg,
+            },
+          );
+        }
+      }
+
+      if (!retriable) {
         this.protocolError({
           type: ProtocolError.HandshakeFailed,
           code: msg.payload.status.code,
           message: reason,
+          ...(msg.payload.status.details === undefined
+            ? {}
+            : { details: msg.payload.status.details }),
         });
+      }
+
+      if (retriable || retryCustomHandlerRejection) {
+        this.tryReconnecting(to);
       }
 
       return;
