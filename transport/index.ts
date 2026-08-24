@@ -24,7 +24,6 @@ export {
 export {
   TransportMessageSchema,
   OpaqueTransportMessageSchema,
-  HandshakeRejectionDetailsSchema,
   isStreamOpen,
   isStreamClose,
 } from './message';

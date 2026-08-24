@@ -1484,14 +1484,14 @@ describe.each(testMatrix())(
         'client',
         createClientHandshakeOptions(requestSchema, construct),
       );
-      const rejectionDetails = {
+      const rejectionExtras = {
         code: 'TOKEN_EXPIRED',
         message: 'The refreshed token expired',
       };
       const validate = vi.fn((metadata: ParsedMetadata) =>
         metadata.token === 'token-v1'
           ? { token: metadata.token }
-          : rejectHandshake(rejectionDetails),
+          : rejectHandshake(rejectionExtras),
       );
       const serverTransport = getServerTransport<
         typeof requestSchema,
@@ -1547,7 +1547,7 @@ describe.each(testMatrix())(
         type: 'handshake_failed',
         code: 'REJECTED_BY_CUSTOM_HANDLER',
         message: 're-handshake metadata rejected by handshake handler',
-        details: rejectionDetails,
+        extras: rejectionExtras,
       });
 
       // let the client's now-disconnected session lapse before cleanup

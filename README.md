@@ -807,7 +807,7 @@ createServer(serverTransport, services, {
       //   from?: TransportClientId,
       // ) =>
       //   | 'REJECTED_BY_CUSTOM_HANDLER' | 'REJECTED_UNSUPPORTED_CLIENT' (if you reject it)
-      //   | HandshakeRejection (if you reject it with structured details)
+      //   | HandshakeRejection (if you reject it with application-defined extras)
       //   | ParsedMetadata (if you allow it)
       //   | a Promise of any of the above
       //
@@ -821,7 +821,7 @@ createServer(serverTransport, services, {
 });
 ```
 
-Use `rejectHandshake` when the client needs a machine-readable reason for an application-level rejection:
+Use `rejectHandshake` when the client needs a machine-readable, application-defined reason for a rejection. The argument is an opaque `extras` value; your application owns its schema:
 
 ```ts
 createServerHandshakeOptions(handshakeSchema, async (metadata) => {
@@ -830,7 +830,6 @@ createServerHandshakeOptions(handshakeSchema, async (metadata) => {
     return rejectHandshake({
       code: 'TOKEN_EXPIRED',
       message: 'The authentication token expired',
-      extras: { expiredAt: authenticated.expiredAt },
     });
   }
 
@@ -838,9 +837,9 @@ createServerHandshakeOptions(handshakeSchema, async (metadata) => {
 });
 ```
 
-River sends these details on the optional `details` field of the failed handshake response and exposes them on the client's `handshake_failed` protocol error event. Existing failure codes remain available for simple handlers. Do not put secrets or raw internal errors in `message` or `extras` because River sends them to the peer.
+River sends `extras` on the optional `extras` field of the failed handshake response and exposes it on the client's `handshake_failed` protocol error event as `event.extras`. River does not interpret it: validate it with your own schema (for example with TypeBox's `Value.Check`) before acting on it. Existing failure codes remain available for simple handlers. Do not put secrets or raw internal errors in `extras` because River sends it to the peer.
 
-During a re-handshake, River exposes structured rejection details only on the server's `handshake_failed` event before it closes the session. The client's next fresh handshake can receive the details.
+During a re-handshake, River exposes the rejection extras only on the server's `handshake_failed` event before it closes the session. The client's next fresh handshake can receive the extras.
 
 `createClientHandshakeOptions` also takes an optional third `eager` argument. When set, the
 client constructs handshake metadata as soon as it starts dialing, so a slow `construct`

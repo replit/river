@@ -8,7 +8,6 @@ import {
   ControlMessageHandshakeRequestSchema,
   ControlMessageRehandshakeResponseSchema,
   HandshakeErrorCustomHandlerFatalResponseCodes,
-  HandshakeRejectionDetailsSchema,
   HandshakeErrorResponseCodes,
   OpaqueTransportMessage,
   acceptedProtocolVersions,
@@ -213,7 +212,7 @@ export abstract class ServerTransport<
         session,
         're-handshake metadata rejected by handshake handler',
         validationResult.responseCode,
-        validationResult.details,
+        validationResult.extras,
       );
 
       return;
@@ -261,7 +260,7 @@ export abstract class ServerTransport<
     code: Static<
       typeof HandshakeErrorCustomHandlerFatalResponseCodes
     > = 'REJECTED_BY_CUSTOM_HANDLER',
-    details?: Static<typeof HandshakeRejectionDetailsSchema>,
+    rejectionExtras?: unknown,
   ) {
     if (this.sessions.get(session.to) !== session) {
       return;
@@ -271,10 +270,10 @@ export abstract class ServerTransport<
     this.log?.warn(`tearing down session to ${to}: ${reason}`, {
       ...session.loggingMetadata,
       connectedTo: to,
-      ...(details && {
+      ...(rejectionExtras !== undefined && {
         extras: {
           ...session.loggingMetadata.extras,
-          handshakeRejectionDetails: details,
+          handshakeRejectionExtras: rejectionExtras,
         },
       }),
     });
@@ -283,7 +282,7 @@ export abstract class ServerTransport<
       type: ProtocolError.HandshakeFailed,
       code,
       message: reason,
-      ...(details && { details }),
+      ...(rejectionExtras !== undefined && { extras: rejectionExtras }),
     });
     this.deleteSession(session, { unhealthy: true });
   }
@@ -375,22 +374,23 @@ export abstract class ServerTransport<
     reason: string,
     code: Static<typeof HandshakeErrorResponseCodes>,
     metadata: MessageMetadata,
-    details?: Static<typeof HandshakeRejectionDetailsSchema>,
+    rejectionExtras?: unknown,
   ) {
     session.conn.telemetry?.span.setStatus({
       code: SpanStatusCode.ERROR,
       message: reason,
     });
 
-    const logMetadata = details
-      ? {
-          ...metadata,
-          extras: {
-            ...metadata.extras,
-            handshakeRejectionDetails: details,
-          },
-        }
-      : metadata;
+    const logMetadata =
+      rejectionExtras !== undefined
+        ? {
+            ...metadata,
+            extras: {
+              ...metadata.extras,
+              handshakeRejectionExtras: rejectionExtras,
+            },
+          }
+        : metadata;
     this.log?.warn(reason, logMetadata);
 
     const responseMsg = handshakeResponseMessage({
@@ -400,7 +400,7 @@ export abstract class ServerTransport<
         ok: false,
         code,
         reason,
-        ...(details && { details }),
+        ...(rejectionExtras !== undefined && { extras: rejectionExtras }),
       },
     });
 
@@ -424,7 +424,7 @@ export abstract class ServerTransport<
       type: ProtocolError.HandshakeFailed,
       code,
       message: reason,
-      ...(details && { details }),
+      ...(rejectionExtras !== undefined && { extras: rejectionExtras }),
     });
     this.deletePendingSession(session);
   }
@@ -539,7 +539,7 @@ export abstract class ServerTransport<
             connectedTo: msg.from,
             clientId: this.clientId,
           },
-          validationResult.details,
+          validationResult.extras,
         );
 
         return;

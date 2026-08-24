@@ -123,12 +123,6 @@ export const HandshakeErrorResponseCodes = Type.Union([
   HandshakeErrorFatalResponseCodes,
 ]);
 
-export const HandshakeRejectionDetailsSchema = Type.Object({
-  code: Type.String(),
-  message: Type.String(),
-  extras: Type.Optional(Type.Unknown()),
-});
-
 export const ControlMessageHandshakeResponseSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_RESP'),
   status: Type.Union([
@@ -140,7 +134,9 @@ export const ControlMessageHandshakeResponseSchema = Type.Object({
       ok: Type.Literal(false),
       reason: Type.String(),
       code: HandshakeErrorResponseCodes,
-      details: Type.Optional(HandshakeRejectionDetailsSchema),
+      // Application-defined rejection data. River populates this only for
+      // custom-handler rejections; older peers ignore it.
+      extras: Type.Optional(Type.Unknown()),
     }),
   ]),
 });

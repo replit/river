@@ -66,8 +66,5 @@ export {
   createServerHandshakeOptions,
   rejectHandshake,
 } from './handshake';
-export type {
-  HandshakeRejection,
-  HandshakeRejectionDetails,
-} from './handshake';
+export type { HandshakeRejection } from './handshake';
 export { version as RIVER_VERSION } from '../package.json';

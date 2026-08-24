@@ -1,24 +1,24 @@
 import type { Static, TSchema } from 'typebox';
 import {
   HandshakeErrorCustomHandlerFatalResponseCodes,
-  HandshakeRejectionDetailsSchema,
   type TransportClientId,
 } from '../transport/message';
 
 const handshakeRejectionBrand: unique symbol = Symbol('handshakeRejection');
 
-export type HandshakeRejectionDetails = Static<
-  typeof HandshakeRejectionDetailsSchema
->;
-
 export interface HandshakeRejection {
   readonly [handshakeRejectionBrand]: true;
   responseCode: Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>;
-  details: HandshakeRejectionDetails;
+  /**
+   * Application-defined rejection data, forwarded to the peer in the failed
+   * handshake response. River transports it opaquely; the application defines
+   * and validates its own schema for it.
+   */
+  extras: unknown;
 }
 
 export function rejectHandshake(
-  details: HandshakeRejectionDetails,
+  extras: unknown,
   responseCode: Static<
     typeof HandshakeErrorCustomHandlerFatalResponseCodes
   > = 'REJECTED_BY_CUSTOM_HANDLER',
@@ -26,7 +26,7 @@ export function rejectHandshake(
   return {
     [handshakeRejectionBrand]: true,
     responseCode,
-    details,
+    extras,
   };
 }
 

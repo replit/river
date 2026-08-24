@@ -109,7 +109,7 @@ describe('message helpers', () => {
     expect(mFail.payload.status.ok).toBe(false);
   });
 
-  test('structured handshake rejections are compatible with older clients', () => {
+  test('handshake rejection extras are compatible with older clients', () => {
     const oldHandshakeResponseSchema = Type.Object({
       type: Type.Literal('HANDSHAKE_RESP'),
       status: Type.Union([
@@ -130,7 +130,7 @@ describe('message helpers', () => {
         ok: false,
         reason: 'rejected by handshake handler',
         code: 'REJECTED_BY_CUSTOM_HANDLER',
-        details: {
+        extras: {
           code: 'TOKEN_EXPIRED',
           message: 'The authentication token expired',
         },
@@ -143,7 +143,28 @@ describe('message helpers', () => {
     );
   });
 
-  test('handshake rejections without details remain valid', () => {
+  test('handshake rejection extras accept any application-defined shape', () => {
+    for (const extras of [
+      'TERMINAL_REPL_GONE',
+      { code: 'TOKEN_EXPIRED' },
+      42,
+      null,
+    ]) {
+      expect(
+        Value.Check(ControlMessageHandshakeResponseSchema, {
+          type: 'HANDSHAKE_RESP',
+          status: {
+            ok: false,
+            reason: 'rejected by handshake handler',
+            code: 'REJECTED_BY_CUSTOM_HANDLER',
+            extras,
+          },
+        }),
+      ).toBe(true);
+    }
+  });
+
+  test('handshake rejections without extras remain valid', () => {
     expect(
       Value.Check(ControlMessageHandshakeResponseSchema, {
         type: 'HANDSHAKE_RESP',

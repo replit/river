@@ -1947,16 +1947,15 @@ describe.each(testMatrix())(
       });
     });
 
-    test('parse can reject connection with structured details', async () => {
+    test('parse can reject connection with application-defined extras', async () => {
       const schema = Type.Object({ foo: Type.String() });
-      const details = {
+      const rejectionExtras = {
         code: 'TOKEN_EXPIRED',
         message: 'The authentication token expired',
-        extras: { expiredAt: '2026-08-20T12:00:00Z' },
       };
       const serverTransport = getServerTransport('SERVER', {
         schema,
-        validate: async () => rejectHandshake(details),
+        validate: async () => rejectHandshake(rejectionExtras),
       });
       const clientTransport = getClientTransport('client', {
         schema,
@@ -1988,13 +1987,13 @@ describe.each(testMatrix())(
           type: ProtocolError.HandshakeFailed,
           code: 'REJECTED_BY_CUSTOM_HANDLER',
           message: 'handshake failed: rejected by handshake handler',
-          details,
+          extras: rejectionExtras,
         });
         expect(serverRejectedConnection).toHaveBeenCalledWith({
           type: ProtocolError.HandshakeFailed,
           code: 'REJECTED_BY_CUSTOM_HANDLER',
           message: 'rejected by handshake handler',
-          details,
+          extras: rejectionExtras,
         });
       });
 

@@ -22,10 +22,7 @@ export {
   createServerHandshakeOptions,
 } from './handshake';
 export { rejectHandshake } from '../router/handshake';
-export type {
-  HandshakeRejection,
-  HandshakeRejectionDetails,
-} from '../router/handshake';
+export type { HandshakeRejection } from '../router/handshake';
 export { createProtoService } from './service';
 export type {
   AnyProtoService,
