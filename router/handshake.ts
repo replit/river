@@ -95,7 +95,7 @@ export interface ServerHandshakeOptions<
   validate: ValidateHandshake<
     MetadataSchema,
     ParsedMetadata,
-    ApplicationErrorCode
+    NoInfer<ApplicationErrorCode>
   >;
 
   /**
@@ -132,7 +132,7 @@ export function createServerHandshakeOptions<
   validate: ValidateHandshake<
     MetadataSchema,
     ParsedMetadata,
-    ApplicationErrorCode
+    NoInfer<ApplicationErrorCode>
   >,
   expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined,
   rejectionCodes?: ReadonlyArray<ApplicationErrorCode>,

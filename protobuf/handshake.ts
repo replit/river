@@ -76,7 +76,11 @@ export function createServerHandshakeOptions<
   ApplicationErrorCode extends string = never,
 >(
   schema: Schema,
-  validate: ValidateHandshake<Schema, ParsedMetadata, ApplicationErrorCode>,
+  validate: ValidateHandshake<
+    Schema,
+    ParsedMetadata,
+    NoInfer<ApplicationErrorCode>
+  >,
   expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined,
   rejectionCodes?: ReadonlyArray<ApplicationErrorCode>,
 ): ServerHandshakeOptions<

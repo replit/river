@@ -2052,7 +2052,7 @@ describe.each(testMatrix())(
         ApplicationErrorCode
       >('SERVER', {
         schema,
-        validate: async () => 'REPL_NOT_FOUND',
+        validate: async (): Promise<ApplicationErrorCode> => 'REPL_NOT_FOUND',
         rejectionCodes: ['REPL_NOT_FOUND'],
       });
 

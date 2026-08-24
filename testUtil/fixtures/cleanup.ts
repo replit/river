@@ -36,7 +36,9 @@ export async function advanceFakeTimersByConnectionBackoff() {
   await vi.advanceTimersByTimeAsync(500);
 }
 
-export async function ensureTransportIsClean(t: Transport<Connection>) {
+export async function ensureTransportIsClean<
+  ApplicationErrorCode extends string = never,
+>(t: Transport<Connection, ApplicationErrorCode>) {
   await advanceFakeTimersBySessionGrace();
   await waitFor(() =>
     expect(
@@ -56,9 +58,9 @@ export function waitFor<T>(cb: () => T | Promise<T>) {
   return vi.waitFor(cb, waitUntilOptions);
 }
 
-export async function ensureTransportBuffersAreEventuallyEmpty(
-  t: Transport<Connection>,
-) {
+export async function ensureTransportBuffersAreEventuallyEmpty<
+  ApplicationErrorCode extends string = never,
+>(t: Transport<Connection, ApplicationErrorCode>) {
   // wait for send buffers to be flushed
   // ignore heartbeat messages
   await waitFor(() =>
@@ -97,9 +99,10 @@ export async function ensureServerIsClean(
   );
 }
 
-export async function cleanupTransports<ConnType extends Connection>(
-  transports: Array<Transport<ConnType>>,
-) {
+export async function cleanupTransports<
+  ConnType extends Connection,
+  ApplicationErrorCode extends string = never,
+>(transports: Array<Transport<ConnType, ApplicationErrorCode>>) {
   for (const t of transports) {
     if (t.getStatus() !== 'closed') {
       t.log?.info('*** end of test cleanup ***', { clientId: t.clientId });
@@ -108,16 +111,18 @@ export async function cleanupTransports<ConnType extends Connection>(
   }
 }
 
-export async function testFinishesCleanly({
+export async function testFinishesCleanly<
+  ApplicationErrorCode extends string = never,
+>({
   clientTransports,
   serverTransport,
   server,
 }: Partial<{
-  clientTransports: Array<ClientTransport<Connection>>;
+  clientTransports: Array<ClientTransport<Connection, ApplicationErrorCode>>;
   // MetadataSchema and ParsedMetadata are not used in this test,
   // so we can safely use any here
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  serverTransport: ServerTransport<Connection, any, any>;
+  serverTransport: ServerTransport<Connection, any, any, ApplicationErrorCode>;
   server: Server<MaybeDisposable, object, AnyServiceSchemaMap>;
 }>) {
   // pre-close invariants
