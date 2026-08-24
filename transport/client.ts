@@ -13,7 +13,6 @@ import {
   handshakeRequestMessage,
   rehandshakeResponseMessage,
 } from './message';
-
 import type { TSchema } from 'typebox';
 import {
   ClientTransportOptions,
