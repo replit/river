@@ -79,7 +79,10 @@ export interface SessionBackpressure {
  * ```
  * @abstract
  */
-export abstract class Transport<ConnType extends Connection> {
+export abstract class Transport<
+  ConnType extends Connection,
+  ApplicationErrorCode extends string = never,
+> {
   /**
    * The status of the transport.
    */
@@ -93,7 +96,7 @@ export abstract class Transport<ConnType extends Connection> {
   /**
    * The event dispatcher for handling events of type EventTypes.
    */
-  eventDispatcher: EventDispatcher<EventTypes>;
+  eventDispatcher: EventDispatcher<EventTypes, ApplicationErrorCode>;
 
   /**
    * The options for this transport.
@@ -149,10 +152,10 @@ export abstract class Transport<ConnType extends Connection> {
    * @param the type of event to listen for
    * @param handler The message handler to add.
    */
-  addEventListener<K extends EventTypes, T extends EventHandler<K>>(
-    type: K,
-    handler: T,
-  ): void {
+  addEventListener<
+    K extends EventTypes,
+    T extends EventHandler<K, ApplicationErrorCode>,
+  >(type: K, handler: T): void {
     this.eventDispatcher.addEventListener(type, handler);
   }
 
@@ -161,14 +164,16 @@ export abstract class Transport<ConnType extends Connection> {
    * @param the type of event to un-listen on
    * @param handler The message handler to remove.
    */
-  removeEventListener<K extends EventTypes, T extends EventHandler<K>>(
-    type: K,
-    handler: T,
-  ): void {
+  removeEventListener<
+    K extends EventTypes,
+    T extends EventHandler<K, ApplicationErrorCode>,
+  >(type: K, handler: T): void {
     this.eventDispatcher.removeEventListener(type, handler);
   }
 
-  protected protocolError(message: EventMap['protocolError']) {
+  protected protocolError(
+    message: EventMap<ApplicationErrorCode>['protocolError'],
+  ) {
     this.eventDispatcher.dispatchEvent('protocolError', message);
   }
 

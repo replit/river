@@ -28,6 +28,7 @@ export {
   isStreamClose,
 } from './message';
 export type {
+  HandshakeErrorCode,
   TransportMessage,
   OpaqueTransportMessage,
   TransportClientId,

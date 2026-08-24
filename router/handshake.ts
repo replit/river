@@ -8,26 +8,41 @@ type ConstructHandshake<T extends TSchema> = () =>
   | Static<T>
   | Promise<Static<T>>;
 
-type ValidateHandshake<T extends TSchema, ParsedMetadata> = (
+type ValidateHandshake<
+  T extends TSchema,
+  ParsedMetadata,
+  ApplicationErrorCode extends string = never,
+> = (
   metadata: Static<T>,
   previousParsedMetadata?: ParsedMetadata,
   from?: TransportClientId,
 ) =>
   | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
+  | ApplicationErrorCode
   | ParsedMetadata
   | Promise<
       | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
+      | ApplicationErrorCode
       | ParsedMetadata
     >;
 
 export interface ClientHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
+  ApplicationErrorCode extends string = never,
 > {
   /**
    * Schema for the metadata that the client sends to the server
    * during the handshake.
    */
   schema: MetadataSchema;
+
+  /**
+   * Application-defined rejection codes the server may answer the handshake
+   * with, sent in the response's `code` field. Must match the server's
+   * {@link ServerHandshakeOptions.rejectionCodes}: an unconfigured code is
+   * rejected as a malformed handshake response.
+   */
+  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>;
 
   /**
    * Gets the {@link HandshakeRequestMetadata} to send to the server.
@@ -48,12 +63,22 @@ export interface ClientHandshakeOptions<
 export interface ServerHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
+  ApplicationErrorCode extends string = never,
 > {
   /**
    * Schema for the metadata that the server receives from the client
    * during the handshake.
    */
   schema: MetadataSchema;
+
+  /**
+   * Application-defined rejection codes that {@link validate} may return.
+   * They travel in the handshake response's `code` field and are fatal like
+   * the built-in custom-handler codes. Clients must register the same codes
+   * in {@link ClientHandshakeOptions.rejectionCodes} or they reject the
+   * response as malformed.
+   */
+  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>;
 
   /**
    * Parses the metadata sent by the client during the handshake into the
@@ -67,7 +92,11 @@ export interface ServerHandshakeOptions<
    *   confirm the presented id is the one the metadata authorizes before
    *   returning parsed metadata.
    */
-  validate: ValidateHandshake<MetadataSchema, ParsedMetadata>;
+  validate: ValidateHandshake<
+    MetadataSchema,
+    ParsedMetadata,
+    ApplicationErrorCode
+  >;
 
   /**
    * When the credential expires (or undefined if it never does). The server
@@ -84,21 +113,33 @@ export interface ServerHandshakeOptions<
 
 export function createClientHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
+  ApplicationErrorCode extends string = never,
 >(
   schema: MetadataSchema,
   construct: ConstructHandshake<MetadataSchema>,
   eager?: boolean,
-): ClientHandshakeOptions<MetadataSchema> {
-  return { schema, construct, eager };
+  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>,
+): ClientHandshakeOptions<MetadataSchema, ApplicationErrorCode> {
+  return { schema, construct, eager, rejectionCodes };
 }
 
 export function createServerHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
+  ApplicationErrorCode extends string = never,
 >(
   schema: MetadataSchema,
-  validate: ValidateHandshake<MetadataSchema, ParsedMetadata>,
+  validate: ValidateHandshake<
+    MetadataSchema,
+    ParsedMetadata,
+    ApplicationErrorCode
+  >,
   expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined,
-): ServerHandshakeOptions<MetadataSchema, ParsedMetadata> {
-  return { schema, validate, expiry };
+  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>,
+): ServerHandshakeOptions<
+  MetadataSchema,
+  ParsedMetadata,
+  ApplicationErrorCode
+> {
+  return { schema, validate, expiry, rejectionCodes };
 }

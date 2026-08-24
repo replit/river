@@ -25,6 +25,7 @@ import { Type } from 'typebox';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 import { createPostTestCleanups } from '../testUtil/fixtures/cleanup';
 import { SessionState } from './sessionStateMachine';
+import { createServerHandshakeOptions } from '../router/handshake';
 import {
   ProvidedClientTransportOptions,
   ProvidedTransportOptions,
@@ -1939,6 +1940,145 @@ describe.each(testMatrix())(
           message: 'rejected by handshake handler',
         });
       });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
+    test('custom handler can reject with an application-defined code', async () => {
+      const schema = Type.Object({
+        foo: Type.String(),
+      });
+
+      type ApplicationErrorCode = 'REPL_NOT_FOUND' | 'TOKEN_EXPIRED';
+      const rejectionCodes: ReadonlyArray<ApplicationErrorCode> = [
+        'REPL_NOT_FOUND',
+        'TOKEN_EXPIRED',
+      ];
+      interface ParsedMetadata {
+        foo: string;
+      }
+
+      // compile-time: undeclared codes cannot be returned by validate
+      expect(
+        createServerHandshakeOptions<
+          typeof schema,
+          ParsedMetadata,
+          ApplicationErrorCode
+        >(
+          schema,
+          // @ts-expect-error only declared rejection codes may be returned
+          async () => 'SOME_OTHER_CODE',
+          undefined,
+          rejectionCodes,
+        ),
+      ).toBeDefined();
+
+      const parse = vi.fn(async (): Promise<ApplicationErrorCode> => {
+        return 'REPL_NOT_FOUND';
+      });
+      const serverTransport = getServerTransport<
+        typeof schema,
+        ParsedMetadata,
+        ApplicationErrorCode
+      >('SERVER', {
+        schema,
+        validate: parse,
+        rejectionCodes,
+      });
+
+      const clientTransport = getClientTransport('client', {
+        schema,
+        construct: async () => ({ foo: 'foo' }),
+        rejectionCodes,
+      });
+
+      const clientHandshakeFailed = vi.fn();
+      clientTransport.addEventListener('protocolError', clientHandshakeFailed);
+      const serverRejectedConnection = vi.fn();
+      serverTransport.addEventListener(
+        'protocolError',
+        serverRejectedConnection,
+      );
+      clientTransport.connect(serverTransport.clientId);
+
+      addPostTestCleanup(async () => {
+        clientTransport.removeEventListener(
+          'protocolError',
+          clientHandshakeFailed,
+        );
+        serverTransport.removeEventListener(
+          'protocolError',
+          serverRejectedConnection,
+        );
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(clientHandshakeFailed).toHaveBeenCalledTimes(1);
+        expect(clientHandshakeFailed).toHaveBeenCalledWith({
+          type: ProtocolError.HandshakeFailed,
+          code: 'REPL_NOT_FOUND',
+          message: 'handshake failed: rejected by handshake handler',
+        });
+        expect(serverRejectedConnection).toHaveBeenCalledWith({
+          type: ProtocolError.HandshakeFailed,
+          code: 'REPL_NOT_FOUND',
+          message: 'rejected by handshake handler',
+        });
+      });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
+    test('an application code is rejected by an unconfigured client', async () => {
+      const schema = Type.Object({
+        foo: Type.String(),
+      });
+
+      type ApplicationErrorCode = 'REPL_NOT_FOUND';
+      interface ParsedMetadata {
+        foo: string;
+      }
+
+      const serverTransport = getServerTransport<
+        typeof schema,
+        ParsedMetadata,
+        ApplicationErrorCode
+      >('SERVER', {
+        schema,
+        validate: async () => 'REPL_NOT_FOUND',
+        rejectionCodes: ['REPL_NOT_FOUND'],
+      });
+
+      // the client did not register the application code: it must treat the
+      // response as malformed rather than accept an unknown code
+      const clientTransport = getClientTransport('client', {
+        schema,
+        construct: async () => ({ foo: 'foo' }),
+      });
+
+      const clientHandshakeFailed = vi.fn();
+      clientTransport.addEventListener('protocolError', clientHandshakeFailed);
+      clientTransport.connect(serverTransport.clientId);
+
+      addPostTestCleanup(async () => {
+        clientTransport.removeEventListener(
+          'protocolError',
+          clientHandshakeFailed,
+        );
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(clientTransport.sessions.size).toBe(0);
+      });
+      expect(clientHandshakeFailed).not.toHaveBeenCalled();
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],

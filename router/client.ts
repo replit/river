@@ -18,7 +18,7 @@ import {
   closeStreamMessage,
   cancelMessage,
 } from '../transport/message';
-import type { Static } from 'typebox';
+import type { Static, TSchema } from 'typebox';
 import { Err, Result, AnyResultSchema } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/connection';
@@ -241,12 +241,16 @@ const defaultClientOptions: ClientOptions = {
 // We are using any here because the ServiceContext is a server-side implementation
 // detail that doesn't affect the client interface
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap<any>>(
-  transport: ClientTransport<Connection>,
+export function createClient<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ServiceSchemaMap extends AnyServiceSchemaMap<any>,
+  ApplicationErrorCode extends string = never,
+>(
+  transport: ClientTransport<Connection, ApplicationErrorCode>,
   serverId: TransportClientId,
   providedClientOptions: Partial<
     ClientOptions & {
-      handshakeOptions: ClientHandshakeOptions;
+      handshakeOptions: ClientHandshakeOptions<TSchema, ApplicationErrorCode>;
     }
   > = {},
 ): Client<ServiceSchemaMap> {
@@ -305,7 +309,8 @@ function mergeCallOptions(
   defaults: ClientOptions['defaultCallOptions'],
   caller: CallOptions | undefined,
 ): CallOptions {
-  const resolved = typeof defaults === 'function' ? defaults() : defaults ?? {};
+  const resolved =
+    typeof defaults === 'function' ? defaults() : (defaults ?? {});
 
   // Caller fields win: spread defaults first, caller second.
   return { ...resolved, ...caller };
@@ -317,9 +322,9 @@ type AnyProcReturn =
   | ReturnType<StreamFn<AnyService, string>>
   | ReturnType<SubscriptionFn<AnyService, string>>;
 
-function handleProc(
+function handleProc<ApplicationErrorCode extends string = never>(
   procType: ValidProcType,
-  transport: ClientTransport<Connection>,
+  transport: ClientTransport<Connection, ApplicationErrorCode>,
   serverId: TransportClientId,
   init: Static<PayloadType>,
   serviceName: string,

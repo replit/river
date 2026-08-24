@@ -5,7 +5,7 @@ import {
   ControlMessageHandshakeRequestSchema,
   ControlMessageRehandshakeResponseSchema,
   HandshakeErrorCustomHandlerFatalResponseCodes,
-  HandshakeErrorResponseCodes,
+  type HandshakeErrorCode,
   OpaqueTransportMessage,
   acceptedProtocolVersions,
   TransportClientId,
@@ -20,7 +20,7 @@ import {
 } from './options';
 import { DeleteSessionOptions, Transport } from './transport';
 import { coerceErrorString } from './stringifyError';
-import type { Static, TSchema } from 'typebox';
+import type { TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { ProtocolError } from './events';
 import { Connection } from './connection';
@@ -36,7 +36,8 @@ export abstract class ServerTransport<
   ConnType extends Connection,
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-> extends Transport<ConnType> {
+  ApplicationErrorCode extends string = never,
+> extends Transport<ConnType, ApplicationErrorCode> {
   /**
    * The options for this transport.
    */
@@ -45,7 +46,11 @@ export abstract class ServerTransport<
   /**
    * Optional handshake options for the server.
    */
-  handshakeExtensions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>;
+  handshakeExtensions?: ServerHandshakeOptions<
+    MetadataSchema,
+    ParsedMetadata,
+    ApplicationErrorCode
+  >;
 
   /**
    * A map of session handshake data for each session.
@@ -72,9 +77,25 @@ export abstract class ServerTransport<
   }
 
   extendHandshake(
-    options: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>,
+    options: ServerHandshakeOptions<
+      MetadataSchema,
+      ParsedMetadata,
+      ApplicationErrorCode
+    >,
   ) {
     this.handshakeExtensions = options;
+  }
+
+  private isApplicationRejectionCode(
+    value: unknown,
+  ): value is ApplicationErrorCode {
+    return (
+      typeof value === 'string' &&
+      (this.handshakeExtensions?.rejectionCodes?.includes(
+        value as ApplicationErrorCode,
+      ) ??
+        false)
+    );
   }
 
   protected deletePendingSession(
@@ -208,11 +229,13 @@ export abstract class ServerTransport<
       Value.Check(
         HandshakeErrorCustomHandlerFatalResponseCodes,
         parsedMetadataOrFailureCode,
-      )
+      ) ||
+      this.isApplicationRejectionCode(parsedMetadataOrFailureCode)
     ) {
       this.teardownForFailedRehandshake(
         session,
         're-handshake metadata rejected by handshake handler',
+        parsedMetadataOrFailureCode as HandshakeErrorCode<ApplicationErrorCode>,
       );
 
       return;
@@ -246,6 +269,7 @@ export abstract class ServerTransport<
   private teardownForFailedRehandshake(
     session: ServerSession<ConnType>,
     reason: string,
+    code: HandshakeErrorCode<ApplicationErrorCode> = 'REJECTED_BY_CUSTOM_HANDLER',
   ) {
     if (session._isConsumed) {
       return;
@@ -263,7 +287,7 @@ export abstract class ServerTransport<
 
     this.protocolError({
       type: ProtocolError.HandshakeFailed,
-      code: 'REJECTED_BY_CUSTOM_HANDLER',
+      code,
       message: reason,
     });
     this.deleteSession(session, { unhealthy: true });
@@ -354,7 +378,7 @@ export abstract class ServerTransport<
     session: SessionWaitingForHandshake<ConnType>,
     to: TransportClientId,
     reason: string,
-    code: Static<typeof HandshakeErrorResponseCodes>,
+    code: HandshakeErrorCode<ApplicationErrorCode>,
     metadata: MessageMetadata,
   ) {
     session.conn.telemetry?.span.setStatus({
@@ -501,13 +525,14 @@ export abstract class ServerTransport<
         Value.Check(
           HandshakeErrorCustomHandlerFatalResponseCodes,
           parsedMetadataOrFailureCode,
-        )
+        ) ||
+        this.isApplicationRejectionCode(parsedMetadataOrFailureCode)
       ) {
         this.rejectHandshakeRequest(
           session,
           msg.from,
           'rejected by handshake handler',
-          parsedMetadataOrFailureCode,
+          parsedMetadataOrFailureCode as HandshakeErrorCode<ApplicationErrorCode>,
           {
             ...session.loggingMetadata,
             connectedTo: msg.from,

@@ -112,12 +112,14 @@ class RiverServer<
   MetadataSchema extends TSchema,
   ParsedMetadata extends object,
   Services extends AnyServiceSchemaMap<Context>,
+  ApplicationErrorCode extends string = never,
 > implements Server<Context, ParsedMetadata, Services>
 {
   private transport: ServerTransport<
     Connection,
     MetadataSchema,
-    ParsedMetadata
+    ParsedMetadata,
+    ApplicationErrorCode
   >;
 
   private contextMap: Map<AnyService, Context & { state: object }>;
@@ -145,9 +147,18 @@ class RiverServer<
   private unregisterTransportListeners: () => void;
 
   constructor(
-    transport: ServerTransport<Connection, MetadataSchema, ParsedMetadata>,
+    transport: ServerTransport<
+      Connection,
+      MetadataSchema,
+      ParsedMetadata,
+      ApplicationErrorCode
+    >,
     services: Services,
-    handshakeOptions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>,
+    handshakeOptions?: ServerHandshakeOptions<
+      MetadataSchema,
+      ParsedMetadata,
+      ApplicationErrorCode
+    >,
     extendedContext?: Context,
     maxCancelledStreamTombstonesPerSession = 200,
     middlewares: Array<Middleware> = [],
@@ -1167,11 +1178,21 @@ export function createServer<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Services extends AnyServiceSchemaMap<any>,
   Context extends MaybeDisposable = MaybeDisposable,
+  ApplicationErrorCode extends string = never,
 >(
-  transport: ServerTransport<Connection, MetadataSchema, ParsedMetadata>,
+  transport: ServerTransport<
+    Connection,
+    MetadataSchema,
+    ParsedMetadata,
+    ApplicationErrorCode
+  >,
   services: Services,
   providedServerOptions?: Partial<{
-    handshakeOptions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>;
+    handshakeOptions?: ServerHandshakeOptions<
+      MetadataSchema,
+      ParsedMetadata,
+      ApplicationErrorCode
+    >;
     extendedContext?: Context;
     /**
      * Maximum number of cancelled streams to keep track of to avoid

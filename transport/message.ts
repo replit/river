@@ -1,4 +1,4 @@
-import { Type, type TSchema, type Static } from 'typebox';
+import { Type, type TLiteral, type TSchema, type Static } from 'typebox';
 import { PropagationContext } from '../tracing';
 import { generateId } from './id';
 // type-only: a value import closes a transport <-> router require cycle
@@ -123,6 +123,14 @@ export const HandshakeErrorResponseCodes = Type.Union([
   HandshakeErrorFatalResponseCodes,
 ]);
 
+/**
+ * The protocol-level handshake error codes plus any application-defined
+ * rejection codes the application registered in its handshake options.
+ */
+export type HandshakeErrorCode<ApplicationErrorCode extends string = never> =
+  | Static<typeof HandshakeErrorResponseCodes>
+  | ApplicationErrorCode;
+
 export const ControlMessageHandshakeResponseSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_RESP'),
   status: Type.Union([
@@ -137,6 +145,38 @@ export const ControlMessageHandshakeResponseSchema = Type.Object({
     }),
   ]),
 });
+
+/**
+ * A handshake response schema that additionally accepts application-defined
+ * rejection codes. Both peers must be configured with the same codes: an
+ * unconfigured peer rejects an application code as a malformed response.
+ */
+export const ControlMessageHandshakeResponseSchemaWithCodes = <
+  const ApplicationErrorCodes extends readonly string[],
+>(
+  applicationErrorCodes: ApplicationErrorCodes,
+) =>
+  Type.Object({
+    type: Type.Literal('HANDSHAKE_RESP'),
+    status: Type.Union([
+      Type.Object({
+        ok: Type.Literal(true),
+        sessionId: Type.String(),
+      }),
+      Type.Object({
+        ok: Type.Literal(false),
+        reason: Type.String(),
+        code: Type.Union([
+          HandshakeErrorResponseCodes,
+          Type.Union(
+            applicationErrorCodes.map(
+              (code) => Type.Literal(code) as TLiteral<typeof code>,
+            ),
+          ),
+        ]),
+      }),
+    ]),
+  });
 
 /**
  * Reserved stream id for the follow-up handshake (re-handshake) control
@@ -264,7 +304,11 @@ export function handshakeResponseMessage({
 }: {
   from: TransportClientId;
   to: TransportClientId;
-  status: Static<typeof ControlMessageHandshakeResponseSchema>['status'];
+  // the code may be an application-defined rejection code, which is only
+  // known to peers that registered it in their handshake options
+  status:
+    | { ok: true; sessionId: string }
+    | { ok: false; reason: string; code: string };
 }): TransportMessage<Static<typeof ControlMessageHandshakeResponseSchema>> {
   return {
     id: generateId(),
@@ -276,8 +320,10 @@ export function handshakeResponseMessage({
     controlFlags: 0,
     payload: {
       type: 'HANDSHAKE_RESP',
-      status,
-    } satisfies Static<typeof ControlMessageHandshakeResponseSchema>,
+      status: status as Static<
+        typeof ControlMessageHandshakeResponseSchema
+      >['status'],
+    },
   };
 }
 

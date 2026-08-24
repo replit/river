@@ -27,23 +27,34 @@ type ConstructHandshake<Schema extends DescMessage> = () =>
   | MessageInitShape<Schema>
   | Promise<MessageInitShape<Schema>>;
 
-type ValidateHandshake<Schema extends DescMessage, ParsedMetadata> = (
+type ValidateHandshake<
+  Schema extends DescMessage,
+  ParsedMetadata,
+  ApplicationErrorCode extends string = never,
+> = (
   metadata: MessageShape<Schema>,
   previousParsedMetadata?: ParsedMetadata,
   from?: TransportClientId,
 ) =>
   | ParsedMetadata
   | ProtobufHandshakeFailureCode
-  | Promise<ParsedMetadata | ProtobufHandshakeFailureCode>;
+  | ApplicationErrorCode
+  | Promise<
+      ParsedMetadata | ProtobufHandshakeFailureCode | ApplicationErrorCode
+    >;
 
 /**
  * Create client-side handshake options backed by a protobuf message type.
  */
-export function createClientHandshakeOptions<Schema extends DescMessage>(
+export function createClientHandshakeOptions<
+  Schema extends DescMessage,
+  ApplicationErrorCode extends string = never,
+>(
   schema: Schema,
   construct: ConstructHandshake<Schema>,
   eager?: boolean,
-): ClientHandshakeOptions<typeof HandshakeBytesSchema> {
+  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>,
+): ClientHandshakeOptions<typeof HandshakeBytesSchema, ApplicationErrorCode> {
   return createTransportClientHandshakeOptions(
     HandshakeBytesSchema,
     async () => {
@@ -52,6 +63,7 @@ export function createClientHandshakeOptions<Schema extends DescMessage>(
       return encodeMessageBytes(schema, metadata);
     },
     eager,
+    rejectionCodes,
   );
 }
 
@@ -61,11 +73,17 @@ export function createClientHandshakeOptions<Schema extends DescMessage>(
 export function createServerHandshakeOptions<
   Schema extends DescMessage,
   ParsedMetadata extends object = object,
+  ApplicationErrorCode extends string = never,
 >(
   schema: Schema,
-  validate: ValidateHandshake<Schema, ParsedMetadata>,
+  validate: ValidateHandshake<Schema, ParsedMetadata, ApplicationErrorCode>,
   expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined,
-): ServerHandshakeOptions<typeof HandshakeBytesSchema, ParsedMetadata> {
+  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>,
+): ServerHandshakeOptions<
+  typeof HandshakeBytesSchema,
+  ParsedMetadata,
+  ApplicationErrorCode
+> {
   return createTransportServerHandshakeOptions(
     HandshakeBytesSchema,
     async (metadata, previousParsedMetadata, from) => {
@@ -79,5 +97,6 @@ export function createServerHandshakeOptions<
       return await validate(decoded, previousParsedMetadata, from);
     },
     expiry,
+    rejectionCodes,
   );
 }

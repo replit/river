@@ -9,7 +9,10 @@ import { Duplex } from 'node:stream';
 import { duplexPair } from '../duplex/duplexPair';
 import { nanoid } from 'nanoid';
 import type { TSchema } from 'typebox';
-import { ServerHandshakeOptions } from '../../router/handshake';
+import {
+  ClientHandshakeOptions,
+  ServerHandshakeOptions,
+} from '../../router/handshake';
 
 export class InMemoryConnection extends Connection {
   conn: Duplex;
@@ -71,8 +74,10 @@ export function createMockTransportNetwork(
   // conn id -> [client->server, server->client]
   const connections = new Observable<Record<string, BidiConnection>>({});
 
-  const transports: Array<Transport<InMemoryConnection>> = [];
-  class MockClientTransport extends ClientTransport<InMemoryConnection> {
+  const transports: Array<Transport<InMemoryConnection, string>> = [];
+  class MockClientTransport<
+    ApplicationErrorCode extends string = never,
+  > extends ClientTransport<InMemoryConnection, ApplicationErrorCode> {
     async createNewOutgoingConnection(
       to: TransportClientId,
     ): Promise<InMemoryConnection> {
@@ -99,10 +104,12 @@ export function createMockTransportNetwork(
   class MockServerTransport<
     MetadataSchema extends TSchema = TSchema,
     ParsedMetadata extends object = object,
+    ApplicationErrorCode extends string = never,
   > extends ServerTransport<
     InMemoryConnection,
     MetadataSchema,
-    ParsedMetadata
+    ParsedMetadata,
+    ApplicationErrorCode
   > {
     subscribeCleanup: () => void;
 
@@ -135,8 +142,14 @@ export function createMockTransportNetwork(
   }
 
   return {
-    getClientTransport: (id, handshakeOptions) => {
-      const clientTransport = new MockClientTransport(id, opts?.client);
+    getClientTransport: <ApplicationErrorCode extends string = never>(
+      id: TransportClientId,
+      handshakeOptions?: ClientHandshakeOptions<TSchema, ApplicationErrorCode>,
+    ) => {
+      const clientTransport = new MockClientTransport<ApplicationErrorCode>(
+        id,
+        opts?.client,
+      );
       if (handshakeOptions) {
         clientTransport.extendHandshake(handshakeOptions);
       }
@@ -148,15 +161,21 @@ export function createMockTransportNetwork(
     getServerTransport: <
       MetadataSchema extends TSchema = TSchema,
       ParsedMetadata extends object = object,
+      ApplicationErrorCode extends string = never,
     >(
       id = 'SERVER',
       handshakeOptions:
-        | ServerHandshakeOptions<MetadataSchema, ParsedMetadata>
+        | ServerHandshakeOptions<
+            MetadataSchema,
+            ParsedMetadata,
+            ApplicationErrorCode
+          >
         | undefined,
     ) => {
       const serverTransport = new MockServerTransport<
         MetadataSchema,
-        ParsedMetadata
+        ParsedMetadata,
+        ApplicationErrorCode
       >(id, opts?.server);
       if (handshakeOptions) {
         serverTransport.extendHandshake(handshakeOptions);

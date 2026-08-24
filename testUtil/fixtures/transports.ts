@@ -30,17 +30,27 @@ export interface TestTransportOptions {
 }
 
 export interface TestSetupHelpers {
-  getClientTransport: (
+  getClientTransport: <ApplicationErrorCode extends string = never>(
     id: TransportClientId,
-    handshakeOptions?: ClientHandshakeOptions,
-  ) => ClientTransport<Connection>;
+    handshakeOptions?: ClientHandshakeOptions<TSchema, ApplicationErrorCode>,
+  ) => ClientTransport<Connection, ApplicationErrorCode>;
   getServerTransport: <
     MetadataSchema extends TSchema = TSchema,
     ParsedMetadata extends object = object,
+    ApplicationErrorCode extends string = never,
   >(
     id?: TransportClientId,
-    handshakeOptions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>,
-  ) => ServerTransport<Connection, MetadataSchema, ParsedMetadata>;
+    handshakeOptions?: ServerHandshakeOptions<
+      MetadataSchema,
+      ParsedMetadata,
+      ApplicationErrorCode
+    >,
+  ) => ServerTransport<
+    Connection,
+    MetadataSchema,
+    ParsedMetadata,
+    ApplicationErrorCode
+  >;
   simulatePhantomDisconnect: () => void;
   restartServer: () => Promise<void>;
   cleanup: () => Promise<void> | void;
@@ -59,10 +69,11 @@ export const transports: Array<TransportMatrixEntry> = [
       const port = await onWsServerReady(server);
       let wss = createWebSocketServer(server);
 
+      /* eslint-disable @typescript-eslint/no-explicit-any */
       const transports: Array<
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        WebSocketClientTransport | WebSocketServerTransport<any, any>
+        WebSocketClientTransport<any> | WebSocketServerTransport<any, any, any>
       > = [];
+      /* eslint-enable @typescript-eslint/no-explicit-any */
 
       return {
         simulatePhantomDisconnect() {
@@ -72,12 +83,19 @@ export const transports: Array<TransportMatrixEntry> = [
             }
           }
         },
-        getClientTransport: (id, handshakeOptions) => {
-          const clientTransport = new WebSocketClientTransport(
-            () => Promise.resolve(createLocalWebSocketClient(port)),
-            id,
-            opts?.client,
-          );
+        getClientTransport: <ApplicationErrorCode extends string = never>(
+          id: TransportClientId,
+          handshakeOptions?: ClientHandshakeOptions<
+            TSchema,
+            ApplicationErrorCode
+          >,
+        ) => {
+          const clientTransport =
+            new WebSocketClientTransport<ApplicationErrorCode>(
+              () => Promise.resolve(createLocalWebSocketClient(port)),
+              id,
+              opts?.client,
+            );
 
           if (handshakeOptions) {
             clientTransport.extendHandshake(handshakeOptions);
@@ -99,15 +117,21 @@ export const transports: Array<TransportMatrixEntry> = [
         getServerTransport: <
           MetadataSchema extends TSchema,
           ParsedMetadata extends object,
+          ApplicationErrorCode extends string = never,
         >(
           id = 'SERVER',
           handshakeOptions:
-            | ServerHandshakeOptions<MetadataSchema, ParsedMetadata>
+            | ServerHandshakeOptions<
+                MetadataSchema,
+                ParsedMetadata,
+                ApplicationErrorCode
+              >
             | undefined,
         ) => {
           const serverTransport = new WebSocketServerTransport<
             MetadataSchema,
-            ParsedMetadata
+            ParsedMetadata,
+            ApplicationErrorCode
           >(wss, id, opts?.server);
 
           serverTransport.bindLogger((msg, ctx, level) => {
@@ -128,7 +152,8 @@ export const transports: Array<TransportMatrixEntry> = [
           return serverTransport as ServerTransport<
             Connection,
             MetadataSchema,
-            ParsedMetadata
+            ParsedMetadata,
+            ApplicationErrorCode
           >;
         },
         async restartServer() {
