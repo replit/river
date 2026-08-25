@@ -112,9 +112,9 @@ export abstract class ClientTransport<
     this.retryBudget = new LeakyBucketRateLimit(this.options);
   }
 
-  extendHandshake(
+  extendHandshake = (
     options: ClientHandshakeOptions<TSchema, RejectionCodeSchema>,
-  ) {
+  ) => {
     this.handshakeExtensions = options;
     if (options.rejectionCodeSchema) {
       this.handshakeResponseSchema =
@@ -122,7 +122,7 @@ export abstract class ClientTransport<
           options.rejectionCodeSchema,
         );
     }
-  }
+  };
 
   protected handleRehandshakeMessage(message: OpaqueTransportMessage): void {
     if (!Value.Check(ControlMessageRehandshakeRequestSchema, message.payload)) {

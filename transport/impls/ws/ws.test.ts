@@ -57,8 +57,10 @@ describe('sending and receiving across websockets works', async () => {
     };
     const defaultTransport = new WebSocketClientTransport(getWs, 'client');
 
-    // @ts-expect-error custom codes must be declared on the transport
-    defaultTransport.extendHandshake(handshakeOptions);
+    // @ts-expect-error a default transport cannot be widened to custom codes
+    const widenedTransport: WebSocketClientTransport<
+      typeof rejectionCodeSchema
+    > = defaultTransport;
 
     const typedTransport = new WebSocketClientTransport<
       typeof rejectionCodeSchema
@@ -66,6 +68,7 @@ describe('sending and receiving across websockets works', async () => {
     typedTransport.extendHandshake(handshakeOptions);
 
     expect(typedTransport.handshakeExtensions).toBe(handshakeOptions);
+    expect(widenedTransport).toBe(defaultTransport);
   });
 
   test('basic send/receive', async () => {

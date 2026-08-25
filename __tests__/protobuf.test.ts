@@ -315,14 +315,13 @@ describe.each(protobufRouterMatrix)(
         rejectionCodeSchema,
       );
 
-      const clientTransport = getClientTransport(
-        'client',
-        clientHandshakeOptions,
-      );
-      const serverTransport = getServerTransport(
-        'SERVER',
-        serverHandshakeOptions,
-      );
+      const clientTransport =
+        getClientTransport<typeof rejectionCodeSchema>('client');
+      const serverTransport = getServerTransport<
+        (typeof serverHandshakeOptions)['schema'],
+        { token: string },
+        typeof rejectionCodeSchema
+      >('SERVER', undefined);
       const TypedProtoService = createProtoService<object, { token: string }>();
       const testSvc = TypedProtoService.define(TestService, {
         echo: (request, ctx) =>
@@ -341,6 +340,7 @@ describe.each(protobufRouterMatrix)(
         TestService,
         clientTransport,
         serverTransport.clientId,
+        { handshakeOptions: clientHandshakeOptions },
       );
 
       await expect(client.echo({ text: 'hello' })).resolves.toMatchObject({

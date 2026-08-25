@@ -78,15 +78,15 @@ export abstract class ServerTransport<
     });
   }
 
-  extendHandshake(
+  extendHandshake = (
     options: ServerHandshakeOptions<
       MetadataSchema,
       ParsedMetadata,
       RejectionCodeSchema
     >,
-  ) {
+  ) => {
     this.handshakeExtensions = options;
-  }
+  };
 
   private isRejectionCode(
     value: unknown,
