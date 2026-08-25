@@ -1,4 +1,5 @@
 import {
+  type BuiltInHandshakeErrorCode,
   OpaqueTransportMessage,
   PartialTransportMessage,
   TransportClientId,
@@ -81,7 +82,7 @@ export interface SessionBackpressure {
  */
 export abstract class Transport<
   ConnType extends Connection,
-  ApplicationErrorCode extends string = never,
+  HandshakeFailureCode extends string = BuiltInHandshakeErrorCode,
 > {
   /**
    * The status of the transport.
@@ -96,7 +97,7 @@ export abstract class Transport<
   /**
    * The event dispatcher for handling events of type EventTypes.
    */
-  eventDispatcher: EventDispatcher<EventTypes, ApplicationErrorCode>;
+  eventDispatcher: EventDispatcher<EventTypes, HandshakeFailureCode>;
 
   /**
    * The options for this transport.
@@ -117,7 +118,10 @@ export abstract class Transport<
     providedOptions?: ProvidedTransportOptions,
   ) {
     this.options = { ...defaultTransportOptions, ...providedOptions };
-    this.eventDispatcher = new EventDispatcher();
+    this.eventDispatcher = new EventDispatcher<
+      EventTypes,
+      HandshakeFailureCode
+    >();
     this.clientId = clientId;
     this.status = 'open';
     this.sessions = new Map();
@@ -154,7 +158,7 @@ export abstract class Transport<
    */
   addEventListener<
     K extends EventTypes,
-    T extends EventHandler<K, ApplicationErrorCode>,
+    T extends EventHandler<K, HandshakeFailureCode>,
   >(type: K, handler: T): void {
     this.eventDispatcher.addEventListener(type, handler);
   }
@@ -166,13 +170,13 @@ export abstract class Transport<
    */
   removeEventListener<
     K extends EventTypes,
-    T extends EventHandler<K, ApplicationErrorCode>,
+    T extends EventHandler<K, HandshakeFailureCode>,
   >(type: K, handler: T): void {
     this.eventDispatcher.removeEventListener(type, handler);
   }
 
   protected protocolError(
-    message: EventMap<ApplicationErrorCode>['protocolError'],
+    message: EventMap<HandshakeFailureCode>['protocolError'],
   ) {
     this.eventDispatcher.dispatchEvent('protocolError', message);
   }

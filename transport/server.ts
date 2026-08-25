@@ -36,8 +36,8 @@ export abstract class ServerTransport<
   ConnType extends Connection,
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  ApplicationErrorCode extends string = never,
-> extends Transport<ConnType, ApplicationErrorCode> {
+  CustomHandshakeErrorCode extends string = never,
+> extends Transport<ConnType, HandshakeErrorCode<CustomHandshakeErrorCode>> {
   /**
    * The options for this transport.
    */
@@ -49,7 +49,7 @@ export abstract class ServerTransport<
   handshakeExtensions?: ServerHandshakeOptions<
     MetadataSchema,
     ParsedMetadata,
-    ApplicationErrorCode
+    CustomHandshakeErrorCode
   >;
 
   /**
@@ -80,19 +80,19 @@ export abstract class ServerTransport<
     options: ServerHandshakeOptions<
       MetadataSchema,
       ParsedMetadata,
-      ApplicationErrorCode
+      CustomHandshakeErrorCode
     >,
   ) {
     this.handshakeExtensions = options;
   }
 
-  private isApplicationRejectionCode(
+  private isCustomHandshakeErrorCode(
     value: unknown,
-  ): value is ApplicationErrorCode {
+  ): value is CustomHandshakeErrorCode {
     return (
       typeof value === 'string' &&
       (this.handshakeExtensions?.rejectionCodes?.includes(
-        value as ApplicationErrorCode,
+        value as CustomHandshakeErrorCode,
       ) ??
         false)
     );
@@ -230,12 +230,12 @@ export abstract class ServerTransport<
         HandshakeErrorCustomHandlerFatalResponseCodes,
         parsedMetadataOrFailureCode,
       ) ||
-      this.isApplicationRejectionCode(parsedMetadataOrFailureCode)
+      this.isCustomHandshakeErrorCode(parsedMetadataOrFailureCode)
     ) {
       this.teardownForFailedRehandshake(
         session,
         're-handshake metadata rejected by handshake handler',
-        parsedMetadataOrFailureCode as HandshakeErrorCode<ApplicationErrorCode>,
+        parsedMetadataOrFailureCode as HandshakeErrorCode<CustomHandshakeErrorCode>,
       );
 
       return;
@@ -269,7 +269,7 @@ export abstract class ServerTransport<
   private teardownForFailedRehandshake(
     session: ServerSession<ConnType>,
     reason: string,
-    code: HandshakeErrorCode<ApplicationErrorCode> = 'REJECTED_BY_CUSTOM_HANDLER',
+    code: HandshakeErrorCode<CustomHandshakeErrorCode> = 'REJECTED_BY_CUSTOM_HANDLER',
   ) {
     if (session._isConsumed) {
       return;
@@ -378,7 +378,7 @@ export abstract class ServerTransport<
     session: SessionWaitingForHandshake<ConnType>,
     to: TransportClientId,
     reason: string,
-    code: HandshakeErrorCode<ApplicationErrorCode>,
+    code: HandshakeErrorCode<CustomHandshakeErrorCode>,
     metadata: MessageMetadata,
   ) {
     session.conn.telemetry?.span.setStatus({
@@ -526,13 +526,13 @@ export abstract class ServerTransport<
           HandshakeErrorCustomHandlerFatalResponseCodes,
           parsedMetadataOrFailureCode,
         ) ||
-        this.isApplicationRejectionCode(parsedMetadataOrFailureCode)
+        this.isCustomHandshakeErrorCode(parsedMetadataOrFailureCode)
       ) {
         this.rejectHandshakeRequest(
           session,
           msg.from,
           'rejected by handshake handler',
-          parsedMetadataOrFailureCode as HandshakeErrorCode<ApplicationErrorCode>,
+          parsedMetadataOrFailureCode as HandshakeErrorCode<CustomHandshakeErrorCode>,
           {
             ...session.loggingMetadata,
             connectedTo: msg.from,

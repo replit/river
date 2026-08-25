@@ -112,14 +112,14 @@ class RiverServer<
   MetadataSchema extends TSchema,
   ParsedMetadata extends object,
   Services extends AnyServiceSchemaMap<Context>,
-  ApplicationErrorCode extends string = never,
+  CustomHandshakeErrorCode extends string,
 > implements Server<Context, ParsedMetadata, Services>
 {
   private transport: ServerTransport<
     Connection,
     MetadataSchema,
     ParsedMetadata,
-    ApplicationErrorCode
+    CustomHandshakeErrorCode
   >;
 
   private contextMap: Map<AnyService, Context & { state: object }>;
@@ -151,13 +151,13 @@ class RiverServer<
       Connection,
       MetadataSchema,
       ParsedMetadata,
-      ApplicationErrorCode
+      CustomHandshakeErrorCode
     >,
     services: Services,
     handshakeOptions?: ServerHandshakeOptions<
       MetadataSchema,
       ParsedMetadata,
-      ApplicationErrorCode
+      CustomHandshakeErrorCode
     >,
     extendedContext?: Context,
     maxCancelledStreamTombstonesPerSession = 200,
@@ -1178,20 +1178,20 @@ export function createServer<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Services extends AnyServiceSchemaMap<any>,
   Context extends MaybeDisposable = MaybeDisposable,
-  ApplicationErrorCode extends string = never,
+  CustomHandshakeErrorCode extends string = never,
 >(
   transport: ServerTransport<
     Connection,
     MetadataSchema,
     ParsedMetadata,
-    ApplicationErrorCode
+    CustomHandshakeErrorCode
   >,
   services: Services,
   providedServerOptions?: Partial<{
     handshakeOptions?: ServerHandshakeOptions<
       MetadataSchema,
       ParsedMetadata,
-      ApplicationErrorCode
+      CustomHandshakeErrorCode
     >;
     extendedContext?: Context;
     /**

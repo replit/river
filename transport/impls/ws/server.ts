@@ -25,12 +25,12 @@ function cleanHeaders(
 export class WebSocketServerTransport<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  ApplicationErrorCode extends string = never,
+  CustomHandshakeErrorCode extends string = never,
 > extends ServerTransport<
   WebSocketConnection,
   MetadataSchema,
   ParsedMetadata,
-  ApplicationErrorCode
+  CustomHandshakeErrorCode
 > {
   wss: WebSocketServer;
 

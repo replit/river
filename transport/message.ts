@@ -1,4 +1,4 @@
-import { Type, type TLiteral, type TSchema, type Static } from 'typebox';
+import { Type, type TSchema, type Static } from 'typebox';
 import { PropagationContext } from '../tracing';
 import { generateId } from './id';
 // type-only: a value import closes a transport <-> router require cycle
@@ -124,12 +124,20 @@ export const HandshakeErrorResponseCodes = Type.Union([
 ]);
 
 /**
+ * The protocol-level handshake error codes River can emit without any
+ * application-defined rejection codes.
+ */
+export type BuiltInHandshakeErrorCode = Static<
+  typeof HandshakeErrorResponseCodes
+>;
+
+/**
  * The protocol-level handshake error codes plus any application-defined
  * rejection codes the application registered in its handshake options.
  */
-export type HandshakeErrorCode<ApplicationErrorCode extends string = never> =
-  | Static<typeof HandshakeErrorResponseCodes>
-  | ApplicationErrorCode;
+export type HandshakeErrorCode<
+  CustomHandshakeErrorCode extends string = never,
+> = BuiltInHandshakeErrorCode | CustomHandshakeErrorCode;
 
 export const ControlMessageHandshakeResponseSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_RESP'),
@@ -152,9 +160,9 @@ export const ControlMessageHandshakeResponseSchema = Type.Object({
  * unconfigured peer rejects an application code as a malformed response.
  */
 export const ControlMessageHandshakeResponseSchemaWithCodes = <
-  const ApplicationErrorCodes extends readonly string[],
+  const CustomHandshakeErrorCodes extends ReadonlyArray<string>,
 >(
-  applicationErrorCodes: ApplicationErrorCodes,
+  customErrorCodes: CustomHandshakeErrorCodes,
 ) =>
   Type.Object({
     type: Type.Literal('HANDSHAKE_RESP'),
@@ -168,11 +176,7 @@ export const ControlMessageHandshakeResponseSchemaWithCodes = <
         reason: Type.String(),
         code: Type.Union([
           HandshakeErrorResponseCodes,
-          Type.Union(
-            applicationErrorCodes.map(
-              (code) => Type.Literal(code) as TLiteral<typeof code>,
-            ),
-          ),
+          Type.Union(customErrorCodes.map((code) => Type.Literal(code))),
         ]),
       }),
     ]),

@@ -244,13 +244,16 @@ const defaultClientOptions: ClientOptions = {
 export function createClient<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ServiceSchemaMap extends AnyServiceSchemaMap<any>,
-  ApplicationErrorCode extends string = never,
+  CustomHandshakeErrorCode extends string = never,
 >(
-  transport: ClientTransport<Connection, ApplicationErrorCode>,
+  transport: ClientTransport<Connection, CustomHandshakeErrorCode>,
   serverId: TransportClientId,
   providedClientOptions: Partial<
     ClientOptions & {
-      handshakeOptions: ClientHandshakeOptions<TSchema, ApplicationErrorCode>;
+      handshakeOptions: ClientHandshakeOptions<
+        TSchema,
+        CustomHandshakeErrorCode
+      >;
     }
   > = {},
 ): Client<ServiceSchemaMap> {
@@ -309,8 +312,7 @@ function mergeCallOptions(
   defaults: ClientOptions['defaultCallOptions'],
   caller: CallOptions | undefined,
 ): CallOptions {
-  const resolved =
-    typeof defaults === 'function' ? defaults() : (defaults ?? {});
+  const resolved = typeof defaults === 'function' ? defaults() : defaults ?? {};
 
   // Caller fields win: spread defaults first, caller second.
   return { ...resolved, ...caller };
@@ -322,9 +324,9 @@ type AnyProcReturn =
   | ReturnType<StreamFn<AnyService, string>>
   | ReturnType<SubscriptionFn<AnyService, string>>;
 
-function handleProc<ApplicationErrorCode extends string = never>(
+function handleProc<CustomHandshakeErrorCode extends string>(
   procType: ValidProcType,
-  transport: ClientTransport<Connection, ApplicationErrorCode>,
+  transport: ClientTransport<Connection, CustomHandshakeErrorCode>,
   serverId: TransportClientId,
   init: Static<PayloadType>,
   serviceName: string,

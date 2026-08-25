@@ -30,26 +30,29 @@ export interface TestTransportOptions {
 }
 
 export interface TestSetupHelpers {
-  getClientTransport: <ApplicationErrorCode extends string = never>(
+  getClientTransport: <CustomHandshakeErrorCode extends string = never>(
     id: TransportClientId,
-    handshakeOptions?: ClientHandshakeOptions<TSchema, ApplicationErrorCode>,
-  ) => ClientTransport<Connection, ApplicationErrorCode>;
+    handshakeOptions?: ClientHandshakeOptions<
+      TSchema,
+      CustomHandshakeErrorCode
+    >,
+  ) => ClientTransport<Connection, CustomHandshakeErrorCode>;
   getServerTransport: <
     MetadataSchema extends TSchema = TSchema,
     ParsedMetadata extends object = object,
-    ApplicationErrorCode extends string = never,
+    CustomHandshakeErrorCode extends string = never,
   >(
     id?: TransportClientId,
     handshakeOptions?: ServerHandshakeOptions<
       MetadataSchema,
       ParsedMetadata,
-      ApplicationErrorCode
+      CustomHandshakeErrorCode
     >,
   ) => ServerTransport<
     Connection,
     MetadataSchema,
     ParsedMetadata,
-    ApplicationErrorCode
+    CustomHandshakeErrorCode
   >;
   simulatePhantomDisconnect: () => void;
   restartServer: () => Promise<void>;
@@ -83,15 +86,15 @@ export const transports: Array<TransportMatrixEntry> = [
             }
           }
         },
-        getClientTransport: <ApplicationErrorCode extends string = never>(
+        getClientTransport: <CustomHandshakeErrorCode extends string>(
           id: TransportClientId,
           handshakeOptions?: ClientHandshakeOptions<
             TSchema,
-            ApplicationErrorCode
+            CustomHandshakeErrorCode
           >,
         ) => {
           const clientTransport =
-            new WebSocketClientTransport<ApplicationErrorCode>(
+            new WebSocketClientTransport<CustomHandshakeErrorCode>(
               () => Promise.resolve(createLocalWebSocketClient(port)),
               id,
               opts?.client,
@@ -117,21 +120,21 @@ export const transports: Array<TransportMatrixEntry> = [
         getServerTransport: <
           MetadataSchema extends TSchema,
           ParsedMetadata extends object,
-          ApplicationErrorCode extends string = never,
+          CustomHandshakeErrorCode extends string,
         >(
           id = 'SERVER',
           handshakeOptions:
             | ServerHandshakeOptions<
                 MetadataSchema,
                 ParsedMetadata,
-                ApplicationErrorCode
+                CustomHandshakeErrorCode
               >
             | undefined,
         ) => {
           const serverTransport = new WebSocketServerTransport<
             MetadataSchema,
             ParsedMetadata,
-            ApplicationErrorCode
+            CustomHandshakeErrorCode
           >(wss, id, opts?.server);
 
           serverTransport.bindLogger((msg, ctx, level) => {
@@ -153,7 +156,7 @@ export const transports: Array<TransportMatrixEntry> = [
             Connection,
             MetadataSchema,
             ParsedMetadata,
-            ApplicationErrorCode
+            CustomHandshakeErrorCode
           >;
         },
         async restartServer() {

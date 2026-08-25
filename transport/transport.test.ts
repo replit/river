@@ -1947,16 +1947,17 @@ describe.each(testMatrix())(
       });
     });
 
-    test('custom handler can reject with an application-defined code', async () => {
+    test('custom handler can reject with a registered handshake error code', async () => {
       const schema = Type.Object({
         foo: Type.String(),
       });
 
-      type ApplicationErrorCode = 'REPL_NOT_FOUND' | 'TOKEN_EXPIRED';
-      const rejectionCodes: ReadonlyArray<ApplicationErrorCode> = [
+      type CustomHandshakeErrorCode = 'REPL_NOT_FOUND' | 'TOKEN_EXPIRED';
+      const rejectionCodes: ReadonlyArray<CustomHandshakeErrorCode> = [
         'REPL_NOT_FOUND',
         'TOKEN_EXPIRED',
       ];
+
       interface ParsedMetadata {
         foo: string;
       }
@@ -1966,7 +1967,7 @@ describe.each(testMatrix())(
         createServerHandshakeOptions<
           typeof schema,
           ParsedMetadata,
-          ApplicationErrorCode
+          CustomHandshakeErrorCode
         >(
           schema,
           // @ts-expect-error only declared rejection codes may be returned
@@ -1976,13 +1977,13 @@ describe.each(testMatrix())(
         ),
       ).toBeDefined();
 
-      const parse = vi.fn(async (): Promise<ApplicationErrorCode> => {
+      const parse = vi.fn(async (): Promise<CustomHandshakeErrorCode> => {
         return 'REPL_NOT_FOUND';
       });
       const serverTransport = getServerTransport<
         typeof schema,
         ParsedMetadata,
-        ApplicationErrorCode
+        CustomHandshakeErrorCode
       >('SERVER', {
         schema,
         validate: parse,
@@ -2036,12 +2037,13 @@ describe.each(testMatrix())(
       });
     });
 
-    test('an application code is rejected by an unconfigured client', async () => {
+    test('an unregistered handshake error code is rejected by an unconfigured client', async () => {
       const schema = Type.Object({
         foo: Type.String(),
       });
 
-      type ApplicationErrorCode = 'REPL_NOT_FOUND';
+      type CustomHandshakeErrorCode = 'REPL_NOT_FOUND';
+
       interface ParsedMetadata {
         foo: string;
       }
@@ -2049,14 +2051,15 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport<
         typeof schema,
         ParsedMetadata,
-        ApplicationErrorCode
+        CustomHandshakeErrorCode
       >('SERVER', {
         schema,
-        validate: async (): Promise<ApplicationErrorCode> => 'REPL_NOT_FOUND',
+        validate: async (): Promise<CustomHandshakeErrorCode> =>
+          'REPL_NOT_FOUND',
         rejectionCodes: ['REPL_NOT_FOUND'],
       });
 
-      // the client did not register the application code: it must treat the
+      // the client did not register the custom code: it must treat the
       // response as malformed rather than accept an unknown code
       const clientTransport = getClientTransport('client', {
         schema,

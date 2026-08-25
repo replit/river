@@ -1,5 +1,8 @@
 import { Connection } from './connection';
-import { OpaqueTransportMessage, HandshakeErrorCode } from './message';
+import {
+  OpaqueTransportMessage,
+  type BuiltInHandshakeErrorCode,
+} from './message';
 import { Session, SessionState } from './sessionStateMachine';
 import { SessionId } from './sessionStateMachine/common';
 import { TransportStatus } from './transport';
@@ -15,7 +18,16 @@ export const ProtocolError = {
 export type ProtocolErrorType =
   (typeof ProtocolError)[keyof typeof ProtocolError];
 
-export interface EventMap<ApplicationErrorCode extends string = never> {
+/**
+ * Transport events. `HandshakeFailureCode` is the full set of codes that can
+ * appear on handshake-failed `protocolError` events: the built-in protocol
+ * codes, plus any custom codes the transport was constructed with. Passing
+ * only a custom subset (e.g. `EventMap<'REPL_NOT_FOUND'>`) does not include
+ * the built-in codes; use `HandshakeErrorCode<YourCustomCode>` for that union.
+ */
+export interface EventMap<
+  HandshakeFailureCode extends string = BuiltInHandshakeErrorCode,
+> {
   message: OpaqueTransportMessage;
   sessionStatus:
     | {
@@ -35,7 +47,7 @@ export interface EventMap<ApplicationErrorCode extends string = never> {
   protocolError:
     | {
         type: (typeof ProtocolError)['HandshakeFailed'];
-        code: HandshakeErrorCode<ApplicationErrorCode>;
+        code: HandshakeFailureCode;
         message: string;
       }
     | {
@@ -53,15 +65,15 @@ export interface EventMap<ApplicationErrorCode extends string = never> {
 export type EventTypes = keyof EventMap;
 export type EventHandler<
   K extends EventTypes,
-  ApplicationErrorCode extends string = never,
-> = (event: EventMap<ApplicationErrorCode>[K]) => unknown;
+  HandshakeFailureCode extends string = BuiltInHandshakeErrorCode,
+> = (event: EventMap<HandshakeFailureCode>[K]) => unknown;
 
 export class EventDispatcher<
   T extends EventTypes,
-  ApplicationErrorCode extends string = never,
+  HandshakeFailureCode extends string = BuiltInHandshakeErrorCode,
 > {
   private eventListeners: {
-    [K in T]?: Set<EventHandler<K, ApplicationErrorCode>>;
+    [K in T]?: Set<EventHandler<K, HandshakeFailureCode>>;
   } = {};
 
   removeAllListeners() {
@@ -74,7 +86,7 @@ export class EventDispatcher<
 
   addEventListener<K extends T>(
     eventType: K,
-    handler: EventHandler<K, ApplicationErrorCode>,
+    handler: EventHandler<K, HandshakeFailureCode>,
   ) {
     if (!this.eventListeners[eventType]) {
       this.eventListeners[eventType] = new Set();
@@ -85,7 +97,7 @@ export class EventDispatcher<
 
   removeEventListener<K extends T>(
     eventType: K,
-    handler: EventHandler<K, ApplicationErrorCode>,
+    handler: EventHandler<K, HandshakeFailureCode>,
   ) {
     const handlers = this.eventListeners[eventType];
     if (handlers) {
@@ -95,7 +107,7 @@ export class EventDispatcher<
 
   dispatchEvent<K extends T>(
     eventType: K,
-    event: EventMap<ApplicationErrorCode>[K],
+    event: EventMap<HandshakeFailureCode>[K],
   ) {
     const handlers = this.eventListeners[eventType];
     if (handlers) {

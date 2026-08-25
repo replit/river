@@ -108,7 +108,7 @@ describe('message helpers', () => {
     expect(mFail.payload.status.ok).toBe(false);
   });
 
-  test('handshake response schema with application codes', () => {
+  test('handshake response schema with custom error codes', () => {
     const extended = ControlMessageHandshakeResponseSchemaWithCodes([
       'REPL_NOT_FOUND',
       'TOKEN_EXPIRED',

@@ -30,7 +30,7 @@ type ConstructHandshake<Schema extends DescMessage> = () =>
 type ValidateHandshake<
   Schema extends DescMessage,
   ParsedMetadata,
-  ApplicationErrorCode extends string = never,
+  CustomHandshakeErrorCode extends string,
 > = (
   metadata: MessageShape<Schema>,
   previousParsedMetadata?: ParsedMetadata,
@@ -38,9 +38,9 @@ type ValidateHandshake<
 ) =>
   | ParsedMetadata
   | ProtobufHandshakeFailureCode
-  | ApplicationErrorCode
+  | CustomHandshakeErrorCode
   | Promise<
-      ParsedMetadata | ProtobufHandshakeFailureCode | ApplicationErrorCode
+      ParsedMetadata | ProtobufHandshakeFailureCode | CustomHandshakeErrorCode
     >;
 
 /**
@@ -48,13 +48,16 @@ type ValidateHandshake<
  */
 export function createClientHandshakeOptions<
   Schema extends DescMessage,
-  ApplicationErrorCode extends string = never,
+  CustomHandshakeErrorCode extends string = never,
 >(
   schema: Schema,
   construct: ConstructHandshake<Schema>,
   eager?: boolean,
-  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>,
-): ClientHandshakeOptions<typeof HandshakeBytesSchema, ApplicationErrorCode> {
+  rejectionCodes?: ReadonlyArray<CustomHandshakeErrorCode>,
+): ClientHandshakeOptions<
+  typeof HandshakeBytesSchema,
+  CustomHandshakeErrorCode
+> {
   return createTransportClientHandshakeOptions(
     HandshakeBytesSchema,
     async () => {
@@ -73,20 +76,20 @@ export function createClientHandshakeOptions<
 export function createServerHandshakeOptions<
   Schema extends DescMessage,
   ParsedMetadata extends object = object,
-  ApplicationErrorCode extends string = never,
+  CustomHandshakeErrorCode extends string = never,
 >(
   schema: Schema,
   validate: ValidateHandshake<
     Schema,
     ParsedMetadata,
-    NoInfer<ApplicationErrorCode>
+    NoInfer<CustomHandshakeErrorCode>
   >,
   expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined,
-  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>,
+  rejectionCodes?: ReadonlyArray<CustomHandshakeErrorCode>,
 ): ServerHandshakeOptions<
   typeof HandshakeBytesSchema,
   ParsedMetadata,
-  ApplicationErrorCode
+  CustomHandshakeErrorCode
 > {
   return createTransportServerHandshakeOptions(
     HandshakeBytesSchema,

@@ -11,24 +11,24 @@ type ConstructHandshake<T extends TSchema> = () =>
 type ValidateHandshake<
   T extends TSchema,
   ParsedMetadata,
-  ApplicationErrorCode extends string = never,
+  CustomHandshakeErrorCode extends string,
 > = (
   metadata: Static<T>,
   previousParsedMetadata?: ParsedMetadata,
   from?: TransportClientId,
 ) =>
   | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
-  | ApplicationErrorCode
+  | CustomHandshakeErrorCode
   | ParsedMetadata
   | Promise<
       | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
-      | ApplicationErrorCode
+      | CustomHandshakeErrorCode
       | ParsedMetadata
     >;
 
 export interface ClientHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
-  ApplicationErrorCode extends string = never,
+  CustomHandshakeErrorCode extends string = never,
 > {
   /**
    * Schema for the metadata that the client sends to the server
@@ -42,7 +42,7 @@ export interface ClientHandshakeOptions<
    * {@link ServerHandshakeOptions.rejectionCodes}: an unconfigured code is
    * rejected as a malformed handshake response.
    */
-  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>;
+  rejectionCodes?: ReadonlyArray<CustomHandshakeErrorCode>;
 
   /**
    * Gets the {@link HandshakeRequestMetadata} to send to the server.
@@ -63,7 +63,7 @@ export interface ClientHandshakeOptions<
 export interface ServerHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  ApplicationErrorCode extends string = never,
+  CustomHandshakeErrorCode extends string = never,
 > {
   /**
    * Schema for the metadata that the server receives from the client
@@ -78,7 +78,7 @@ export interface ServerHandshakeOptions<
    * in {@link ClientHandshakeOptions.rejectionCodes} or they reject the
    * response as malformed.
    */
-  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>;
+  rejectionCodes?: ReadonlyArray<CustomHandshakeErrorCode>;
 
   /**
    * Parses the metadata sent by the client during the handshake into the
@@ -95,7 +95,7 @@ export interface ServerHandshakeOptions<
   validate: ValidateHandshake<
     MetadataSchema,
     ParsedMetadata,
-    NoInfer<ApplicationErrorCode>
+    NoInfer<CustomHandshakeErrorCode>
   >;
 
   /**
@@ -113,33 +113,33 @@ export interface ServerHandshakeOptions<
 
 export function createClientHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
-  ApplicationErrorCode extends string = never,
+  CustomHandshakeErrorCode extends string = never,
 >(
   schema: MetadataSchema,
   construct: ConstructHandshake<MetadataSchema>,
   eager?: boolean,
-  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>,
-): ClientHandshakeOptions<MetadataSchema, ApplicationErrorCode> {
+  rejectionCodes?: ReadonlyArray<CustomHandshakeErrorCode>,
+): ClientHandshakeOptions<MetadataSchema, CustomHandshakeErrorCode> {
   return { schema, construct, eager, rejectionCodes };
 }
 
 export function createServerHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  ApplicationErrorCode extends string = never,
+  CustomHandshakeErrorCode extends string = never,
 >(
   schema: MetadataSchema,
   validate: ValidateHandshake<
     MetadataSchema,
     ParsedMetadata,
-    NoInfer<ApplicationErrorCode>
+    NoInfer<CustomHandshakeErrorCode>
   >,
   expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined,
-  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>,
+  rejectionCodes?: ReadonlyArray<CustomHandshakeErrorCode>,
 ): ServerHandshakeOptions<
   MetadataSchema,
   ParsedMetadata,
-  ApplicationErrorCode
+  CustomHandshakeErrorCode
 > {
   return { schema, validate, expiry, rejectionCodes };
 }

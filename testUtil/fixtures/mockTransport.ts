@@ -76,8 +76,8 @@ export function createMockTransportNetwork(
 
   const transports: Array<Transport<InMemoryConnection, string>> = [];
   class MockClientTransport<
-    ApplicationErrorCode extends string = never,
-  > extends ClientTransport<InMemoryConnection, ApplicationErrorCode> {
+    CustomHandshakeErrorCode extends string,
+  > extends ClientTransport<InMemoryConnection, CustomHandshakeErrorCode> {
     async createNewOutgoingConnection(
       to: TransportClientId,
     ): Promise<InMemoryConnection> {
@@ -102,14 +102,14 @@ export function createMockTransportNetwork(
   }
 
   class MockServerTransport<
-    MetadataSchema extends TSchema = TSchema,
-    ParsedMetadata extends object = object,
-    ApplicationErrorCode extends string = never,
+    MetadataSchema extends TSchema,
+    ParsedMetadata extends object,
+    CustomHandshakeErrorCode extends string,
   > extends ServerTransport<
     InMemoryConnection,
     MetadataSchema,
     ParsedMetadata,
-    ApplicationErrorCode
+    CustomHandshakeErrorCode
   > {
     subscribeCleanup: () => void;
 
@@ -142,11 +142,14 @@ export function createMockTransportNetwork(
   }
 
   return {
-    getClientTransport: <ApplicationErrorCode extends string = never>(
+    getClientTransport: <CustomHandshakeErrorCode extends string>(
       id: TransportClientId,
-      handshakeOptions?: ClientHandshakeOptions<TSchema, ApplicationErrorCode>,
+      handshakeOptions?: ClientHandshakeOptions<
+        TSchema,
+        CustomHandshakeErrorCode
+      >,
     ) => {
-      const clientTransport = new MockClientTransport<ApplicationErrorCode>(
+      const clientTransport = new MockClientTransport<CustomHandshakeErrorCode>(
         id,
         opts?.client,
       );
@@ -159,23 +162,23 @@ export function createMockTransportNetwork(
       return clientTransport;
     },
     getServerTransport: <
-      MetadataSchema extends TSchema = TSchema,
-      ParsedMetadata extends object = object,
-      ApplicationErrorCode extends string = never,
+      MetadataSchema extends TSchema,
+      ParsedMetadata extends object,
+      CustomHandshakeErrorCode extends string,
     >(
       id = 'SERVER',
       handshakeOptions:
         | ServerHandshakeOptions<
             MetadataSchema,
             ParsedMetadata,
-            ApplicationErrorCode
+            CustomHandshakeErrorCode
           >
         | undefined,
     ) => {
       const serverTransport = new MockServerTransport<
         MetadataSchema,
         ParsedMetadata,
-        ApplicationErrorCode
+        CustomHandshakeErrorCode
       >(id, opts?.server);
       if (handshakeOptions) {
         serverTransport.extendHandshake(handshakeOptions);
