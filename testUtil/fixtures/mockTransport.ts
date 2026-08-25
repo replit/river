@@ -1,5 +1,5 @@
 import { Transport, TransportClientId } from '../../transport';
-import type { ApplicationErrorCodeSchemas } from '../../transport/message';
+import type { CustomHandshakeErrorCodeSchemas } from '../../transport/message';
 import { ClientTransport } from '../../transport/client';
 import { Connection } from '../../transport/connection';
 import { ServerTransport } from '../../transport/server';
@@ -75,11 +75,9 @@ export function createMockTransportNetwork(
   // conn id -> [client->server, server->client]
   const connections = new Observable<Record<string, BidiConnection>>({});
 
-  const transports: Array<
-    Transport<InMemoryConnection, ApplicationErrorCodeSchemas>
-  > = [];
+  const transports: Array<Transport<InMemoryConnection, string>> = [];
   class MockClientTransport<
-    RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+    RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
   > extends ClientTransport<InMemoryConnection, RejectionCodeSchemas> {
     async createNewOutgoingConnection(
       to: TransportClientId,
@@ -105,9 +103,9 @@ export function createMockTransportNetwork(
   }
 
   class MockServerTransport<
-    MetadataSchema extends TSchema = TSchema,
-    ParsedMetadata extends object = object,
-    RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+    MetadataSchema extends TSchema,
+    ParsedMetadata extends object,
+    RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
   > extends ServerTransport<
     InMemoryConnection,
     MetadataSchema,
@@ -146,7 +144,7 @@ export function createMockTransportNetwork(
 
   return {
     getClientTransport: <
-      RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+      RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
     >(
       id: TransportClientId,
       handshakeOptions?: ClientHandshakeOptions<TSchema, RejectionCodeSchemas>,
@@ -166,7 +164,7 @@ export function createMockTransportNetwork(
     getServerTransport: <
       MetadataSchema extends TSchema = TSchema,
       ParsedMetadata extends object = object,
-      RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+      RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
     >(
       id = 'SERVER',
       handshakeOptions:

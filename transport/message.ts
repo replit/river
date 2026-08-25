@@ -124,32 +124,38 @@ export const HandshakeErrorResponseCodes = Type.Union([
 ]);
 
 /**
- * A tuple of TypeBox literal schemas declaring the application-defined
+ * A tuple of TypeBox literal schemas declaring the custom
  * handshake rejection codes, e.g.
  * `[Type.Literal('REPL_NOT_FOUND'), Type.Literal('TOKEN_EXPIRED')] as const`.
  */
-export type ApplicationErrorCodeSchemas = ReadonlyArray<TLiteral<string>>;
+export type CustomHandshakeErrorCodeSchemas = ReadonlyArray<TLiteral<string>>;
 
 /**
  * The union of codes declared by a tuple of rejection code schemas.
  * Widened schemas (`TLiteral<string>` rather than a specific literal)
  * contribute no codes.
  */
-export type ApplicationErrorCode<
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas,
+export type CustomHandshakeErrorCode<
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
 > = string extends Static<RejectionCodeSchemas[number]>
   ? never
   : Static<RejectionCodeSchemas[number]>;
 
 /**
- * The protocol-level handshake error codes plus any application-defined
- * rejection codes the application registered in its handshake options.
+ * The protocol-level handshake error codes River can emit without any custom
+ * rejection codes.
+ */
+export type BuiltInHandshakeErrorCode = Static<
+  typeof HandshakeErrorResponseCodes
+>;
+
+/**
+ * The protocol-level handshake error codes plus any custom rejection codes
+ * registered in the handshake options.
  */
 export type HandshakeErrorCode<
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
-> =
-  | Static<typeof HandshakeErrorResponseCodes>
-  | ApplicationErrorCode<RejectionCodeSchemas>;
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
+> = BuiltInHandshakeErrorCode | CustomHandshakeErrorCode<RejectionCodeSchemas>;
 
 const handshakeResponseSchema = <Code extends TSchema>(code: Code) =>
   Type.Object({
@@ -172,12 +178,12 @@ export const ControlMessageHandshakeResponseSchema = handshakeResponseSchema(
 );
 
 /**
- * A handshake response schema that additionally accepts application-defined
+ * A handshake response schema that additionally accepts custom
  * rejection codes. Both peers must be configured with the same codes: an
- * unconfigured peer rejects an application code as a malformed response.
+ * unconfigured peer rejects a custom code as a malformed response.
  */
 export const ControlMessageHandshakeResponseSchemaWithCodes = <
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas,
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
 >(
   rejectionCodeSchemas: RejectionCodeSchemas,
 ) =>
@@ -305,7 +311,7 @@ export function handshakeRequestMessage({
 export const SESSION_STATE_MISMATCH = 'session state mismatch';
 
 export function handshakeResponseMessage<
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
 >({
   from,
   to,
@@ -313,7 +319,7 @@ export function handshakeResponseMessage<
 }: {
   from: TransportClientId;
   to: TransportClientId;
-  // the code may be an application-defined rejection code, which is only
+  // the code may be a custom rejection code, which is only
   // known to peers that registered it in their handshake options
   status:
     | { ok: true; sessionId: string }

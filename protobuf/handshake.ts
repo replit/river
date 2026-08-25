@@ -11,8 +11,8 @@ import {
   type ServerHandshakeOptions,
 } from '../router/handshake';
 import {
-  type ApplicationErrorCode,
-  type ApplicationErrorCodeSchemas,
+  type CustomHandshakeErrorCode,
+  type CustomHandshakeErrorCodeSchemas,
   HandshakeErrorCustomHandlerFatalResponseCodes,
   type TransportClientId,
 } from '../transport/message';
@@ -32,7 +32,7 @@ type ConstructHandshake<Schema extends DescMessage> = () =>
 type ValidateHandshake<
   Schema extends DescMessage,
   ParsedMetadata,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
 > = (
   metadata: MessageShape<Schema>,
   previousParsedMetadata?: ParsedMetadata,
@@ -40,11 +40,11 @@ type ValidateHandshake<
 ) =>
   | ParsedMetadata
   | ProtobufHandshakeFailureCode
-  | ApplicationErrorCode<RejectionCodeSchemas>
+  | CustomHandshakeErrorCode<RejectionCodeSchemas>
   | Promise<
       | ParsedMetadata
       | ProtobufHandshakeFailureCode
-      | ApplicationErrorCode<RejectionCodeSchemas>
+      | CustomHandshakeErrorCode<RejectionCodeSchemas>
     >;
 
 /**
@@ -52,7 +52,7 @@ type ValidateHandshake<
  */
 export function createClientHandshakeOptions<
   Schema extends DescMessage,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
 >(
   schema: Schema,
   construct: ConstructHandshake<Schema>,
@@ -77,7 +77,7 @@ export function createClientHandshakeOptions<
 export function createServerHandshakeOptions<
   Schema extends DescMessage,
   ParsedMetadata extends object = object,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
 >(
   schema: Schema,
   validate: ValidateHandshake<

@@ -5,7 +5,7 @@ import {
   ControlMessageHandshakeResponseSchema,
   ControlMessageHandshakeResponseSchemaWithCodes,
   ControlMessageRehandshakeRequestSchema,
-  type ApplicationErrorCodeSchemas,
+  type CustomHandshakeErrorCodeSchemas,
   type HandshakeErrorCode,
   HandshakeErrorRetriableResponseCodes,
   OpaqueTransportMessage,
@@ -54,8 +54,8 @@ type ConstructedHandshakeMetadata =
 
 export abstract class ClientTransport<
   ConnType extends Connection,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
-> extends Transport<ConnType, RejectionCodeSchemas> {
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
+> extends Transport<ConnType, HandshakeErrorCode<RejectionCodeSchemas>> {
   /**
    * The options for this transport.
    */
@@ -77,7 +77,7 @@ export abstract class ClientTransport<
   handshakeExtensions?: ClientHandshakeOptions<TSchema, RejectionCodeSchemas>;
 
   /**
-   * Handshake response schema extended with the application-defined
+   * Handshake response schema extended with the custom
    * rejection codes, when any are registered.
    */
   protected handshakeResponseSchema:

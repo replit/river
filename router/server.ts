@@ -29,7 +29,7 @@ import {
   cancelMessage,
   ProtocolVersion,
   TransportClientId,
-  type ApplicationErrorCodeSchemas,
+  type CustomHandshakeErrorCodeSchemas,
 } from '../transport/message';
 import { ProcedureHandlerContext } from './context';
 import { Logger } from '../logging/log';
@@ -113,7 +113,7 @@ class RiverServer<
   MetadataSchema extends TSchema,
   ParsedMetadata extends object,
   Services extends AnyServiceSchemaMap<Context>,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
 > implements Server<Context, ParsedMetadata, Services>
 {
   private transport: ServerTransport<
@@ -1179,7 +1179,7 @@ export function createServer<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Services extends AnyServiceSchemaMap<any>,
   Context extends MaybeDisposable = MaybeDisposable,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
 >(
   transport: ServerTransport<
     Connection,

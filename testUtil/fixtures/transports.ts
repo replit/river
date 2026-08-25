@@ -17,7 +17,7 @@ import {
   ProvidedServerTransportOptions,
 } from '../../transport/options';
 import {
-  type ApplicationErrorCodeSchemas,
+  type CustomHandshakeErrorCodeSchemas,
   TransportClientId,
 } from '../../transport/message';
 import { ClientTransport } from '../../transport/client';
@@ -34,7 +34,7 @@ export interface TestTransportOptions {
 
 export interface TestSetupHelpers {
   getClientTransport: <
-    RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+    RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
   >(
     id: TransportClientId,
     handshakeOptions?: ClientHandshakeOptions<TSchema, RejectionCodeSchemas>,
@@ -42,7 +42,7 @@ export interface TestSetupHelpers {
   getServerTransport: <
     MetadataSchema extends TSchema = TSchema,
     ParsedMetadata extends object = object,
-    RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+    RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
   >(
     id?: TransportClientId,
     handshakeOptions?: ServerHandshakeOptions<
@@ -89,7 +89,7 @@ export const transports: Array<TransportMatrixEntry> = [
           }
         },
         getClientTransport: <
-          RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+          RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
         >(
           id: TransportClientId,
           handshakeOptions?: ClientHandshakeOptions<
@@ -124,7 +124,7 @@ export const transports: Array<TransportMatrixEntry> = [
         getServerTransport: <
           MetadataSchema extends TSchema,
           ParsedMetadata extends object,
-          RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+          RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
         >(
           id = 'SERVER',
           handshakeOptions:

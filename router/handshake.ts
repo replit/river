@@ -1,7 +1,7 @@
 import type { Static, TSchema } from 'typebox';
 import {
-  type ApplicationErrorCode,
-  type ApplicationErrorCodeSchemas,
+  type CustomHandshakeErrorCode,
+  type CustomHandshakeErrorCodeSchemas,
   HandshakeErrorCustomHandlerFatalResponseCodes,
   type TransportClientId,
 } from '../transport/message';
@@ -13,24 +13,24 @@ type ConstructHandshake<T extends TSchema> = () =>
 type ValidateHandshake<
   T extends TSchema,
   ParsedMetadata,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
 > = (
   metadata: Static<T>,
   previousParsedMetadata?: ParsedMetadata,
   from?: TransportClientId,
 ) =>
   | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
-  | ApplicationErrorCode<RejectionCodeSchemas>
+  | CustomHandshakeErrorCode<RejectionCodeSchemas>
   | ParsedMetadata
   | Promise<
       | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
-      | ApplicationErrorCode<RejectionCodeSchemas>
+      | CustomHandshakeErrorCode<RejectionCodeSchemas>
       | ParsedMetadata
     >;
 
 export interface ClientHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
 > {
   /**
    * Schema for the metadata that the client sends to the server
@@ -39,7 +39,7 @@ export interface ClientHandshakeOptions<
   schema: MetadataSchema;
 
   /**
-   * Application-defined rejection codes the server may answer the handshake
+   * Custom rejection codes the server may answer the handshake
    * with, sent in the response's `code` field. Must match the server's
    * {@link ServerHandshakeOptions.rejectionCodeSchemas}: an unconfigured code
    * is rejected as a malformed handshake response. Pass a tuple of TypeBox
@@ -66,7 +66,7 @@ export interface ClientHandshakeOptions<
 export interface ServerHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
 > {
   /**
    * Schema for the metadata that the server receives from the client
@@ -75,7 +75,7 @@ export interface ServerHandshakeOptions<
   schema: MetadataSchema;
 
   /**
-   * Application-defined rejection codes that {@link validate} may return.
+   * Custom rejection codes that {@link validate} may return.
    * They travel in the handshake response's `code` field and are fatal like
    * the built-in custom-handler codes. Clients must register the same codes
    * in {@link ClientHandshakeOptions.rejectionCodeSchemas} or they reject the
@@ -117,7 +117,7 @@ export interface ServerHandshakeOptions<
 
 export function createClientHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
 >(
   schema: MetadataSchema,
   construct: ConstructHandshake<MetadataSchema>,
@@ -130,7 +130,7 @@ export function createClientHandshakeOptions<
 export function createServerHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
 >(
   schema: MetadataSchema,
   validate: ValidateHandshake<

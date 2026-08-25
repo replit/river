@@ -5,8 +5,8 @@ import {
   ControlMessageHandshakeRequestSchema,
   ControlMessageRehandshakeResponseSchema,
   HandshakeErrorCustomHandlerFatalResponseCodes,
-  type ApplicationErrorCode,
-  type ApplicationErrorCodeSchemas,
+  type CustomHandshakeErrorCode,
+  type CustomHandshakeErrorCodeSchemas,
   type HandshakeErrorCode,
   OpaqueTransportMessage,
   acceptedProtocolVersions,
@@ -38,8 +38,8 @@ export abstract class ServerTransport<
   ConnType extends Connection,
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
-> extends Transport<ConnType, RejectionCodeSchemas> {
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
+> extends Transport<ConnType, HandshakeErrorCode<RejectionCodeSchemas>> {
   /**
    * The options for this transport.
    */
@@ -92,7 +92,7 @@ export abstract class ServerTransport<
     value: unknown,
   ): value is
     | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
-    | ApplicationErrorCode<RejectionCodeSchemas> {
+    | CustomHandshakeErrorCode<RejectionCodeSchemas> {
     return (
       Value.Check(HandshakeErrorCustomHandlerFatalResponseCodes, value) ||
       (this.handshakeExtensions?.rejectionCodeSchemas?.some((schema) =>

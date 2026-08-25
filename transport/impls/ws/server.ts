@@ -1,5 +1,5 @@
 import {
-  type ApplicationErrorCodeSchemas,
+  type CustomHandshakeErrorCodeSchemas,
   TransportClientId,
 } from '../../message';
 import { WebSocketServer } from 'ws';
@@ -28,7 +28,7 @@ function cleanHeaders(
 export class WebSocketServerTransport<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
 > extends ServerTransport<
   WebSocketConnection,
   MetadataSchema,
