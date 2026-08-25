@@ -151,20 +151,25 @@ export type HandshakeErrorCode<
   | Static<typeof HandshakeErrorResponseCodes>
   | ApplicationErrorCode<RejectionCodeSchemas>;
 
-export const ControlMessageHandshakeResponseSchema = Type.Object({
-  type: Type.Literal('HANDSHAKE_RESP'),
-  status: Type.Union([
-    Type.Object({
-      ok: Type.Literal(true),
-      sessionId: Type.String(),
-    }),
-    Type.Object({
-      ok: Type.Literal(false),
-      reason: Type.String(),
-      code: HandshakeErrorResponseCodes,
-    }),
-  ]),
-});
+const handshakeResponseSchema = <Code extends TSchema>(code: Code) =>
+  Type.Object({
+    type: Type.Literal('HANDSHAKE_RESP'),
+    status: Type.Union([
+      Type.Object({
+        ok: Type.Literal(true),
+        sessionId: Type.String(),
+      }),
+      Type.Object({
+        ok: Type.Literal(false),
+        reason: Type.String(),
+        code,
+      }),
+    ]),
+  });
+
+export const ControlMessageHandshakeResponseSchema = handshakeResponseSchema(
+  HandshakeErrorResponseCodes,
+);
 
 /**
  * A handshake response schema that additionally accepts application-defined
@@ -176,23 +181,9 @@ export const ControlMessageHandshakeResponseSchemaWithCodes = <
 >(
   rejectionCodeSchemas: RejectionCodeSchemas,
 ) =>
-  Type.Object({
-    type: Type.Literal('HANDSHAKE_RESP'),
-    status: Type.Union([
-      Type.Object({
-        ok: Type.Literal(true),
-        sessionId: Type.String(),
-      }),
-      Type.Object({
-        ok: Type.Literal(false),
-        reason: Type.String(),
-        code: Type.Union([
-          HandshakeErrorResponseCodes,
-          ...rejectionCodeSchemas,
-        ]),
-      }),
-    ]),
-  });
+  handshakeResponseSchema(
+    Type.Union([HandshakeErrorResponseCodes, ...rejectionCodeSchemas]),
+  );
 
 /**
  * Reserved stream id for the follow-up handshake (re-handshake) control

@@ -22,7 +22,7 @@ import {
 } from './options';
 import { DeleteSessionOptions, Transport } from './transport';
 import { coerceErrorString } from './stringifyError';
-import type { TSchema } from 'typebox';
+import type { Static, TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { ProtocolError } from './events';
 import { Connection } from './connection';
@@ -88,13 +88,17 @@ export abstract class ServerTransport<
     this.handshakeExtensions = options;
   }
 
-  private isApplicationRejectionCode(
+  private isRejectionCode(
     value: unknown,
-  ): value is ApplicationErrorCode<RejectionCodeSchemas> {
+  ): value is
+    | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
+    | ApplicationErrorCode<RejectionCodeSchemas> {
     return (
-      this.handshakeExtensions?.rejectionCodeSchemas?.some((schema) =>
+      Value.Check(HandshakeErrorCustomHandlerFatalResponseCodes, value) ||
+      (this.handshakeExtensions?.rejectionCodeSchemas?.some((schema) =>
         Value.Check(schema, value),
-      ) ?? false
+      ) ??
+        false)
     );
   }
 
@@ -225,17 +229,11 @@ export abstract class ServerTransport<
       return;
     }
 
-    if (
-      Value.Check(
-        HandshakeErrorCustomHandlerFatalResponseCodes,
-        parsedMetadataOrFailureCode,
-      ) ||
-      this.isApplicationRejectionCode(parsedMetadataOrFailureCode)
-    ) {
+    if (this.isRejectionCode(parsedMetadataOrFailureCode)) {
       this.teardownForFailedRehandshake(
         session,
         're-handshake metadata rejected by handshake handler',
-        parsedMetadataOrFailureCode as HandshakeErrorCode<RejectionCodeSchemas>,
+        parsedMetadataOrFailureCode,
       );
 
       return;
@@ -521,18 +519,12 @@ export abstract class ServerTransport<
       }
 
       // handler rejected the connection
-      if (
-        Value.Check(
-          HandshakeErrorCustomHandlerFatalResponseCodes,
-          parsedMetadataOrFailureCode,
-        ) ||
-        this.isApplicationRejectionCode(parsedMetadataOrFailureCode)
-      ) {
+      if (this.isRejectionCode(parsedMetadataOrFailureCode)) {
         this.rejectHandshakeRequest(
           session,
           msg.from,
           'rejected by handshake handler',
-          parsedMetadataOrFailureCode as HandshakeErrorCode<RejectionCodeSchemas>,
+          parsedMetadataOrFailureCode,
           {
             ...session.loggingMetadata,
             connectedTo: msg.from,
