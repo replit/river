@@ -89,7 +89,7 @@ export class EventDispatcher<
       this.eventListeners[eventType] = new Set();
     }
 
-    this.eventListeners[eventType].add(handler);
+    this.eventListeners[eventType]?.add(handler);
   }
 
   removeEventListener<K extends T>(
