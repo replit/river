@@ -109,11 +109,13 @@ describe('message helpers', () => {
     expect(mFail.payload.status.ok).toBe(false);
   });
 
-  test('handshake response schema with application codes', () => {
-    const extended = ControlMessageHandshakeResponseSchemaWithCodes([
-      Type.Literal('REPL_NOT_FOUND'),
-      Type.Literal('TOKEN_EXPIRED'),
-    ] as const);
+  test('handshake response schema with custom error codes', () => {
+    const extended = ControlMessageHandshakeResponseSchemaWithCodes(
+      Type.Union([
+        Type.Literal('REPL_NOT_FOUND'),
+        Type.Literal('TOKEN_EXPIRED'),
+      ]),
+    );
     const rejection = {
       type: 'HANDSHAKE_RESP',
       status: {

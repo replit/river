@@ -5,7 +5,7 @@ import {
   ControlMessageHandshakeResponseSchema,
   ControlMessageHandshakeResponseSchemaWithCodes,
   ControlMessageRehandshakeRequestSchema,
-  type ApplicationErrorCodeSchemas,
+  type CustomHandshakeErrorCodeSchema,
   type HandshakeErrorCode,
   HandshakeErrorRetriableResponseCodes,
   OpaqueTransportMessage,
@@ -54,8 +54,8 @@ type ConstructedHandshakeMetadata =
 
 export abstract class ClientTransport<
   ConnType extends Connection,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
-> extends Transport<ConnType, RejectionCodeSchemas> {
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
+> extends Transport<ConnType, HandshakeErrorCode<RejectionCodeSchema>> {
   /**
    * The options for this transport.
    */
@@ -74,10 +74,10 @@ export abstract class ClientTransport<
   /**
    * Optional handshake options for this client.
    */
-  handshakeExtensions?: ClientHandshakeOptions<TSchema, RejectionCodeSchemas>;
+  handshakeExtensions?: ClientHandshakeOptions<TSchema, RejectionCodeSchema>;
 
   /**
-   * Handshake response schema extended with the application-defined
+   * Handshake response schema extended with the custom
    * rejection codes, when any are registered.
    */
   protected handshakeResponseSchema:
@@ -112,17 +112,17 @@ export abstract class ClientTransport<
     this.retryBudget = new LeakyBucketRateLimit(this.options);
   }
 
-  extendHandshake(
-    options: ClientHandshakeOptions<TSchema, RejectionCodeSchemas>,
-  ) {
+  extendHandshake = (
+    options: ClientHandshakeOptions<TSchema, RejectionCodeSchema>,
+  ) => {
     this.handshakeExtensions = options;
-    if (options.rejectionCodeSchemas?.length) {
+    if (options.rejectionCodeSchema) {
       this.handshakeResponseSchema =
         ControlMessageHandshakeResponseSchemaWithCodes(
-          options.rejectionCodeSchemas,
+          options.rejectionCodeSchema,
         );
     }
-  }
+  };
 
   protected handleRehandshakeMessage(message: OpaqueTransportMessage): void {
     if (!Value.Check(ControlMessageRehandshakeRequestSchema, message.payload)) {
@@ -411,7 +411,7 @@ export abstract class ClientTransport<
         this.protocolError({
           type: ProtocolError.HandshakeFailed,
           code: msg.payload.status
-            .code as HandshakeErrorCode<RejectionCodeSchemas>,
+            .code as HandshakeErrorCode<RejectionCodeSchema>,
           message: reason,
         });
       }

@@ -1,4 +1,10 @@
-import { Type, type TLiteral, type TSchema, type Static } from 'typebox';
+import {
+  Type,
+  type TLiteral,
+  type TSchema,
+  type TUnion,
+  type Static,
+} from 'typebox';
 import { PropagationContext } from '../tracing';
 import { generateId } from './id';
 // type-only: a value import closes a transport <-> router require cycle
@@ -124,32 +130,36 @@ export const HandshakeErrorResponseCodes = Type.Union([
 ]);
 
 /**
- * A tuple of TypeBox literal schemas declaring the application-defined
- * handshake rejection codes, e.g.
- * `[Type.Literal('REPL_NOT_FOUND'), Type.Literal('TOKEN_EXPIRED')] as const`.
+ * A TypeBox union of literals declaring the custom handshake rejection codes.
  */
-export type ApplicationErrorCodeSchemas = ReadonlyArray<TLiteral<string>>;
+export type CustomHandshakeErrorCodeSchema = TUnion<Array<TLiteral<string>>>;
 
 /**
- * The union of codes declared by a tuple of rejection code schemas.
- * Widened schemas (`TLiteral<string>` rather than a specific literal)
- * contribute no codes.
+ * The union of codes declared by a rejection code schema. Widened literal
+ * schemas (`TLiteral<string>` rather than a specific literal) contribute no
+ * codes.
  */
-export type ApplicationErrorCode<
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas,
-> = string extends Static<RejectionCodeSchemas[number]>
+export type CustomHandshakeErrorCode<
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
+> = string extends Static<RejectionCodeSchema>
   ? never
-  : Static<RejectionCodeSchemas[number]>;
+  : Static<RejectionCodeSchema>;
 
 /**
- * The protocol-level handshake error codes plus any application-defined
- * rejection codes the application registered in its handshake options.
+ * The protocol-level handshake error codes River can emit without any custom
+ * rejection codes.
+ */
+export type BuiltInHandshakeErrorCode = Static<
+  typeof HandshakeErrorResponseCodes
+>;
+
+/**
+ * The protocol-level handshake error codes plus any custom rejection codes
+ * registered in the handshake options.
  */
 export type HandshakeErrorCode<
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
-> =
-  | Static<typeof HandshakeErrorResponseCodes>
-  | ApplicationErrorCode<RejectionCodeSchemas>;
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
+> = BuiltInHandshakeErrorCode | CustomHandshakeErrorCode<RejectionCodeSchema>;
 
 const handshakeResponseSchema = <Code extends TSchema>(code: Code) =>
   Type.Object({
@@ -172,17 +182,17 @@ export const ControlMessageHandshakeResponseSchema = handshakeResponseSchema(
 );
 
 /**
- * A handshake response schema that additionally accepts application-defined
+ * A handshake response schema that additionally accepts custom
  * rejection codes. Both peers must be configured with the same codes: an
- * unconfigured peer rejects an application code as a malformed response.
+ * unconfigured peer rejects a custom code as a malformed response.
  */
 export const ControlMessageHandshakeResponseSchemaWithCodes = <
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
 >(
-  rejectionCodeSchemas: RejectionCodeSchemas,
+  rejectionCodeSchema: RejectionCodeSchema,
 ) =>
   handshakeResponseSchema(
-    Type.Union([HandshakeErrorResponseCodes, ...rejectionCodeSchemas]),
+    Type.Union([HandshakeErrorResponseCodes, rejectionCodeSchema]),
   );
 
 /**
@@ -305,7 +315,7 @@ export function handshakeRequestMessage({
 export const SESSION_STATE_MISMATCH = 'session state mismatch';
 
 export function handshakeResponseMessage<
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
 >({
   from,
   to,
@@ -313,14 +323,14 @@ export function handshakeResponseMessage<
 }: {
   from: TransportClientId;
   to: TransportClientId;
-  // the code may be an application-defined rejection code, which is only
+  // the code may be a custom rejection code, which is only
   // known to peers that registered it in their handshake options
   status:
     | { ok: true; sessionId: string }
     | {
         ok: false;
         reason: string;
-        code: HandshakeErrorCode<RejectionCodeSchemas>;
+        code: HandshakeErrorCode<RejectionCodeSchema>;
       };
 }): TransportMessage<Static<typeof ControlMessageHandshakeResponseSchema>> {
   return {

@@ -1,7 +1,6 @@
 import { Connection } from './connection';
 import type {
-  ApplicationErrorCodeSchemas,
-  HandshakeErrorCode,
+  BuiltInHandshakeErrorCode,
   OpaqueTransportMessage,
 } from './message';
 import { Session, SessionState } from './sessionStateMachine';
@@ -19,8 +18,12 @@ export const ProtocolError = {
 export type ProtocolErrorType =
   (typeof ProtocolError)[keyof typeof ProtocolError];
 
+/**
+ * Transport events. `HandshakeFailureCode` is the full set of codes observable
+ * on handshake-failed protocol errors, including built-in and custom codes.
+ */
 export interface EventMap<
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  HandshakeFailureCode extends string = BuiltInHandshakeErrorCode,
 > {
   message: OpaqueTransportMessage;
   sessionStatus:
@@ -41,7 +44,7 @@ export interface EventMap<
   protocolError:
     | {
         type: (typeof ProtocolError)['HandshakeFailed'];
-        code: HandshakeErrorCode<RejectionCodeSchemas>;
+        code: HandshakeFailureCode;
         message: string;
       }
     | {
@@ -59,15 +62,15 @@ export interface EventMap<
 export type EventTypes = keyof EventMap;
 export type EventHandler<
   K extends EventTypes,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
-> = (event: EventMap<RejectionCodeSchemas>[K]) => unknown;
+  HandshakeFailureCode extends string = BuiltInHandshakeErrorCode,
+> = (event: EventMap<HandshakeFailureCode>[K]) => unknown;
 
 export class EventDispatcher<
   T extends EventTypes,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  HandshakeFailureCode extends string,
 > {
   private eventListeners: {
-    [K in T]?: Set<EventHandler<K, RejectionCodeSchemas>>;
+    [K in T]?: Set<EventHandler<K, HandshakeFailureCode>>;
   } = {};
 
   removeAllListeners() {
@@ -80,18 +83,18 @@ export class EventDispatcher<
 
   addEventListener<K extends T>(
     eventType: K,
-    handler: EventHandler<K, RejectionCodeSchemas>,
+    handler: EventHandler<K, HandshakeFailureCode>,
   ) {
     if (!this.eventListeners[eventType]) {
       this.eventListeners[eventType] = new Set();
     }
 
-    this.eventListeners[eventType]?.add(handler);
+    this.eventListeners[eventType].add(handler);
   }
 
   removeEventListener<K extends T>(
     eventType: K,
-    handler: EventHandler<K, RejectionCodeSchemas>,
+    handler: EventHandler<K, HandshakeFailureCode>,
   ) {
     const handlers = this.eventListeners[eventType];
     if (handlers) {
@@ -101,7 +104,7 @@ export class EventDispatcher<
 
   dispatchEvent<K extends T>(
     eventType: K,
-    event: EventMap<RejectionCodeSchemas>[K],
+    event: EventMap<HandshakeFailureCode>[K],
   ) {
     const handlers = this.eventListeners[eventType];
     if (handlers) {

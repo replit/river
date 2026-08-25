@@ -1947,17 +1947,17 @@ describe.each(testMatrix())(
       });
     });
 
-    test('custom handler can reject with an application-defined code', async () => {
+    test('custom handler can reject with a registered handshake error code', async () => {
       const schema = Type.Object({
         foo: Type.String(),
       });
 
-      const rejectionCodeSchemas = [
+      const rejectionCodeSchema = Type.Union([
         Type.Literal('REPL_NOT_FOUND'),
         Type.Literal('TOKEN_EXPIRED'),
-      ] as const;
+      ]);
 
-      type ApplicationErrorCode = Static<(typeof rejectionCodeSchemas)[number]>;
+      type CustomHandshakeErrorCode = Static<typeof rejectionCodeSchema>;
 
       interface ParsedMetadata {
         foo: string;
@@ -1968,50 +1968,50 @@ describe.each(testMatrix())(
         createServerHandshakeOptions<
           typeof schema,
           ParsedMetadata,
-          typeof rejectionCodeSchemas
+          typeof rejectionCodeSchema
         >(
           schema,
           // @ts-expect-error only declared rejection codes may be returned
           async () => 'SOME_OTHER_CODE',
           undefined,
-          rejectionCodeSchemas,
+          rejectionCodeSchema,
         ),
       ).toBeDefined();
 
       const broadCode = String('REPL_NOT_FOUND');
-      const broadCodeSchemas = [Type.Literal(broadCode)];
+      const broadCodeSchema = Type.Union([Type.Literal(broadCode)]);
 
       expect(
         createServerHandshakeOptions<
           typeof schema,
           ParsedMetadata,
-          typeof broadCodeSchemas
+          typeof broadCodeSchema
         >(
           schema,
           // @ts-expect-error widened literal schemas contribute no codes
           async () => broadCode,
           undefined,
-          broadCodeSchemas,
+          broadCodeSchema,
         ),
       ).toBeDefined();
 
-      const parse = vi.fn(async (): Promise<ApplicationErrorCode> => {
+      const parse = vi.fn(async (): Promise<CustomHandshakeErrorCode> => {
         return 'REPL_NOT_FOUND';
       });
       const serverTransport = getServerTransport<
         typeof schema,
         ParsedMetadata,
-        typeof rejectionCodeSchemas
+        typeof rejectionCodeSchema
       >('SERVER', {
         schema,
         validate: parse,
-        rejectionCodeSchemas,
+        rejectionCodeSchema,
       });
 
       const clientTransport = getClientTransport('client', {
         schema,
         construct: async () => ({ foo: 'foo' }),
-        rejectionCodeSchemas,
+        rejectionCodeSchema,
       });
 
       const clientHandshakeFailed = vi.fn();
@@ -2055,14 +2055,14 @@ describe.each(testMatrix())(
       });
     });
 
-    test('an application code is rejected by an unconfigured client', async () => {
+    test('an unregistered handshake error code is rejected by an unconfigured client', async () => {
       const schema = Type.Object({
         foo: Type.String(),
       });
 
-      const rejectionCodeSchemas = [Type.Literal('REPL_NOT_FOUND')] as const;
+      const rejectionCodeSchema = Type.Union([Type.Literal('REPL_NOT_FOUND')]);
 
-      type ApplicationErrorCode = Static<(typeof rejectionCodeSchemas)[number]>;
+      type CustomHandshakeErrorCode = Static<typeof rejectionCodeSchema>;
 
       interface ParsedMetadata {
         foo: string;
@@ -2071,14 +2071,15 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport<
         typeof schema,
         ParsedMetadata,
-        typeof rejectionCodeSchemas
+        typeof rejectionCodeSchema
       >('SERVER', {
         schema,
-        validate: async (): Promise<ApplicationErrorCode> => 'REPL_NOT_FOUND',
-        rejectionCodeSchemas,
+        validate: async (): Promise<CustomHandshakeErrorCode> =>
+          'REPL_NOT_FOUND',
+        rejectionCodeSchema,
       });
 
-      // the client did not register the application code: it must treat the
+      // the client did not register the custom code: it must treat the
       // response as malformed rather than accept an unknown code
       const clientTransport = getClientTransport('client', {
         schema,
@@ -2104,9 +2105,7 @@ describe.each(testMatrix())(
       expect(clientHandshakeFailed).not.toHaveBeenCalled();
 
       await testFinishesCleanly({ clientTransports: [clientTransport] });
-      await testFinishesCleanly<typeof rejectionCodeSchemas>({
-        serverTransport,
-      });
+      await testFinishesCleanly({ serverTransport });
     });
   },
 );

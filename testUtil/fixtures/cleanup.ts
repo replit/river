@@ -8,9 +8,10 @@ import {
 import { Server } from '../../router';
 import { AnyServiceSchemaMap, MaybeDisposable } from '../../router/services';
 import { numberOfConnections, testingSessionOptions } from '..';
+import type { TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import {
-  type ApplicationErrorCodeSchemas,
+  type CustomHandshakeErrorCodeSchema,
   ControlMessageAckSchema,
 } from '../../transport/message';
 
@@ -40,8 +41,8 @@ export async function advanceFakeTimersByConnectionBackoff() {
 }
 
 export async function ensureTransportIsClean<
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
->(t: Transport<Connection, RejectionCodeSchemas>) {
+  HandshakeFailureCode extends string,
+>(t: Transport<Connection, HandshakeFailureCode>) {
   await advanceFakeTimersBySessionGrace();
   await waitFor(() =>
     expect(
@@ -62,8 +63,8 @@ export function waitFor<T>(cb: () => T | Promise<T>) {
 }
 
 export async function ensureTransportBuffersAreEventuallyEmpty<
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
->(t: Transport<Connection, RejectionCodeSchemas>) {
+  HandshakeFailureCode extends string,
+>(t: Transport<Connection, HandshakeFailureCode>) {
   // wait for send buffers to be flushed
   // ignore heartbeat messages
   await waitFor(() =>
@@ -104,8 +105,8 @@ export async function ensureServerIsClean(
 
 export async function cleanupTransports<
   ConnType extends Connection,
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
->(transports: Array<Transport<ConnType, RejectionCodeSchemas>>) {
+  HandshakeFailureCode extends string,
+>(transports: Array<Transport<ConnType, HandshakeFailureCode>>) {
   for (const t of transports) {
     if (t.getStatus() !== 'closed') {
       t.log?.info('*** end of test cleanup ***', { clientId: t.clientId });
@@ -115,17 +116,21 @@ export async function cleanupTransports<
 }
 
 export async function testFinishesCleanly<
-  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  MetadataSchema extends TSchema,
+  ParsedMetadata extends object,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
 >({
   clientTransports,
   serverTransport,
   server,
 }: Partial<{
-  clientTransports: Array<ClientTransport<Connection, RejectionCodeSchemas>>;
-  // MetadataSchema and ParsedMetadata are not used in this test,
-  // so we can safely use any here
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  serverTransport: ServerTransport<Connection, any, any, RejectionCodeSchemas>;
+  clientTransports: Array<ClientTransport<Connection, RejectionCodeSchema>>;
+  serverTransport: ServerTransport<
+    Connection,
+    MetadataSchema,
+    ParsedMetadata,
+    RejectionCodeSchema
+  >;
   server: Server<MaybeDisposable, object, AnyServiceSchemaMap>;
 }>) {
   // pre-close invariants

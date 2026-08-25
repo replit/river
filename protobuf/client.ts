@@ -6,6 +6,7 @@ import type {
   MessageInitShape,
   MessageShape,
 } from '@bufbuild/protobuf';
+import type { TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { ClientTransport } from '../transport/client';
 import { Connection } from '../transport/connection';
@@ -13,6 +14,7 @@ import { EventMap } from '../transport/events';
 import {
   ControlFlags,
   ControlMessageCloseSchema,
+  type CustomHandshakeErrorCodeSchema,
   OpaqueTransportMessage,
   TransportClientId,
   cancelMessage,
@@ -75,13 +77,16 @@ interface StartedMethodCall<
 /**
  * Creates a protobuf client for a single protobuf service descriptor.
  */
-export function createClient<Service extends DescService>(
+export function createClient<
+  Service extends DescService,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
+>(
   service: Service,
-  transport: ClientTransport<Connection>,
+  transport: ClientTransport<Connection, RejectionCodeSchema>,
   serverId: TransportClientId,
   providedClientOptions: Partial<
     ClientOptions & {
-      handshakeOptions: ClientHandshakeOptions;
+      handshakeOptions: ClientHandshakeOptions<TSchema, RejectionCodeSchema>;
     }
   > = {},
 ): ProtobufClient<Service> {
@@ -111,10 +116,13 @@ export function createClient<Service extends DescService>(
   return client as ProtobufClient<Service>;
 }
 
-function createMethodCaller<Method extends DescMethod>(
+function createMethodCaller<
+  Method extends DescMethod,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
+>(
   service: DescService,
   method: Method,
-  transport: ClientTransport<Connection>,
+  transport: ClientTransport<Connection, RejectionCodeSchema>,
   serverId: TransportClientId,
   clientOptions: ClientOptions,
 ): ClientMethod<Method> {
@@ -235,9 +243,11 @@ function createMethodCaller<Method extends DescMethod>(
   }
 }
 
-function connectOnInvokeIfNeeded(
+function connectOnInvokeIfNeeded<
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
+>(
   clientOptions: ClientOptions,
-  transport: ClientTransport<Connection>,
+  transport: ClientTransport<Connection, RejectionCodeSchema>,
   serverId: TransportClientId,
 ) {
   if (clientOptions.connectOnInvoke && !transport.sessions.has(serverId)) {
@@ -245,10 +255,13 @@ function connectOnInvokeIfNeeded(
   }
 }
 
-function startMethodCall<Method extends DescMethod>(
+function startMethodCall<
+  Method extends DescMethod,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
+>(
   service: DescService,
   method: Method,
-  transport: ClientTransport<Connection>,
+  transport: ClientTransport<Connection, RejectionCodeSchema>,
   serverId: TransportClientId,
   initialPayload: Uint8Array,
   procClosesWithInit: boolean,
