@@ -85,11 +85,7 @@ export class EventDispatcher<
     eventType: K,
     handler: EventHandler<K, HandshakeFailureCode>,
   ) {
-    if (!this.eventListeners[eventType]) {
-      this.eventListeners[eventType] = new Set();
-    }
-
-    this.eventListeners[eventType].add(handler);
+    (this.eventListeners[eventType] ??= new Set()).add(handler);
   }
 
   removeEventListener<K extends T>(
