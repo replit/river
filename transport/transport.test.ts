@@ -1978,7 +1978,7 @@ describe.each(testMatrix())(
         ),
       ).toBeDefined();
 
-      const broadCode: string = 'REPL_NOT_FOUND';
+      const broadCode = String('REPL_NOT_FOUND');
       const broadCodeSchemas = [Type.Literal(broadCode)];
 
       expect(
@@ -2056,7 +2056,10 @@ describe.each(testMatrix())(
         foo: Type.String(),
       });
 
-      type ApplicationErrorCode = 'REPL_NOT_FOUND';
+      const rejectionCodeSchema = Type.Literal('REPL_NOT_FOUND');
+
+      type ApplicationErrorCode = Static<typeof rejectionCodeSchema>;
+
       interface ParsedMetadata {
         foo: string;
       }
@@ -2068,7 +2071,7 @@ describe.each(testMatrix())(
       >('SERVER', {
         schema,
         validate: async (): Promise<ApplicationErrorCode> => 'REPL_NOT_FOUND',
-        rejectionCodeSchemas: [Type.Literal('REPL_NOT_FOUND')],
+        rejectionCodeSchemas: [rejectionCodeSchema],
       });
 
       // the client did not register the application code: it must treat the
