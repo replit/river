@@ -30,14 +30,14 @@ export interface TestTransportOptions {
 }
 
 export interface TestSetupHelpers {
-  getClientTransport: <ApplicationErrorCode extends string = never>(
+  getClientTransport: <const ApplicationErrorCode extends string = never>(
     id: TransportClientId,
     handshakeOptions?: ClientHandshakeOptions<TSchema, ApplicationErrorCode>,
   ) => ClientTransport<Connection, ApplicationErrorCode>;
   getServerTransport: <
     MetadataSchema extends TSchema = TSchema,
     ParsedMetadata extends object = object,
-    ApplicationErrorCode extends string = never,
+    const ApplicationErrorCode extends string = never,
   >(
     id?: TransportClientId,
     handshakeOptions?: ServerHandshakeOptions<
@@ -83,7 +83,7 @@ export const transports: Array<TransportMatrixEntry> = [
             }
           }
         },
-        getClientTransport: <ApplicationErrorCode extends string = never>(
+        getClientTransport: <const ApplicationErrorCode extends string = never>(
           id: TransportClientId,
           handshakeOptions?: ClientHandshakeOptions<
             TSchema,
@@ -117,7 +117,7 @@ export const transports: Array<TransportMatrixEntry> = [
         getServerTransport: <
           MetadataSchema extends TSchema,
           ParsedMetadata extends object,
-          ApplicationErrorCode extends string = never,
+          const ApplicationErrorCode extends string = never,
         >(
           id = 'SERVER',
           handshakeOptions:

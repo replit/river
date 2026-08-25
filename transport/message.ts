@@ -123,13 +123,21 @@ export const HandshakeErrorResponseCodes = Type.Union([
   HandshakeErrorFatalResponseCodes,
 ]);
 
+export type LiteralErrorCode<Code extends string> = string extends Code
+  ? never
+  : Code;
+
+export type LiteralErrorCodes<Code extends string> = ReadonlyArray<
+  LiteralErrorCode<Code>
+>;
+
 /**
  * The protocol-level handshake error codes plus any application-defined
  * rejection codes the application registered in its handshake options.
  */
 export type HandshakeErrorCode<ApplicationErrorCode extends string = never> =
   | Static<typeof HandshakeErrorResponseCodes>
-  | ApplicationErrorCode;
+  | LiteralErrorCode<ApplicationErrorCode>;
 
 export const ControlMessageHandshakeResponseSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_RESP'),

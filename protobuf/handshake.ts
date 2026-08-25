@@ -12,6 +12,8 @@ import {
 } from '../router/handshake';
 import {
   HandshakeErrorCustomHandlerFatalResponseCodes,
+  type LiteralErrorCode,
+  type LiteralErrorCodes,
   type TransportClientId,
 } from '../transport/message';
 import { decodeMessageBytes, encodeMessageBytes } from './shared';
@@ -38,9 +40,11 @@ type ValidateHandshake<
 ) =>
   | ParsedMetadata
   | ProtobufHandshakeFailureCode
-  | ApplicationErrorCode
+  | LiteralErrorCode<ApplicationErrorCode>
   | Promise<
-      ParsedMetadata | ProtobufHandshakeFailureCode | ApplicationErrorCode
+      | ParsedMetadata
+      | ProtobufHandshakeFailureCode
+      | LiteralErrorCode<ApplicationErrorCode>
     >;
 
 /**
@@ -48,12 +52,12 @@ type ValidateHandshake<
  */
 export function createClientHandshakeOptions<
   Schema extends DescMessage,
-  ApplicationErrorCode extends string = never,
+  const ApplicationErrorCode extends string = never,
 >(
   schema: Schema,
   construct: ConstructHandshake<Schema>,
   eager?: boolean,
-  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>,
+  rejectionCodes?: LiteralErrorCodes<ApplicationErrorCode>,
 ): ClientHandshakeOptions<typeof HandshakeBytesSchema, ApplicationErrorCode> {
   return createTransportClientHandshakeOptions(
     HandshakeBytesSchema,
@@ -73,7 +77,7 @@ export function createClientHandshakeOptions<
 export function createServerHandshakeOptions<
   Schema extends DescMessage,
   ParsedMetadata extends object = object,
-  ApplicationErrorCode extends string = never,
+  const ApplicationErrorCode extends string = never,
 >(
   schema: Schema,
   validate: ValidateHandshake<
@@ -82,7 +86,7 @@ export function createServerHandshakeOptions<
     NoInfer<ApplicationErrorCode>
   >,
   expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined,
-  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>,
+  rejectionCodes?: LiteralErrorCodes<ApplicationErrorCode>,
 ): ServerHandshakeOptions<
   typeof HandshakeBytesSchema,
   ParsedMetadata,

@@ -309,8 +309,7 @@ function mergeCallOptions(
   defaults: ClientOptions['defaultCallOptions'],
   caller: CallOptions | undefined,
 ): CallOptions {
-  const resolved =
-    typeof defaults === 'function' ? defaults() : (defaults ?? {});
+  const resolved = typeof defaults === 'function' ? defaults() : defaults ?? {};
 
   // Caller fields win: spread defaults first, caller second.
   return { ...resolved, ...caller };

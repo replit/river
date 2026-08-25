@@ -1,6 +1,8 @@
 import type { Static, TSchema } from 'typebox';
 import {
   HandshakeErrorCustomHandlerFatalResponseCodes,
+  type LiteralErrorCode,
+  type LiteralErrorCodes,
   type TransportClientId,
 } from '../transport/message';
 
@@ -18,11 +20,11 @@ type ValidateHandshake<
   from?: TransportClientId,
 ) =>
   | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
-  | ApplicationErrorCode
+  | LiteralErrorCode<ApplicationErrorCode>
   | ParsedMetadata
   | Promise<
       | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
-      | ApplicationErrorCode
+      | LiteralErrorCode<ApplicationErrorCode>
       | ParsedMetadata
     >;
 
@@ -40,9 +42,10 @@ export interface ClientHandshakeOptions<
    * Application-defined rejection codes the server may answer the handshake
    * with, sent in the response's `code` field. Must match the server's
    * {@link ServerHandshakeOptions.rejectionCodes}: an unconfigured code is
-   * rejected as a malformed handshake response.
+   * rejected as a malformed handshake response. Pass a literal tuple (`as
+   * const`); broad `string[]` values are rejected by the type system.
    */
-  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>;
+  rejectionCodes?: LiteralErrorCodes<ApplicationErrorCode>;
 
   /**
    * Gets the {@link HandshakeRequestMetadata} to send to the server.
@@ -76,9 +79,10 @@ export interface ServerHandshakeOptions<
    * They travel in the handshake response's `code` field and are fatal like
    * the built-in custom-handler codes. Clients must register the same codes
    * in {@link ClientHandshakeOptions.rejectionCodes} or they reject the
-   * response as malformed.
+   * response as malformed. Pass a literal tuple (`as const`); broad `string[]`
+   * values are rejected by the type system.
    */
-  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>;
+  rejectionCodes?: LiteralErrorCodes<ApplicationErrorCode>;
 
   /**
    * Parses the metadata sent by the client during the handshake into the
@@ -113,12 +117,12 @@ export interface ServerHandshakeOptions<
 
 export function createClientHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
-  ApplicationErrorCode extends string = never,
+  const ApplicationErrorCode extends string = never,
 >(
   schema: MetadataSchema,
   construct: ConstructHandshake<MetadataSchema>,
   eager?: boolean,
-  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>,
+  rejectionCodes?: LiteralErrorCodes<ApplicationErrorCode>,
 ): ClientHandshakeOptions<MetadataSchema, ApplicationErrorCode> {
   return { schema, construct, eager, rejectionCodes };
 }
@@ -126,7 +130,7 @@ export function createClientHandshakeOptions<
 export function createServerHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  ApplicationErrorCode extends string = never,
+  const ApplicationErrorCode extends string = never,
 >(
   schema: MetadataSchema,
   validate: ValidateHandshake<
@@ -135,7 +139,7 @@ export function createServerHandshakeOptions<
     NoInfer<ApplicationErrorCode>
   >,
   expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined,
-  rejectionCodes?: ReadonlyArray<ApplicationErrorCode>,
+  rejectionCodes?: LiteralErrorCodes<ApplicationErrorCode>,
 ): ServerHandshakeOptions<
   MetadataSchema,
   ParsedMetadata,

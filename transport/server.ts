@@ -6,6 +6,7 @@ import {
   ControlMessageRehandshakeResponseSchema,
   HandshakeErrorCustomHandlerFatalResponseCodes,
   type HandshakeErrorCode,
+  type LiteralErrorCode,
   OpaqueTransportMessage,
   acceptedProtocolVersions,
   TransportClientId,
@@ -88,11 +89,11 @@ export abstract class ServerTransport<
 
   private isApplicationRejectionCode(
     value: unknown,
-  ): value is ApplicationErrorCode {
+  ): value is LiteralErrorCode<ApplicationErrorCode> {
     return (
       typeof value === 'string' &&
       (this.handshakeExtensions?.rejectionCodes?.includes(
-        value as ApplicationErrorCode,
+        value as LiteralErrorCode<ApplicationErrorCode>,
       ) ??
         false)
     );

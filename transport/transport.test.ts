@@ -1952,11 +1952,8 @@ describe.each(testMatrix())(
         foo: Type.String(),
       });
 
-      type ApplicationErrorCode = 'REPL_NOT_FOUND' | 'TOKEN_EXPIRED';
-      const rejectionCodes: ReadonlyArray<ApplicationErrorCode> = [
-        'REPL_NOT_FOUND',
-        'TOKEN_EXPIRED',
-      ];
+      const rejectionCodes = ['REPL_NOT_FOUND', 'TOKEN_EXPIRED'] as const;
+      type ApplicationErrorCode = (typeof rejectionCodes)[number];
       interface ParsedMetadata {
         foo: string;
       }
@@ -1973,6 +1970,17 @@ describe.each(testMatrix())(
           async () => 'SOME_OTHER_CODE',
           undefined,
           rejectionCodes,
+        ),
+      ).toBeDefined();
+
+      const broadCodes: string[] = ['REPL_NOT_FOUND'];
+      expect(
+        createServerHandshakeOptions<typeof schema, ParsedMetadata, string>(
+          schema,
+          async () => ({ foo: 'foo' }),
+          undefined,
+          // @ts-expect-error application error codes must be string literals
+          broadCodes,
         ),
       ).toBeDefined();
 
@@ -2072,7 +2080,8 @@ describe.each(testMatrix())(
           'protocolError',
           clientHandshakeFailed,
         );
-        await cleanupTransports([clientTransport, serverTransport]);
+        await cleanupTransports([clientTransport]);
+        await cleanupTransports([serverTransport]);
       });
 
       await waitFor(() => {
@@ -2080,10 +2089,8 @@ describe.each(testMatrix())(
       });
       expect(clientHandshakeFailed).not.toHaveBeenCalled();
 
-      await testFinishesCleanly({
-        clientTransports: [clientTransport],
-        serverTransport,
-      });
+      await testFinishesCleanly({ clientTransports: [clientTransport] });
+      await testFinishesCleanly<ApplicationErrorCode>({ serverTransport });
     });
   },
 );

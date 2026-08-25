@@ -142,7 +142,7 @@ export function createMockTransportNetwork(
   }
 
   return {
-    getClientTransport: <ApplicationErrorCode extends string = never>(
+    getClientTransport: <const ApplicationErrorCode extends string = never>(
       id: TransportClientId,
       handshakeOptions?: ClientHandshakeOptions<TSchema, ApplicationErrorCode>,
     ) => {
@@ -161,7 +161,7 @@ export function createMockTransportNetwork(
     getServerTransport: <
       MetadataSchema extends TSchema = TSchema,
       ParsedMetadata extends object = object,
-      ApplicationErrorCode extends string = never,
+      const ApplicationErrorCode extends string = never,
     >(
       id = 'SERVER',
       handshakeOptions:
