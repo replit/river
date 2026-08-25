@@ -1,6 +1,8 @@
 import { TransportMessage } from '.';
 import {
   ControlFlags,
+  ControlMessageHandshakeResponseSchema,
+  ControlMessageHandshakeResponseSchemaWithCodes,
   handshakeRequestMessage,
   handshakeResponseMessage,
   isAck,
@@ -8,6 +10,8 @@ import {
   isStreamOpen,
 } from './message';
 import { describe, test, expect } from 'vitest';
+import { Type } from 'typebox';
+import { Value } from 'typebox/value';
 
 const msg = (
   to: string,
@@ -103,6 +107,51 @@ describe('message helpers', () => {
     expect(mFail.from).toBe('a');
     expect(mFail.to).toBe('b');
     expect(mFail.payload.status.ok).toBe(false);
+  });
+
+  test('handshake response schema with custom error codes', () => {
+    const extended = ControlMessageHandshakeResponseSchemaWithCodes(
+      Type.Union([
+        Type.Literal('REPL_NOT_FOUND'),
+        Type.Literal('TOKEN_EXPIRED'),
+      ]),
+    );
+    const rejection = {
+      type: 'HANDSHAKE_RESP',
+      status: {
+        ok: false,
+        reason: 'rejected by handshake handler',
+        code: 'REPL_NOT_FOUND',
+      },
+    };
+    const protocolFailure = {
+      type: 'HANDSHAKE_RESP',
+      status: {
+        ok: false,
+        reason: 'bad',
+        code: 'SESSION_STATE_MISMATCH',
+      },
+    };
+    const unknownCode = {
+      type: 'HANDSHAKE_RESP',
+      status: {
+        ok: false,
+        reason: 'bad',
+        code: 'NOT_A_REGISTERED_CODE',
+      },
+    };
+
+    expect(Value.Check(extended, rejection)).toBe(true);
+    expect(Value.Check(extended, protocolFailure)).toBe(true);
+    expect(Value.Check(extended, unknownCode)).toBe(false);
+
+    // the base schema only knows the protocol-level codes
+    expect(Value.Check(ControlMessageHandshakeResponseSchema, rejection)).toBe(
+      false,
+    );
+    expect(
+      Value.Check(ControlMessageHandshakeResponseSchema, protocolFailure),
+    ).toBe(true);
   });
 
   test('default message has no control flags set', () => {

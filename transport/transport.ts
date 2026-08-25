@@ -1,4 +1,5 @@
 import {
+  type BuiltInHandshakeErrorCode,
   OpaqueTransportMessage,
   PartialTransportMessage,
   TransportClientId,
@@ -79,7 +80,10 @@ export interface SessionBackpressure {
  * ```
  * @abstract
  */
-export abstract class Transport<ConnType extends Connection> {
+export abstract class Transport<
+  ConnType extends Connection,
+  HandshakeFailureCode extends string = BuiltInHandshakeErrorCode,
+> {
   /**
    * The status of the transport.
    */
@@ -93,7 +97,7 @@ export abstract class Transport<ConnType extends Connection> {
   /**
    * The event dispatcher for handling events of type EventTypes.
    */
-  eventDispatcher: EventDispatcher<EventTypes>;
+  eventDispatcher: EventDispatcher<EventTypes, HandshakeFailureCode>;
 
   /**
    * The options for this transport.
@@ -114,7 +118,10 @@ export abstract class Transport<ConnType extends Connection> {
     providedOptions?: ProvidedTransportOptions,
   ) {
     this.options = { ...defaultTransportOptions, ...providedOptions };
-    this.eventDispatcher = new EventDispatcher();
+    this.eventDispatcher = new EventDispatcher<
+      EventTypes,
+      HandshakeFailureCode
+    >();
     this.clientId = clientId;
     this.status = 'open';
     this.sessions = new Map();
@@ -149,10 +156,10 @@ export abstract class Transport<ConnType extends Connection> {
    * @param the type of event to listen for
    * @param handler The message handler to add.
    */
-  addEventListener<K extends EventTypes, T extends EventHandler<K>>(
-    type: K,
-    handler: T,
-  ): void {
+  addEventListener<
+    K extends EventTypes,
+    T extends EventHandler<K, HandshakeFailureCode>,
+  >(type: K, handler: T): void {
     this.eventDispatcher.addEventListener(type, handler);
   }
 
@@ -161,14 +168,16 @@ export abstract class Transport<ConnType extends Connection> {
    * @param the type of event to un-listen on
    * @param handler The message handler to remove.
    */
-  removeEventListener<K extends EventTypes, T extends EventHandler<K>>(
-    type: K,
-    handler: T,
-  ): void {
+  removeEventListener<
+    K extends EventTypes,
+    T extends EventHandler<K, HandshakeFailureCode>,
+  >(type: K, handler: T): void {
     this.eventDispatcher.removeEventListener(type, handler);
   }
 
-  protected protocolError(message: EventMap['protocolError']) {
+  protected protocolError(
+    message: EventMap<HandshakeFailureCode>['protocolError'],
+  ) {
     this.eventDispatcher.dispatchEvent('protocolError', message);
   }
 

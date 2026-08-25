@@ -15,6 +15,9 @@ import {
 } from '../../router/handshake';
 import { createClient } from '../../router/client';
 import { createServer } from '../../router/server';
+import type { ClientTransport } from '../../transport/client';
+import type { Connection } from '../../transport/connection';
+import type { ServerTransport } from '../../transport/server';
 import { closeAllConnections, numberOfConnections } from '../../testUtil';
 import { createMockTransportNetwork } from '../../testUtil/fixtures/mockTransport';
 import type { TestTransportOptions } from '../../testUtil/fixtures/transports';
@@ -152,12 +155,8 @@ const multiplexedSchedules: gs.Generator<MultiplexedSchedule> = gs.composite(
 
 function setup(opts?: TestTransportOptions): {
   network: ReturnType<typeof createMockTransportNetwork>;
-  clientTransport: ReturnType<
-    ReturnType<typeof createMockTransportNetwork>['getClientTransport']
-  >;
-  serverTransport: ReturnType<
-    ReturnType<typeof createMockTransportNetwork>['getServerTransport']
-  >;
+  clientTransport: ClientTransport<Connection>;
+  serverTransport: ServerTransport<Connection>;
   client: ReturnType<typeof createClient<typeof services>>;
   violations: Array<string>;
 } {
@@ -536,11 +535,8 @@ describe('re-handshake under faults', () => {
     throw new Error(`timed out waiting for ${what}`);
   }
 
-  const isConnected = (
-    transport: ReturnType<
-      ReturnType<typeof createMockTransportNetwork>['getClientTransport']
-    >,
-  ) => numberOfConnections(transport) === 1;
+  const isConnected = (transport: ClientTransport<Connection>) =>
+    numberOfConnections(transport) === 1;
 
   const handshakeSchema = Type.Object({ token: Type.String() });
 

@@ -29,6 +29,7 @@ import {
   cancelMessage,
   ProtocolVersion,
   TransportClientId,
+  type CustomHandshakeErrorCodeSchema,
 } from '../transport/message';
 import { ProcedureHandlerContext } from './context';
 import { Logger } from '../logging/log';
@@ -112,12 +113,14 @@ class RiverServer<
   MetadataSchema extends TSchema,
   ParsedMetadata extends object,
   Services extends AnyServiceSchemaMap<Context>,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
 > implements Server<Context, ParsedMetadata, Services>
 {
   private transport: ServerTransport<
     Connection,
     MetadataSchema,
-    ParsedMetadata
+    ParsedMetadata,
+    RejectionCodeSchema
   >;
 
   private contextMap: Map<AnyService, Context & { state: object }>;
@@ -145,9 +148,18 @@ class RiverServer<
   private unregisterTransportListeners: () => void;
 
   constructor(
-    transport: ServerTransport<Connection, MetadataSchema, ParsedMetadata>,
+    transport: ServerTransport<
+      Connection,
+      MetadataSchema,
+      ParsedMetadata,
+      RejectionCodeSchema
+    >,
     services: Services,
-    handshakeOptions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>,
+    handshakeOptions?: ServerHandshakeOptions<
+      MetadataSchema,
+      ParsedMetadata,
+      RejectionCodeSchema
+    >,
     extendedContext?: Context,
     maxCancelledStreamTombstonesPerSession = 200,
     middlewares: Array<Middleware> = [],
@@ -1167,11 +1179,21 @@ export function createServer<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Services extends AnyServiceSchemaMap<any>,
   Context extends MaybeDisposable = MaybeDisposable,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
 >(
-  transport: ServerTransport<Connection, MetadataSchema, ParsedMetadata>,
+  transport: ServerTransport<
+    Connection,
+    MetadataSchema,
+    ParsedMetadata,
+    RejectionCodeSchema
+  >,
   services: Services,
   providedServerOptions?: Partial<{
-    handshakeOptions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>;
+    handshakeOptions?: ServerHandshakeOptions<
+      MetadataSchema,
+      ParsedMetadata,
+      RejectionCodeSchema
+    >;
     extendedContext?: Context;
     /**
      * Maximum number of cancelled streams to keep track of to avoid

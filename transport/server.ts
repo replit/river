@@ -5,7 +5,9 @@ import {
   ControlMessageHandshakeRequestSchema,
   ControlMessageRehandshakeResponseSchema,
   HandshakeErrorCustomHandlerFatalResponseCodes,
-  HandshakeErrorResponseCodes,
+  type CustomHandshakeErrorCode,
+  type CustomHandshakeErrorCodeSchema,
+  type HandshakeErrorCode,
   OpaqueTransportMessage,
   acceptedProtocolVersions,
   TransportClientId,
@@ -36,7 +38,8 @@ export abstract class ServerTransport<
   ConnType extends Connection,
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-> extends Transport<ConnType> {
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
+> extends Transport<ConnType, HandshakeErrorCode<RejectionCodeSchema>> {
   /**
    * The options for this transport.
    */
@@ -45,7 +48,11 @@ export abstract class ServerTransport<
   /**
    * Optional handshake options for the server.
    */
-  handshakeExtensions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>;
+  handshakeExtensions?: ServerHandshakeOptions<
+    MetadataSchema,
+    ParsedMetadata,
+    RejectionCodeSchema
+  >;
 
   /**
    * A map of session handshake data for each session.
@@ -71,10 +78,27 @@ export abstract class ServerTransport<
     });
   }
 
-  extendHandshake(
-    options: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>,
-  ) {
+  extendHandshake = (
+    options: ServerHandshakeOptions<
+      MetadataSchema,
+      ParsedMetadata,
+      RejectionCodeSchema
+    >,
+  ) => {
     this.handshakeExtensions = options;
+  };
+
+  private isRejectionCode(
+    value: unknown,
+  ): value is
+    | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
+    | CustomHandshakeErrorCode<RejectionCodeSchema> {
+    return (
+      Value.Check(HandshakeErrorCustomHandlerFatalResponseCodes, value) ||
+      (this.handshakeExtensions?.rejectionCodeSchema
+        ? Value.Check(this.handshakeExtensions.rejectionCodeSchema, value)
+        : false)
+    );
   }
 
   protected deletePendingSession(
@@ -204,15 +228,11 @@ export abstract class ServerTransport<
       return;
     }
 
-    if (
-      Value.Check(
-        HandshakeErrorCustomHandlerFatalResponseCodes,
-        parsedMetadataOrFailureCode,
-      )
-    ) {
+    if (this.isRejectionCode(parsedMetadataOrFailureCode)) {
       this.teardownForFailedRehandshake(
         session,
         're-handshake metadata rejected by handshake handler',
+        parsedMetadataOrFailureCode,
       );
 
       return;
@@ -246,6 +266,7 @@ export abstract class ServerTransport<
   private teardownForFailedRehandshake(
     session: ServerSession<ConnType>,
     reason: string,
+    code: HandshakeErrorCode<RejectionCodeSchema> = 'REJECTED_BY_CUSTOM_HANDLER',
   ) {
     if (session._isConsumed) {
       return;
@@ -263,7 +284,7 @@ export abstract class ServerTransport<
 
     this.protocolError({
       type: ProtocolError.HandshakeFailed,
-      code: 'REJECTED_BY_CUSTOM_HANDLER',
+      code,
       message: reason,
     });
     this.deleteSession(session, { unhealthy: true });
@@ -354,7 +375,7 @@ export abstract class ServerTransport<
     session: SessionWaitingForHandshake<ConnType>,
     to: TransportClientId,
     reason: string,
-    code: Static<typeof HandshakeErrorResponseCodes>,
+    code: HandshakeErrorCode<RejectionCodeSchema>,
     metadata: MessageMetadata,
   ) {
     session.conn.telemetry?.span.setStatus({
@@ -497,12 +518,7 @@ export abstract class ServerTransport<
       }
 
       // handler rejected the connection
-      if (
-        Value.Check(
-          HandshakeErrorCustomHandlerFatalResponseCodes,
-          parsedMetadataOrFailureCode,
-        )
-      ) {
+      if (this.isRejectionCode(parsedMetadataOrFailureCode)) {
         this.rejectHandshakeRequest(
           session,
           msg.from,

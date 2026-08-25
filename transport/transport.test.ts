@@ -21,10 +21,11 @@ import {
 } from '../testUtil/fixtures/cleanup';
 import { testMatrix } from '../testUtil/fixtures/matrix';
 import { PartialTransportMessage } from './message';
-import { Type } from 'typebox';
+import { Type, type Static } from 'typebox';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 import { createPostTestCleanups } from '../testUtil/fixtures/cleanup';
 import { SessionState } from './sessionStateMachine';
+import { createServerHandshakeOptions } from '../router/handshake';
 import {
   ProvidedClientTransportOptions,
   ProvidedTransportOptions,
@@ -1944,6 +1945,167 @@ describe.each(testMatrix())(
         clientTransports: [clientTransport],
         serverTransport,
       });
+    });
+
+    test('custom handler can reject with a registered handshake error code', async () => {
+      const schema = Type.Object({
+        foo: Type.String(),
+      });
+
+      const rejectionCodeSchema = Type.Union([
+        Type.Literal('REPL_NOT_FOUND'),
+        Type.Literal('TOKEN_EXPIRED'),
+      ]);
+
+      type CustomHandshakeErrorCode = Static<typeof rejectionCodeSchema>;
+
+      interface ParsedMetadata {
+        foo: string;
+      }
+
+      // compile-time: undeclared codes cannot be returned by validate
+      expect(
+        createServerHandshakeOptions<
+          typeof schema,
+          ParsedMetadata,
+          typeof rejectionCodeSchema
+        >(
+          schema,
+          // @ts-expect-error only declared rejection codes may be returned
+          async () => 'SOME_OTHER_CODE',
+          undefined,
+          rejectionCodeSchema,
+        ),
+      ).toBeDefined();
+
+      const broadCode = String('REPL_NOT_FOUND');
+      const broadCodeSchema = Type.Union([Type.Literal(broadCode)]);
+
+      expect(
+        createServerHandshakeOptions<
+          typeof schema,
+          ParsedMetadata,
+          typeof broadCodeSchema
+        >(
+          schema,
+          // @ts-expect-error widened literal schemas contribute no codes
+          async () => broadCode,
+          undefined,
+          broadCodeSchema,
+        ),
+      ).toBeDefined();
+
+      const parse = vi.fn(async (): Promise<CustomHandshakeErrorCode> => {
+        return 'REPL_NOT_FOUND';
+      });
+      const serverTransport = getServerTransport<
+        typeof schema,
+        ParsedMetadata,
+        typeof rejectionCodeSchema
+      >('SERVER', {
+        schema,
+        validate: parse,
+        rejectionCodeSchema,
+      });
+
+      const clientTransport = getClientTransport('client', {
+        schema,
+        construct: async () => ({ foo: 'foo' }),
+        rejectionCodeSchema,
+      });
+
+      const clientHandshakeFailed = vi.fn();
+      clientTransport.addEventListener('protocolError', clientHandshakeFailed);
+      const serverRejectedConnection = vi.fn();
+      serverTransport.addEventListener(
+        'protocolError',
+        serverRejectedConnection,
+      );
+      clientTransport.connect(serverTransport.clientId);
+
+      addPostTestCleanup(async () => {
+        clientTransport.removeEventListener(
+          'protocolError',
+          clientHandshakeFailed,
+        );
+        serverTransport.removeEventListener(
+          'protocolError',
+          serverRejectedConnection,
+        );
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(clientHandshakeFailed).toHaveBeenCalledTimes(1);
+        expect(clientHandshakeFailed).toHaveBeenCalledWith({
+          type: ProtocolError.HandshakeFailed,
+          code: 'REPL_NOT_FOUND',
+          message: 'handshake failed: rejected by handshake handler',
+        });
+        expect(serverRejectedConnection).toHaveBeenCalledWith({
+          type: ProtocolError.HandshakeFailed,
+          code: 'REPL_NOT_FOUND',
+          message: 'rejected by handshake handler',
+        });
+      });
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
+    test('an unregistered handshake error code is rejected by an unconfigured client', async () => {
+      const schema = Type.Object({
+        foo: Type.String(),
+      });
+
+      const rejectionCodeSchema = Type.Union([Type.Literal('REPL_NOT_FOUND')]);
+
+      type CustomHandshakeErrorCode = Static<typeof rejectionCodeSchema>;
+
+      interface ParsedMetadata {
+        foo: string;
+      }
+
+      const serverTransport = getServerTransport<
+        typeof schema,
+        ParsedMetadata,
+        typeof rejectionCodeSchema
+      >('SERVER', {
+        schema,
+        validate: async (): Promise<CustomHandshakeErrorCode> =>
+          'REPL_NOT_FOUND',
+        rejectionCodeSchema,
+      });
+
+      // the client did not register the custom code: it must treat the
+      // response as malformed rather than accept an unknown code
+      const clientTransport = getClientTransport('client', {
+        schema,
+        construct: async () => ({ foo: 'foo' }),
+      });
+
+      const clientHandshakeFailed = vi.fn();
+      clientTransport.addEventListener('protocolError', clientHandshakeFailed);
+      clientTransport.connect(serverTransport.clientId);
+
+      addPostTestCleanup(async () => {
+        clientTransport.removeEventListener(
+          'protocolError',
+          clientHandshakeFailed,
+        );
+        await cleanupTransports([clientTransport]);
+        await cleanupTransports([serverTransport]);
+      });
+
+      await waitFor(() => {
+        expect(clientTransport.sessions.size).toBe(0);
+      });
+      expect(clientHandshakeFailed).not.toHaveBeenCalled();
+
+      await testFinishesCleanly({ clientTransports: [clientTransport] });
+      await testFinishesCleanly({ serverTransport });
     });
   },
 );

@@ -1,6 +1,8 @@
-import type { Static } from 'typebox';
 import { Connection } from './connection';
-import { OpaqueTransportMessage, HandshakeErrorResponseCodes } from './message';
+import type {
+  BuiltInHandshakeErrorCode,
+  OpaqueTransportMessage,
+} from './message';
 import { Session, SessionState } from './sessionStateMachine';
 import { SessionId } from './sessionStateMachine/common';
 import { TransportStatus } from './transport';
@@ -16,7 +18,13 @@ export const ProtocolError = {
 export type ProtocolErrorType =
   (typeof ProtocolError)[keyof typeof ProtocolError];
 
-export interface EventMap {
+/**
+ * Transport events. `HandshakeFailureCode` is the full set of codes observable
+ * on handshake-failed protocol errors, including built-in and custom codes.
+ */
+export interface EventMap<
+  HandshakeFailureCode extends string = BuiltInHandshakeErrorCode,
+> {
   message: OpaqueTransportMessage;
   sessionStatus:
     | {
@@ -36,7 +44,7 @@ export interface EventMap {
   protocolError:
     | {
         type: (typeof ProtocolError)['HandshakeFailed'];
-        code: Static<typeof HandshakeErrorResponseCodes>;
+        code: HandshakeFailureCode;
         message: string;
       }
     | {
@@ -52,12 +60,18 @@ export interface EventMap {
 }
 
 export type EventTypes = keyof EventMap;
-export type EventHandler<K extends EventTypes> = (
-  event: EventMap[K],
-) => unknown;
+export type EventHandler<
+  K extends EventTypes,
+  HandshakeFailureCode extends string = BuiltInHandshakeErrorCode,
+> = (event: EventMap<HandshakeFailureCode>[K]) => unknown;
 
-export class EventDispatcher<T extends EventTypes> {
-  private eventListeners: { [K in T]?: Set<EventHandler<K>> } = {};
+export class EventDispatcher<
+  T extends EventTypes,
+  HandshakeFailureCode extends string,
+> {
+  private eventListeners: {
+    [K in T]?: Set<EventHandler<K, HandshakeFailureCode>>;
+  } = {};
 
   removeAllListeners() {
     this.eventListeners = {};
@@ -67,22 +81,33 @@ export class EventDispatcher<T extends EventTypes> {
     return this.eventListeners[eventType]?.size ?? 0;
   }
 
-  addEventListener<K extends T>(eventType: K, handler: EventHandler<K>) {
-    if (!this.eventListeners[eventType]) {
-      this.eventListeners[eventType] = new Set();
+  addEventListener<K extends T>(
+    eventType: K,
+    handler: EventHandler<K, HandshakeFailureCode>,
+  ) {
+    let listeners = this.eventListeners[eventType];
+    if (!listeners) {
+      listeners = new Set();
+      this.eventListeners[eventType] = listeners;
     }
 
-    this.eventListeners[eventType]?.add(handler);
+    listeners.add(handler);
   }
 
-  removeEventListener<K extends T>(eventType: K, handler: EventHandler<K>) {
+  removeEventListener<K extends T>(
+    eventType: K,
+    handler: EventHandler<K, HandshakeFailureCode>,
+  ) {
     const handlers = this.eventListeners[eventType];
     if (handlers) {
       this.eventListeners[eventType]?.delete(handler);
     }
   }
 
-  dispatchEvent<K extends T>(eventType: K, event: EventMap[K]) {
+  dispatchEvent<K extends T>(
+    eventType: K,
+    event: EventMap<HandshakeFailureCode>[K],
+  ) {
     const handlers = this.eventListeners[eventType];
     if (handlers) {
       // copying ensures that adding more listeners in a handler doesn't

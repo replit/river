@@ -8,8 +8,12 @@ import {
 import { Server } from '../../router';
 import { AnyServiceSchemaMap, MaybeDisposable } from '../../router/services';
 import { numberOfConnections, testingSessionOptions } from '..';
+import type { TSchema } from 'typebox';
 import { Value } from 'typebox/value';
-import { ControlMessageAckSchema } from '../../transport/message';
+import {
+  type CustomHandshakeErrorCodeSchema,
+  ControlMessageAckSchema,
+} from '../../transport/message';
 
 const waitUntilOptions = {
   timeout: 500, // account for possibility of conn backoff
@@ -36,7 +40,9 @@ export async function advanceFakeTimersByConnectionBackoff() {
   await vi.advanceTimersByTimeAsync(500);
 }
 
-export async function ensureTransportIsClean(t: Transport<Connection>) {
+export async function ensureTransportIsClean<
+  HandshakeFailureCode extends string,
+>(t: Transport<Connection, HandshakeFailureCode>) {
   await advanceFakeTimersBySessionGrace();
   await waitFor(() =>
     expect(
@@ -56,9 +62,9 @@ export function waitFor<T>(cb: () => T | Promise<T>) {
   return vi.waitFor(cb, waitUntilOptions);
 }
 
-export async function ensureTransportBuffersAreEventuallyEmpty(
-  t: Transport<Connection>,
-) {
+export async function ensureTransportBuffersAreEventuallyEmpty<
+  HandshakeFailureCode extends string,
+>(t: Transport<Connection, HandshakeFailureCode>) {
   // wait for send buffers to be flushed
   // ignore heartbeat messages
   await waitFor(() =>
@@ -97,9 +103,10 @@ export async function ensureServerIsClean(
   );
 }
 
-export async function cleanupTransports<ConnType extends Connection>(
-  transports: Array<Transport<ConnType>>,
-) {
+export async function cleanupTransports<
+  ConnType extends Connection,
+  HandshakeFailureCode extends string,
+>(transports: Array<Transport<ConnType, HandshakeFailureCode>>) {
   for (const t of transports) {
     if (t.getStatus() !== 'closed') {
       t.log?.info('*** end of test cleanup ***', { clientId: t.clientId });
@@ -108,16 +115,22 @@ export async function cleanupTransports<ConnType extends Connection>(
   }
 }
 
-export async function testFinishesCleanly({
+export async function testFinishesCleanly<
+  MetadataSchema extends TSchema,
+  ParsedMetadata extends object,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
+>({
   clientTransports,
   serverTransport,
   server,
 }: Partial<{
-  clientTransports: Array<ClientTransport<Connection>>;
-  // MetadataSchema and ParsedMetadata are not used in this test,
-  // so we can safely use any here
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  serverTransport: ServerTransport<Connection, any, any>;
+  clientTransports: Array<ClientTransport<Connection, RejectionCodeSchema>>;
+  serverTransport: ServerTransport<
+    Connection,
+    MetadataSchema,
+    ParsedMetadata,
+    RejectionCodeSchema
+  >;
   server: Server<MaybeDisposable, object, AnyServiceSchemaMap>;
 }>) {
   // pre-close invariants

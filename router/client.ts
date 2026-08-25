@@ -17,8 +17,9 @@ import {
   isStreamCancel,
   closeStreamMessage,
   cancelMessage,
+  type CustomHandshakeErrorCodeSchema,
 } from '../transport/message';
-import type { Static } from 'typebox';
+import type { Static, TSchema } from 'typebox';
 import { Err, Result, AnyResultSchema } from './result';
 import { EventMap } from '../transport/events';
 import { Connection } from '../transport/connection';
@@ -241,12 +242,16 @@ const defaultClientOptions: ClientOptions = {
 // We are using any here because the ServiceContext is a server-side implementation
 // detail that doesn't affect the client interface
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createClient<ServiceSchemaMap extends AnyServiceSchemaMap<any>>(
-  transport: ClientTransport<Connection>,
+export function createClient<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ServiceSchemaMap extends AnyServiceSchemaMap<any>,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
+>(
+  transport: ClientTransport<Connection, RejectionCodeSchema>,
   serverId: TransportClientId,
   providedClientOptions: Partial<
     ClientOptions & {
-      handshakeOptions: ClientHandshakeOptions;
+      handshakeOptions: ClientHandshakeOptions<TSchema, RejectionCodeSchema>;
     }
   > = {},
 ): Client<ServiceSchemaMap> {
@@ -317,9 +322,9 @@ type AnyProcReturn =
   | ReturnType<StreamFn<AnyService, string>>
   | ReturnType<SubscriptionFn<AnyService, string>>;
 
-function handleProc(
+function handleProc<RejectionCodeSchema extends CustomHandshakeErrorCodeSchema>(
   procType: ValidProcType,
-  transport: ClientTransport<Connection>,
+  transport: ClientTransport<Connection, RejectionCodeSchema>,
   serverId: TransportClientId,
   init: Static<PayloadType>,
   serviceName: string,

@@ -16,6 +16,7 @@ import { EventMap } from '../transport/events';
 import {
   ControlFlags,
   ControlMessageCloseSchema,
+  type CustomHandshakeErrorCodeSchema,
   OpaqueTransportMessage,
   TransportClientId,
   cancelMessage,
@@ -133,11 +134,13 @@ export type Middleware<ParsedMetadata extends object = object> = (
 export interface ServerOptions<
   MetadataSchema extends TSchema,
   ParsedMetadata extends object,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
 > {
   readonly extendedContext?: object;
   readonly handshakeOptions?: ServerHandshakeOptions<
     MetadataSchema,
-    ParsedMetadata
+    ParsedMetadata,
+    RejectionCodeSchema
   >;
   readonly middlewares?: Array<Middleware<ParsedMetadata>>;
   readonly maxCancelledStreamTombstonesPerSession?: number;
@@ -146,6 +149,7 @@ export interface ServerOptions<
 class ProtobufServer<
   MetadataSchema extends TSchema,
   ParsedMetadata extends object,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
 > implements Server
 {
   readonly streams: Map<StreamId, ProcStream>;
@@ -153,7 +157,8 @@ class ProtobufServer<
   private readonly transport: ServerTransport<
     Connection,
     MetadataSchema,
-    ParsedMetadata
+    ParsedMetadata,
+    RejectionCodeSchema
   >;
 
   private readonly methods: Map<string, RegisteredMethod>;
@@ -171,9 +176,18 @@ class ProtobufServer<
   private unregisterTransportListeners: () => void;
 
   constructor(
-    transport: ServerTransport<Connection, MetadataSchema, ParsedMetadata>,
+    transport: ServerTransport<
+      Connection,
+      MetadataSchema,
+      ParsedMetadata,
+      RejectionCodeSchema
+    >,
     services: ReadonlyArray<AnyProtoService>,
-    options: ServerOptions<MetadataSchema, ParsedMetadata> = {},
+    options: ServerOptions<
+      MetadataSchema,
+      ParsedMetadata,
+      RejectionCodeSchema
+    > = {},
   ) {
     this.transport = transport;
     this.log = transport.log;
@@ -979,10 +993,16 @@ class LRUSet<T> {
 export function createServer<
   MetadataSchema extends TSchema,
   ParsedMetadata extends object,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
 >(
-  transport: ServerTransport<Connection, MetadataSchema, ParsedMetadata>,
+  transport: ServerTransport<
+    Connection,
+    MetadataSchema,
+    ParsedMetadata,
+    RejectionCodeSchema
+  >,
   services: ReadonlyArray<AnyProtoService>,
-  options?: ServerOptions<MetadataSchema, ParsedMetadata>,
+  options?: ServerOptions<MetadataSchema, ParsedMetadata, RejectionCodeSchema>,
 ): Server {
   return new ProtobufServer(transport, services, options);
 }

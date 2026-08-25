@@ -1,4 +1,7 @@
-import { TransportClientId } from '../../message';
+import {
+  type CustomHandshakeErrorCodeSchema,
+  TransportClientId,
+} from '../../message';
 import { WebSocketServer } from 'ws';
 import { WebSocketConnection } from './connection';
 import { WsLike } from './wslike';
@@ -25,7 +28,13 @@ function cleanHeaders(
 export class WebSocketServerTransport<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-> extends ServerTransport<WebSocketConnection, MetadataSchema, ParsedMetadata> {
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
+> extends ServerTransport<
+  WebSocketConnection,
+  MetadataSchema,
+  ParsedMetadata,
+  RejectionCodeSchema
+> {
   wss: WebSocketServer;
 
   constructor(

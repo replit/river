@@ -1,4 +1,10 @@
-import { Type, type TSchema, type Static } from 'typebox';
+import {
+  Type,
+  type TLiteral,
+  type TSchema,
+  type TUnion,
+  type Static,
+} from 'typebox';
 import { PropagationContext } from '../tracing';
 import { generateId } from './id';
 // type-only: a value import closes a transport <-> router require cycle
@@ -123,20 +129,71 @@ export const HandshakeErrorResponseCodes = Type.Union([
   HandshakeErrorFatalResponseCodes,
 ]);
 
-export const ControlMessageHandshakeResponseSchema = Type.Object({
-  type: Type.Literal('HANDSHAKE_RESP'),
-  status: Type.Union([
-    Type.Object({
-      ok: Type.Literal(true),
-      sessionId: Type.String(),
-    }),
-    Type.Object({
-      ok: Type.Literal(false),
-      reason: Type.String(),
-      code: HandshakeErrorResponseCodes,
-    }),
-  ]),
-});
+/**
+ * A TypeBox union of literals declaring the custom handshake rejection codes.
+ */
+export type CustomHandshakeErrorCodeSchema = TUnion<Array<TLiteral<string>>>;
+
+/**
+ * The union of codes declared by a rejection code schema. Widened literal
+ * schemas (`TLiteral<string>` rather than a specific literal) contribute no
+ * codes.
+ */
+export type CustomHandshakeErrorCode<
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
+> = string extends Static<RejectionCodeSchema>
+  ? never
+  : Static<RejectionCodeSchema>;
+
+/**
+ * The protocol-level handshake error codes River can emit without any custom
+ * rejection codes.
+ */
+export type BuiltInHandshakeErrorCode = Static<
+  typeof HandshakeErrorResponseCodes
+>;
+
+/**
+ * The protocol-level handshake error codes plus any custom rejection codes
+ * registered in the handshake options.
+ */
+export type HandshakeErrorCode<
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
+> = BuiltInHandshakeErrorCode | CustomHandshakeErrorCode<RejectionCodeSchema>;
+
+const handshakeResponseSchema = <Code extends TSchema>(code: Code) =>
+  Type.Object({
+    type: Type.Literal('HANDSHAKE_RESP'),
+    status: Type.Union([
+      Type.Object({
+        ok: Type.Literal(true),
+        sessionId: Type.String(),
+      }),
+      Type.Object({
+        ok: Type.Literal(false),
+        reason: Type.String(),
+        code,
+      }),
+    ]),
+  });
+
+export const ControlMessageHandshakeResponseSchema = handshakeResponseSchema(
+  HandshakeErrorResponseCodes,
+);
+
+/**
+ * A handshake response schema that additionally accepts custom
+ * rejection codes. Both peers must be configured with the same codes: an
+ * unconfigured peer rejects a custom code as a malformed response.
+ */
+export const ControlMessageHandshakeResponseSchemaWithCodes = <
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
+>(
+  rejectionCodeSchema: RejectionCodeSchema,
+) =>
+  handshakeResponseSchema(
+    Type.Union([HandshakeErrorResponseCodes, rejectionCodeSchema]),
+  );
 
 /**
  * Reserved stream id for the follow-up handshake (re-handshake) control
@@ -257,14 +314,24 @@ export function handshakeRequestMessage({
  */
 export const SESSION_STATE_MISMATCH = 'session state mismatch';
 
-export function handshakeResponseMessage({
+export function handshakeResponseMessage<
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
+>({
   from,
   to,
   status,
 }: {
   from: TransportClientId;
   to: TransportClientId;
-  status: Static<typeof ControlMessageHandshakeResponseSchema>['status'];
+  // the code may be a custom rejection code, which is only
+  // known to peers that registered it in their handshake options
+  status:
+    | { ok: true; sessionId: string }
+    | {
+        ok: false;
+        reason: string;
+        code: HandshakeErrorCode<RejectionCodeSchema>;
+      };
 }): TransportMessage<Static<typeof ControlMessageHandshakeResponseSchema>> {
   return {
     id: generateId(),
@@ -276,8 +343,10 @@ export function handshakeResponseMessage({
     controlFlags: 0,
     payload: {
       type: 'HANDSHAKE_RESP',
-      status,
-    } satisfies Static<typeof ControlMessageHandshakeResponseSchema>,
+      status: status as Static<
+        typeof ControlMessageHandshakeResponseSchema
+      >['status'],
+    },
   };
 }
 

@@ -16,7 +16,10 @@ import {
   ProvidedClientTransportOptions,
   ProvidedServerTransportOptions,
 } from '../../transport/options';
-import { TransportClientId } from '../../transport/message';
+import {
+  type CustomHandshakeErrorCodeSchema,
+  TransportClientId,
+} from '../../transport/message';
 import { ClientTransport } from '../../transport/client';
 import { Connection } from '../../transport/connection';
 import { ServerTransport } from '../../transport/server';
@@ -30,17 +33,29 @@ export interface TestTransportOptions {
 }
 
 export interface TestSetupHelpers {
-  getClientTransport: (
+  getClientTransport: <
+    RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
+  >(
     id: TransportClientId,
-    handshakeOptions?: ClientHandshakeOptions,
-  ) => ClientTransport<Connection>;
+    handshakeOptions?: ClientHandshakeOptions<TSchema, RejectionCodeSchema>,
+  ) => ClientTransport<Connection, RejectionCodeSchema>;
   getServerTransport: <
     MetadataSchema extends TSchema = TSchema,
     ParsedMetadata extends object = object,
+    RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
   >(
     id?: TransportClientId,
-    handshakeOptions?: ServerHandshakeOptions<MetadataSchema, ParsedMetadata>,
-  ) => ServerTransport<Connection, MetadataSchema, ParsedMetadata>;
+    handshakeOptions?: ServerHandshakeOptions<
+      MetadataSchema,
+      ParsedMetadata,
+      RejectionCodeSchema
+    >,
+  ) => ServerTransport<
+    Connection,
+    MetadataSchema,
+    ParsedMetadata,
+    RejectionCodeSchema
+  >;
   simulatePhantomDisconnect: () => void;
   restartServer: () => Promise<void>;
   cleanup: () => Promise<void> | void;
@@ -59,10 +74,11 @@ export const transports: Array<TransportMatrixEntry> = [
       const port = await onWsServerReady(server);
       let wss = createWebSocketServer(server);
 
+      /* eslint-disable @typescript-eslint/no-explicit-any */
       const transports: Array<
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        WebSocketClientTransport | WebSocketServerTransport<any, any>
+        WebSocketClientTransport<any> | WebSocketServerTransport<any, any, any>
       > = [];
+      /* eslint-enable @typescript-eslint/no-explicit-any */
 
       return {
         simulatePhantomDisconnect() {
@@ -72,12 +88,21 @@ export const transports: Array<TransportMatrixEntry> = [
             }
           }
         },
-        getClientTransport: (id, handshakeOptions) => {
-          const clientTransport = new WebSocketClientTransport(
-            () => Promise.resolve(createLocalWebSocketClient(port)),
-            id,
-            opts?.client,
-          );
+        getClientTransport: <
+          RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
+        >(
+          id: TransportClientId,
+          handshakeOptions?: ClientHandshakeOptions<
+            TSchema,
+            RejectionCodeSchema
+          >,
+        ) => {
+          const clientTransport =
+            new WebSocketClientTransport<RejectionCodeSchema>(
+              () => Promise.resolve(createLocalWebSocketClient(port)),
+              id,
+              opts?.client,
+            );
 
           if (handshakeOptions) {
             clientTransport.extendHandshake(handshakeOptions);
@@ -99,15 +124,21 @@ export const transports: Array<TransportMatrixEntry> = [
         getServerTransport: <
           MetadataSchema extends TSchema,
           ParsedMetadata extends object,
+          RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
         >(
           id = 'SERVER',
           handshakeOptions:
-            | ServerHandshakeOptions<MetadataSchema, ParsedMetadata>
+            | ServerHandshakeOptions<
+                MetadataSchema,
+                ParsedMetadata,
+                RejectionCodeSchema
+              >
             | undefined,
         ) => {
           const serverTransport = new WebSocketServerTransport<
             MetadataSchema,
-            ParsedMetadata
+            ParsedMetadata,
+            RejectionCodeSchema
           >(wss, id, opts?.server);
 
           serverTransport.bindLogger((msg, ctx, level) => {
@@ -128,7 +159,8 @@ export const transports: Array<TransportMatrixEntry> = [
           return serverTransport as ServerTransport<
             Connection,
             MetadataSchema,
-            ParsedMetadata
+            ParsedMetadata,
+            RejectionCodeSchema
           >;
         },
         async restartServer() {

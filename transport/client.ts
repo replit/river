@@ -3,7 +3,10 @@ import { ClientHandshakeOptions } from '../router/handshake';
 import { validationErrorToRiverErrors } from '../router/errors';
 import {
   ControlMessageHandshakeResponseSchema,
+  ControlMessageHandshakeResponseSchemaWithCodes,
   ControlMessageRehandshakeRequestSchema,
+  type CustomHandshakeErrorCodeSchema,
+  type HandshakeErrorCode,
   HandshakeErrorRetriableResponseCodes,
   OpaqueTransportMessage,
   TransportClientId,
@@ -11,6 +14,7 @@ import {
   handshakeRequestMessage,
   rehandshakeResponseMessage,
 } from './message';
+import type { TSchema } from 'typebox';
 import {
   ClientTransportOptions,
   ProvidedClientTransportOptions,
@@ -50,7 +54,8 @@ type ConstructedHandshakeMetadata =
 
 export abstract class ClientTransport<
   ConnType extends Connection,
-> extends Transport<ConnType> {
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
+> extends Transport<ConnType, HandshakeErrorCode<RejectionCodeSchema>> {
   /**
    * The options for this transport.
    */
@@ -69,7 +74,16 @@ export abstract class ClientTransport<
   /**
    * Optional handshake options for this client.
    */
-  handshakeExtensions?: ClientHandshakeOptions;
+  handshakeExtensions?: ClientHandshakeOptions<TSchema, RejectionCodeSchema>;
+
+  /**
+   * Handshake response schema extended with the custom
+   * rejection codes, when any are registered.
+   */
+  protected handshakeResponseSchema:
+    | typeof ControlMessageHandshakeResponseSchema
+    | ReturnType<typeof ControlMessageHandshakeResponseSchemaWithCodes> =
+    ControlMessageHandshakeResponseSchema;
 
   /**
    * Handshake-metadata constructions prefetched when a connection attempt begins
@@ -98,9 +112,17 @@ export abstract class ClientTransport<
     this.retryBudget = new LeakyBucketRateLimit(this.options);
   }
 
-  extendHandshake(options: ClientHandshakeOptions) {
+  extendHandshake = (
+    options: ClientHandshakeOptions<TSchema, RejectionCodeSchema>,
+  ) => {
     this.handshakeExtensions = options;
-  }
+    if (options.rejectionCodeSchema) {
+      this.handshakeResponseSchema =
+        ControlMessageHandshakeResponseSchemaWithCodes(
+          options.rejectionCodeSchema,
+        );
+    }
+  };
 
   protected handleRehandshakeMessage(message: OpaqueTransportMessage): void {
     if (!Value.Check(ControlMessageRehandshakeRequestSchema, message.payload)) {
@@ -355,13 +377,13 @@ export abstract class ClientTransport<
     msg: OpaqueTransportMessage,
   ) {
     // invariant: msg is a handshake response
-    if (!Value.Check(ControlMessageHandshakeResponseSchema, msg.payload)) {
+    if (!Value.Check(this.handshakeResponseSchema, msg.payload)) {
       const reason = `received invalid handshake response`;
       this.rejectHandshakeResponse(session, reason, {
         ...session.loggingMetadata,
         transportMessage: msg,
         validationErrors: Value.Errors(
-          ControlMessageHandshakeResponseSchema,
+          this.handshakeResponseSchema,
           msg.payload,
         ).flatMap(validationErrorToRiverErrors),
       });
@@ -388,7 +410,8 @@ export abstract class ClientTransport<
       } else {
         this.protocolError({
           type: ProtocolError.HandshakeFailed,
-          code: msg.payload.status.code,
+          code: msg.payload.status
+            .code as HandshakeErrorCode<RejectionCodeSchema>,
           message: reason,
         });
       }
