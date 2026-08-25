@@ -1968,7 +1968,7 @@ describe.each(testMatrix())(
         createServerHandshakeOptions<
           typeof schema,
           ParsedMetadata,
-          ApplicationErrorCode
+          typeof rejectionCodeSchemas
         >(
           schema,
           // @ts-expect-error only declared rejection codes may be returned
@@ -1982,11 +1982,15 @@ describe.each(testMatrix())(
       const broadCodeSchemas = [Type.Literal(broadCode)];
 
       expect(
-        createServerHandshakeOptions<typeof schema, ParsedMetadata, string>(
+        createServerHandshakeOptions<
+          typeof schema,
+          ParsedMetadata,
+          typeof broadCodeSchemas
+        >(
           schema,
-          async () => ({ foo: 'foo' }),
+          // @ts-expect-error widened literal schemas contribute no codes
+          async () => broadCode,
           undefined,
-          // @ts-expect-error application error schemas must use literals
           broadCodeSchemas,
         ),
       ).toBeDefined();
@@ -1997,7 +2001,7 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport<
         typeof schema,
         ParsedMetadata,
-        ApplicationErrorCode
+        typeof rejectionCodeSchemas
       >('SERVER', {
         schema,
         validate: parse,
@@ -2056,9 +2060,9 @@ describe.each(testMatrix())(
         foo: Type.String(),
       });
 
-      const rejectionCodeSchema = Type.Literal('REPL_NOT_FOUND');
+      const rejectionCodeSchemas = [Type.Literal('REPL_NOT_FOUND')] as const;
 
-      type ApplicationErrorCode = Static<typeof rejectionCodeSchema>;
+      type ApplicationErrorCode = Static<(typeof rejectionCodeSchemas)[number]>;
 
       interface ParsedMetadata {
         foo: string;
@@ -2067,11 +2071,11 @@ describe.each(testMatrix())(
       const serverTransport = getServerTransport<
         typeof schema,
         ParsedMetadata,
-        ApplicationErrorCode
+        typeof rejectionCodeSchemas
       >('SERVER', {
         schema,
         validate: async (): Promise<ApplicationErrorCode> => 'REPL_NOT_FOUND',
-        rejectionCodeSchemas: [rejectionCodeSchema],
+        rejectionCodeSchemas,
       });
 
       // the client did not register the application code: it must treat the
@@ -2100,7 +2104,9 @@ describe.each(testMatrix())(
       expect(clientHandshakeFailed).not.toHaveBeenCalled();
 
       await testFinishesCleanly({ clientTransports: [clientTransport] });
-      await testFinishesCleanly<ApplicationErrorCode>({ serverTransport });
+      await testFinishesCleanly<typeof rejectionCodeSchemas>({
+        serverTransport,
+      });
     });
   },
 );

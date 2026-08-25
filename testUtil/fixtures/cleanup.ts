@@ -9,7 +9,10 @@ import { Server } from '../../router';
 import { AnyServiceSchemaMap, MaybeDisposable } from '../../router/services';
 import { numberOfConnections, testingSessionOptions } from '..';
 import { Value } from 'typebox/value';
-import { ControlMessageAckSchema } from '../../transport/message';
+import {
+  type ApplicationErrorCodeSchemas,
+  ControlMessageAckSchema,
+} from '../../transport/message';
 
 const waitUntilOptions = {
   timeout: 500, // account for possibility of conn backoff
@@ -37,8 +40,8 @@ export async function advanceFakeTimersByConnectionBackoff() {
 }
 
 export async function ensureTransportIsClean<
-  ApplicationErrorCode extends string = never,
->(t: Transport<Connection, ApplicationErrorCode>) {
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+>(t: Transport<Connection, RejectionCodeSchemas>) {
   await advanceFakeTimersBySessionGrace();
   await waitFor(() =>
     expect(
@@ -59,8 +62,8 @@ export function waitFor<T>(cb: () => T | Promise<T>) {
 }
 
 export async function ensureTransportBuffersAreEventuallyEmpty<
-  ApplicationErrorCode extends string = never,
->(t: Transport<Connection, ApplicationErrorCode>) {
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+>(t: Transport<Connection, RejectionCodeSchemas>) {
   // wait for send buffers to be flushed
   // ignore heartbeat messages
   await waitFor(() =>
@@ -101,8 +104,8 @@ export async function ensureServerIsClean(
 
 export async function cleanupTransports<
   ConnType extends Connection,
-  ApplicationErrorCode extends string = never,
->(transports: Array<Transport<ConnType, ApplicationErrorCode>>) {
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+>(transports: Array<Transport<ConnType, RejectionCodeSchemas>>) {
   for (const t of transports) {
     if (t.getStatus() !== 'closed') {
       t.log?.info('*** end of test cleanup ***', { clientId: t.clientId });
@@ -112,17 +115,17 @@ export async function cleanupTransports<
 }
 
 export async function testFinishesCleanly<
-  ApplicationErrorCode extends string = never,
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
 >({
   clientTransports,
   serverTransport,
   server,
 }: Partial<{
-  clientTransports: Array<ClientTransport<Connection, ApplicationErrorCode>>;
+  clientTransports: Array<ClientTransport<Connection, RejectionCodeSchemas>>;
   // MetadataSchema and ParsedMetadata are not used in this test,
   // so we can safely use any here
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  serverTransport: ServerTransport<Connection, any, any, ApplicationErrorCode>;
+  serverTransport: ServerTransport<Connection, any, any, RejectionCodeSchemas>;
   server: Server<MaybeDisposable, object, AnyServiceSchemaMap>;
 }>) {
   // pre-close invariants

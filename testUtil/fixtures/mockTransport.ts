@@ -1,4 +1,5 @@
 import { Transport, TransportClientId } from '../../transport';
+import type { ApplicationErrorCodeSchemas } from '../../transport/message';
 import { ClientTransport } from '../../transport/client';
 import { Connection } from '../../transport/connection';
 import { ServerTransport } from '../../transport/server';
@@ -74,10 +75,12 @@ export function createMockTransportNetwork(
   // conn id -> [client->server, server->client]
   const connections = new Observable<Record<string, BidiConnection>>({});
 
-  const transports: Array<Transport<InMemoryConnection, string>> = [];
+  const transports: Array<
+    Transport<InMemoryConnection, ApplicationErrorCodeSchemas>
+  > = [];
   class MockClientTransport<
-    ApplicationErrorCode extends string = never,
-  > extends ClientTransport<InMemoryConnection, ApplicationErrorCode> {
+    RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+  > extends ClientTransport<InMemoryConnection, RejectionCodeSchemas> {
     async createNewOutgoingConnection(
       to: TransportClientId,
     ): Promise<InMemoryConnection> {
@@ -104,12 +107,12 @@ export function createMockTransportNetwork(
   class MockServerTransport<
     MetadataSchema extends TSchema = TSchema,
     ParsedMetadata extends object = object,
-    ApplicationErrorCode extends string = never,
+    RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
   > extends ServerTransport<
     InMemoryConnection,
     MetadataSchema,
     ParsedMetadata,
-    ApplicationErrorCode
+    RejectionCodeSchemas
   > {
     subscribeCleanup: () => void;
 
@@ -142,11 +145,13 @@ export function createMockTransportNetwork(
   }
 
   return {
-    getClientTransport: <const ApplicationErrorCode extends string = never>(
+    getClientTransport: <
+      RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+    >(
       id: TransportClientId,
-      handshakeOptions?: ClientHandshakeOptions<TSchema, ApplicationErrorCode>,
+      handshakeOptions?: ClientHandshakeOptions<TSchema, RejectionCodeSchemas>,
     ) => {
-      const clientTransport = new MockClientTransport<ApplicationErrorCode>(
+      const clientTransport = new MockClientTransport<RejectionCodeSchemas>(
         id,
         opts?.client,
       );
@@ -161,21 +166,21 @@ export function createMockTransportNetwork(
     getServerTransport: <
       MetadataSchema extends TSchema = TSchema,
       ParsedMetadata extends object = object,
-      const ApplicationErrorCode extends string = never,
+      RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
     >(
       id = 'SERVER',
       handshakeOptions:
         | ServerHandshakeOptions<
             MetadataSchema,
             ParsedMetadata,
-            ApplicationErrorCode
+            RejectionCodeSchemas
           >
         | undefined,
     ) => {
       const serverTransport = new MockServerTransport<
         MetadataSchema,
         ParsedMetadata,
-        ApplicationErrorCode
+        RejectionCodeSchemas
       >(id, opts?.server);
       if (handshakeOptions) {
         serverTransport.extendHandshake(handshakeOptions);

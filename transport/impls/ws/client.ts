@@ -1,5 +1,8 @@
 import { ClientTransport } from '../../client';
-import { TransportClientId } from '../../message';
+import {
+  type ApplicationErrorCodeSchemas,
+  TransportClientId,
+} from '../../message';
 import { ProvidedClientTransportOptions } from '../../options';
 import { WebSocketConnection } from './connection';
 import { WsLike } from './wslike';
@@ -10,8 +13,8 @@ import { WsLike } from './wslike';
  * @extends Transport
  */
 export class WebSocketClientTransport<
-  ApplicationErrorCode extends string = never,
-> extends ClientTransport<WebSocketConnection, ApplicationErrorCode> {
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+> extends ClientTransport<WebSocketConnection, RejectionCodeSchemas> {
   /**
    * A function that returns a Promise that resolves to a websocket URL.
    */

@@ -1,4 +1,5 @@
 import {
+  type ApplicationErrorCodeSchemas,
   OpaqueTransportMessage,
   PartialTransportMessage,
   TransportClientId,
@@ -81,7 +82,7 @@ export interface SessionBackpressure {
  */
 export abstract class Transport<
   ConnType extends Connection,
-  ApplicationErrorCode extends string = never,
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
 > {
   /**
    * The status of the transport.
@@ -96,7 +97,7 @@ export abstract class Transport<
   /**
    * The event dispatcher for handling events of type EventTypes.
    */
-  eventDispatcher: EventDispatcher<EventTypes, ApplicationErrorCode>;
+  eventDispatcher: EventDispatcher<EventTypes, RejectionCodeSchemas>;
 
   /**
    * The options for this transport.
@@ -154,7 +155,7 @@ export abstract class Transport<
    */
   addEventListener<
     K extends EventTypes,
-    T extends EventHandler<K, ApplicationErrorCode>,
+    T extends EventHandler<K, RejectionCodeSchemas>,
   >(type: K, handler: T): void {
     this.eventDispatcher.addEventListener(type, handler);
   }
@@ -166,13 +167,13 @@ export abstract class Transport<
    */
   removeEventListener<
     K extends EventTypes,
-    T extends EventHandler<K, ApplicationErrorCode>,
+    T extends EventHandler<K, RejectionCodeSchemas>,
   >(type: K, handler: T): void {
     this.eventDispatcher.removeEventListener(type, handler);
   }
 
   protected protocolError(
-    message: EventMap<ApplicationErrorCode>['protocolError'],
+    message: EventMap<RejectionCodeSchemas>['protocolError'],
   ) {
     this.eventDispatcher.dispatchEvent('protocolError', message);
   }

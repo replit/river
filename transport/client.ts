@@ -5,6 +5,7 @@ import {
   ControlMessageHandshakeResponseSchema,
   ControlMessageHandshakeResponseSchemaWithCodes,
   ControlMessageRehandshakeRequestSchema,
+  type ApplicationErrorCodeSchemas,
   type HandshakeErrorCode,
   HandshakeErrorRetriableResponseCodes,
   OpaqueTransportMessage,
@@ -53,8 +54,8 @@ type ConstructedHandshakeMetadata =
 
 export abstract class ClientTransport<
   ConnType extends Connection,
-  ApplicationErrorCode extends string = never,
-> extends Transport<ConnType, ApplicationErrorCode> {
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+> extends Transport<ConnType, RejectionCodeSchemas> {
   /**
    * The options for this transport.
    */
@@ -73,7 +74,7 @@ export abstract class ClientTransport<
   /**
    * Optional handshake options for this client.
    */
-  handshakeExtensions?: ClientHandshakeOptions<TSchema, ApplicationErrorCode>;
+  handshakeExtensions?: ClientHandshakeOptions<TSchema, RejectionCodeSchemas>;
 
   /**
    * Handshake response schema extended with the application-defined
@@ -112,7 +113,7 @@ export abstract class ClientTransport<
   }
 
   extendHandshake(
-    options: ClientHandshakeOptions<TSchema, ApplicationErrorCode>,
+    options: ClientHandshakeOptions<TSchema, RejectionCodeSchemas>,
   ) {
     this.handshakeExtensions = options;
     if (options.rejectionCodeSchemas?.length) {
@@ -410,7 +411,7 @@ export abstract class ClientTransport<
         this.protocolError({
           type: ProtocolError.HandshakeFailed,
           code: msg.payload.status
-            .code as HandshakeErrorCode<ApplicationErrorCode>,
+            .code as HandshakeErrorCode<RejectionCodeSchemas>,
           message: reason,
         });
       }

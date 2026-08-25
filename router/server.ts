@@ -29,6 +29,7 @@ import {
   cancelMessage,
   ProtocolVersion,
   TransportClientId,
+  type ApplicationErrorCodeSchemas,
 } from '../transport/message';
 import { ProcedureHandlerContext } from './context';
 import { Logger } from '../logging/log';
@@ -112,14 +113,14 @@ class RiverServer<
   MetadataSchema extends TSchema,
   ParsedMetadata extends object,
   Services extends AnyServiceSchemaMap<Context>,
-  ApplicationErrorCode extends string = never,
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
 > implements Server<Context, ParsedMetadata, Services>
 {
   private transport: ServerTransport<
     Connection,
     MetadataSchema,
     ParsedMetadata,
-    ApplicationErrorCode
+    RejectionCodeSchemas
   >;
 
   private contextMap: Map<AnyService, Context & { state: object }>;
@@ -151,13 +152,13 @@ class RiverServer<
       Connection,
       MetadataSchema,
       ParsedMetadata,
-      ApplicationErrorCode
+      RejectionCodeSchemas
     >,
     services: Services,
     handshakeOptions?: ServerHandshakeOptions<
       MetadataSchema,
       ParsedMetadata,
-      ApplicationErrorCode
+      RejectionCodeSchemas
     >,
     extendedContext?: Context,
     maxCancelledStreamTombstonesPerSession = 200,
@@ -1178,20 +1179,20 @@ export function createServer<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Services extends AnyServiceSchemaMap<any>,
   Context extends MaybeDisposable = MaybeDisposable,
-  ApplicationErrorCode extends string = never,
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
 >(
   transport: ServerTransport<
     Connection,
     MetadataSchema,
     ParsedMetadata,
-    ApplicationErrorCode
+    RejectionCodeSchemas
   >,
   services: Services,
   providedServerOptions?: Partial<{
     handshakeOptions?: ServerHandshakeOptions<
       MetadataSchema,
       ParsedMetadata,
-      ApplicationErrorCode
+      RejectionCodeSchemas
     >;
     extendedContext?: Context;
     /**

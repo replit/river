@@ -123,21 +123,33 @@ export const HandshakeErrorResponseCodes = Type.Union([
   HandshakeErrorFatalResponseCodes,
 ]);
 
-export type LiteralErrorCode<Code extends string> = string extends Code
-  ? never
-  : Code;
+/**
+ * A tuple of TypeBox literal schemas declaring the application-defined
+ * handshake rejection codes, e.g.
+ * `[Type.Literal('REPL_NOT_FOUND'), Type.Literal('TOKEN_EXPIRED')] as const`.
+ */
+export type ApplicationErrorCodeSchemas = ReadonlyArray<TLiteral<string>>;
 
-export type LiteralErrorCodeSchemas<Code extends string> = ReadonlyArray<
-  TLiteral<LiteralErrorCode<Code>>
->;
+/**
+ * The union of codes declared by a tuple of rejection code schemas.
+ * Widened schemas (`TLiteral<string>` rather than a specific literal)
+ * contribute no codes.
+ */
+export type ApplicationErrorCode<
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas,
+> = string extends Static<RejectionCodeSchemas[number]>
+  ? never
+  : Static<RejectionCodeSchemas[number]>;
 
 /**
  * The protocol-level handshake error codes plus any application-defined
  * rejection codes the application registered in its handshake options.
  */
-export type HandshakeErrorCode<ApplicationErrorCode extends string = never> =
+export type HandshakeErrorCode<
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+> =
   | Static<typeof HandshakeErrorResponseCodes>
-  | LiteralErrorCode<ApplicationErrorCode>;
+  | ApplicationErrorCode<RejectionCodeSchemas>;
 
 export const ControlMessageHandshakeResponseSchema = Type.Object({
   type: Type.Literal('HANDSHAKE_RESP'),
@@ -160,9 +172,9 @@ export const ControlMessageHandshakeResponseSchema = Type.Object({
  * unconfigured peer rejects an application code as a malformed response.
  */
 export const ControlMessageHandshakeResponseSchemaWithCodes = <
-  const ApplicationErrorCodeSchemas extends ReadonlyArray<TLiteral<string>>,
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas,
 >(
-  applicationErrorCodeSchemas: ApplicationErrorCodeSchemas,
+  rejectionCodeSchemas: RejectionCodeSchemas,
 ) =>
   Type.Object({
     type: Type.Literal('HANDSHAKE_RESP'),
@@ -176,7 +188,7 @@ export const ControlMessageHandshakeResponseSchemaWithCodes = <
         reason: Type.String(),
         code: Type.Union([
           HandshakeErrorResponseCodes,
-          Type.Union([...applicationErrorCodeSchemas]),
+          ...rejectionCodeSchemas,
         ]),
       }),
     ]),
@@ -301,7 +313,9 @@ export function handshakeRequestMessage({
  */
 export const SESSION_STATE_MISMATCH = 'session state mismatch';
 
-export function handshakeResponseMessage({
+export function handshakeResponseMessage<
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
+>({
   from,
   to,
   status,
@@ -312,7 +326,11 @@ export function handshakeResponseMessage({
   // known to peers that registered it in their handshake options
   status:
     | { ok: true; sessionId: string }
-    | { ok: false; reason: string; code: string };
+    | {
+        ok: false;
+        reason: string;
+        code: HandshakeErrorCode<RejectionCodeSchemas>;
+      };
 }): TransportMessage<Static<typeof ControlMessageHandshakeResponseSchema>> {
   return {
     id: generateId(),

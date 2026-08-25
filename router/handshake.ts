@@ -1,8 +1,8 @@
 import type { Static, TSchema } from 'typebox';
 import {
+  type ApplicationErrorCode,
+  type ApplicationErrorCodeSchemas,
   HandshakeErrorCustomHandlerFatalResponseCodes,
-  type LiteralErrorCode,
-  type LiteralErrorCodeSchemas,
   type TransportClientId,
 } from '../transport/message';
 
@@ -13,24 +13,24 @@ type ConstructHandshake<T extends TSchema> = () =>
 type ValidateHandshake<
   T extends TSchema,
   ParsedMetadata,
-  ApplicationErrorCode extends string = never,
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
 > = (
   metadata: Static<T>,
   previousParsedMetadata?: ParsedMetadata,
   from?: TransportClientId,
 ) =>
   | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
-  | LiteralErrorCode<ApplicationErrorCode>
+  | ApplicationErrorCode<RejectionCodeSchemas>
   | ParsedMetadata
   | Promise<
       | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
-      | LiteralErrorCode<ApplicationErrorCode>
+      | ApplicationErrorCode<RejectionCodeSchemas>
       | ParsedMetadata
     >;
 
 export interface ClientHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
-  ApplicationErrorCode extends string = never,
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
 > {
   /**
    * Schema for the metadata that the client sends to the server
@@ -45,7 +45,7 @@ export interface ClientHandshakeOptions<
    * is rejected as a malformed handshake response. Pass a tuple of TypeBox
    * literals (`Type.Literal(...)`) with `as const`.
    */
-  rejectionCodeSchemas?: LiteralErrorCodeSchemas<ApplicationErrorCode>;
+  rejectionCodeSchemas?: RejectionCodeSchemas;
 
   /**
    * Gets the {@link HandshakeRequestMetadata} to send to the server.
@@ -66,7 +66,7 @@ export interface ClientHandshakeOptions<
 export interface ServerHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  ApplicationErrorCode extends string = never,
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
 > {
   /**
    * Schema for the metadata that the server receives from the client
@@ -82,7 +82,7 @@ export interface ServerHandshakeOptions<
    * response as malformed. Pass a tuple of TypeBox literals
    * (`Type.Literal(...)`) with `as const`.
    */
-  rejectionCodeSchemas?: LiteralErrorCodeSchemas<ApplicationErrorCode>;
+  rejectionCodeSchemas?: RejectionCodeSchemas;
 
   /**
    * Parses the metadata sent by the client during the handshake into the
@@ -99,7 +99,7 @@ export interface ServerHandshakeOptions<
   validate: ValidateHandshake<
     MetadataSchema,
     ParsedMetadata,
-    NoInfer<ApplicationErrorCode>
+    NoInfer<RejectionCodeSchemas>
   >;
 
   /**
@@ -117,33 +117,33 @@ export interface ServerHandshakeOptions<
 
 export function createClientHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
-  const ApplicationErrorCode extends string = never,
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
 >(
   schema: MetadataSchema,
   construct: ConstructHandshake<MetadataSchema>,
   eager?: boolean,
-  rejectionCodeSchemas?: LiteralErrorCodeSchemas<ApplicationErrorCode>,
-): ClientHandshakeOptions<MetadataSchema, ApplicationErrorCode> {
+  rejectionCodeSchemas?: RejectionCodeSchemas,
+): ClientHandshakeOptions<MetadataSchema, RejectionCodeSchemas> {
   return { schema, construct, eager, rejectionCodeSchemas };
 }
 
 export function createServerHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  const ApplicationErrorCode extends string = never,
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
 >(
   schema: MetadataSchema,
   validate: ValidateHandshake<
     MetadataSchema,
     ParsedMetadata,
-    NoInfer<ApplicationErrorCode>
+    NoInfer<RejectionCodeSchemas>
   >,
   expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined,
-  rejectionCodeSchemas?: LiteralErrorCodeSchemas<ApplicationErrorCode>,
+  rejectionCodeSchemas?: RejectionCodeSchemas,
 ): ServerHandshakeOptions<
   MetadataSchema,
   ParsedMetadata,
-  ApplicationErrorCode
+  RejectionCodeSchemas
 > {
   return { schema, validate, expiry, rejectionCodeSchemas };
 }

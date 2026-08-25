@@ -1,4 +1,7 @@
-import { TransportClientId } from '../../message';
+import {
+  type ApplicationErrorCodeSchemas,
+  TransportClientId,
+} from '../../message';
 import { WebSocketServer } from 'ws';
 import { WebSocketConnection } from './connection';
 import { WsLike } from './wslike';
@@ -25,12 +28,12 @@ function cleanHeaders(
 export class WebSocketServerTransport<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  ApplicationErrorCode extends string = never,
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
 > extends ServerTransport<
   WebSocketConnection,
   MetadataSchema,
   ParsedMetadata,
-  ApplicationErrorCode
+  RejectionCodeSchemas
 > {
   wss: WebSocketServer;
 

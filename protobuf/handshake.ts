@@ -11,9 +11,9 @@ import {
   type ServerHandshakeOptions,
 } from '../router/handshake';
 import {
+  type ApplicationErrorCode,
+  type ApplicationErrorCodeSchemas,
   HandshakeErrorCustomHandlerFatalResponseCodes,
-  type LiteralErrorCode,
-  type LiteralErrorCodeSchemas,
   type TransportClientId,
 } from '../transport/message';
 import { decodeMessageBytes, encodeMessageBytes } from './shared';
@@ -32,7 +32,7 @@ type ConstructHandshake<Schema extends DescMessage> = () =>
 type ValidateHandshake<
   Schema extends DescMessage,
   ParsedMetadata,
-  ApplicationErrorCode extends string = never,
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
 > = (
   metadata: MessageShape<Schema>,
   previousParsedMetadata?: ParsedMetadata,
@@ -40,11 +40,11 @@ type ValidateHandshake<
 ) =>
   | ParsedMetadata
   | ProtobufHandshakeFailureCode
-  | LiteralErrorCode<ApplicationErrorCode>
+  | ApplicationErrorCode<RejectionCodeSchemas>
   | Promise<
       | ParsedMetadata
       | ProtobufHandshakeFailureCode
-      | LiteralErrorCode<ApplicationErrorCode>
+      | ApplicationErrorCode<RejectionCodeSchemas>
     >;
 
 /**
@@ -52,13 +52,13 @@ type ValidateHandshake<
  */
 export function createClientHandshakeOptions<
   Schema extends DescMessage,
-  const ApplicationErrorCode extends string = never,
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
 >(
   schema: Schema,
   construct: ConstructHandshake<Schema>,
   eager?: boolean,
-  rejectionCodeSchemas?: LiteralErrorCodeSchemas<ApplicationErrorCode>,
-): ClientHandshakeOptions<typeof HandshakeBytesSchema, ApplicationErrorCode> {
+  rejectionCodeSchemas?: RejectionCodeSchemas,
+): ClientHandshakeOptions<typeof HandshakeBytesSchema, RejectionCodeSchemas> {
   return createTransportClientHandshakeOptions(
     HandshakeBytesSchema,
     async () => {
@@ -77,20 +77,20 @@ export function createClientHandshakeOptions<
 export function createServerHandshakeOptions<
   Schema extends DescMessage,
   ParsedMetadata extends object = object,
-  const ApplicationErrorCode extends string = never,
+  RejectionCodeSchemas extends ApplicationErrorCodeSchemas = [],
 >(
   schema: Schema,
   validate: ValidateHandshake<
     Schema,
     ParsedMetadata,
-    NoInfer<ApplicationErrorCode>
+    NoInfer<RejectionCodeSchemas>
   >,
   expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined,
-  rejectionCodeSchemas?: LiteralErrorCodeSchemas<ApplicationErrorCode>,
+  rejectionCodeSchemas?: RejectionCodeSchemas,
 ): ServerHandshakeOptions<
   typeof HandshakeBytesSchema,
   ParsedMetadata,
-  ApplicationErrorCode
+  RejectionCodeSchemas
 > {
   return createTransportServerHandshakeOptions(
     HandshakeBytesSchema,
