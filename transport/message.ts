@@ -127,8 +127,8 @@ export type LiteralErrorCode<Code extends string> = string extends Code
   ? never
   : Code;
 
-export type LiteralErrorCodes<Code extends string> = ReadonlyArray<
-  LiteralErrorCode<Code>
+export type LiteralErrorCodeSchemas<Code extends string> = ReadonlyArray<
+  TLiteral<LiteralErrorCode<Code>>
 >;
 
 /**
@@ -160,9 +160,9 @@ export const ControlMessageHandshakeResponseSchema = Type.Object({
  * unconfigured peer rejects an application code as a malformed response.
  */
 export const ControlMessageHandshakeResponseSchemaWithCodes = <
-  const ApplicationErrorCodes extends readonly string[],
+  const ApplicationErrorCodeSchemas extends ReadonlyArray<TLiteral<string>>,
 >(
-  applicationErrorCodes: ApplicationErrorCodes,
+  applicationErrorCodeSchemas: ApplicationErrorCodeSchemas,
 ) =>
   Type.Object({
     type: Type.Literal('HANDSHAKE_RESP'),
@@ -176,11 +176,7 @@ export const ControlMessageHandshakeResponseSchemaWithCodes = <
         reason: Type.String(),
         code: Type.Union([
           HandshakeErrorResponseCodes,
-          Type.Union(
-            applicationErrorCodes.map(
-              (code) => Type.Literal(code) as TLiteral<typeof code>,
-            ),
-          ),
+          Type.Union([...applicationErrorCodeSchemas]),
         ]),
       }),
     ]),

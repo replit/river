@@ -21,7 +21,7 @@ import {
 } from '../testUtil/fixtures/cleanup';
 import { testMatrix } from '../testUtil/fixtures/matrix';
 import { PartialTransportMessage } from './message';
-import { Type } from 'typebox';
+import { Type, type Static } from 'typebox';
 import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 import { createPostTestCleanups } from '../testUtil/fixtures/cleanup';
 import { SessionState } from './sessionStateMachine';
@@ -1952,8 +1952,13 @@ describe.each(testMatrix())(
         foo: Type.String(),
       });
 
-      const rejectionCodes = ['REPL_NOT_FOUND', 'TOKEN_EXPIRED'] as const;
-      type ApplicationErrorCode = (typeof rejectionCodes)[number];
+      const rejectionCodeSchemas = [
+        Type.Literal('REPL_NOT_FOUND'),
+        Type.Literal('TOKEN_EXPIRED'),
+      ] as const;
+
+      type ApplicationErrorCode = Static<(typeof rejectionCodeSchemas)[number]>;
+
       interface ParsedMetadata {
         foo: string;
       }
@@ -1969,18 +1974,20 @@ describe.each(testMatrix())(
           // @ts-expect-error only declared rejection codes may be returned
           async () => 'SOME_OTHER_CODE',
           undefined,
-          rejectionCodes,
+          rejectionCodeSchemas,
         ),
       ).toBeDefined();
 
-      const broadCodes: string[] = ['REPL_NOT_FOUND'];
+      const broadCode: string = 'REPL_NOT_FOUND';
+      const broadCodeSchemas = [Type.Literal(broadCode)];
+
       expect(
         createServerHandshakeOptions<typeof schema, ParsedMetadata, string>(
           schema,
           async () => ({ foo: 'foo' }),
           undefined,
-          // @ts-expect-error application error codes must be string literals
-          broadCodes,
+          // @ts-expect-error application error schemas must use literals
+          broadCodeSchemas,
         ),
       ).toBeDefined();
 
@@ -1994,13 +2001,13 @@ describe.each(testMatrix())(
       >('SERVER', {
         schema,
         validate: parse,
-        rejectionCodes,
+        rejectionCodeSchemas,
       });
 
       const clientTransport = getClientTransport('client', {
         schema,
         construct: async () => ({ foo: 'foo' }),
-        rejectionCodes,
+        rejectionCodeSchemas,
       });
 
       const clientHandshakeFailed = vi.fn();
@@ -2061,7 +2068,7 @@ describe.each(testMatrix())(
       >('SERVER', {
         schema,
         validate: async (): Promise<ApplicationErrorCode> => 'REPL_NOT_FOUND',
-        rejectionCodes: ['REPL_NOT_FOUND'],
+        rejectionCodeSchemas: [Type.Literal('REPL_NOT_FOUND')],
       });
 
       // the client did not register the application code: it must treat the

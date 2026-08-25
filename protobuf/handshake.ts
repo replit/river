@@ -13,7 +13,7 @@ import {
 import {
   HandshakeErrorCustomHandlerFatalResponseCodes,
   type LiteralErrorCode,
-  type LiteralErrorCodes,
+  type LiteralErrorCodeSchemas,
   type TransportClientId,
 } from '../transport/message';
 import { decodeMessageBytes, encodeMessageBytes } from './shared';
@@ -57,7 +57,7 @@ export function createClientHandshakeOptions<
   schema: Schema,
   construct: ConstructHandshake<Schema>,
   eager?: boolean,
-  rejectionCodes?: LiteralErrorCodes<ApplicationErrorCode>,
+  rejectionCodeSchemas?: LiteralErrorCodeSchemas<ApplicationErrorCode>,
 ): ClientHandshakeOptions<typeof HandshakeBytesSchema, ApplicationErrorCode> {
   return createTransportClientHandshakeOptions(
     HandshakeBytesSchema,
@@ -67,7 +67,7 @@ export function createClientHandshakeOptions<
       return encodeMessageBytes(schema, metadata);
     },
     eager,
-    rejectionCodes,
+    rejectionCodeSchemas,
   );
 }
 
@@ -86,7 +86,7 @@ export function createServerHandshakeOptions<
     NoInfer<ApplicationErrorCode>
   >,
   expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined,
-  rejectionCodes?: LiteralErrorCodes<ApplicationErrorCode>,
+  rejectionCodeSchemas?: LiteralErrorCodeSchemas<ApplicationErrorCode>,
 ): ServerHandshakeOptions<
   typeof HandshakeBytesSchema,
   ParsedMetadata,
@@ -105,6 +105,6 @@ export function createServerHandshakeOptions<
       return await validate(decoded, previousParsedMetadata, from);
     },
     expiry,
-    rejectionCodes,
+    rejectionCodeSchemas,
   );
 }

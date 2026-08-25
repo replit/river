@@ -115,9 +115,11 @@ export abstract class ClientTransport<
     options: ClientHandshakeOptions<TSchema, ApplicationErrorCode>,
   ) {
     this.handshakeExtensions = options;
-    if (options.rejectionCodes?.length) {
+    if (options.rejectionCodeSchemas?.length) {
       this.handshakeResponseSchema =
-        ControlMessageHandshakeResponseSchemaWithCodes(options.rejectionCodes);
+        ControlMessageHandshakeResponseSchemaWithCodes(
+          options.rejectionCodeSchemas,
+        );
     }
   }
 

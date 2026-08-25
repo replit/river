@@ -10,6 +10,7 @@ import {
   isStreamOpen,
 } from './message';
 import { describe, test, expect } from 'vitest';
+import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 
 const msg = (
@@ -110,8 +111,8 @@ describe('message helpers', () => {
 
   test('handshake response schema with application codes', () => {
     const extended = ControlMessageHandshakeResponseSchemaWithCodes([
-      'REPL_NOT_FOUND',
-      'TOKEN_EXPIRED',
+      Type.Literal('REPL_NOT_FOUND'),
+      Type.Literal('TOKEN_EXPIRED'),
     ] as const);
     const rejection = {
       type: 'HANDSHAKE_RESP',

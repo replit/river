@@ -91,11 +91,9 @@ export abstract class ServerTransport<
     value: unknown,
   ): value is LiteralErrorCode<ApplicationErrorCode> {
     return (
-      typeof value === 'string' &&
-      (this.handshakeExtensions?.rejectionCodes?.includes(
-        value as LiteralErrorCode<ApplicationErrorCode>,
-      ) ??
-        false)
+      this.handshakeExtensions?.rejectionCodeSchemas?.some((schema) =>
+        Value.Check(schema, value),
+      ) ?? false
     );
   }
 
