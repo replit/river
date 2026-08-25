@@ -67,7 +67,7 @@ export type EventHandler<
 
 export class EventDispatcher<
   T extends EventTypes,
-  HandshakeFailureCode extends string = BuiltInHandshakeErrorCode,
+  HandshakeFailureCode extends string,
 > {
   private eventListeners: {
     [K in T]?: Set<EventHandler<K, HandshakeFailureCode>>;

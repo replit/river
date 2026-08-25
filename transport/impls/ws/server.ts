@@ -28,8 +28,7 @@ function cleanHeaders(
 export class WebSocketServerTransport<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  RejectionCodeSchema extends
-    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
 > extends ServerTransport<
   WebSocketConnection,
   MetadataSchema,

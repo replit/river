@@ -158,8 +158,7 @@ export type BuiltInHandshakeErrorCode = Static<
  * registered in the handshake options.
  */
 export type HandshakeErrorCode<
-  RejectionCodeSchema extends
-    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
 > = BuiltInHandshakeErrorCode | CustomHandshakeErrorCode<RejectionCodeSchema>;
 
 const handshakeResponseSchema = <Code extends TSchema>(code: Code) =>
@@ -316,8 +315,7 @@ export function handshakeRequestMessage({
 export const SESSION_STATE_MISMATCH = 'session state mismatch';
 
 export function handshakeResponseMessage<
-  RejectionCodeSchema extends
-    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
 >({
   from,
   to,

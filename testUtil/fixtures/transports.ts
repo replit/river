@@ -34,8 +34,7 @@ export interface TestTransportOptions {
 
 export interface TestSetupHelpers {
   getClientTransport: <
-    RejectionCodeSchema extends
-      CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+    RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
   >(
     id: TransportClientId,
     handshakeOptions?: ClientHandshakeOptions<TSchema, RejectionCodeSchema>,
@@ -43,8 +42,7 @@ export interface TestSetupHelpers {
   getServerTransport: <
     MetadataSchema extends TSchema = TSchema,
     ParsedMetadata extends object = object,
-    RejectionCodeSchema extends
-      CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+    RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
   >(
     id?: TransportClientId,
     handshakeOptions?: ServerHandshakeOptions<

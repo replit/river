@@ -245,8 +245,7 @@ const defaultClientOptions: ClientOptions = {
 export function createClient<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ServiceSchemaMap extends AnyServiceSchemaMap<any>,
-  RejectionCodeSchema extends
-    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
 >(
   transport: ClientTransport<Connection, RejectionCodeSchema>,
   serverId: TransportClientId,

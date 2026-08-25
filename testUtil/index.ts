@@ -2,6 +2,7 @@ import NodeWs, { WebSocketServer } from 'ws';
 import http from 'node:http';
 import type { Static } from 'typebox';
 import {
+  type CustomHandshakeErrorCodeSchema,
   OpaqueTransportMessage,
   PartialTransportMessage,
   currentProtocolVersion,
@@ -18,7 +19,6 @@ import { SessionState } from '../transport/sessionStateMachine/common';
 import { SessionStateGraph } from '../transport/sessionStateMachine/transitions';
 import { BaseErrorSchemaType } from '../router/errors';
 import { ClientTransport } from '../transport/client';
-import { ServerTransport } from '../transport/server';
 import { getTracer } from '../tracing';
 
 export {
@@ -194,9 +194,11 @@ export function dummySession() {
   );
 }
 
-export function getClientSendFn(
-  clientTransport: ClientTransport<Connection>,
-  serverTransport: ServerTransport<Connection>,
+export function getClientSendFn<
+  ClientRejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
+>(
+  clientTransport: ClientTransport<Connection, ClientRejectionCodeSchema>,
+  serverTransport: { clientId: string },
 ) {
   const session =
     clientTransport.sessions.get(serverTransport.clientId) ??
@@ -208,9 +210,9 @@ export function getClientSendFn(
   );
 }
 
-export function getServerSendFn(
-  serverTransport: ServerTransport<Connection>,
-  clientTransport: ClientTransport<Connection>,
+export function getServerSendFn<HandshakeFailureCode extends string>(
+  serverTransport: Transport<Connection, HandshakeFailureCode>,
+  clientTransport: { clientId: string },
 ) {
   const session = serverTransport.sessions.get(clientTransport.clientId);
   if (!session) {
@@ -223,9 +225,10 @@ export function getServerSendFn(
   );
 }
 
-export function getTransportConnections<ConnType extends Connection>(
-  transport: Transport<ConnType>,
-): Array<ConnType> {
+export function getTransportConnections<
+  ConnType extends Connection,
+  HandshakeFailureCode extends string,
+>(transport: Transport<ConnType, HandshakeFailureCode>): Array<ConnType> {
   const connections = [];
   for (const session of transport.sessions.values()) {
     if (session.state === SessionState.Connected) {
@@ -236,15 +239,17 @@ export function getTransportConnections<ConnType extends Connection>(
   return connections;
 }
 
-export function numberOfConnections<ConnType extends Connection>(
-  transport: Transport<ConnType>,
-): number {
+export function numberOfConnections<
+  ConnType extends Connection,
+  HandshakeFailureCode extends string,
+>(transport: Transport<ConnType, HandshakeFailureCode>): number {
   return getTransportConnections(transport).length;
 }
 
-export function closeAllConnections<ConnType extends Connection>(
-  transport: Transport<ConnType>,
-) {
+export function closeAllConnections<
+  ConnType extends Connection,
+  HandshakeFailureCode extends string,
+>(transport: Transport<ConnType, HandshakeFailureCode>) {
   for (const conn of getTransportConnections(transport)) {
     conn.close();
   }

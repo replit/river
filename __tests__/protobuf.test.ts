@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { Type } from 'typebox';
 import { BinaryCodec, NaiveJsonCodec } from '../codec';
 import {
   type ClientError,
@@ -298,15 +299,20 @@ describe.each(protobufRouterMatrix)(
     });
 
     test('protobuf handshake metadata is decoded through the router helpers', async () => {
+      const rejectionCodeSchema = Type.Union([Type.Literal('TOKEN_EXPIRED')]);
       const clientHandshakeOptions = createClientHandshakeOptions(
         AuthHandshakeSchema,
         () => ({ token: 'let-me-in' }),
+        undefined,
+        rejectionCodeSchema,
       );
       const serverHandshakeOptions = createServerHandshakeOptions(
         AuthHandshakeSchema,
         (metadata) => ({
           token: metadata.token,
         }),
+        undefined,
+        rejectionCodeSchema,
       );
 
       const clientTransport = getClientTransport(

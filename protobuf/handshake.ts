@@ -52,8 +52,7 @@ type ValidateHandshake<
  */
 export function createClientHandshakeOptions<
   Schema extends DescMessage,
-  RejectionCodeSchema extends
-    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
 >(
   schema: Schema,
   construct: ConstructHandshake<Schema>,
@@ -78,8 +77,7 @@ export function createClientHandshakeOptions<
 export function createServerHandshakeOptions<
   Schema extends DescMessage,
   ParsedMetadata extends object = object,
-  RejectionCodeSchema extends
-    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
 >(
   schema: Schema,
   validate: ValidateHandshake<

@@ -30,8 +30,7 @@ type ValidateHandshake<
 
 export interface ClientHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
-  RejectionCodeSchema extends
-    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
 > {
   /**
    * Schema for the metadata that the client sends to the server
@@ -67,8 +66,7 @@ export interface ClientHandshakeOptions<
 export interface ServerHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  RejectionCodeSchema extends
-    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
 > {
   /**
    * Schema for the metadata that the server receives from the client
@@ -118,8 +116,7 @@ export interface ServerHandshakeOptions<
 
 export function createClientHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
-  RejectionCodeSchema extends
-    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
 >(
   schema: MetadataSchema,
   construct: ConstructHandshake<MetadataSchema>,
@@ -132,8 +129,7 @@ export function createClientHandshakeOptions<
 export function createServerHandshakeOptions<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  RejectionCodeSchema extends
-    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
 >(
   schema: MetadataSchema,
   validate: ValidateHandshake<

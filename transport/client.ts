@@ -54,8 +54,7 @@ type ConstructedHandshakeMetadata =
 
 export abstract class ClientTransport<
   ConnType extends Connection,
-  RejectionCodeSchema extends
-    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
 > extends Transport<ConnType, HandshakeErrorCode<RejectionCodeSchema>> {
   /**
    * The options for this transport.

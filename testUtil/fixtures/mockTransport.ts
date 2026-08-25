@@ -162,10 +162,9 @@ export function createMockTransportNetwork(
       return clientTransport;
     },
     getServerTransport: <
-      MetadataSchema extends TSchema = TSchema,
-      ParsedMetadata extends object = object,
-      RejectionCodeSchema extends
-        CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+      MetadataSchema extends TSchema,
+      ParsedMetadata extends object,
+      RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
     >(
       id = 'SERVER',
       handshakeOptions:

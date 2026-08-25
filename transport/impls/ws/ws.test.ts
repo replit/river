@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { describe, test, expect, beforeEach } from 'vitest';
+import { Type } from 'typebox';
 import {
   createWebSocketServer,
   onWsServerReady,
@@ -23,6 +24,7 @@ import {
 import { PartialTransportMessage } from '../../message';
 import type NodeWs from 'ws';
 import { createPostTestCleanups } from '../../../testUtil/fixtures/cleanup';
+import { createClientHandshakeOptions } from '../../../router/handshake';
 
 describe('sending and receiving across websockets works', async () => {
   let server: http.Server;
@@ -40,6 +42,30 @@ describe('sending and receiving across websockets works', async () => {
       wss.close();
       server.close();
     };
+  });
+
+  test('custom handshake codes require an explicit transport type', () => {
+    const rejectionCodeSchema = Type.Union([Type.Literal('TOKEN_EXPIRED')]);
+    const handshakeOptions = createClientHandshakeOptions(
+      Type.Object({}),
+      () => ({}),
+      undefined,
+      rejectionCodeSchema,
+    );
+    const getWs = () => {
+      throw new Error('not called');
+    };
+    const defaultTransport = new WebSocketClientTransport(getWs, 'client');
+
+    // @ts-expect-error custom codes must be declared on the transport
+    defaultTransport.extendHandshake(handshakeOptions);
+
+    const typedTransport = new WebSocketClientTransport<
+      typeof rejectionCodeSchema
+    >(getWs, 'client');
+    typedTransport.extendHandshake(handshakeOptions);
+
+    expect(typedTransport.handshakeExtensions).toBe(handshakeOptions);
   });
 
   test('basic send/receive', async () => {

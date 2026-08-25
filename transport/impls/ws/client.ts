@@ -13,8 +13,7 @@ import { WsLike } from './wslike';
  * @extends Transport
  */
 export class WebSocketClientTransport<
-  RejectionCodeSchema extends
-    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
 > extends ClientTransport<WebSocketConnection, RejectionCodeSchema> {
   /**
    * A function that returns a Promise that resolves to a websocket URL.

@@ -1179,8 +1179,7 @@ export function createServer<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Services extends AnyServiceSchemaMap<any>,
   Context extends MaybeDisposable = MaybeDisposable,
-  RejectionCodeSchema extends
-    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema = never,
 >(
   transport: ServerTransport<
     Connection,
