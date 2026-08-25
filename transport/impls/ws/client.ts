@@ -1,6 +1,6 @@
 import { ClientTransport } from '../../client';
 import {
-  type CustomHandshakeErrorCodeSchemas,
+  type CustomHandshakeErrorCodeSchema,
   TransportClientId,
 } from '../../message';
 import { ProvidedClientTransportOptions } from '../../options';
@@ -13,8 +13,9 @@ import { WsLike } from './wslike';
  * @extends Transport
  */
 export class WebSocketClientTransport<
-  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
-> extends ClientTransport<WebSocketConnection, RejectionCodeSchemas> {
+  RejectionCodeSchema extends
+    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+> extends ClientTransport<WebSocketConnection, RejectionCodeSchema> {
   /**
    * A function that returns a Promise that resolves to a websocket URL.
    */

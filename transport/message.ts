@@ -1,4 +1,10 @@
-import { Type, type TLiteral, type TSchema, type Static } from 'typebox';
+import {
+  Type,
+  type TLiteral,
+  type TSchema,
+  type TUnion,
+  type Static,
+} from 'typebox';
 import { PropagationContext } from '../tracing';
 import { generateId } from './id';
 // type-only: a value import closes a transport <-> router require cycle
@@ -124,22 +130,20 @@ export const HandshakeErrorResponseCodes = Type.Union([
 ]);
 
 /**
- * A tuple of TypeBox literal schemas declaring the custom
- * handshake rejection codes, e.g.
- * `[Type.Literal('REPL_NOT_FOUND'), Type.Literal('TOKEN_EXPIRED')] as const`.
+ * A TypeBox union of literals declaring the custom handshake rejection codes.
  */
-export type CustomHandshakeErrorCodeSchemas = ReadonlyArray<TLiteral<string>>;
+export type CustomHandshakeErrorCodeSchema = TUnion<Array<TLiteral<string>>>;
 
 /**
- * The union of codes declared by a tuple of rejection code schemas.
- * Widened schemas (`TLiteral<string>` rather than a specific literal)
- * contribute no codes.
+ * The union of codes declared by a rejection code schema. Widened literal
+ * schemas (`TLiteral<string>` rather than a specific literal) contribute no
+ * codes.
  */
 export type CustomHandshakeErrorCode<
-  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
-> = string extends Static<RejectionCodeSchemas[number]>
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
+> = string extends Static<RejectionCodeSchema>
   ? never
-  : Static<RejectionCodeSchemas[number]>;
+  : Static<RejectionCodeSchema>;
 
 /**
  * The protocol-level handshake error codes River can emit without any custom
@@ -154,8 +158,9 @@ export type BuiltInHandshakeErrorCode = Static<
  * registered in the handshake options.
  */
 export type HandshakeErrorCode<
-  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
-> = BuiltInHandshakeErrorCode | CustomHandshakeErrorCode<RejectionCodeSchemas>;
+  RejectionCodeSchema extends
+    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+> = BuiltInHandshakeErrorCode | CustomHandshakeErrorCode<RejectionCodeSchema>;
 
 const handshakeResponseSchema = <Code extends TSchema>(code: Code) =>
   Type.Object({
@@ -183,12 +188,12 @@ export const ControlMessageHandshakeResponseSchema = handshakeResponseSchema(
  * unconfigured peer rejects a custom code as a malformed response.
  */
 export const ControlMessageHandshakeResponseSchemaWithCodes = <
-  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
 >(
-  rejectionCodeSchemas: RejectionCodeSchemas,
+  rejectionCodeSchema: RejectionCodeSchema,
 ) =>
   handshakeResponseSchema(
-    Type.Union([HandshakeErrorResponseCodes, ...rejectionCodeSchemas]),
+    Type.Union([HandshakeErrorResponseCodes, rejectionCodeSchema]),
   );
 
 /**
@@ -311,7 +316,8 @@ export function handshakeRequestMessage({
 export const SESSION_STATE_MISMATCH = 'session state mismatch';
 
 export function handshakeResponseMessage<
-  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
+  RejectionCodeSchema extends
+    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
 >({
   from,
   to,
@@ -326,7 +332,7 @@ export function handshakeResponseMessage<
     | {
         ok: false;
         reason: string;
-        code: HandshakeErrorCode<RejectionCodeSchemas>;
+        code: HandshakeErrorCode<RejectionCodeSchema>;
       };
 }): TransportMessage<Static<typeof ControlMessageHandshakeResponseSchema>> {
   return {

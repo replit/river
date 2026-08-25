@@ -11,7 +11,7 @@ import { numberOfConnections, testingSessionOptions } from '..';
 import type { TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import {
-  type CustomHandshakeErrorCodeSchemas,
+  type CustomHandshakeErrorCodeSchema,
   ControlMessageAckSchema,
 } from '../../transport/message';
 
@@ -118,18 +118,18 @@ export async function cleanupTransports<
 export async function testFinishesCleanly<
   MetadataSchema extends TSchema,
   ParsedMetadata extends object,
-  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
 >({
   clientTransports,
   serverTransport,
   server,
 }: Partial<{
-  clientTransports: Array<ClientTransport<Connection, RejectionCodeSchemas>>;
+  clientTransports: Array<ClientTransport<Connection, RejectionCodeSchema>>;
   serverTransport: ServerTransport<
     Connection,
     MetadataSchema,
     ParsedMetadata,
-    RejectionCodeSchemas
+    RejectionCodeSchema
   >;
   server: Server<MaybeDisposable, object, AnyServiceSchemaMap>;
 }>) {

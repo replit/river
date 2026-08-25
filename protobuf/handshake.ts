@@ -12,7 +12,7 @@ import {
 } from '../router/handshake';
 import {
   type CustomHandshakeErrorCode,
-  type CustomHandshakeErrorCodeSchemas,
+  type CustomHandshakeErrorCodeSchema,
   HandshakeErrorCustomHandlerFatalResponseCodes,
   type TransportClientId,
 } from '../transport/message';
@@ -32,7 +32,7 @@ type ConstructHandshake<Schema extends DescMessage> = () =>
 type ValidateHandshake<
   Schema extends DescMessage,
   ParsedMetadata,
-  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
 > = (
   metadata: MessageShape<Schema>,
   previousParsedMetadata?: ParsedMetadata,
@@ -40,11 +40,11 @@ type ValidateHandshake<
 ) =>
   | ParsedMetadata
   | ProtobufHandshakeFailureCode
-  | CustomHandshakeErrorCode<RejectionCodeSchemas>
+  | CustomHandshakeErrorCode<RejectionCodeSchema>
   | Promise<
       | ParsedMetadata
       | ProtobufHandshakeFailureCode
-      | CustomHandshakeErrorCode<RejectionCodeSchemas>
+      | CustomHandshakeErrorCode<RejectionCodeSchema>
     >;
 
 /**
@@ -52,13 +52,14 @@ type ValidateHandshake<
  */
 export function createClientHandshakeOptions<
   Schema extends DescMessage,
-  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
+  RejectionCodeSchema extends
+    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
 >(
   schema: Schema,
   construct: ConstructHandshake<Schema>,
   eager?: boolean,
-  rejectionCodeSchemas?: RejectionCodeSchemas,
-): ClientHandshakeOptions<typeof HandshakeBytesSchema, RejectionCodeSchemas> {
+  rejectionCodeSchema?: RejectionCodeSchema,
+): ClientHandshakeOptions<typeof HandshakeBytesSchema, RejectionCodeSchema> {
   return createTransportClientHandshakeOptions(
     HandshakeBytesSchema,
     async () => {
@@ -67,7 +68,7 @@ export function createClientHandshakeOptions<
       return encodeMessageBytes(schema, metadata);
     },
     eager,
-    rejectionCodeSchemas,
+    rejectionCodeSchema,
   );
 }
 
@@ -77,20 +78,21 @@ export function createClientHandshakeOptions<
 export function createServerHandshakeOptions<
   Schema extends DescMessage,
   ParsedMetadata extends object = object,
-  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
+  RejectionCodeSchema extends
+    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
 >(
   schema: Schema,
   validate: ValidateHandshake<
     Schema,
     ParsedMetadata,
-    NoInfer<RejectionCodeSchemas>
+    NoInfer<RejectionCodeSchema>
   >,
   expiry?: (parsedMetadata: ParsedMetadata) => Date | undefined,
-  rejectionCodeSchemas?: RejectionCodeSchemas,
+  rejectionCodeSchema?: RejectionCodeSchema,
 ): ServerHandshakeOptions<
   typeof HandshakeBytesSchema,
   ParsedMetadata,
-  RejectionCodeSchemas
+  RejectionCodeSchema
 > {
   return createTransportServerHandshakeOptions(
     HandshakeBytesSchema,
@@ -105,6 +107,6 @@ export function createServerHandshakeOptions<
       return await validate(decoded, previousParsedMetadata, from);
     },
     expiry,
-    rejectionCodeSchemas,
+    rejectionCodeSchema,
   );
 }

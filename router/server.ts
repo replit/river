@@ -29,7 +29,7 @@ import {
   cancelMessage,
   ProtocolVersion,
   TransportClientId,
-  type CustomHandshakeErrorCodeSchemas,
+  type CustomHandshakeErrorCodeSchema,
 } from '../transport/message';
 import { ProcedureHandlerContext } from './context';
 import { Logger } from '../logging/log';
@@ -113,14 +113,14 @@ class RiverServer<
   MetadataSchema extends TSchema,
   ParsedMetadata extends object,
   Services extends AnyServiceSchemaMap<Context>,
-  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
 > implements Server<Context, ParsedMetadata, Services>
 {
   private transport: ServerTransport<
     Connection,
     MetadataSchema,
     ParsedMetadata,
-    RejectionCodeSchemas
+    RejectionCodeSchema
   >;
 
   private contextMap: Map<AnyService, Context & { state: object }>;
@@ -152,13 +152,13 @@ class RiverServer<
       Connection,
       MetadataSchema,
       ParsedMetadata,
-      RejectionCodeSchemas
+      RejectionCodeSchema
     >,
     services: Services,
     handshakeOptions?: ServerHandshakeOptions<
       MetadataSchema,
       ParsedMetadata,
-      RejectionCodeSchemas
+      RejectionCodeSchema
     >,
     extendedContext?: Context,
     maxCancelledStreamTombstonesPerSession = 200,
@@ -1179,20 +1179,21 @@ export function createServer<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Services extends AnyServiceSchemaMap<any>,
   Context extends MaybeDisposable = MaybeDisposable,
-  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
+  RejectionCodeSchema extends
+    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
 >(
   transport: ServerTransport<
     Connection,
     MetadataSchema,
     ParsedMetadata,
-    RejectionCodeSchemas
+    RejectionCodeSchema
   >,
   services: Services,
   providedServerOptions?: Partial<{
     handshakeOptions?: ServerHandshakeOptions<
       MetadataSchema,
       ParsedMetadata,
-      RejectionCodeSchemas
+      RejectionCodeSchema
     >;
     extendedContext?: Context;
     /**

@@ -5,7 +5,7 @@ import {
   ControlMessageHandshakeResponseSchema,
   ControlMessageHandshakeResponseSchemaWithCodes,
   ControlMessageRehandshakeRequestSchema,
-  type CustomHandshakeErrorCodeSchemas,
+  type CustomHandshakeErrorCodeSchema,
   type HandshakeErrorCode,
   HandshakeErrorRetriableResponseCodes,
   OpaqueTransportMessage,
@@ -54,8 +54,9 @@ type ConstructedHandshakeMetadata =
 
 export abstract class ClientTransport<
   ConnType extends Connection,
-  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
-> extends Transport<ConnType, HandshakeErrorCode<RejectionCodeSchemas>> {
+  RejectionCodeSchema extends
+    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+> extends Transport<ConnType, HandshakeErrorCode<RejectionCodeSchema>> {
   /**
    * The options for this transport.
    */
@@ -74,7 +75,7 @@ export abstract class ClientTransport<
   /**
    * Optional handshake options for this client.
    */
-  handshakeExtensions?: ClientHandshakeOptions<TSchema, RejectionCodeSchemas>;
+  handshakeExtensions?: ClientHandshakeOptions<TSchema, RejectionCodeSchema>;
 
   /**
    * Handshake response schema extended with the custom
@@ -113,13 +114,13 @@ export abstract class ClientTransport<
   }
 
   extendHandshake(
-    options: ClientHandshakeOptions<TSchema, RejectionCodeSchemas>,
+    options: ClientHandshakeOptions<TSchema, RejectionCodeSchema>,
   ) {
     this.handshakeExtensions = options;
-    if (options.rejectionCodeSchemas?.length) {
+    if (options.rejectionCodeSchema) {
       this.handshakeResponseSchema =
         ControlMessageHandshakeResponseSchemaWithCodes(
-          options.rejectionCodeSchemas,
+          options.rejectionCodeSchema,
         );
     }
   }
@@ -411,7 +412,7 @@ export abstract class ClientTransport<
         this.protocolError({
           type: ProtocolError.HandshakeFailed,
           code: msg.payload.status
-            .code as HandshakeErrorCode<RejectionCodeSchemas>,
+            .code as HandshakeErrorCode<RejectionCodeSchema>,
           message: reason,
         });
       }

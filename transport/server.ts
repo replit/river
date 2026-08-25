@@ -6,7 +6,7 @@ import {
   ControlMessageRehandshakeResponseSchema,
   HandshakeErrorCustomHandlerFatalResponseCodes,
   type CustomHandshakeErrorCode,
-  type CustomHandshakeErrorCodeSchemas,
+  type CustomHandshakeErrorCodeSchema,
   type HandshakeErrorCode,
   OpaqueTransportMessage,
   acceptedProtocolVersions,
@@ -38,8 +38,9 @@ export abstract class ServerTransport<
   ConnType extends Connection,
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
-  RejectionCodeSchemas extends CustomHandshakeErrorCodeSchemas = [],
-> extends Transport<ConnType, HandshakeErrorCode<RejectionCodeSchemas>> {
+  RejectionCodeSchema extends
+    CustomHandshakeErrorCodeSchema = CustomHandshakeErrorCodeSchema,
+> extends Transport<ConnType, HandshakeErrorCode<RejectionCodeSchema>> {
   /**
    * The options for this transport.
    */
@@ -51,7 +52,7 @@ export abstract class ServerTransport<
   handshakeExtensions?: ServerHandshakeOptions<
     MetadataSchema,
     ParsedMetadata,
-    RejectionCodeSchemas
+    RejectionCodeSchema
   >;
 
   /**
@@ -82,7 +83,7 @@ export abstract class ServerTransport<
     options: ServerHandshakeOptions<
       MetadataSchema,
       ParsedMetadata,
-      RejectionCodeSchemas
+      RejectionCodeSchema
     >,
   ) {
     this.handshakeExtensions = options;
@@ -92,13 +93,12 @@ export abstract class ServerTransport<
     value: unknown,
   ): value is
     | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
-    | CustomHandshakeErrorCode<RejectionCodeSchemas> {
+    | CustomHandshakeErrorCode<RejectionCodeSchema> {
     return (
       Value.Check(HandshakeErrorCustomHandlerFatalResponseCodes, value) ||
-      (this.handshakeExtensions?.rejectionCodeSchemas?.some((schema) =>
-        Value.Check(schema, value),
-      ) ??
-        false)
+      (this.handshakeExtensions?.rejectionCodeSchema
+        ? Value.Check(this.handshakeExtensions.rejectionCodeSchema, value)
+        : false)
     );
   }
 
@@ -267,7 +267,7 @@ export abstract class ServerTransport<
   private teardownForFailedRehandshake(
     session: ServerSession<ConnType>,
     reason: string,
-    code: HandshakeErrorCode<RejectionCodeSchemas> = 'REJECTED_BY_CUSTOM_HANDLER',
+    code: HandshakeErrorCode<RejectionCodeSchema> = 'REJECTED_BY_CUSTOM_HANDLER',
   ) {
     if (session._isConsumed) {
       return;
@@ -376,7 +376,7 @@ export abstract class ServerTransport<
     session: SessionWaitingForHandshake<ConnType>,
     to: TransportClientId,
     reason: string,
-    code: HandshakeErrorCode<RejectionCodeSchemas>,
+    code: HandshakeErrorCode<RejectionCodeSchema>,
     metadata: MessageMetadata,
   ) {
     session.conn.telemetry?.span.setStatus({
