@@ -7,3 +7,6 @@ example
 
 # Nix
 /.direnv/
+
+# Nix build symlinks
+/result

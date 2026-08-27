@@ -60,6 +60,7 @@ function inheritSharedSession(
     seqSent: session.seqSent,
     sendBuffer: session.sendBuffer,
     sendBufferDrainWaiter: session.sendBufferDrainWaiter,
+    hadConnection: session.hadConnection,
     telemetry: session.telemetry,
     options: session.options,
     log: session.log,
@@ -104,6 +105,7 @@ export const SessionStateGraph = {
         graceExpiryTime: Date.now() + options.sessionDisconnectGraceMs,
         sendBuffer,
         sendBufferDrainWaiter: undefined,
+        hadConnection: false,
         telemetry,
         options,
         protocolVersion,
@@ -238,6 +240,7 @@ export const SessionStateGraph = {
         conn,
         listeners,
         ...carriedState,
+        hadConnection: true,
       });
 
       session.startHeartbeatWatchdog();
@@ -276,6 +279,7 @@ export const SessionStateGraph = {
             seqSent: 0,
             sendBuffer: [],
             sendBufferDrainWaiter: undefined,
+            hadConnection: true,
             telemetry: createSessionTelemetryInfo(
               pendingSession.tracer,
               sessionId,

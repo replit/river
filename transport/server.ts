@@ -650,7 +650,12 @@ export abstract class ServerTransport<
       oldSession = undefined;
     }
 
-    if (!oldSession && (clientNextSentSeq > 0 || clientNextExpectedSeq > 0)) {
+    if (
+      !oldSession &&
+      (clientNextSentSeq > 0 ||
+        clientNextExpectedSeq > 0 ||
+        msg.payload.expectedSessionState.isReconnect === true)
+    ) {
       // we don't have a session, but the client is trying to reconnect
       // to an old session. we can't do anything about this, so we reject
       connectCase = 'unknown session';

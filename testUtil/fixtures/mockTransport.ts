@@ -14,6 +14,13 @@ import {
   ClientHandshakeOptions,
   ServerHandshakeOptions,
 } from '../../router/handshake';
+import { NaiveJsonCodec } from '../../codec';
+import {
+  attachTraceEvents,
+  startTraceCase,
+  traceWrapCodec,
+  tracingEnabled,
+} from './trace';
 
 export class InMemoryConnection extends Connection {
   conn: Duplex;
@@ -72,6 +79,10 @@ interface BidiConnection {
 export function createMockTransportNetwork(
   opts?: TestTransportOptions,
 ): TestSetupHelpers {
+  // one trace file per network = per generated test case (no-op unless
+  // RIVER_TRACE_DIR is set -- see ./trace.ts)
+  startTraceCase();
+
   // conn id -> [client->server, server->client]
   const connections = new Observable<Record<string, BidiConnection>>({});
 
@@ -151,12 +162,21 @@ export function createMockTransportNetwork(
     ) => {
       const clientTransport = new MockClientTransport<RejectionCodeSchema>(
         id,
-        opts?.client,
+        tracingEnabled()
+          ? {
+              ...opts?.client,
+              codec: traceWrapCodec(
+                'client',
+                opts?.client?.codec ?? NaiveJsonCodec,
+              ),
+            }
+          : opts?.client,
       );
       if (handshakeOptions) {
         clientTransport.extendHandshake(handshakeOptions);
       }
 
+      attachTraceEvents('client', clientTransport);
       transports.push(clientTransport);
 
       return clientTransport;
@@ -179,11 +199,23 @@ export function createMockTransportNetwork(
         MetadataSchema,
         ParsedMetadata,
         RejectionCodeSchema
-      >(id, opts?.server);
+      >(
+        id,
+        tracingEnabled()
+          ? {
+              ...opts?.server,
+              codec: traceWrapCodec(
+                'server',
+                opts?.server?.codec ?? NaiveJsonCodec,
+              ),
+            }
+          : opts?.server,
+      );
       if (handshakeOptions) {
         serverTransport.extendHandshake(handshakeOptions);
       }
 
+      attachTraceEvents('server', serverTransport);
       transports.push(serverTransport);
 
       return serverTransport;
