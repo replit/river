@@ -112,12 +112,10 @@ describe('sending and receiving across websockets works', async () => {
       .fn()
       .mockReturnValueOnce({ verifiedUserId: 'user-1' })
       .mockReturnValueOnce({ verifiedUserId: 'user-2' });
-    const serverTransport = new WebSocketServerTransport(
-      wss,
-      'SERVER',
-      undefined,
-      createConnectionExtras,
-    );
+    const serverTransport = new WebSocketServerTransport<
+      typeof schema,
+      { token: string }
+    >(wss, 'SERVER', undefined, createConnectionExtras);
     serverTransport.extendHandshake({ schema, validate });
     const clientTransport = new WebSocketClientTransport(
       () => Promise.resolve(createLocalWebSocketClient(port)),

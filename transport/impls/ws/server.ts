@@ -53,8 +53,7 @@ export class WebSocketServerTransport<
     wss: WebSocketServer,
     clientId: TransportClientId,
     providedOptions?: ProvidedServerTransportOptions,
-    createConnectionExtras: WebSocketConnectionExtrasFactory =
-      defaultConnectionExtrasFactory,
+    createConnectionExtras: WebSocketConnectionExtrasFactory = defaultConnectionExtrasFactory,
   ) {
     super(clientId, providedOptions);
     this.wss = wss;
