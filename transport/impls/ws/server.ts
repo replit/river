@@ -9,6 +9,7 @@ import { ServerTransport } from '../../server';
 import { ProvidedServerTransportOptions } from '../../options';
 import { type IncomingMessage } from 'http';
 import type { TSchema } from 'typebox';
+import type { ConnectionExtras } from '../../connection';
 
 function cleanHeaders(
   headers: IncomingMessage['headers'],
@@ -25,6 +26,16 @@ function cleanHeaders(
   return cleanedHeaders;
 }
 
+export type WebSocketConnectionExtrasFactory = (
+  ws: WsLike,
+  req: IncomingMessage,
+) => ConnectionExtras;
+
+const defaultConnectionExtrasFactory: WebSocketConnectionExtrasFactory = (
+  _ws,
+  req,
+) => ({ headers: cleanHeaders(req.headersDistinct) });
+
 export class WebSocketServerTransport<
   MetadataSchema extends TSchema = TSchema,
   ParsedMetadata extends object = object,
@@ -36,21 +47,26 @@ export class WebSocketServerTransport<
   RejectionCodeSchema
 > {
   wss: WebSocketServer;
+  private readonly createConnectionExtras: WebSocketConnectionExtrasFactory;
 
   constructor(
     wss: WebSocketServer,
     clientId: TransportClientId,
     providedOptions?: ProvidedServerTransportOptions,
+    createConnectionExtras: WebSocketConnectionExtrasFactory =
+      defaultConnectionExtrasFactory,
   ) {
     super(clientId, providedOptions);
     this.wss = wss;
+    this.createConnectionExtras = createConnectionExtras;
     this.wss.on('connection', this.connectionHandler);
   }
 
   connectionHandler = (ws: WsLike, req: IncomingMessage) => {
-    const conn = new WebSocketConnection(ws, {
-      headers: cleanHeaders(req.headersDistinct),
-    });
+    const conn = new WebSocketConnection(
+      ws,
+      this.createConnectionExtras(ws, req),
+    );
 
     this.handleConnection(conn);
   };

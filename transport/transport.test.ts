@@ -1487,7 +1487,7 @@ describe.each(testMatrix())(
       };
     });
 
-    test('handshakes and stores parsed metadata in session', async () => {
+    test('handshakes with a three-argument validator and stores metadata', async () => {
       const schema = Type.Object({
         kept: Type.String(),
         discarded: Type.String(),
@@ -1498,9 +1498,15 @@ describe.each(testMatrix())(
       }
 
       const get = vi.fn(async () => ({ kept: 'kept', discarded: 'discarded' }));
-      const parse = vi.fn(async (metadata: Metadata) => ({
-        kept: metadata.kept,
-      }));
+      const parse = vi.fn(
+        async (
+          metadata: Metadata,
+          _previousMetadata?: Metadata,
+          _from?: string,
+        ) => ({
+          kept: metadata.kept,
+        }),
+      );
 
       const serverTransport = getServerTransport('SERVER', {
         schema,
@@ -1842,14 +1848,14 @@ describe.each(testMatrix())(
       await waitFor(() => expect(serverTransport.sessions.size).toBe(1));
       expect(construct).toHaveBeenCalledTimes(1);
       expect(validate).toHaveBeenCalledTimes(1);
-      expect(validate).toHaveBeenCalledWith(
+      expect(validate.mock.calls[0]?.slice(0, 3)).toEqual([
         {
           kept: 'kept',
           discarded: 'discarded',
         },
         undefined,
         clientTransport.clientId,
-      );
+      ]);
 
       const session = serverTransport.sessions.get(clientTransport.clientId);
       assert(session);
@@ -1870,7 +1876,7 @@ describe.each(testMatrix())(
       await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(1));
 
       expect(validate).toHaveBeenCalledTimes(2);
-      expect(validate).toHaveBeenCalledWith(
+      expect(validate.mock.calls[1]?.slice(0, 3)).toEqual([
         {
           kept: 'kept',
           discarded: 'discarded',
@@ -1879,7 +1885,7 @@ describe.each(testMatrix())(
           kept: 'kept',
         },
         clientTransport.clientId,
-      );
+      ]);
 
       await testFinishesCleanly({
         clientTransports: [clientTransport],

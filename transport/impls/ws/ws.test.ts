@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { Type } from 'typebox';
 import {
   createWebSocketServer,
@@ -8,6 +8,7 @@ import {
   createDummyTransportMessage,
   payloadToTransportMessage,
   createLocalWebSocketClient,
+  closeAllConnections,
   numberOfConnections,
   getTransportConnections,
   getClientSendFn,
@@ -16,6 +17,7 @@ import {
 import { WebSocketServerTransport } from './server';
 import { WebSocketClientTransport } from './client';
 import {
+  advanceFakeTimersByConnectionBackoff,
   advanceFakeTimersBySessionGrace,
   cleanupTransports,
   testFinishesCleanly,
@@ -89,6 +91,64 @@ describe('sending and receiving across websockets works', async () => {
     await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msgId),
     ).resolves.toStrictEqual(msg.payload);
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
+  });
+
+  test('handshake validation receives connection extras', async () => {
+    const schema = Type.Object({ token: Type.String() });
+    const validate = vi.fn(
+      async (
+        metadata: { token: string },
+        _previousMetadata: { token: string } | undefined,
+        _from: string | undefined,
+        _connectionExtras: Record<string, unknown> | undefined,
+      ) => ({ token: metadata.token }),
+    );
+    const createConnectionExtras = vi
+      .fn()
+      .mockReturnValueOnce({ verifiedUserId: 'user-1' })
+      .mockReturnValueOnce({ verifiedUserId: 'user-2' });
+    const serverTransport = new WebSocketServerTransport(
+      wss,
+      'SERVER',
+      undefined,
+      createConnectionExtras,
+    );
+    serverTransport.extendHandshake({ schema, validate });
+    const clientTransport = new WebSocketClientTransport(
+      () => Promise.resolve(createLocalWebSocketClient(port)),
+      'client',
+    );
+    clientTransport.extendHandshake({
+      schema,
+      construct: async () => ({ token: 'token' }),
+    });
+
+    clientTransport.connect(serverTransport.clientId);
+    addPostTestCleanup(async () => {
+      await cleanupTransports([clientTransport, serverTransport]);
+    });
+
+    await waitFor(() => expect(validate).toHaveBeenCalledTimes(1));
+    expect(serverTransport.requestRehandshake(clientTransport.clientId)).toBe(
+      true,
+    );
+    await waitFor(() => expect(validate).toHaveBeenCalledTimes(2));
+
+    closeAllConnections(clientTransport);
+    await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(0));
+    await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+    await advanceFakeTimersByConnectionBackoff();
+    await waitFor(() => expect(validate).toHaveBeenCalledTimes(3));
+    expect(validate.mock.calls.map((call) => call[3])).toEqual([
+      { verifiedUserId: 'user-1' },
+      { verifiedUserId: 'user-1' },
+      { verifiedUserId: 'user-2' },
+    ]);
 
     await testFinishesCleanly({
       clientTransports: [clientTransport],

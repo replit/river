@@ -5,6 +5,7 @@ import {
   HandshakeErrorCustomHandlerFatalResponseCodes,
   type TransportClientId,
 } from '../transport/message';
+import type { ConnectionExtras } from '../transport/connection';
 
 type ConstructHandshake<T extends TSchema> = () =>
   | Static<T>
@@ -18,6 +19,7 @@ type ValidateHandshake<
   metadata: Static<T>,
   previousParsedMetadata?: ParsedMetadata,
   from?: TransportClientId,
+  connectionExtras?: ConnectionExtras,
 ) =>
   | Static<typeof HandshakeErrorCustomHandlerFatalResponseCodes>
   | CustomHandshakeErrorCode<RejectionCodeSchema>
@@ -94,6 +96,8 @@ export interface ServerHandshakeOptions<
    * @param from - The client id the peer presented in its handshake. Use it to
    *   confirm the presented id is the one the metadata authorizes before
    *   returning parsed metadata.
+   * @param connectionExtras - Context attached to the current transport
+   *   connection, if any.
    */
   validate: ValidateHandshake<
     MetadataSchema,

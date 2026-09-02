@@ -2,6 +2,8 @@ import { TelemetryInfo } from '../tracing';
 import { MessageMetadata } from '../logging';
 import { generateId } from './id';
 
+export type ConnectionExtras = Record<string, unknown>;
+
 /**
  * A connection is the actual raw underlying transport connection.
  * It's responsible for dispatching to/from the actual connection itself
@@ -11,9 +13,11 @@ import { generateId } from './id';
 export abstract class Connection {
   id: string;
   telemetry?: TelemetryInfo;
+  extras?: ConnectionExtras;
 
-  constructor() {
+  constructor(extras?: ConnectionExtras) {
     this.id = `conn-${generateId()}`; // for debugging, no collision safety needed
+    this.extras = extras;
   }
 
   get loggingMetadata(): MessageMetadata {
