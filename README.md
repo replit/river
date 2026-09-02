@@ -799,12 +799,13 @@ createClient<typeof services>(clientTransport, 'SERVER', {
 createServer(serverTransport, services, {
   handshakeOptions: createServerHandshakeOptions(
     handshakeSchema,
-    (metadata, previousMetadata, from) => {
+    (metadata, previousMetadata, from, connectionExtras) => {
       // the type of this function is
       // (
       //   metadata: Static<typeof handshakeSchema>,
       //   previousMetadata?: ParsedMetadata,
       //   from?: TransportClientId,
+      //   connectionExtras?: Record<string, unknown>,
       // ) =>
       //   | 'REJECTED_BY_CUSTOM_HANDLER' | 'REJECTED_UNSUPPORTED_CLIENT' (if you reject it)
       //   | ParsedMetadata (if you allow it)
@@ -813,12 +814,27 @@ createServer(serverTransport, services, {
       // next time a connection happens on the same session, previousMetadata will
       // be populated with the last returned value. `from` is the client id the peer
       // presented in its handshake — check it against what the metadata authorizes
-      // before returning parsed metadata.
+      // before returning parsed metadata. `connectionExtras` contains context from
+      // the transport connection that carried this handshake.
       return { parsedToken: metadata.token };
     },
   ),
 });
 ```
+
+For WebSocket servers, `connectionExtras` is `{ headers: cleanedUpgradeHeaders }` by default.
+Pass an extras factory as the fourth transport constructor argument to replace this value with verified upgrade data:
+
+```ts
+const transport = new WebSocketServerTransport(
+  wss,
+  'SERVER',
+  undefined,
+  (ws, req) => ({ identity: getVerifiedUpgradeIdentity(ws, req) }),
+);
+```
+
+The extras factory is synchronous. Complete asynchronous authentication before the WebSocket connection event, then read its result in the factory.
 
 `createClientHandshakeOptions` also takes an optional third `eager` argument. When set, the
 client constructs handshake metadata as soon as it starts dialing, so a slow `construct`

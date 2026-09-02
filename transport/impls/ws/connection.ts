@@ -1,9 +1,5 @@
-import { Connection } from '../../connection';
+import { Connection, type ConnectionExtras } from '../../connection';
 import { WsLike } from './wslike';
-
-interface ConnectionInfoExtras extends Record<string, unknown> {
-  headers: Record<string, string>;
-}
 
 const WS_HEALTHY_CLOSE_CODE = 1000;
 
@@ -20,7 +16,6 @@ export class WebSocketCloseError extends Error {
 
 export class WebSocketConnection extends Connection {
   ws: WsLike;
-  extras?: ConnectionInfoExtras;
 
   get loggingMetadata() {
     const metadata = super.loggingMetadata;
@@ -31,10 +26,9 @@ export class WebSocketConnection extends Connection {
     return metadata;
   }
 
-  constructor(ws: WsLike, extras?: ConnectionInfoExtras) {
-    super();
+  constructor(ws: WsLike, extras?: ConnectionExtras) {
+    super(extras);
     this.ws = ws;
-    this.extras = extras;
     this.ws.binaryType = 'arraybuffer';
 
     // Websockets are kinda shitty, they emit error events with no

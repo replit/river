@@ -207,6 +207,10 @@ export abstract class ServerTransport<
     }
 
     const previousParsedMetadata = this.sessionHandshakeMetadata.get(from);
+    const connectionExtras =
+      session.state === SessionState.Connected
+        ? session.conn.extras
+        : undefined;
 
     let parsedMetadataOrFailureCode;
     try {
@@ -214,6 +218,7 @@ export abstract class ServerTransport<
         metadata,
         previousParsedMetadata,
         from,
+        connectionExtras,
       );
     } catch (err) {
       // teardownForFailedRehandshake no-ops if this session was already replaced
@@ -494,6 +499,7 @@ export abstract class ServerTransport<
           msg.payload.metadata,
           previousParsedMetadata,
           msg.from,
+          session.conn.extras,
         );
       } catch (err) {
         this.rejectHandshakeRequest(

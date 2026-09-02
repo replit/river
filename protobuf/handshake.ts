@@ -18,6 +18,7 @@ import {
 } from '../transport/message';
 import { decodeMessageBytes, encodeMessageBytes } from './shared';
 import { Uint8ArrayType } from '../customSchemas';
+import type { ConnectionExtras } from '../transport/connection';
 
 const HandshakeBytesSchema = Uint8ArrayType();
 
@@ -37,6 +38,7 @@ type ValidateHandshake<
   metadata: MessageShape<Schema>,
   previousParsedMetadata?: ParsedMetadata,
   from?: TransportClientId,
+  connectionExtras?: ConnectionExtras,
 ) =>
   | ParsedMetadata
   | ProtobufHandshakeFailureCode
@@ -94,7 +96,7 @@ export function createServerHandshakeOptions<
 > {
   return createTransportServerHandshakeOptions(
     HandshakeBytesSchema,
-    async (metadata, previousParsedMetadata, from) => {
+    async (metadata, previousParsedMetadata, from, connectionExtras) => {
       let decoded;
       try {
         decoded = decodeMessageBytes(schema, metadata);
@@ -102,7 +104,12 @@ export function createServerHandshakeOptions<
         return 'REJECTED_BY_CUSTOM_HANDLER' as ProtobufHandshakeFailureCode;
       }
 
-      return await validate(decoded, previousParsedMetadata, from);
+      return await validate(
+        decoded,
+        previousParsedMetadata,
+        from,
+        connectionExtras,
+      );
     },
     expiry,
     rejectionCodeSchema,
