@@ -16,6 +16,7 @@ type Equal<Left, Right> = (<T>() => T extends Left ? 1 : 2) extends <
 >() => T extends Right ? 1 : 2
   ? true
   : false;
+
 type Assert<T extends true> = T;
 
 type EchoProcedure = RPCProcedure<

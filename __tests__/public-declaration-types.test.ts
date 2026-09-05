@@ -10,7 +10,7 @@ test('public procedure and service-map types support declaration emit', () => {
   );
   const config = ts.readConfigFile(
     path.join(rootDir, 'tsconfig.json'),
-    ts.sys.readFile,
+    (fileName) => ts.sys.readFile(fileName),
   );
   expect(config.error).toBeUndefined();
 
