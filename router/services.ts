@@ -1,8 +1,8 @@
 import { Type, type TSchema, type Static } from 'typebox';
 import {
-  Branded,
+  ProcedureDefinitionMap,
   ProcedureMap,
-  Unbranded,
+  UnwrapProcedureDefinition,
   AnyProcedure,
   PayloadType,
 } from './procedures';
@@ -152,10 +152,8 @@ export type ProcType<
  * A list of procedures where every procedure is "branded", as-in the procedure
  * was created via the {@link Procedure} constructors.
  */
-type BrandedProcedureMap<Context, State, ParsedMetadata> = Record<
-  string,
-  Branded<AnyProcedure<Context, State, ParsedMetadata>>
->;
+type CompatibleProcedureDefinitionMap<Context, State, ParsedMetadata> =
+  ProcedureDefinitionMap<ProcedureMap<Context, State, ParsedMetadata>>;
 
 export type MaybeDisposable<T extends object = Record<string, unknown>> = T & {
   [Symbol.asyncDispose]?: () => PromiseLike<void>;
@@ -440,13 +438,17 @@ export function createServiceSchema<
      */
     static define<
       State extends object,
-      Procedures extends BrandedProcedureMap<Context, State, ParsedMetadata>,
+      Procedures extends CompatibleProcedureDefinitionMap<
+        Context,
+        State,
+        ParsedMetadata
+      >,
     >(
       config: ServiceConfiguration<Context, State>,
       procedures: Procedures,
     ): ServiceSchema<
       State,
-      { [K in keyof Procedures]: Unbranded<Procedures[K]> }
+      { [K in keyof Procedures]: UnwrapProcedureDefinition<Procedures[K]> }
     >;
     /**
      * Creates a new {@link ServiceSchema} with the given procedures.
@@ -472,22 +474,34 @@ export function createServiceSchema<
      */
 
     static define<
-      Procedures extends BrandedProcedureMap<Context, object, ParsedMetadata>,
+      Procedures extends CompatibleProcedureDefinitionMap<
+        Context,
+        object,
+        ParsedMetadata
+      >,
     >(
       procedures: Procedures,
     ): ServiceSchema<
       object,
-      { [K in keyof Procedures]: Unbranded<Procedures[K]> }
+      { [K in keyof Procedures]: UnwrapProcedureDefinition<Procedures[K]> }
     >;
     // actual implementation
     static define(
       configOrProcedures:
         | ServiceConfiguration<Context, object>
-        | BrandedProcedureMap<Context, object, ParsedMetadata>,
-      maybeProcedures?: BrandedProcedureMap<Context, object, ParsedMetadata>,
+        | CompatibleProcedureDefinitionMap<Context, object, ParsedMetadata>,
+      maybeProcedures?: CompatibleProcedureDefinitionMap<
+        Context,
+        object,
+        ParsedMetadata
+      >,
     ): ServiceSchema<object, ProcedureMap> {
       let config: ServiceConfiguration<Context, object>;
-      let procedures: BrandedProcedureMap<Context, object, ParsedMetadata>;
+      let procedures: CompatibleProcedureDefinitionMap<
+        Context,
+        object,
+        ParsedMetadata
+      >;
 
       if (
         'initializeState' in configOrProcedures &&
@@ -501,7 +515,7 @@ export function createServiceSchema<
         procedures = maybeProcedures;
       } else {
         config = { initializeState: () => ({}) };
-        procedures = configOrProcedures as BrandedProcedureMap<
+        procedures = configOrProcedures as CompatibleProcedureDefinitionMap<
           Context,
           object,
           ParsedMetadata
@@ -675,9 +689,9 @@ class ServiceScaffold<
    *
    * @param procedures - The procedures for this service.
    */
-  procedures<T extends BrandedProcedureMap<Context, State, ParsedMetadata>>(
-    procedures: T,
-  ): T {
+  procedures<
+    T extends CompatibleProcedureDefinitionMap<Context, State, ParsedMetadata>,
+  >(procedures: T): T {
     return procedures;
   }
 
@@ -699,9 +713,9 @@ class ServiceScaffold<
    * });
    * ```
    */
-  finalize<T extends BrandedProcedureMap<Context, State, ParsedMetadata>>(
-    procedures: T,
-  ) {
+  finalize<
+    T extends CompatibleProcedureDefinitionMap<Context, State, ParsedMetadata>,
+  >(procedures: T) {
     return createServiceSchema<Context, ParsedMetadata>().define(
       this.config,
       procedures,

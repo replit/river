@@ -9,15 +9,7 @@ import {
   ReaderErrorSchema,
 } from './errors';
 
-/**
- * Brands a type to prevent it from being directly constructed.
- */
-export type Branded<T> = T & { readonly __BRAND_DO_NOT_USE: unique symbol };
-
-/**
- * Unbrands a {@link Branded} type.
- */
-export type Unbranded<T> = T extends Branded<infer U> ? U : never;
+type Branded<T> = T & { readonly __BRAND_DO_NOT_USE: unique symbol };
 
 /**
  * The valid {@link Procedure} types. The `stream` and `upload` types can optionally have a
@@ -258,6 +250,20 @@ export type AnyProcedure<
   ProcedureErrorSchemaType
 >;
 
+/**
+ * A procedure created by one of the {@link Procedure} constructors.
+ */
+export type ProcedureDefinition<T = AnyProcedure> = Branded<T>;
+
+/**
+ * Extracts the procedure represented by a {@link ProcedureDefinition}.
+ */
+export type UnwrapProcedureDefinition<T> = T extends ProcedureDefinition<
+  infer Procedure
+>
+  ? Procedure
+  : never;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRpcProcedure = RpcProcedure<any, any, any, any, any, any>;
 
@@ -275,6 +281,16 @@ export type ProcedureMap<
   State = object,
   ParsedMetadata = object,
 > = Record<string, AnyProcedure<Context, State, ParsedMetadata>>;
+
+/**
+ * Preserves the exact keys and procedure types of a map while requiring every
+ * value to come from a {@link Procedure} constructor.
+ */
+export type ProcedureDefinitionMap<
+  Procedures extends Record<string, unknown> = ProcedureMap,
+> = {
+  [K in keyof Procedures]: ProcedureDefinition<Procedures[K]>;
+};
 
 // typescript is funky so with these upcoming procedure constructors, the overloads
 // which handle the `init` case _must_ come first, otherwise the `init` property
@@ -303,7 +319,7 @@ function rpc<
     ResponseData,
     TNever
   >['handler'];
-}): Branded<
+}): ProcedureDefinition<
   RpcProcedure<
     Context,
     State,
@@ -335,7 +351,7 @@ function rpc<
     ResponseData,
     ResponseErr
   >['handler'];
-}): Branded<
+}): ProcedureDefinition<
   RpcProcedure<
     Context,
     State,
@@ -396,7 +412,7 @@ function upload<
     ResponseData,
     TNever
   >['handler'];
-}): Branded<
+}): ProcedureDefinition<
   UploadProcedure<
     Context,
     State,
@@ -432,7 +448,7 @@ function upload<
     ResponseData,
     ResponseErr
   >['handler'];
-}): Branded<
+}): ProcedureDefinition<
   UploadProcedure<
     Context,
     State,
@@ -494,7 +510,7 @@ function subscription<
     ResponseData,
     TNever
   >['handler'];
-}): Branded<
+}): ProcedureDefinition<
   SubscriptionProcedure<
     Context,
     State,
@@ -526,7 +542,7 @@ function subscription<
     ResponseData,
     ResponseErr
   >['handler'];
-}): Branded<
+}): ProcedureDefinition<
   SubscriptionProcedure<
     Context,
     State,
@@ -594,7 +610,7 @@ function stream<
     ResponseData,
     TNever
   >['handler'];
-}): Branded<
+}): ProcedureDefinition<
   StreamProcedure<
     Context,
     State,
@@ -630,7 +646,7 @@ function stream<
     ResponseData,
     ResponseErr
   >['handler'];
-}): Branded<
+}): ProcedureDefinition<
   StreamProcedure<
     Context,
     State,

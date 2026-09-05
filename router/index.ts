@@ -8,6 +8,9 @@ export type {
   ProcResponse,
   ProcErrors,
   ProcType,
+  AnyServiceSchema,
+  AnyServiceSchemaMap,
+  InstantiatedServiceSchemaMap,
 } from './services';
 export {
   createServiceSchema,
@@ -24,6 +27,9 @@ export type {
   ValidProcType,
   PayloadType,
   ProcedureMap,
+  ProcedureDefinition,
+  ProcedureDefinitionMap,
+  UnwrapProcedureDefinition,
   RpcProcedure as RPCProcedure,
   UploadProcedure,
   SubscriptionProcedure,
