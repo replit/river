@@ -54,11 +54,12 @@ import {
   methodKey,
   methodKindToProcType,
 } from './shared';
-import type {
-  AnyProtoService,
-  InstantiatedProtoService,
-  MaybeDisposable,
-  RegisteredMethod,
+import {
+  isRawHandler,
+  type AnyProtoService,
+  type InstantiatedProtoService,
+  type MaybeDisposable,
+  type RegisteredMethod,
 } from './service';
 
 type StreamId = string;
@@ -445,7 +446,7 @@ class ProtobufServer<
       writeCb: (response) => {
         if (
           response.ok &&
-          typeof impl !== 'function' &&
+          isRawHandler(impl) &&
           !(response.payload instanceof Uint8Array)
         ) {
           throw new Error(
@@ -455,7 +456,7 @@ class ProtobufServer<
 
         // Registration checks typed payloads against method.output before type erasure.
         const payload = response.ok
-          ? typeof impl !== 'function'
+          ? isRawHandler(impl)
             ? response.payload
             : encodeMessageBytes(
                 method.output,
@@ -710,7 +711,7 @@ class ProtobufServer<
     // type-erased handler dispatch; ProtoService.define() enforces the
     // correct handler signatures at registration time.
     /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any */
-    const handler = (typeof impl === 'function' ? impl : impl.raw) as (
+    const handler = (isRawHandler(impl) ? impl.raw : impl) as (
       ...args: Array<any>
     ) => any;
 
@@ -878,10 +879,9 @@ class ProtobufServer<
       }
 
       try {
-        initialRequest =
-          typeof route.impl === 'function'
-            ? decodeMessageBytes(route.method.input, initMessage.payload)
-            : initMessage.payload;
+        initialRequest = isRawHandler(route.impl)
+          ? initMessage.payload
+          : decodeMessageBytes(route.method.input, initMessage.payload);
       } catch {
         sendCancel({
           code: INVALID_REQUEST_CODE,

@@ -18,6 +18,12 @@ export interface RegisteredMethod {
   readonly impl: NonNullable<ServiceHandlers<DescService>[string]>;
 }
 
+export function isRawHandler(
+  impl: RegisteredMethod['impl'],
+): impl is Extract<RegisteredMethod['impl'], { raw: unknown }> {
+  return typeof impl !== 'function';
+}
+
 /**
  * An instantiated protobuf service with initialized state and a disposal hook.
  */
@@ -69,8 +75,9 @@ function buildMethodMap<
       throw new Error(`unknown method ${methodName} on ${descriptor.typeName}`);
     }
 
+    const impl = handler as RegisteredMethod['impl'];
     if (
-      typeof handler !== 'function' &&
+      isRawHandler(impl) &&
       method.methodKind !== 'unary' &&
       method.methodKind !== 'server_streaming'
     ) {
@@ -82,7 +89,7 @@ function buildMethodMap<
     methods.set(method.name, {
       service: descriptor,
       method,
-      impl: handler as RegisteredMethod['impl'],
+      impl,
     });
   }
 
