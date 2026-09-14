@@ -117,6 +117,19 @@ export type MethodImpl<
   ? BiDiStreamingImpl<Method, Context, State, ParsedMetadata>
   : never;
 
+/** A raw handler owns protobuf-body validation; River still validates the envelope. */
+export type RawMethodImpl<
+  Method extends DescMethod,
+  Context extends object = object,
+  State extends object = object,
+  ParsedMetadata extends object = object,
+> = Method extends DescMethodUnary
+  ? (
+      request: Uint8Array,
+      ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>,
+    ) => Awaitable<Result<Uint8Array, ClientError>>
+  : never;
+
 /**
  * Partial implementation shape for a protobuf service.
  *
@@ -134,6 +147,30 @@ export type ServiceImpl<
     State,
     ParsedMetadata
   >;
+};
+
+/** Typed functions and per-method raw opt-ins can share one service. */
+export type ServiceHandlers<
+  Service extends DescService,
+  Context extends object = object,
+  State extends object = object,
+  ParsedMetadata extends object = object,
+> = {
+  [MethodName in keyof Service['method']]?:
+    | MethodImpl<
+        Service['method'][MethodName] & DescMethod,
+        Context,
+        State,
+        ParsedMetadata
+      >
+    | {
+        readonly raw: RawMethodImpl<
+          Service['method'][MethodName] & DescMethod,
+          Context,
+          State,
+          ParsedMetadata
+        >;
+      };
 };
 
 /**

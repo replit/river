@@ -64,7 +64,7 @@ import type {
 type StreamId = string;
 
 type HandlerResponse<Method extends DescMethod> = Result<
-  MessageInitShape<Method['output']>,
+  MessageInitShape<Method['output']> | Uint8Array,
   ClientError
 >;
 
@@ -77,7 +77,10 @@ interface StreamInitProps {
   readonly serviceState: object;
   readonly sessionMetadata: object;
   readonly initialSession: IdentifiedSession;
-  readonly initialRequest: MessageShape<DescMethod['input']> | null;
+  readonly initialRequest:
+    | MessageShape<DescMethod['input']>
+    | Uint8Array
+    | null;
   readonly closeRequestOnStart: boolean;
   readonly tracingCtx: PropagationContext | undefined;
 }
@@ -116,7 +119,7 @@ export type MiddlewareContext<ParsedMetadata extends object = object> =
  */
 export interface MiddlewareParam<ParsedMetadata extends object = object> {
   readonly ctx: MiddlewareContext<ParsedMetadata>;
-  readonly reqInit: MessageShape<DescMethod['input']> | null;
+  readonly reqInit: MessageShape<DescMethod['input']> | Uint8Array | null;
   next: () => void;
 }
 
@@ -421,7 +424,7 @@ class ProtobufServer<
     };
 
     const reqReadable = new ReadableImpl<
-      MessageShape<DescMethod['input']>,
+      MessageShape<DescMethod['input']> | Uint8Array,
       ProtocolError
     >();
     const closeReadable = () => {
@@ -440,8 +443,24 @@ class ProtobufServer<
 
     const resWritable = new WritableImpl<HandlerResponse<DescMethod>>({
       writeCb: (response) => {
+        if (
+          response.ok &&
+          typeof impl !== 'function' &&
+          !(response.payload instanceof Uint8Array)
+        ) {
+          throw new Error(
+            'raw protobuf handlers must return Uint8Array payloads',
+          );
+        }
+
+        // Registration checks typed payloads against method.output before type erasure.
         const payload = response.ok
-          ? encodeMessageBytes(method.output, response.payload)
+          ? typeof impl !== 'function'
+            ? response.payload
+            : encodeMessageBytes(
+                method.output,
+                response.payload as MessageInitShape<DescMethod['output']>,
+              )
           : Err(response.payload);
 
         if (!response.ok) {
@@ -691,7 +710,9 @@ class ProtobufServer<
     // type-erased handler dispatch; ProtoService.define() enforces the
     // correct handler signatures at registration time.
     /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any */
-    const handler = impl as (...args: Array<any>) => any;
+    const handler = (typeof impl === 'function' ? impl : impl.raw) as (
+      ...args: Array<any>
+    ) => any;
 
     const runProcedureHandler = async () => {
       try {
@@ -840,7 +861,7 @@ class ProtobufServer<
 
     const serviceInstance = this.serviceInstances.get(initMessage.serviceName);
 
-    let initialRequest: MessageShape<DescMethod['input']> | null = null;
+    let initialRequest: StreamInitProps['initialRequest'] = null;
     let closeRequestOnStart = false;
 
     if (
@@ -857,10 +878,10 @@ class ProtobufServer<
       }
 
       try {
-        initialRequest = decodeMessageBytes(
-          route.method.input,
-          initMessage.payload,
-        );
+        initialRequest =
+          typeof route.impl === 'function'
+            ? decodeMessageBytes(route.method.input, initMessage.payload)
+            : initMessage.payload;
       } catch {
         sendCancel({
           code: INVALID_REQUEST_CODE,
@@ -948,9 +969,9 @@ class ProtobufServer<
 }
 
 function requireInitialRequest<Method extends DescMethod>(
-  initialRequest: MessageShape<Method['input']> | null,
+  initialRequest: MessageShape<Method['input']> | Uint8Array | null,
   method: Method,
-): MessageShape<Method['input']> {
+): MessageShape<Method['input']> | Uint8Array {
   if (initialRequest === null) {
     throw new Error(
       `missing initial request for protobuf ${method.parent.typeName}.${method.name}`,

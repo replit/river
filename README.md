@@ -939,6 +939,8 @@ const transport = new WebSocketClientTransport(
 
 > **Note:** The protobuf router is experimental and its API may change.
 
+See [raw protobuf handlers](./protobuf/README.md) for forwarding serialized payloads without decoding and encoding them again.
+
 ### Further examples
 
 We've also provided an end-to-end testing environment using `Next.js`, and a simple backend connected with the WebSocket transport that you can [play with on Replit](https://replit.com/@jzhao-replit/riverbed).
