@@ -69,9 +69,13 @@ function buildMethodMap<
       throw new Error(`unknown method ${methodName} on ${descriptor.typeName}`);
     }
 
-    if (typeof handler !== 'function' && method.methodKind !== 'unary') {
+    if (
+      typeof handler !== 'function' &&
+      method.methodKind !== 'unary' &&
+      method.methodKind !== 'server_streaming'
+    ) {
       throw new Error(
-        `raw handlers require a unary method: ${descriptor.typeName}.${method.name}`,
+        `raw handlers require a unary or server-streaming method: ${descriptor.typeName}.${method.name}`,
       );
     }
 

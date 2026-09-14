@@ -128,6 +128,12 @@ export type RawMethodImpl<
       request: Uint8Array,
       ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>,
     ) => Awaitable<Result<Uint8Array, ClientError>>
+  : Method extends DescMethodServerStreaming
+  ? (param: {
+      readonly request: Uint8Array;
+      readonly ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>;
+      readonly resWritable: Writable<Result<Uint8Array, ClientError>>;
+    }) => Awaitable<void>
   : never;
 
 /**
