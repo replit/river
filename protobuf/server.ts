@@ -43,23 +43,33 @@ import {
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
 } from '../router/errors';
-import { decodeMessageBytes, methodKey, methodKindToProcType } from './shared';
-import {
-  getMethodCodec,
-  type AnyProtoService,
-  type InstantiatedProtoService,
-  type MaybeDisposable,
-  type MethodCodec,
-  type RegisteredMethod,
+import { methodKey, methodKindToProcType } from './shared';
+import { serde } from './serde';
+import type { Codec } from '../codec/types';
+import type {
+  AnyProtoService,
+  InstantiatedProtoService,
+  MaybeDisposable,
+  RegisteredMethod,
 } from './service';
 
 type StreamId = string;
 
 type HandlerResponse = Result<unknown, ClientError>;
 
-interface BoundMethod extends Omit<RegisteredMethod, 'impl'> {
+interface BoundMethod
+  extends Omit<RegisteredMethod, 'impl' | 'input' | 'output'> {
   readonly impl: (...args: Array<never>) => unknown;
-  readonly codec: MethodCodec;
+  readonly input: Codec<unknown>;
+  readonly output: Codec<unknown>;
+  readonly middlewareInput:
+    | Codec<MessageShape<DescMethod['input']>>
+    | undefined;
+}
+
+interface InitialRequest {
+  readonly value: unknown;
+  readonly bytes: Uint8Array;
 }
 
 interface StreamInitProps {
@@ -67,12 +77,13 @@ interface StreamInitProps {
   readonly service: DescService;
   readonly method: DescMethod;
   readonly impl: BoundMethod['impl'];
-  readonly codec: MethodCodec;
+  readonly input: Codec<unknown>;
+  readonly output: Codec<unknown>;
   readonly serviceContext: object;
   readonly serviceState: object;
   readonly sessionMetadata: object;
   readonly initialSession: IdentifiedSession;
-  readonly initialRequest: unknown;
+  readonly initialRequest: InitialRequest | null;
   readonly middlewareRequest: MessageShape<DescMethod['input']> | null;
   readonly closeRequestOnStart: boolean;
   readonly tracingCtx: PropagationContext | undefined;
@@ -209,11 +220,15 @@ class ProtobufServer<
       this.serviceInstances.set(svc.descriptor.typeName, instance);
 
       for (const [, reg] of instance.methods) {
-        this.methods.set(methodKey(svc.descriptor.typeName, reg.method.name), {
+        const method = reg.method;
+        this.methods.set(methodKey(svc.descriptor.typeName, method.name), {
           service: reg.service,
-          method: reg.method,
+          method,
           impl: reg.impl,
-          codec: getMethodCodec(reg),
+          input: reg.input ?? serde.message(method.input),
+          output: reg.output ?? serde.message(method.output),
+          middlewareInput:
+            reg.input !== undefined ? serde.message(method.input) : undefined,
         });
       }
     }
@@ -339,7 +354,8 @@ class ProtobufServer<
       service,
       method,
       impl,
-      codec,
+      input,
+      output,
       serviceContext,
       serviceState,
       sessionMetadata,
@@ -438,8 +454,11 @@ class ProtobufServer<
     const resWritable = new WritableImpl<HandlerResponse>({
       writeCb: (response) => {
         const payload = response.ok
-          ? codec.encodeResponse(response.payload)
+          ? output.toBuffer(response.payload)
           : Err(response.payload);
+        if (response.ok && !(payload instanceof Uint8Array)) {
+          throw new Error('handler codec must return Uint8Array');
+        }
 
         if (!response.ok) {
           recordRiverError(span, response.payload);
@@ -579,7 +598,7 @@ class ProtobufServer<
 
       if (msg.payload instanceof Uint8Array) {
         try {
-          reqReadable._pushValue(Ok(codec.decodeRequest(msg.payload)));
+          reqReadable._pushValue(Ok(input.fromBuffer(msg.payload)));
         } catch {
           onServerCancel({
             code: INVALID_REQUEST_CODE,
@@ -677,7 +696,7 @@ class ProtobufServer<
     };
 
     if (initialRequest !== null) {
-      reqReadable._pushValue(Ok(initialRequest));
+      reqReadable._pushValue(Ok(initialRequest.value));
     }
     if (closeRequestOnStart) {
       closeReadable();
@@ -834,6 +853,13 @@ class ProtobufServer<
 
     const serviceInstance = this.serviceInstances.get(initMessage.serviceName);
 
+    // Custom decoders may mutate their input before middleware reads it.
+    const middlewareBytes =
+      this.middlewares.length > 0 &&
+      route.middlewareInput !== undefined &&
+      initMessage.payload instanceof Uint8Array
+        ? new Uint8Array(initMessage.payload)
+        : undefined;
     let initialRequest: StreamInitProps['initialRequest'] = null;
     let closeRequestOnStart = false;
 
@@ -851,7 +877,10 @@ class ProtobufServer<
       }
 
       try {
-        initialRequest = route.codec.decodeRequest(initMessage.payload);
+        initialRequest = {
+          value: route.input.fromBuffer(initMessage.payload),
+          bytes: middlewareBytes ?? initMessage.payload,
+        };
       } catch {
         sendCancel({
           code: INVALID_REQUEST_CODE,
@@ -875,7 +904,10 @@ class ProtobufServer<
     } else if (initMessage.payload instanceof Uint8Array) {
       if (initMessage.payload.byteLength > 0) {
         try {
-          initialRequest = route.codec.decodeRequest(initMessage.payload);
+          initialRequest = {
+            value: route.input.fromBuffer(initMessage.payload),
+            bytes: middlewareBytes ?? initMessage.payload,
+          };
         } catch {
           sendCancel({
             code: INVALID_REQUEST_CODE,
@@ -904,10 +936,9 @@ class ProtobufServer<
     let middlewareRequest: MessageShape<DescMethod['input']> | null = null;
     if (this.middlewares.length > 0 && initialRequest !== null) {
       try {
-        middlewareRequest =
-          initialRequest instanceof Uint8Array
-            ? decodeMessageBytes(route.method.input, initialRequest)
-            : (initialRequest as MessageShape<DescMethod['input']>);
+        middlewareRequest = route.middlewareInput
+          ? route.middlewareInput.fromBuffer(initialRequest.bytes)
+          : (initialRequest.value as MessageShape<DescMethod['input']>);
       } catch {
         sendCancel({
           code: INVALID_REQUEST_CODE,
@@ -923,7 +954,8 @@ class ProtobufServer<
       service: route.service,
       method: route.method,
       impl: route.impl,
-      codec: route.codec,
+      input: route.input,
+      output: route.output,
       serviceContext: this.userContext,
       serviceState: serviceInstance?.state ?? {},
       sessionMetadata,
@@ -955,7 +987,7 @@ class ProtobufServer<
 }
 
 function requireInitialRequest(
-  initialRequest: unknown,
+  initialRequest: InitialRequest | null,
   method: DescMethod,
 ): unknown {
   if (initialRequest === null) {
@@ -964,7 +996,7 @@ function requireInitialRequest(
     );
   }
 
-  return initialRequest;
+  return initialRequest.value;
 }
 
 class LRUSet<T> {

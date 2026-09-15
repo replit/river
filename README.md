@@ -941,25 +941,26 @@ const transport = new WebSocketClientTransport(
 
 ### Raw protobuf responses
 
-Use `{ raw: handler }` in `define()` to return already-encoded protobuf bytes:
+Use `withSerde()` to choose input and output codecs independently:
 
 ```ts
+import { serde, withSerde } from '@replit/river/protobuf';
+
 const service = createProtoService().define(Greeter, {
-  sayHello: { raw: () => Ok(encodedResponse) },
+  sayHello: withSerde(
+    { input: serde.message(HelloRequestSchema), output: serde.binary },
+    (request) => Ok(encodedResponse),
+  ),
 });
 ```
 
-Raw handlers keep the typed handler's signature, but receive `Uint8Array` requests and use `Ok(Uint8Array)` for successful responses.
-For server streams, write `Ok(bytes)` to `resWritable` and close it when finished.
-Only unary and server-streaming methods support raw handlers. Other method kinds fail TypeScript checks and throw during raw registration.
-Existing typed registration helpers, middleware, and clients stay unchanged.
+`serde.message(schema)` decodes messages and encodes message init shapes. `serde.binary` receives an owned `Uint8Array` copy and sends response bytes unchanged.
+Codecs must produce the declared protobuf wire format for existing generated clients. Typed errors and stream lifecycle rules stay unchanged.
+Middleware still receives the original protobuf request, independently of the handler's custom input type.
 
-Without middleware, River does not decode raw requests. With middleware, River decodes the request once for it and gives the handler the original bytes.
-River never re-encodes raw responses.
-
-**Never read `request.buffer`.** The request is a view into a larger buffer. Use the `Uint8Array` view itself.
-
-Handlers must supply valid protobuf response bytes. Typed errors stay unchanged.
+All four method kinds are supported. Outside `define()`, pass the method descriptor first: `withSerde(Greeter.method.sayHello, codecs, handler)`.
+Reuse the returned handler directly; call `withSerde()` again to change its codecs.
+For a context-dependent `initializeState`, annotate its context parameter so nested serde handlers infer the state type.
 
 ### Further examples
 
