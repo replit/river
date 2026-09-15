@@ -1,5 +1,10 @@
-import type { DescMethod, DescService } from '@bufbuild/protobuf';
+import type {
+  DescMethod,
+  DescService,
+  MessageInitShape,
+} from '@bufbuild/protobuf';
 import type { ServiceHandlers, ServiceImpl } from './types';
+import { decodeMessageBytes, encodeMessageBytes } from './shared';
 
 /**
  * An object that may implement async or sync disposal.
@@ -15,14 +20,25 @@ export type MaybeDisposable<T extends object = Record<string, unknown>> = T & {
 export interface RegisteredMethod {
   readonly service: DescService;
   readonly method: DescMethod;
-  readonly impl: NonNullable<ServiceHandlers<DescService>[string]>;
+  readonly impl: (...args: never[]) => unknown;
+  readonly codec: MethodCodec;
 }
 
-export function isRawHandler(
-  impl: RegisteredMethod['impl'],
-): impl is Extract<RegisteredMethod['impl'], { raw: unknown }> {
-  return typeof impl !== 'function';
+export interface MethodCodec {
+  decodeRequest(bytes: Uint8Array): unknown;
+  encodeResponse(payload: unknown): Uint8Array;
 }
+
+const rawMethodCodec: MethodCodec = {
+  decodeRequest: (bytes) => bytes,
+  encodeResponse(payload) {
+    if (!(payload instanceof Uint8Array)) {
+      throw new Error('raw protobuf handlers must return Uint8Array payloads');
+    }
+
+    return payload;
+  },
+};
 
 /**
  * An instantiated protobuf service with initialized state and a disposal hook.
@@ -75,21 +91,36 @@ function buildMethodMap<
       throw new Error(`unknown method ${methodName} on ${descriptor.typeName}`);
     }
 
-    const impl = handler as RegisteredMethod['impl'];
-    if (
-      isRawHandler(impl) &&
-      method.methodKind !== 'unary' &&
-      method.methodKind !== 'server_streaming'
-    ) {
-      throw new Error(
-        `raw handlers require a unary or server-streaming method: ${descriptor.typeName}.${method.name}`,
-      );
+    let impl: RegisteredMethod['impl'];
+    let codec: MethodCodec;
+    if (typeof handler === 'function') {
+      impl = handler;
+      codec = {
+        decodeRequest: (bytes) => decodeMessageBytes(method.input, bytes),
+        encodeResponse: (payload) =>
+          encodeMessageBytes(
+            method.output,
+            payload as MessageInitShape<typeof method.output>,
+          ),
+      };
+    } else {
+      if (
+        method.methodKind !== 'unary' &&
+        method.methodKind !== 'server_streaming'
+      ) {
+        throw new Error(
+          `raw handlers require a unary or server-streaming method: ${descriptor.typeName}.${method.name}`,
+        );
+      }
+      impl = handler.raw;
+      codec = rawMethodCodec;
     }
 
     methods.set(method.name, {
       service: descriptor,
       method,
       impl,
+      codec,
     });
   }
 

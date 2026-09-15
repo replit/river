@@ -1,9 +1,4 @@
-import type {
-  DescMethod,
-  DescService,
-  MessageInitShape,
-  MessageShape,
-} from '@bufbuild/protobuf';
+import type { DescMethod, DescService } from '@bufbuild/protobuf';
 import type { TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { context as otelContext, trace, type Span } from '@opentelemetry/api';
@@ -48,40 +43,30 @@ import {
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
 } from '../router/errors';
-import {
-  decodeMessageBytes,
-  encodeMessageBytes,
-  methodKey,
-  methodKindToProcType,
-} from './shared';
-import {
-  isRawHandler,
-  type AnyProtoService,
-  type InstantiatedProtoService,
-  type MaybeDisposable,
-  type RegisteredMethod,
+import { methodKey, methodKindToProcType } from './shared';
+import type {
+  AnyProtoService,
+  InstantiatedProtoService,
+  MaybeDisposable,
+  MethodCodec,
+  RegisteredMethod,
 } from './service';
 
 type StreamId = string;
 
-type HandlerResponse<Method extends DescMethod> = Result<
-  MessageInitShape<Method['output']> | Uint8Array,
-  ClientError
->;
+type HandlerResponse = Result<unknown, ClientError>;
 
 interface StreamInitProps {
   readonly streamId: StreamId;
   readonly service: DescService;
   readonly method: DescMethod;
   readonly impl: RegisteredMethod['impl'];
+  readonly codec: MethodCodec;
   readonly serviceContext: object;
   readonly serviceState: object;
   readonly sessionMetadata: object;
   readonly initialSession: IdentifiedSession;
-  readonly initialRequest:
-    | MessageShape<DescMethod['input']>
-    | Uint8Array
-    | null;
+  readonly initialRequest: unknown;
   readonly closeRequestOnStart: boolean;
   readonly tracingCtx: PropagationContext | undefined;
 }
@@ -120,7 +105,7 @@ export type MiddlewareContext<ParsedMetadata extends object = object> =
  */
 export interface MiddlewareParam<ParsedMetadata extends object = object> {
   readonly ctx: MiddlewareContext<ParsedMetadata>;
-  readonly reqInit: MessageShape<DescMethod['input']> | Uint8Array | null;
+  readonly reqInit: unknown;
   next: () => void;
 }
 
@@ -345,6 +330,7 @@ class ProtobufServer<
       service,
       method,
       impl,
+      codec,
       serviceContext,
       serviceState,
       sessionMetadata,
@@ -424,10 +410,7 @@ class ProtobufServer<
       void runDeferredCleanups();
     };
 
-    const reqReadable = new ReadableImpl<
-      MessageShape<DescMethod['input']> | Uint8Array,
-      ProtocolError
-    >();
+    const reqReadable = new ReadableImpl<unknown, ProtocolError>();
     const closeReadable = () => {
       if (reqReadable.isClosed()) {
         return;
@@ -442,26 +425,10 @@ class ProtobufServer<
     const procClosesWithResponse =
       method.methodKind === 'unary' || method.methodKind === 'client_streaming';
 
-    const resWritable = new WritableImpl<HandlerResponse<DescMethod>>({
+    const resWritable = new WritableImpl<HandlerResponse>({
       writeCb: (response) => {
-        if (
-          response.ok &&
-          isRawHandler(impl) &&
-          !(response.payload instanceof Uint8Array)
-        ) {
-          throw new Error(
-            'raw protobuf handlers must return Uint8Array payloads',
-          );
-        }
-
-        // Registration checks typed payloads against method.output before type erasure.
         const payload = response.ok
-          ? isRawHandler(impl)
-            ? response.payload
-            : encodeMessageBytes(
-                method.output,
-                response.payload as MessageInitShape<DescMethod['output']>,
-              )
+          ? codec.encodeResponse(response.payload)
           : Err(response.payload);
 
         if (!response.ok) {
@@ -602,9 +569,7 @@ class ProtobufServer<
 
       if (msg.payload instanceof Uint8Array) {
         try {
-          reqReadable._pushValue(
-            Ok(decodeMessageBytes(method.input, msg.payload)),
-          );
+          reqReadable._pushValue(Ok(codec.decodeRequest(msg.payload)));
         } catch {
           onServerCancel({
             code: INVALID_REQUEST_CODE,
@@ -711,15 +676,13 @@ class ProtobufServer<
     // type-erased handler dispatch; ProtoService.define() enforces the
     // correct handler signatures at registration time.
     /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any */
-    const handler = (isRawHandler(impl) ? impl.raw : impl) as (
-      ...args: Array<any>
-    ) => any;
+    const handler = impl as (...args: Array<any>) => any;
 
     const runProcedureHandler = async () => {
       try {
         switch (method.methodKind) {
           case 'unary': {
-            const response: HandlerResponse<DescMethod> = await handler(
+            const response: HandlerResponse = await handler(
               requireInitialRequest(initialRequest, method),
               handlerContext,
             );
@@ -738,7 +701,7 @@ class ProtobufServer<
             break;
 
           case 'client_streaming': {
-            const response: HandlerResponse<DescMethod> = await handler({
+            const response: HandlerResponse = await handler({
               ctx: handlerContext,
               reqReadable,
             });
@@ -879,9 +842,7 @@ class ProtobufServer<
       }
 
       try {
-        initialRequest = isRawHandler(route.impl)
-          ? initMessage.payload
-          : decodeMessageBytes(route.method.input, initMessage.payload);
+        initialRequest = route.codec.decodeRequest(initMessage.payload);
       } catch {
         sendCancel({
           code: INVALID_REQUEST_CODE,
@@ -905,10 +866,7 @@ class ProtobufServer<
     } else if (initMessage.payload instanceof Uint8Array) {
       if (initMessage.payload.byteLength > 0) {
         try {
-          initialRequest = decodeMessageBytes(
-            route.method.input,
-            initMessage.payload,
-          );
+          initialRequest = route.codec.decodeRequest(initMessage.payload);
         } catch {
           sendCancel({
             code: INVALID_REQUEST_CODE,
@@ -939,6 +897,7 @@ class ProtobufServer<
       service: route.service,
       method: route.method,
       impl: route.impl,
+      codec: route.codec,
       serviceContext: this.userContext,
       serviceState: serviceInstance?.state ?? {},
       sessionMetadata,
@@ -968,10 +927,10 @@ class ProtobufServer<
   }
 }
 
-function requireInitialRequest<Method extends DescMethod>(
-  initialRequest: MessageShape<Method['input']> | Uint8Array | null,
-  method: Method,
-): MessageShape<Method['input']> | Uint8Array {
+function requireInitialRequest(
+  initialRequest: unknown,
+  method: DescMethod,
+): unknown {
   if (initialRequest === null) {
     throw new Error(
       `missing initial request for protobuf ${method.parent.typeName}.${method.name}`,
