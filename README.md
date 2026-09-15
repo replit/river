@@ -949,9 +949,14 @@ const service = createProtoService().define(Greeter, {
 });
 ```
 
-This works for unary and server-streaming methods. Requests and successful responses are `Uint8Array` values, such as `encodedResponse` above.
-Handlers must supply valid protobuf bytes. River does not validate raw message bodies.
-Streaming handlers write `Ok(bytes)` and close `resWritable`. Existing clients and typed errors stay unchanged.
+Raw handlers keep the typed handler's signature, but receive `Uint8Array` requests and use `Ok(Uint8Array)` for successful responses.
+For server streams, write `Ok(bytes)` to `resWritable` and close it when finished.
+Only unary and server-streaming methods support raw handlers. Other method kinds fail TypeScript checks and throw during `define()`.
+Middleware receives `{ kind: 'raw', bytes }` for a raw request.
+
+**Never read `request.buffer`.** The request is a view into a larger buffer. Use the `Uint8Array` view itself.
+
+Handlers must supply valid protobuf bytes. River does not validate raw message bodies. Existing clients and typed errors stay unchanged.
 
 ### Further examples
 
