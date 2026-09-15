@@ -137,8 +137,6 @@ export type RawMethodImpl<
   : never;
 
 /**
- * Partial implementation shape for a protobuf service.
- *
  * All methods are optional -- missing methods return UNIMPLEMENTED at runtime.
  */
 export type ServiceImpl<

@@ -685,8 +685,7 @@ class ProtobufServer<
       closeReadable();
     }
 
-    // type-erased handler dispatch; ProtoService.define() enforces the
-    // correct handler signatures at registration time.
+    // Registered handlers must match their method descriptors before type-erased dispatch.
     /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any */
     const handler = impl as (...args: Array<any>) => any;
 

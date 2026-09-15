@@ -24,6 +24,7 @@ export interface RegisteredMethod {
   readonly codec: MethodCodec;
 }
 
+/** Request decoding must return a protobuf message or a raw byte view. */
 export interface MethodCodec {
   decodeRequest(bytes: Uint8Array): unknown;
   encodeResponse(payload: unknown): Uint8Array;
@@ -154,13 +155,6 @@ class ProtoServiceScaffold<
     this.config = config;
   }
 
-  /**
-   * Type-check a partial set of handler implementations against this
-   * service's types. Returns the input unchanged -- this is purely a
-   * type-level helper for splitting handlers across files.
-   *
-   * @param handlers - A partial set of method implementations.
-   */
   procedures<H extends ServiceImpl<Service, Context, State, ParsedMetadata>>(
     handlers: H,
   ): H {
