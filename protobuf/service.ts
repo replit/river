@@ -20,7 +20,7 @@ export type MaybeDisposable<T extends object = Record<string, unknown>> = T & {
 export interface RegisteredMethod {
   readonly service: DescService;
   readonly method: DescMethod;
-  readonly impl: (...args: never[]) => unknown;
+  readonly impl: (...args: Array<never>) => unknown;
   readonly codec: MethodCodec;
 }
 
