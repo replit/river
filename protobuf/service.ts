@@ -1,14 +1,10 @@
+import type { DescMethod, DescService } from '@bufbuild/protobuf';
 import type {
-  DescMethod,
-  DescService,
-  MessageInitShape,
-} from '@bufbuild/protobuf';
-import type {
+  AnyCodec,
   MethodImpl,
   ServiceImpl,
-  ServiceImplWithRawHandlers,
+  ServiceImplWithSerde,
 } from './types';
-import { decodeMessageBytes, encodeMessageBytes } from './shared';
 
 /**
  * An object that may implement async or sync disposal.
@@ -26,45 +22,9 @@ export interface RegisteredMethod {
   readonly method: DescMethod;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readonly impl: MethodImpl<DescMethod, any, any, any>;
+  readonly input?: AnyCodec;
+  readonly output?: AnyCodec;
 }
-
-/** Request decoding must return a protobuf message or a raw byte view. */
-export interface MethodCodec {
-  decodeRequest(bytes: Uint8Array): unknown;
-  encodeResponse(payload: unknown): Uint8Array;
-}
-
-// Codec metadata must not change the public registration shape.
-const methodCodecs = new WeakMap<RegisteredMethod, MethodCodec>();
-
-function createTypedMethodCodec(method: DescMethod): MethodCodec {
-  return {
-    decodeRequest: (bytes) => decodeMessageBytes(method.input, bytes),
-    encodeResponse: (payload) =>
-      encodeMessageBytes(
-        method.output,
-        payload as MessageInitShape<typeof method.output>,
-      ),
-  };
-}
-
-export function getMethodCodec(registration: RegisteredMethod): MethodCodec {
-  return (
-    methodCodecs.get(registration) ??
-    createTypedMethodCodec(registration.method)
-  );
-}
-
-const rawMethodCodec: MethodCodec = {
-  decodeRequest: (bytes) => bytes,
-  encodeResponse(payload) {
-    if (!(payload instanceof Uint8Array)) {
-      throw new Error('raw protobuf handlers must return Uint8Array payloads');
-    }
-
-    return payload;
-  },
-};
 
 /**
  * An instantiated protobuf service with initialized state and a disposal hook.
@@ -97,7 +57,7 @@ function buildMethodMap<
   ParsedMetadata extends object,
 >(
   descriptor: Service,
-  handlers: ServiceImplWithRawHandlers<Service, Context, State, ParsedMetadata>,
+  handlers: ServiceImplWithSerde<Service, Context, State, ParsedMetadata>,
 ): Map<string, RegisteredMethod> {
   const methods = new Map<string, RegisteredMethod>();
   const typedMethods = descriptor.method as Service['method'];
@@ -117,36 +77,44 @@ function buildMethodMap<
       throw new Error(`unknown method ${methodName} on ${descriptor.typeName}`);
     }
 
-    let impl: (...args: Array<never>) => unknown;
-    let codec: MethodCodec;
     if (typeof handler === 'function') {
-      impl = handler;
-      codec = createTypedMethodCodec(method);
-    } else {
-      if (typeof handler.raw !== 'function') {
-        throw new Error(
-          `raw handler must be a function: ${descriptor.typeName}.${method.name}`,
-        );
-      }
+      methods.set(method.name, {
+        service: descriptor,
+        method,
+        impl: handler as RegisteredMethod['impl'],
+      });
+      continue;
+    }
+    if (typeof handler.handler !== 'function') {
+      throw new Error(
+        `serde handler must be a function: ${descriptor.typeName}.${method.name}`,
+      );
+    }
+    if (
+      handler.methodKind !== undefined &&
+      handler.methodKind !== method.methodKind
+    ) {
+      throw new Error(
+        `serde handler kind does not match ${descriptor.typeName}.${method.name}`,
+      );
+    }
+    for (const codec of [handler.input, handler.output]) {
       if (
-        method.methodKind !== 'unary' &&
-        method.methodKind !== 'server_streaming'
+        typeof codec.fromBuffer !== 'function' ||
+        typeof codec.toBuffer !== 'function'
       ) {
         throw new Error(
-          `raw handlers require a unary or server-streaming method: ${descriptor.typeName}.${method.name}`,
+          `invalid handler codec: ${descriptor.typeName}.${method.name}`,
         );
       }
-      impl = handler.raw;
-      codec = rawMethodCodec;
     }
-
-    const registration: RegisteredMethod = {
+    methods.set(method.name, {
       service: descriptor,
       method,
-      impl: impl as RegisteredMethod['impl'],
-    };
-    methodCodecs.set(registration, codec);
-    methods.set(method.name, registration);
+      impl: handler.handler as RegisteredMethod['impl'],
+      input: handler.input,
+      output: handler.output,
+    });
   }
 
   return methods;
@@ -291,12 +259,12 @@ export function createProtoService<
 
     static define<S extends DescService>(
       descriptor: S,
-      handlers: ServiceImplWithRawHandlers<S, Context, object, ParsedMetadata>,
+      handlers: ServiceImplWithSerde<S, Context, object, ParsedMetadata>,
     ): ProtoServiceSchema<S, object>;
     static define<S extends DescService, St extends object>(
       descriptor: S,
       config: ServiceConfiguration<Context, St>,
-      handlers: ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
+      handlers: ServiceImplWithSerde<S, Context, St, ParsedMetadata>,
     ): ProtoServiceSchema<S, St>;
 
     // Legacy overloads must stay last to preserve Parameters and ReturnType.
@@ -328,18 +296,13 @@ export function createProtoService<
       descriptor: S,
       configOrHandlers:
         | ServiceConfiguration<Context, St>
-        | ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
-      maybeHandlers?: ServiceImplWithRawHandlers<
-        S,
-        Context,
-        St,
-        ParsedMetadata
-      >,
+        | ServiceImplWithSerde<S, Context, St, ParsedMetadata>,
+      maybeHandlers?: ServiceImplWithSerde<S, Context, St, ParsedMetadata>,
     ): ProtoServiceSchema<S, St> {
       let initializeStateFn:
         | ((ctx: Context) => MaybeDisposable<St>)
         | undefined;
-      let handlers: ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>;
+      let handlers: ServiceImplWithSerde<S, Context, St, ParsedMetadata>;
       if (
         'initializeState' in configOrHandlers &&
         typeof configOrHandlers.initializeState === 'function'
@@ -353,7 +316,7 @@ export function createProtoService<
         handlers = maybeHandlers;
       } else {
         initializeStateFn = undefined;
-        handlers = configOrHandlers as ServiceImplWithRawHandlers<
+        handlers = configOrHandlers as ServiceImplWithSerde<
           S,
           Context,
           St,

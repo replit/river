@@ -1,18 +1,19 @@
 /**
- * Codec interface for encoding and decoding objects to and from Uint8 buffers.
+ * Codec interface for encoding and decoding values to and from Uint8 buffers.
  * Used to prepare messages for use by the transport layer.
  */
-export interface Codec {
+export interface Codec<T = object, TInit = T> {
   /**
-   * Encodes an object to a Uint8 buffer.
-   * @param obj - The object to encode.
+   * Encodes a value to a Uint8 buffer.
+   * @param obj - The value to encode.
    * @returns The encoded Uint8 buffer.
    */
-  toBuffer(obj: object): Uint8Array;
+  toBuffer(obj: TInit): Uint8Array;
   /**
-   * Decodes an object from a Uint8 buffer.
+   * Decodes a value from a Uint8 buffer.
    * @param buf - The Uint8 buffer to decode.
-   * @returns The decoded object, or null if decoding failed.
+   * @returns The decoded value. This can be null if T permits it.
+   * @throws If decoding fails.
    */
-  fromBuffer(buf: Uint8Array): object;
+  fromBuffer(buf: Uint8Array): T;
 }

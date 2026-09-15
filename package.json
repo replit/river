@@ -57,7 +57,7 @@
     "vitest": "^3.2.6"
   },
   "scripts": {
-    "check": "tsc --noEmit && npm run format && npm run lint",
+    "check": "npm run build && tsc --noEmit && npm run format && npm run lint",
     "format": "npx prettier . --check",
     "format:fix": "npx prettier . --write",
     "lint": "eslint .",
