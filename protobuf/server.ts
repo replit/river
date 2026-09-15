@@ -1,4 +1,4 @@
-import type { DescMethod, DescService } from '@bufbuild/protobuf';
+import type { DescMethod, DescService, MessageShape } from '@bufbuild/protobuf';
 import type { TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { context as otelContext, trace, type Span } from '@opentelemetry/api';
@@ -105,7 +105,10 @@ export type MiddlewareContext<ParsedMetadata extends object = object> =
  */
 export interface MiddlewareParam<ParsedMetadata extends object = object> {
   readonly ctx: MiddlewareContext<ParsedMetadata>;
-  readonly reqInit: unknown;
+  readonly reqInit:
+    | { kind: 'message'; message: MessageShape<DescMethod['input']> }
+    | { kind: 'raw'; bytes: Uint8Array }
+    | null;
   next: () => void;
 }
 
@@ -665,6 +668,15 @@ class ProtobufServer<
       procedureName: method.name,
       serviceName: service.typeName,
     };
+    const reqInit: MiddlewareParam<ParsedMetadata>['reqInit'] =
+      initialRequest === null
+        ? null
+        : initialRequest instanceof Uint8Array
+        ? { kind: 'raw', bytes: initialRequest }
+        : {
+            kind: 'message',
+            message: initialRequest as MessageShape<DescMethod['input']>,
+          };
 
     if (initialRequest !== null) {
       reqReadable._pushValue(Ok(initialRequest));
@@ -730,7 +742,7 @@ class ProtobufServer<
         return () => {
           middleware({
             ctx: middlewareContext,
-            reqInit: initialRequest,
+            reqInit,
             next,
           });
         };

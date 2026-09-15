@@ -442,8 +442,8 @@ describe.each(transports)(
         handshakeOptions: handshake,
         middlewares: [
           ({ reqInit, ctx, next }) => {
-            assert(reqInit instanceof Uint8Array);
-            observed = new Uint8Array(reqInit);
+            assert(reqInit?.kind === 'raw');
+            observed = new Uint8Array(reqInit.bytes);
             expect(ctx.service).toBe(TestService);
             expect(ctx.method).toBe(TestService.method.echo);
             next();
