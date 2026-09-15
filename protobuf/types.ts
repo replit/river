@@ -12,40 +12,13 @@ import type { Result } from '../router/result';
 import type { Readable, Writable } from '../router/streams';
 import type { ProtobufHandlerContext } from './context';
 import type { ClientError, ProtocolError } from './errors';
-import type { Codec } from '../codec/types';
 
 type Awaitable<T> = T | PromiseLike<T>;
 
-export type HandlerImpl<
-  Kind extends DescMethod['methodKind'],
-  Request,
-  Response,
-  Context extends object,
-  State extends object,
-  ParsedMetadata extends object,
-> = Kind extends 'unary'
-  ? (
-      request: Request,
-      ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>,
-    ) => Awaitable<Result<Response, ClientError>>
-  : Kind extends 'server_streaming'
-  ? (param: {
-      readonly request: Request;
-      readonly ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>;
-      readonly resWritable: Writable<Result<Response, ClientError>>;
-    }) => Awaitable<void>
-  : Kind extends 'client_streaming'
-  ? (param: {
-      readonly ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>;
-      readonly reqReadable: Readable<Request, ProtocolError>;
-    }) => Awaitable<Result<Response, ClientError>>
-  : Kind extends 'bidi_streaming'
-  ? (param: {
-      readonly ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>;
-      readonly reqReadable: Readable<Request, ProtocolError>;
-      readonly resWritable: Writable<Result<Response, ClientError>>;
-    }) => Awaitable<void>
-  : never;
+type HandlerResult<
+  Method extends DescMethod,
+  Error extends ClientError = ClientError,
+> = Result<MessageInitShape<Method['output']>, Error>;
 
 /**
  * Options shared by protobuf-router client calls.
@@ -80,14 +53,10 @@ export type UnaryImpl<
   Context extends object = object,
   State extends object = object,
   ParsedMetadata extends object = object,
-> = HandlerImpl<
-  'unary',
-  MessageShape<Method['input']>,
-  MessageInitShape<Method['output']>,
-  Context,
-  State,
-  ParsedMetadata
->;
+> = (
+  request: MessageShape<Method['input']>,
+  ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>,
+) => Awaitable<HandlerResult<Method>>;
 
 /**
  * A protobuf-router server-streaming handler.
@@ -97,14 +66,11 @@ export type ServerStreamingImpl<
   Context extends object = object,
   State extends object = object,
   ParsedMetadata extends object = object,
-> = HandlerImpl<
-  'server_streaming',
-  MessageShape<Method['input']>,
-  MessageInitShape<Method['output']>,
-  Context,
-  State,
-  ParsedMetadata
->;
+> = (param: {
+  readonly request: MessageShape<Method['input']>;
+  readonly ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>;
+  readonly resWritable: Writable<HandlerResult<Method>>;
+}) => Awaitable<void>;
 
 /**
  * A protobuf-router client-streaming handler.
@@ -114,14 +80,10 @@ export type ClientStreamingImpl<
   Context extends object = object,
   State extends object = object,
   ParsedMetadata extends object = object,
-> = HandlerImpl<
-  'client_streaming',
-  MessageShape<Method['input']>,
-  MessageInitShape<Method['output']>,
-  Context,
-  State,
-  ParsedMetadata
->;
+> = (param: {
+  readonly ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>;
+  readonly reqReadable: Readable<MessageShape<Method['input']>, ProtocolError>;
+}) => Awaitable<HandlerResult<Method>>;
 
 /**
  * A protobuf-router bidi-streaming handler.
@@ -131,14 +93,11 @@ export type BiDiStreamingImpl<
   Context extends object = object,
   State extends object = object,
   ParsedMetadata extends object = object,
-> = HandlerImpl<
-  'bidi_streaming',
-  MessageShape<Method['input']>,
-  MessageInitShape<Method['output']>,
-  Context,
-  State,
-  ParsedMetadata
->;
+> = (param: {
+  readonly ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>;
+  readonly reqReadable: Readable<MessageShape<Method['input']>, ProtocolError>;
+  readonly resWritable: Writable<HandlerResult<Method>>;
+}) => Awaitable<void>;
 
 /**
  * The handler type for an arbitrary protobuf method descriptor.
@@ -158,35 +117,67 @@ export type MethodImpl<
   ? BiDiStreamingImpl<Method, Context, State, ParsedMetadata>
   : never;
 
-export type AnyCodec = Codec<unknown, never>;
-
-declare const serdeTypes: unique symbol;
-
-declare class SerdeHandlerBrand {
-  // Object spread must not preserve the codec/handler pairing check.
-  private readonly __BRAND_DO_NOT_USE: void;
-}
-
-export interface SerdeHandler<
-  Kind extends DescMethod['methodKind'],
+type RawMethodImpl<
+  Method extends DescMethod,
+  Request,
   Context extends object,
   State extends object,
   ParsedMetadata extends object,
-> extends SerdeHandlerBrand {
-  readonly input: AnyCodec;
-  readonly output: AnyCodec;
-  readonly handler: (...args: Array<never>) => unknown;
-  readonly methodKind?: Kind;
-  // Contextual inference must retain the slot's kind, context, state, and metadata.
-  readonly [serdeTypes]?: {
-    readonly kind: Kind;
-    readonly context: (
+> = Method extends DescMethodUnary
+  ? (
+      request: Request,
       ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>,
-    ) => void;
-  };
-}
+    ) => Awaitable<Result<Uint8Array, ClientError>>
+  : Method extends DescMethodServerStreaming
+  ? (param: {
+      readonly request: Request;
+      readonly ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>;
+      readonly resWritable: Writable<Result<Uint8Array, ClientError>>;
+    }) => Awaitable<void>
+  : Method extends DescMethodClientStreaming
+  ? (param: {
+      readonly ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>;
+      readonly reqReadable: Readable<Request, ProtocolError>;
+    }) => Awaitable<Result<Uint8Array, ClientError>>
+  : Method extends DescMethodBiDiStreaming
+  ? (param: {
+      readonly ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>;
+      readonly reqReadable: Readable<Request, ProtocolError>;
+      readonly resWritable: Writable<Result<Uint8Array, ClientError>>;
+    }) => Awaitable<void>
+  : never;
+
+/** A raw handler owns protobuf-body validation; River still validates the envelope. */
+export type RawHandler<
+  Method extends DescMethod,
+  Context extends object = object,
+  State extends object = object,
+  ParsedMetadata extends object = object,
+> =
+  | {
+      readonly raw: 'both';
+      readonly handler: RawMethodImpl<
+        Method,
+        Uint8Array,
+        Context,
+        State,
+        ParsedMetadata
+      >;
+    }
+  | {
+      readonly raw: 'output';
+      readonly handler: RawMethodImpl<
+        Method,
+        MessageShape<Method['input']>,
+        Context,
+        State,
+        ParsedMetadata
+      >;
+    };
 
 /**
+ * Partial implementation shape for a protobuf service.
+ *
  * All methods are optional -- missing methods return UNIMPLEMENTED at runtime.
  */
 export type ServiceImpl<
@@ -203,7 +194,7 @@ export type ServiceImpl<
   >;
 };
 
-export type ServiceImplWithSerde<
+export type ServiceImplWithRawHandlers<
   Service extends DescService,
   Context extends object = object,
   State extends object = object,
@@ -211,8 +202,8 @@ export type ServiceImplWithSerde<
 > = {
   [MethodName in keyof Service['method']]?:
     | ServiceImpl<Service, Context, State, ParsedMetadata>[MethodName]
-    | SerdeHandler<
-        Service['method'][MethodName]['methodKind'],
+    | RawHandler<
+        Service['method'][MethodName] & DescMethod,
         Context,
         State,
         ParsedMetadata
