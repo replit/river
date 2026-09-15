@@ -941,26 +941,21 @@ const transport = new WebSocketClientTransport(
 
 ### Raw protobuf responses
 
-Use `withSerde()` to choose input and output codecs independently:
+Use `raw: 'output'` to return already-encoded protobuf bytes:
 
 ```ts
-import { serde, withSerde } from '@replit/river/protobuf';
-
 const service = createProtoService().define(Greeter, {
-  sayHello: withSerde(
-    { input: serde.message(HelloRequestSchema), output: serde.binary },
-    (request) => Ok(encodedResponse),
-  ),
+  sayHello: {
+    raw: 'output',
+    handler: (request, ctx) => Ok(encodedResponse),
+  },
 });
 ```
 
-`serde.message(schema)` decodes messages and encodes message init shapes. `serde.binary` receives an owned `Uint8Array` copy and sends response bytes unchanged.
-Codecs must produce the declared protobuf wire format for existing generated clients. Typed errors and stream lifecycle rules stay unchanged.
-Middleware still receives the original protobuf request, independently of the handler's custom input type.
-
-All four method kinds are supported. Outside `define()`, pass the method descriptor first: `withSerde(Greeter.method.sayHello, codecs, handler)`.
-Reuse the returned handler directly; call `withSerde()` again to change its codecs.
-For a context-dependent `initializeState`, annotate its context parameter so nested serde handlers infer the state type.
+Requests stay typed. Use `raw: 'both'` to also receive request bytes as an owned `Uint8Array` copy.
+All four method kinds support both modes. Stream handlers write `Ok(bytes)` to `resWritable` and close it when finished.
+Responses must contain valid bytes for the declared protobuf message. River sends them unchanged.
+Existing typed handlers, clients, middleware, errors, and stream lifecycle rules stay unchanged.
 
 ### Further examples
 

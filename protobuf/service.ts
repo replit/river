@@ -1,9 +1,8 @@
 import type { DescMethod, DescService } from '@bufbuild/protobuf';
 import type {
-  AnyCodec,
   MethodImpl,
   ServiceImpl,
-  ServiceImplWithSerde,
+  ServiceImplWithRawHandlers,
 } from './types';
 
 /**
@@ -22,8 +21,7 @@ export interface RegisteredMethod {
   readonly method: DescMethod;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readonly impl: MethodImpl<DescMethod, any, any, any>;
-  readonly input?: AnyCodec;
-  readonly output?: AnyCodec;
+  readonly raw?: 'both' | 'output';
 }
 
 /**
@@ -57,7 +55,7 @@ function buildMethodMap<
   ParsedMetadata extends object,
 >(
   descriptor: Service,
-  handlers: ServiceImplWithSerde<Service, Context, State, ParsedMetadata>,
+  handlers: ServiceImplWithRawHandlers<Service, Context, State, ParsedMetadata>,
 ): Map<string, RegisteredMethod> {
   const methods = new Map<string, RegisteredMethod>();
   const typedMethods = descriptor.method as Service['method'];
@@ -77,43 +75,13 @@ function buildMethodMap<
       throw new Error(`unknown method ${methodName} on ${descriptor.typeName}`);
     }
 
-    if (typeof handler === 'function') {
-      methods.set(method.name, {
-        service: descriptor,
-        method,
-        impl: handler as RegisteredMethod['impl'],
-      });
-      continue;
-    }
-    if (typeof handler.handler !== 'function') {
-      throw new Error(
-        `serde handler must be a function: ${descriptor.typeName}.${method.name}`,
-      );
-    }
-    if (
-      handler.methodKind !== undefined &&
-      handler.methodKind !== method.methodKind
-    ) {
-      throw new Error(
-        `serde handler kind does not match ${descriptor.typeName}.${method.name}`,
-      );
-    }
-    for (const codec of [handler.input, handler.output]) {
-      if (
-        typeof codec.fromBuffer !== 'function' ||
-        typeof codec.toBuffer !== 'function'
-      ) {
-        throw new Error(
-          `invalid handler codec: ${descriptor.typeName}.${method.name}`,
-        );
-      }
-    }
     methods.set(method.name, {
       service: descriptor,
       method,
-      impl: handler.handler as RegisteredMethod['impl'],
-      input: handler.input,
-      output: handler.output,
+      impl: (typeof handler === 'function'
+        ? handler
+        : handler.handler) as RegisteredMethod['impl'],
+      raw: typeof handler === 'function' ? undefined : handler.raw,
     });
   }
 
@@ -142,6 +110,13 @@ class ProtoServiceScaffold<
     this.config = config;
   }
 
+  /**
+   * Type-check a partial set of handler implementations against this
+   * service's types. Returns the input unchanged -- this is purely a
+   * type-level helper for splitting handlers across files.
+   *
+   * @param handlers - A partial set of method implementations.
+   */
   procedures(
     handlers: ServiceImpl<Service, Context, State, ParsedMetadata>,
   ): ServiceImpl<Service, Context, State, ParsedMetadata> {
@@ -259,12 +234,12 @@ export function createProtoService<
 
     static define<S extends DescService>(
       descriptor: S,
-      handlers: ServiceImplWithSerde<S, Context, object, ParsedMetadata>,
+      handlers: ServiceImplWithRawHandlers<S, Context, object, ParsedMetadata>,
     ): ProtoServiceSchema<S, object>;
     static define<S extends DescService, St extends object>(
       descriptor: S,
       config: ServiceConfiguration<Context, St>,
-      handlers: ServiceImplWithSerde<S, Context, St, ParsedMetadata>,
+      handlers: ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
     ): ProtoServiceSchema<S, St>;
 
     // Legacy overloads must stay last to preserve Parameters and ReturnType.
@@ -296,13 +271,19 @@ export function createProtoService<
       descriptor: S,
       configOrHandlers:
         | ServiceConfiguration<Context, St>
-        | ServiceImplWithSerde<S, Context, St, ParsedMetadata>,
-      maybeHandlers?: ServiceImplWithSerde<S, Context, St, ParsedMetadata>,
+        | ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
+      maybeHandlers?: ServiceImplWithRawHandlers<
+        S,
+        Context,
+        St,
+        ParsedMetadata
+      >,
     ): ProtoServiceSchema<S, St> {
       let initializeStateFn:
         | ((ctx: Context) => MaybeDisposable<St>)
         | undefined;
-      let handlers: ServiceImplWithSerde<S, Context, St, ParsedMetadata>;
+      let handlers: ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>;
+
       if (
         'initializeState' in configOrHandlers &&
         typeof configOrHandlers.initializeState === 'function'
@@ -310,13 +291,14 @@ export function createProtoService<
         if (!maybeHandlers) {
           throw new Error('expected handlers as third argument');
         }
+
         initializeStateFn = (
           configOrHandlers as ServiceConfiguration<Context, St>
         ).initializeState;
         handlers = maybeHandlers;
       } else {
         initializeStateFn = undefined;
-        handlers = configOrHandlers as ServiceImplWithSerde<
+        handlers = configOrHandlers as ServiceImplWithRawHandlers<
           S,
           Context,
           St,

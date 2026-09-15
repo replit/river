@@ -22,7 +22,6 @@ export {
   createServerHandshakeOptions,
 } from './handshake';
 export { createProtoService } from './service';
-export { serde, withSerde } from './serde';
 export type {
   AnyProtoService,
   InstantiatedProtoService,
@@ -44,8 +43,8 @@ export type {
   ClientStreamingCall,
   MethodImpl,
   ServiceImpl,
-  ServiceImplWithSerde,
-  SerdeHandler,
+  ServiceImplWithRawHandlers,
+  RawHandler,
 } from './types';
 export { Err, Ok } from '../router/result';
 export type {
