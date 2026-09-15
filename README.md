@@ -941,10 +941,10 @@ const transport = new WebSocketClientTransport(
 
 ### Raw protobuf responses
 
-Use `defineWithRawHandlers()` to return already-encoded protobuf bytes:
+Use `{ raw: handler }` in `define()` to return already-encoded protobuf bytes:
 
 ```ts
-const service = createProtoService().defineWithRawHandlers(Greeter, {
+const service = createProtoService().define(Greeter, {
   sayHello: { raw: () => Ok(encodedResponse) },
 });
 ```

@@ -245,8 +245,10 @@ export function createProtoService<
   Context extends object = object,
   ParsedMetadata extends object = object,
 >() {
-  class ProtoServiceSchema<Service extends DescService, State extends object>
-    implements AnyProtoService
+  return class ProtoServiceSchema<
+    Service extends DescService,
+    State extends object,
+  > implements AnyProtoService
   {
     readonly descriptor: Service;
     readonly methods: ReadonlyMap<string, RegisteredMethod>;
@@ -287,6 +289,17 @@ export function createProtoService<
       });
     }
 
+    static define<S extends DescService>(
+      descriptor: S,
+      handlers: ServiceImplWithRawHandlers<S, Context, object, ParsedMetadata>,
+    ): ProtoServiceSchema<S, object>;
+    static define<S extends DescService, St extends object>(
+      descriptor: S,
+      config: ServiceConfiguration<Context, St>,
+      handlers: ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
+    ): ProtoServiceSchema<S, St>;
+
+    // Legacy overloads must stay last to preserve Parameters and ReturnType.
     /**
      * Define a stateless protobuf service with the given handlers.
      *
@@ -315,25 +328,6 @@ export function createProtoService<
       descriptor: S,
       configOrHandlers:
         | ServiceConfiguration<Context, St>
-        | ServiceImpl<S, Context, St, ParsedMetadata>,
-      maybeHandlers?: ServiceImpl<S, Context, St, ParsedMetadata>,
-    ): ProtoServiceSchema<S, St> {
-      return defineService(descriptor, configOrHandlers, maybeHandlers);
-    }
-
-    static defineWithRawHandlers<S extends DescService>(
-      descriptor: S,
-      handlers: ServiceImplWithRawHandlers<S, Context, object, ParsedMetadata>,
-    ): ProtoServiceSchema<S, object>;
-    static defineWithRawHandlers<S extends DescService, St extends object>(
-      descriptor: S,
-      config: ServiceConfiguration<Context, St>,
-      handlers: ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
-    ): ProtoServiceSchema<S, St>;
-    static defineWithRawHandlers<S extends DescService, St extends object>(
-      descriptor: S,
-      configOrHandlers:
-        | ServiceConfiguration<Context, St>
         | ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
       maybeHandlers?: ServiceImplWithRawHandlers<
         S,
@@ -342,7 +336,36 @@ export function createProtoService<
         ParsedMetadata
       >,
     ): ProtoServiceSchema<S, St> {
-      return defineService(descriptor, configOrHandlers, maybeHandlers);
+      let initializeStateFn:
+        | ((ctx: Context) => MaybeDisposable<St>)
+        | undefined;
+      let handlers: ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>;
+      if (
+        'initializeState' in configOrHandlers &&
+        typeof configOrHandlers.initializeState === 'function'
+      ) {
+        if (!maybeHandlers) {
+          throw new Error('expected handlers as third argument');
+        }
+        initializeStateFn = (
+          configOrHandlers as ServiceConfiguration<Context, St>
+        ).initializeState;
+        handlers = maybeHandlers;
+      } else {
+        initializeStateFn = undefined;
+        handlers = configOrHandlers as ServiceImplWithRawHandlers<
+          S,
+          Context,
+          St,
+          ParsedMetadata
+        >;
+      }
+
+      return new ProtoServiceSchema(
+        descriptor,
+        initializeStateFn,
+        buildMethodMap(descriptor, handlers),
+      );
     }
 
     /**
@@ -360,44 +383,5 @@ export function createProtoService<
         config,
       );
     }
-  }
-
-  function defineService<S extends DescService, St extends object>(
-    descriptor: S,
-    configOrHandlers:
-      | ServiceConfiguration<Context, St>
-      | ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
-    maybeHandlers?: ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
-  ): ProtoServiceSchema<S, St> {
-    let initializeStateFn: ((ctx: Context) => MaybeDisposable<St>) | undefined;
-    let handlers: ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>;
-    if (
-      'initializeState' in configOrHandlers &&
-      typeof configOrHandlers.initializeState === 'function'
-    ) {
-      if (!maybeHandlers) {
-        throw new Error('expected handlers as third argument');
-      }
-      initializeStateFn = (
-        configOrHandlers as ServiceConfiguration<Context, St>
-      ).initializeState;
-      handlers = maybeHandlers;
-    } else {
-      initializeStateFn = undefined;
-      handlers = configOrHandlers as ServiceImplWithRawHandlers<
-        S,
-        Context,
-        St,
-        ParsedMetadata
-      >;
-    }
-
-    return new ProtoServiceSchema(
-      descriptor,
-      initializeStateFn,
-      buildMethodMap(descriptor, handlers),
-    );
-  }
-
-  return ProtoServiceSchema;
+  };
 }

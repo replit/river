@@ -84,6 +84,35 @@ test('typed-only define calls retain the inferred main service shape', () => {
       { calls: number }
     >
   >();
+  expectTypeOf<
+    Parameters<typeof Factory.define<typeof TestService, { calls: number }>>[2]
+  >().toEqualTypeOf<
+    ServiceImpl<
+      typeof TestService,
+      { prefix: string },
+      { calls: number },
+      { userId: string }
+    >
+  >();
+  const rawStateful = Factory.define(
+    TestService,
+    {
+      initializeState: () => ({ calls: 0 }),
+    },
+    {
+      echo: {
+        raw: (request, ctx) => {
+          expectTypeOf(request).toEqualTypeOf<Uint8Array>();
+          expectTypeOf(ctx.state.calls).toEqualTypeOf<number>();
+          expectTypeOf(ctx.prefix).toEqualTypeOf<string>();
+          expectTypeOf(ctx.metadata.userId).toEqualTypeOf<string>();
+
+          return Ok(request);
+        },
+      },
+    },
+  );
+  expectTypeOf(rawStateful).toEqualTypeOf<typeof stateful>();
   const scaffold = Factory.scaffold(TestService, {
     initializeState: () => ({ calls: 0 }),
   });
@@ -101,14 +130,12 @@ test('typed-only define calls retain the inferred main service shape', () => {
   expectTypeOf(scaffold.finalize(handlers)).toEqualTypeOf<typeof stateful>();
 });
 
-test('existing typed helpers do not accept raw-handler entries', () => {
+test('typed scaffold helpers do not accept raw-handler entries', () => {
   const raw = () => Ok(new Uint8Array());
   const scaffold = ProtoService.scaffold(TestService, {
     initializeState: () => ({}),
   });
   const checkTypes = () => {
-    // @ts-expect-error The existing define API accepts typed functions only.
-    ProtoService.define(TestService, { echo: { raw } });
     // @ts-expect-error The existing procedures API accepts typed functions only.
     scaffold.procedures({ echo: { raw } });
     // @ts-expect-error The existing finalize API accepts typed functions only.
@@ -126,7 +153,7 @@ function countResponseBytes(value: number): Uint8Array {
 
 test('raw handlers must be functions at definition time', () => {
   expect(() =>
-    ProtoService.defineWithRawHandlers(TestService, {
+    ProtoService.define(TestService, {
       echo: {
         // @ts-expect-error Raw handlers must be callable.
         raw: 42,
@@ -138,13 +165,13 @@ test('raw handlers must be functions at definition time', () => {
 test('raw handlers cannot implement client-streaming or bidi methods', () => {
   const raw = () => Ok(new Uint8Array());
   expect(() =>
-    ProtoService.defineWithRawHandlers(TestService, {
+    ProtoService.define(TestService, {
       // @ts-expect-error Raw handlers cannot implement client-streaming methods.
       sum: { raw },
     }),
   ).toThrow('raw handlers require a unary or server-streaming method');
   expect(() =>
-    ProtoService.defineWithRawHandlers(TestService, {
+    ProtoService.define(TestService, {
       // @ts-expect-error Raw handlers cannot implement bidi methods.
       chat: { raw },
     }),
@@ -198,7 +225,7 @@ describe.each(transports)(
         [
           'instantiate' in handlers
             ? handlers
-            : ProtoService.defineWithRawHandlers(TestService, handlers),
+            : ProtoService.define(TestService, handlers),
         ],
         { middlewares },
       );
@@ -370,7 +397,7 @@ describe.each(transports)(
         await expect(client.echo({})).resolves.toEqual(Ok(response));
         await server.close();
         const rawServer = createServer(serverTransport, [
-          ProtoService.defineWithRawHandlers(TestService, {
+          ProtoService.define(TestService, {
             echo: { raw: () => Ok(backing.subarray(1, backing.length - 1)) },
           }),
         ]);
