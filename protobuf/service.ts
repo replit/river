@@ -3,7 +3,11 @@ import type {
   DescService,
   MessageInitShape,
 } from '@bufbuild/protobuf';
-import type { ServiceImpl } from './types';
+import type {
+  MethodImpl,
+  ServiceImpl,
+  ServiceImplWithRawHandlers,
+} from './types';
 import { decodeMessageBytes, encodeMessageBytes } from './shared';
 
 /**
@@ -20,14 +24,35 @@ export type MaybeDisposable<T extends object = Record<string, unknown>> = T & {
 export interface RegisteredMethod {
   readonly service: DescService;
   readonly method: DescMethod;
-  readonly impl: (...args: Array<never>) => unknown;
-  readonly codec: MethodCodec;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  readonly impl: MethodImpl<DescMethod, any, any, any>;
 }
 
 /** Request decoding must return a protobuf message or a raw byte view. */
 export interface MethodCodec {
   decodeRequest(bytes: Uint8Array): unknown;
   encodeResponse(payload: unknown): Uint8Array;
+}
+
+// Codec metadata must not change the public registration shape.
+const methodCodecs = new WeakMap<RegisteredMethod, MethodCodec>();
+
+function createTypedMethodCodec(method: DescMethod): MethodCodec {
+  return {
+    decodeRequest: (bytes) => decodeMessageBytes(method.input, bytes),
+    encodeResponse: (payload) =>
+      encodeMessageBytes(
+        method.output,
+        payload as MessageInitShape<typeof method.output>,
+      ),
+  };
+}
+
+export function getMethodCodec(registration: RegisteredMethod): MethodCodec {
+  return (
+    methodCodecs.get(registration) ??
+    createTypedMethodCodec(registration.method)
+  );
 }
 
 const rawMethodCodec: MethodCodec = {
@@ -72,7 +97,7 @@ function buildMethodMap<
   ParsedMetadata extends object,
 >(
   descriptor: Service,
-  handlers: ServiceImpl<Service, Context, State, ParsedMetadata>,
+  handlers: ServiceImplWithRawHandlers<Service, Context, State, ParsedMetadata>,
 ): Map<string, RegisteredMethod> {
   const methods = new Map<string, RegisteredMethod>();
   const typedMethods = descriptor.method as Service['method'];
@@ -92,18 +117,11 @@ function buildMethodMap<
       throw new Error(`unknown method ${methodName} on ${descriptor.typeName}`);
     }
 
-    let impl: RegisteredMethod['impl'];
+    let impl: (...args: Array<never>) => unknown;
     let codec: MethodCodec;
     if (typeof handler === 'function') {
       impl = handler;
-      codec = {
-        decodeRequest: (bytes) => decodeMessageBytes(method.input, bytes),
-        encodeResponse: (payload) =>
-          encodeMessageBytes(
-            method.output,
-            payload as MessageInitShape<typeof method.output>,
-          ),
-      };
+      codec = createTypedMethodCodec(method);
     } else {
       if (typeof handler.raw !== 'function') {
         throw new Error(
@@ -122,12 +140,13 @@ function buildMethodMap<
       codec = rawMethodCodec;
     }
 
-    methods.set(method.name, {
+    const registration: RegisteredMethod = {
       service: descriptor,
       method,
-      impl,
-      codec,
-    });
+      impl: impl as RegisteredMethod['impl'],
+    };
+    methodCodecs.set(registration, codec);
+    methods.set(method.name, registration);
   }
 
   return methods;
@@ -155,9 +174,9 @@ class ProtoServiceScaffold<
     this.config = config;
   }
 
-  procedures<H extends ServiceImpl<Service, Context, State, ParsedMetadata>>(
-    handlers: H,
-  ): H {
+  procedures(
+    handlers: ServiceImpl<Service, Context, State, ParsedMetadata>,
+  ): ServiceImpl<Service, Context, State, ParsedMetadata> {
     return handlers;
   }
 
@@ -226,10 +245,8 @@ export function createProtoService<
   Context extends object = object,
   ParsedMetadata extends object = object,
 >() {
-  return class ProtoServiceSchema<
-    Service extends DescService,
-    State extends object,
-  > implements AnyProtoService
+  class ProtoServiceSchema<Service extends DescService, State extends object>
+    implements AnyProtoService
   {
     readonly descriptor: Service;
     readonly methods: ReadonlyMap<string, RegisteredMethod>;
@@ -301,38 +318,31 @@ export function createProtoService<
         | ServiceImpl<S, Context, St, ParsedMetadata>,
       maybeHandlers?: ServiceImpl<S, Context, St, ParsedMetadata>,
     ): ProtoServiceSchema<S, St> {
-      let initializeStateFn:
-        | ((ctx: Context) => MaybeDisposable<St>)
-        | undefined;
-      let handlers: ServiceImpl<S, Context, St, ParsedMetadata>;
+      return defineService(descriptor, configOrHandlers, maybeHandlers);
+    }
 
-      if (
-        'initializeState' in configOrHandlers &&
-        typeof configOrHandlers.initializeState === 'function'
-      ) {
-        if (!maybeHandlers) {
-          throw new Error('expected handlers as third argument');
-        }
-
-        initializeStateFn = (
-          configOrHandlers as ServiceConfiguration<Context, St>
-        ).initializeState;
-        handlers = maybeHandlers;
-      } else {
-        initializeStateFn = undefined;
-        handlers = configOrHandlers as ServiceImpl<
-          S,
-          Context,
-          St,
-          ParsedMetadata
-        >;
-      }
-
-      return new ProtoServiceSchema(
-        descriptor,
-        initializeStateFn,
-        buildMethodMap(descriptor, handlers),
-      );
+    static defineWithRawHandlers<S extends DescService>(
+      descriptor: S,
+      handlers: ServiceImplWithRawHandlers<S, Context, object, ParsedMetadata>,
+    ): ProtoServiceSchema<S, object>;
+    static defineWithRawHandlers<S extends DescService, St extends object>(
+      descriptor: S,
+      config: ServiceConfiguration<Context, St>,
+      handlers: ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
+    ): ProtoServiceSchema<S, St>;
+    static defineWithRawHandlers<S extends DescService, St extends object>(
+      descriptor: S,
+      configOrHandlers:
+        | ServiceConfiguration<Context, St>
+        | ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
+      maybeHandlers?: ServiceImplWithRawHandlers<
+        S,
+        Context,
+        St,
+        ParsedMetadata
+      >,
+    ): ProtoServiceSchema<S, St> {
+      return defineService(descriptor, configOrHandlers, maybeHandlers);
     }
 
     /**
@@ -350,5 +360,44 @@ export function createProtoService<
         config,
       );
     }
-  };
+  }
+
+  function defineService<S extends DescService, St extends object>(
+    descriptor: S,
+    configOrHandlers:
+      | ServiceConfiguration<Context, St>
+      | ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
+    maybeHandlers?: ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
+  ): ProtoServiceSchema<S, St> {
+    let initializeStateFn: ((ctx: Context) => MaybeDisposable<St>) | undefined;
+    let handlers: ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>;
+    if (
+      'initializeState' in configOrHandlers &&
+      typeof configOrHandlers.initializeState === 'function'
+    ) {
+      if (!maybeHandlers) {
+        throw new Error('expected handlers as third argument');
+      }
+      initializeStateFn = (
+        configOrHandlers as ServiceConfiguration<Context, St>
+      ).initializeState;
+      handlers = maybeHandlers;
+    } else {
+      initializeStateFn = undefined;
+      handlers = configOrHandlers as ServiceImplWithRawHandlers<
+        S,
+        Context,
+        St,
+        ParsedMetadata
+      >;
+    }
+
+    return new ProtoServiceSchema(
+      descriptor,
+      initializeStateFn,
+      buildMethodMap(descriptor, handlers),
+    );
+  }
+
+  return ProtoServiceSchema;
 }

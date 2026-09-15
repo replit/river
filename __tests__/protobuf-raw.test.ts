@@ -20,9 +20,15 @@ import {
   createProtoService,
   createServer,
   isSerializedClientErrorResult,
+  type AnyProtoService,
+  type Middleware,
   type MiddlewareParam,
   type ServiceImpl,
+  type ServiceImplWithRawHandlers,
 } from '../protobuf';
+import * as messages from '../protobuf/shared';
+import { getClientSendFn } from '../testUtil';
+import type { MainDefinedProtoService } from '../testUtil/fixtures/protobufMainShape';
 import {
   TransportEnvelopeSchema,
   type TransportEnvelope,
@@ -42,10 +48,74 @@ import {
   type TestSetupHelpers,
   transports,
 } from '../testUtil/fixtures/transports';
-import { ControlFlags } from '../transport/message';
+import {
+  ControlFlags,
+  type OpaqueTransportMessage,
+} from '../transport/message';
 
 const ProtoService = createProtoService();
 const THREE_BYTE_LENGTH_PREFIX_PAYLOAD_SIZE = 145 * 1024;
+
+test('typed-only define calls retain the inferred main service shape', () => {
+  const stateless = ProtoService.define(TestService, {
+    echo: (request) => Ok({ text: request.text }),
+  });
+  expectTypeOf(stateless).toEqualTypeOf<
+    MainDefinedProtoService<typeof TestService, object, object>
+  >();
+  const Factory = createProtoService<{ prefix: string }, { userId: string }>();
+  const stateful = Factory.define(
+    TestService,
+    {
+      initializeState: () => ({ calls: 0 }),
+    },
+    {
+      echo: (request, ctx) => {
+        ctx.state.calls++;
+
+        return Ok({ text: ctx.prefix + request.text + ctx.metadata.userId });
+      },
+    },
+  );
+  expectTypeOf(stateful).toEqualTypeOf<
+    MainDefinedProtoService<
+      typeof TestService,
+      { prefix: string },
+      { calls: number }
+    >
+  >();
+  const scaffold = Factory.scaffold(TestService, {
+    initializeState: () => ({ calls: 0 }),
+  });
+  const handlers = scaffold.procedures({
+    echo: (request) => Ok({ text: request.text }),
+  });
+  expectTypeOf(handlers).toEqualTypeOf<
+    ServiceImpl<
+      typeof TestService,
+      { prefix: string },
+      { calls: number },
+      { userId: string }
+    >
+  >();
+  expectTypeOf(scaffold.finalize(handlers)).toEqualTypeOf<typeof stateful>();
+});
+
+test('existing typed helpers do not accept raw-handler entries', () => {
+  const raw = () => Ok(new Uint8Array());
+  const scaffold = ProtoService.scaffold(TestService, {
+    initializeState: () => ({}),
+  });
+  const checkTypes = () => {
+    // @ts-expect-error The existing define API accepts typed functions only.
+    ProtoService.define(TestService, { echo: { raw } });
+    // @ts-expect-error The existing procedures API accepts typed functions only.
+    scaffold.procedures({ echo: { raw } });
+    // @ts-expect-error The existing finalize API accepts typed functions only.
+    scaffold.finalize({ echo: { raw } });
+  };
+  expectTypeOf(checkTypes).toBeFunction();
+});
 
 function countResponseBytes(value: number): Uint8Array {
   return toBinary(
@@ -56,7 +126,7 @@ function countResponseBytes(value: number): Uint8Array {
 
 test('raw handlers must be functions at definition time', () => {
   expect(() =>
-    ProtoService.define(TestService, {
+    ProtoService.defineWithRawHandlers(TestService, {
       echo: {
         // @ts-expect-error Raw handlers must be callable.
         raw: 42,
@@ -68,13 +138,13 @@ test('raw handlers must be functions at definition time', () => {
 test('raw handlers cannot implement client-streaming or bidi methods', () => {
   const raw = () => Ok(new Uint8Array());
   expect(() =>
-    ProtoService.define(TestService, {
+    ProtoService.defineWithRawHandlers(TestService, {
       // @ts-expect-error Raw handlers cannot implement client-streaming methods.
       sum: { raw },
     }),
   ).toThrow('raw handlers require a unary or server-streaming method');
   expect(() =>
-    ProtoService.define(TestService, {
+    ProtoService.defineWithRawHandlers(TestService, {
       // @ts-expect-error Raw handlers cannot implement bidi methods.
       chat: { raw },
     }),
@@ -110,25 +180,27 @@ describe.each(transports)(
           await postTestCleanup();
         } finally {
           await setup.cleanup();
+          vi.restoreAllMocks();
         }
       };
     });
 
-    function start(handlers: ServiceImpl<typeof TestService>) {
-      const requests: Array<MiddlewareParam['reqInit']> = [];
+    function start(
+      handlers:
+        | ServiceImplWithRawHandlers<typeof TestService>
+        | AnyProtoService,
+      middlewares: Array<Middleware> = [],
+    ) {
       const clientTransport = setup.getClientTransport('client');
       const serverTransport = setup.getServerTransport();
       const server = createServer(
         serverTransport,
-        [ProtoService.define(TestService, handlers)],
-        {
-          middlewares: [
-            ({ reqInit, next }) => {
-              requests.push(reqInit);
-              next();
-            },
-          ],
-        },
+        [
+          'instantiate' in handlers
+            ? handlers
+            : ProtoService.defineWithRawHandlers(TestService, handlers),
+        ],
+        { middlewares },
       );
       addPostTestCleanup(async () => {
         try {
@@ -144,40 +216,138 @@ describe.each(transports)(
         serverTransport.clientId,
       );
 
-      return { client, serverTransport, server, requests };
+      return { client, clientTransport, serverTransport, server };
     }
 
-    test('raw requests retain the exact client bytes and reach middleware as a view', async () => {
-      let received: Uint8Array | undefined;
-      const { client, requests } = start({
-        echo: {
-          raw: (request, ctx) => {
-            received = request;
-            expect(ctx.service).toBe(TestService);
-            expect(ctx.method).toBe(TestService.method.echo);
+    test('legacy getter-backed registrations dispatch through the typed codec', async () => {
+      const service = ProtoService.define(TestService, {
+        echo: (request, ctx) => {
+          expect(ctx.service).toBe(TestService);
+          expect(ctx.method).toBe(TestService.method.echo);
 
-            return Ok(request);
-          },
+          return Ok({ text: request.text.toUpperCase() });
         },
       });
+      const registrations = new Map(
+        [...service.methods].map(
+          ([name, registration]) =>
+            [
+              name,
+              new (class {
+                get service() {
+                  return registration.service;
+                }
 
-      await expect(client.echo({ text: 'hello' })).resolves.toEqual(
-        Ok(create(EchoResponseSchema, { text: 'hello' })),
-      );
-      assert(received);
-      expect(
-        Buffer.compare(
-          received,
-          toBinary(
-            EchoRequestSchema,
-            create(EchoRequestSchema, { text: 'hello' }),
-          ) as Uint8Array,
+                get method() {
+                  return registration.method;
+                }
+
+                get impl() {
+                  return registration.impl;
+                }
+              })(),
+            ] as const,
         ),
-      ).toBe(0);
-      expect(received.byteOffset).toBeGreaterThan(0);
-      const request = requests[0];
-      assert(request?.kind === 'raw');
-      expect(request.bytes).toBe(received);
+      );
+      const legacyService = new ProtoService(
+        TestService,
+        undefined,
+        registrations,
+      );
+      const { client, server } = start(legacyService);
+
+      await expect(client.echo({ text: 'getter' })).resolves.toEqual(
+        Ok(create(EchoResponseSchema, { text: 'GETTER' })),
+      );
+      await waitFor(() => expect(server.streams.size).toBe(0));
+    });
+
+    test.each([0, 2])(
+      'raw requests retain their bytes with %i middleware functions',
+      async (middlewareCount) => {
+        const decoded = vi.spyOn(messages, 'decodeMessageBytes');
+        const encoded = vi.spyOn(messages, 'encodeMessageBytes');
+        const requests: Array<MiddlewareParam['reqInit']> = [];
+        let received: Uint8Array | undefined;
+        const { client } = start(
+          {
+            echo: {
+              raw: (request, ctx) => {
+                received = request;
+                expect(ctx.service).toBe(TestService);
+                expect(ctx.method).toBe(TestService.method.echo);
+
+                return Ok(request);
+              },
+            },
+          },
+          Array.from({ length: middlewareCount }, () => ({ reqInit, next }) => {
+            requests.push(reqInit);
+            next();
+          }),
+        );
+
+        await expect(client.echo({ text: 'hello' })).resolves.toEqual(
+          Ok(create(EchoResponseSchema, { text: 'hello' })),
+        );
+        assert(received);
+        expect(
+          Buffer.compare(
+            received,
+            toBinary(
+              EchoRequestSchema,
+              create(EchoRequestSchema, { text: 'hello' }),
+            ) as Uint8Array,
+          ),
+        ).toBe(0);
+        expect(received.byteOffset).toBeGreaterThan(0);
+        expect(
+          decoded.mock.calls.filter(([schema]) => schema === EchoRequestSchema),
+        ).toHaveLength(middlewareCount === 0 ? 0 : 1);
+        expect(
+          encoded.mock.calls.filter(
+            ([schema]) => schema === EchoResponseSchema,
+          ),
+        ).toHaveLength(0);
+        expect(requests).toHaveLength(middlewareCount);
+        if (middlewareCount > 0) {
+          expect(requests[0]).toEqual(
+            create(EchoRequestSchema, { text: 'hello' }),
+          );
+          expect(requests[1]).toBe(requests[0]);
+        }
+      },
+    );
+
+    test('middleware rejects malformed raw requests before invoking the handler', async () => {
+      const handler = vi.fn(() => Ok(new Uint8Array()));
+      const middleware = vi.fn<Middleware>(({ next }) => next());
+      const { clientTransport, serverTransport, server } = start(
+        { echo: { raw: handler } },
+        [middleware],
+      );
+      const received: Array<OpaqueTransportMessage> = [];
+      clientTransport.addEventListener('message', (message) =>
+        received.push(message),
+      );
+      getClientSendFn(
+        clientTransport,
+        serverTransport,
+      )({
+        streamId: 'malformed',
+        serviceName: TestService.typeName,
+        procedureName: TestService.method.echo.name,
+        payload: Uint8Array.of(255),
+        controlFlags: ControlFlags.StreamOpenBit | ControlFlags.StreamClosedBit,
+      });
+
+      await waitFor(() => expect(received).toHaveLength(1));
+      expect(received[0]).toMatchObject({
+        payload: { ok: false, payload: { code: 'INVALID_REQUEST' } },
+      });
+      expect(handler).not.toHaveBeenCalled();
+      expect(middleware).not.toHaveBeenCalled();
+      expect(server.streams.size).toBe(0);
     });
 
     test.each([
@@ -200,7 +370,7 @@ describe.each(transports)(
         await expect(client.echo({})).resolves.toEqual(Ok(response));
         await server.close();
         const rawServer = createServer(serverTransport, [
-          ProtoService.define(TestService, {
+          ProtoService.defineWithRawHandlers(TestService, {
             echo: { raw: () => Ok(backing.subarray(1, backing.length - 1)) },
           }),
         ]);
@@ -340,13 +510,14 @@ describe.each(transports)(
     });
 
     test('typed and raw methods coexist with callable scaffold results', async () => {
+      const initializeState = () => ({});
       const scaffold = ProtoService.scaffold(TestService, {
-        initializeState: () => ({}),
+        initializeState,
       });
       const typed = scaffold.procedures({
         echo: (request) => Ok({ text: request.text.toUpperCase() }),
       });
-      const raw = scaffold.procedures({
+      const raw = {
         countUp: {
           raw: ({ ctx, resWritable }) => {
             expect(ctx.method).toBe(TestService.method.countUp);
@@ -355,10 +526,16 @@ describe.each(transports)(
             resWritable.close();
           },
         },
-      });
-      expectTypeOf(typed.echo).toBeFunction();
+      } satisfies ServiceImplWithRawHandlers<typeof TestService>;
+      expectTypeOf(typed).toEqualTypeOf<
+        ServiceImpl<
+          typeof TestService,
+          object,
+          ReturnType<typeof initializeState>
+        >
+      >();
       expectTypeOf(raw.countUp.raw).toBeFunction();
-      const { client, requests } = start({ ...typed, ...raw });
+      const { client } = start({ ...typed, ...raw });
 
       await expect(client.echo({ text: 'typed' })).resolves.toEqual(
         Ok(create(EchoResponseSchema, { text: 'TYPED' })),
@@ -366,10 +543,6 @@ describe.each(transports)(
       await expect(
         client.countUp({ limit: 2 }).collect(),
       ).resolves.toMatchObject([Ok({ value: 1 }), Ok({ value: 2 })]);
-      expect(requests).toMatchObject([
-        { kind: 'message', message: { text: 'typed' } },
-        { kind: 'raw' },
-      ]);
     });
 
     test('non-byte raw responses fail before serialization', async () => {

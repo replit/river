@@ -145,21 +145,34 @@ export type ServiceImpl<
   State extends object = object,
   ParsedMetadata extends object = object,
 > = {
+  [MethodName in keyof Service['method']]?: MethodImpl<
+    Service['method'][MethodName] & DescMethod,
+    Context,
+    State,
+    ParsedMetadata
+  >;
+};
+
+export type ServiceImplWithRawHandlers<
+  Service extends DescService,
+  Context extends object = object,
+  State extends object = object,
+  ParsedMetadata extends object = object,
+> = {
   [MethodName in keyof Service['method']]?:
-    | MethodImpl<
-        Service['method'][MethodName] & DescMethod,
-        Context,
-        State,
-        ParsedMetadata
-      >
-    | {
-        readonly raw: RawMethodImpl<
-          Service['method'][MethodName] & DescMethod,
-          Context,
-          State,
-          ParsedMetadata
-        >;
-      };
+    | ServiceImpl<Service, Context, State, ParsedMetadata>[MethodName]
+    | (Service['method'][MethodName] extends
+        | DescMethodUnary
+        | DescMethodServerStreaming
+        ? {
+            readonly raw: RawMethodImpl<
+              Service['method'][MethodName],
+              Context,
+              State,
+              ParsedMetadata
+            >;
+          }
+        : never);
 };
 
 /**

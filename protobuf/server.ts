@@ -43,30 +43,37 @@ import {
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
 } from '../router/errors';
-import { methodKey, methodKindToProcType } from './shared';
-import type {
-  AnyProtoService,
-  InstantiatedProtoService,
-  MaybeDisposable,
-  MethodCodec,
-  RegisteredMethod,
+import { decodeMessageBytes, methodKey, methodKindToProcType } from './shared';
+import {
+  getMethodCodec,
+  type AnyProtoService,
+  type InstantiatedProtoService,
+  type MaybeDisposable,
+  type MethodCodec,
+  type RegisteredMethod,
 } from './service';
 
 type StreamId = string;
 
 type HandlerResponse = Result<unknown, ClientError>;
 
+interface BoundMethod extends Omit<RegisteredMethod, 'impl'> {
+  readonly impl: (...args: Array<never>) => unknown;
+  readonly codec: MethodCodec;
+}
+
 interface StreamInitProps {
   readonly streamId: StreamId;
   readonly service: DescService;
   readonly method: DescMethod;
-  readonly impl: RegisteredMethod['impl'];
+  readonly impl: BoundMethod['impl'];
   readonly codec: MethodCodec;
   readonly serviceContext: object;
   readonly serviceState: object;
   readonly sessionMetadata: object;
   readonly initialSession: IdentifiedSession;
   readonly initialRequest: unknown;
+  readonly middlewareRequest: MessageShape<DescMethod['input']> | null;
   readonly closeRequestOnStart: boolean;
   readonly tracingCtx: PropagationContext | undefined;
 }
@@ -105,10 +112,7 @@ export type MiddlewareContext<ParsedMetadata extends object = object> =
  */
 export interface MiddlewareParam<ParsedMetadata extends object = object> {
   readonly ctx: MiddlewareContext<ParsedMetadata>;
-  readonly reqInit:
-    | { kind: 'message'; message: MessageShape<DescMethod['input']> }
-    | { kind: 'raw'; bytes: Uint8Array }
-    | null;
+  readonly reqInit: MessageShape<DescMethod['input']> | null;
   next: () => void;
 }
 
@@ -153,7 +157,7 @@ class ProtobufServer<
     RejectionCodeSchema
   >;
 
-  private readonly methods: Map<string, RegisteredMethod>;
+  private readonly methods: Map<string, BoundMethod>;
   private readonly serviceInstances: Map<string, InstantiatedProtoService>;
   private readonly userContext: object;
 
@@ -205,10 +209,12 @@ class ProtobufServer<
       this.serviceInstances.set(svc.descriptor.typeName, instance);
 
       for (const [, reg] of instance.methods) {
-        this.methods.set(
-          methodKey(svc.descriptor.typeName, reg.method.name),
-          reg,
-        );
+        this.methods.set(methodKey(svc.descriptor.typeName, reg.method.name), {
+          service: reg.service,
+          method: reg.method,
+          impl: reg.impl,
+          codec: getMethodCodec(reg),
+        });
       }
     }
 
@@ -339,6 +345,7 @@ class ProtobufServer<
       sessionMetadata,
       initialSession,
       initialRequest,
+      middlewareRequest,
       closeRequestOnStart,
     } = props;
     const { to: from, loggingMetadata, id: sessionId } = initialSession;
@@ -668,15 +675,6 @@ class ProtobufServer<
       procedureName: method.name,
       serviceName: service.typeName,
     };
-    const reqInit: MiddlewareParam<ParsedMetadata>['reqInit'] =
-      initialRequest === null
-        ? null
-        : initialRequest instanceof Uint8Array
-        ? { kind: 'raw', bytes: initialRequest }
-        : {
-            kind: 'message',
-            message: initialRequest as MessageShape<DescMethod['input']>,
-          };
 
     if (initialRequest !== null) {
       reqReadable._pushValue(Ok(initialRequest));
@@ -741,7 +739,7 @@ class ProtobufServer<
         return () => {
           middleware({
             ctx: middlewareContext,
-            reqInit,
+            reqInit: middlewareRequest,
             next,
           });
         };
@@ -903,6 +901,23 @@ class ProtobufServer<
       return null;
     }
 
+    let middlewareRequest: MessageShape<DescMethod['input']> | null = null;
+    if (this.middlewares.length > 0 && initialRequest !== null) {
+      try {
+        middlewareRequest =
+          initialRequest instanceof Uint8Array
+            ? decodeMessageBytes(route.method.input, initialRequest)
+            : (initialRequest as MessageShape<DescMethod['input']>);
+      } catch {
+        sendCancel({
+          code: INVALID_REQUEST_CODE,
+          message: 'failed to decode protobuf request payload',
+        });
+
+        return null;
+      }
+    }
+
     return {
       streamId: initMessage.streamId,
       service: route.service,
@@ -914,6 +929,7 @@ class ProtobufServer<
       sessionMetadata,
       initialSession: session,
       initialRequest,
+      middlewareRequest,
       closeRequestOnStart,
       tracingCtx: initMessage.tracing,
     };

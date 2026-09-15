@@ -941,22 +941,25 @@ const transport = new WebSocketClientTransport(
 
 ### Raw protobuf responses
 
-Return already-encoded protobuf bytes with `{ raw: handler }`:
+Use `defineWithRawHandlers()` to return already-encoded protobuf bytes:
 
 ```ts
-const service = createProtoService().define(Greeter, {
+const service = createProtoService().defineWithRawHandlers(Greeter, {
   sayHello: { raw: () => Ok(encodedResponse) },
 });
 ```
 
 Raw handlers keep the typed handler's signature, but receive `Uint8Array` requests and use `Ok(Uint8Array)` for successful responses.
 For server streams, write `Ok(bytes)` to `resWritable` and close it when finished.
-Only unary and server-streaming methods support raw handlers. Other method kinds fail TypeScript checks and throw during `define()`.
-Middleware receives `{ kind: 'raw', bytes }` for a raw request.
+Only unary and server-streaming methods support raw handlers. Other method kinds fail TypeScript checks and throw during raw registration.
+Existing typed registration helpers, middleware, and clients stay unchanged.
+
+Without middleware, River does not decode raw requests. With middleware, River decodes the request once for it and gives the handler the original bytes.
+River never re-encodes raw responses.
 
 **Never read `request.buffer`.** The request is a view into a larger buffer. Use the `Uint8Array` view itself.
 
-Handlers must supply valid protobuf bytes. River does not validate raw message bodies. Existing clients and typed errors stay unchanged.
+Handlers must supply valid protobuf response bytes. Typed errors stay unchanged.
 
 ### Further examples
 

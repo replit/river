@@ -391,8 +391,7 @@ describe.each(protobufRouterMatrix)(
           procedureName: TestService.method.echo.name,
         },
         reqInit: {
-          kind: 'message',
-          message: { text: 'hello' },
+          text: 'hello',
         },
       });
       expect(firstCall.ctx.sessionId).toEqual(

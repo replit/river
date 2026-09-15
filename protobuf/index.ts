@@ -44,6 +44,7 @@ export type {
   MethodImpl,
   RawMethodImpl,
   ServiceImpl,
+  ServiceImplWithRawHandlers,
 } from './types';
 export { Err, Ok } from '../router/result';
 export type {
