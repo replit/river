@@ -1,5 +1,9 @@
 import type { DescMethod, DescService } from '@bufbuild/protobuf';
-import type { MethodImpl, ServiceImpl } from './types';
+import type {
+  MethodImpl,
+  ServiceImpl,
+  ServiceImplWithRawHandlers,
+} from './types';
 
 /**
  * An object that may implement async or sync disposal.
@@ -17,6 +21,7 @@ export interface RegisteredMethod {
   readonly method: DescMethod;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readonly impl: MethodImpl<DescMethod, any, any, any>;
+  readonly raw?: 'both' | 'output';
 }
 
 /**
@@ -43,6 +48,16 @@ interface ServiceConfiguration<Context extends object, State extends object> {
   initializeState: (ctx: Context) => MaybeDisposable<State>;
 }
 
+type ErasedHandler = (...args: Array<never>) => unknown;
+
+function normalizeHandler(
+  handler:
+    | ErasedHandler
+    | { handler: ErasedHandler; raw: RegisteredMethod['raw'] },
+) {
+  return typeof handler === 'function' ? { handler, raw: undefined } : handler;
+}
+
 function buildMethodMap<
   Service extends DescService,
   Context extends object,
@@ -50,7 +65,7 @@ function buildMethodMap<
   ParsedMetadata extends object,
 >(
   descriptor: Service,
-  handlers: ServiceImpl<Service, Context, State, ParsedMetadata>,
+  handlers: ServiceImplWithRawHandlers<Service, Context, State, ParsedMetadata>,
 ): Map<string, RegisteredMethod> {
   const methods = new Map<string, RegisteredMethod>();
   const typedMethods = descriptor.method as Service['method'];
@@ -70,10 +85,12 @@ function buildMethodMap<
       throw new Error(`unknown method ${methodName} on ${descriptor.typeName}`);
     }
 
+    const normalized = normalizeHandler(handler);
     methods.set(method.name, {
       service: descriptor,
       method,
-      impl: handler as MethodImpl<DescMethod>,
+      impl: normalized.handler as RegisteredMethod['impl'],
+      raw: normalized.raw,
     });
   }
 
@@ -224,6 +241,17 @@ export function createProtoService<
       });
     }
 
+    static define<S extends DescService>(
+      descriptor: S,
+      handlers: ServiceImplWithRawHandlers<S, Context, object, ParsedMetadata>,
+    ): ProtoServiceSchema<S, object>;
+    static define<S extends DescService, St extends object>(
+      descriptor: S,
+      config: ServiceConfiguration<Context, St>,
+      handlers: ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
+    ): ProtoServiceSchema<S, St>;
+
+    // Legacy overloads must stay last to preserve Parameters and ReturnType.
     /**
      * Define a stateless protobuf service with the given handlers.
      *
@@ -252,13 +280,18 @@ export function createProtoService<
       descriptor: S,
       configOrHandlers:
         | ServiceConfiguration<Context, St>
-        | ServiceImpl<S, Context, St, ParsedMetadata>,
-      maybeHandlers?: ServiceImpl<S, Context, St, ParsedMetadata>,
+        | ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>,
+      maybeHandlers?: ServiceImplWithRawHandlers<
+        S,
+        Context,
+        St,
+        ParsedMetadata
+      >,
     ): ProtoServiceSchema<S, St> {
       let initializeStateFn:
         | ((ctx: Context) => MaybeDisposable<St>)
         | undefined;
-      let handlers: ServiceImpl<S, Context, St, ParsedMetadata>;
+      let handlers: ServiceImplWithRawHandlers<S, Context, St, ParsedMetadata>;
 
       if (
         'initializeState' in configOrHandlers &&
@@ -274,7 +307,7 @@ export function createProtoService<
         handlers = maybeHandlers;
       } else {
         initializeStateFn = undefined;
-        handlers = configOrHandlers as ServiceImpl<
+        handlers = configOrHandlers as ServiceImplWithRawHandlers<
           S,
           Context,
           St,

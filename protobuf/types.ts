@@ -15,10 +15,10 @@ import type { ClientError, ProtocolError } from './errors';
 
 type Awaitable<T> = T | PromiseLike<T>;
 
-type HandlerResult<
-  Method extends DescMethod,
-  Error extends ClientError = ClientError,
-> = Result<MessageInitShape<Method['output']>, Error>;
+type HandlerResult<Method extends DescMethod> = Result<
+  MessageInitShape<Method['output']>,
+  ClientError
+>;
 
 /**
  * Options shared by protobuf-router client calls.
@@ -117,6 +117,58 @@ export type MethodImpl<
   ? BiDiStreamingImpl<Method, Context, State, ParsedMetadata>
   : never;
 
+type RawMethodImpl<
+  Method extends DescMethod,
+  Request,
+  HandlerContext,
+> = Method extends DescMethodUnary
+  ? (
+      request: Request,
+      ctx: HandlerContext,
+    ) => Awaitable<Result<Uint8Array, ClientError>>
+  : Method extends DescMethodServerStreaming
+  ? (param: {
+      readonly request: Request;
+      readonly ctx: HandlerContext;
+      readonly resWritable: Writable<Result<Uint8Array, ClientError>>;
+    }) => Awaitable<void>
+  : Method extends DescMethodClientStreaming
+  ? (param: {
+      readonly ctx: HandlerContext;
+      readonly reqReadable: Readable<Request, ProtocolError>;
+    }) => Awaitable<Result<Uint8Array, ClientError>>
+  : Method extends DescMethodBiDiStreaming
+  ? (param: {
+      readonly ctx: HandlerContext;
+      readonly reqReadable: Readable<Request, ProtocolError>;
+      readonly resWritable: Writable<Result<Uint8Array, ClientError>>;
+    }) => Awaitable<void>
+  : never;
+
+/** A raw handler owns protobuf-body validation; River still validates the envelope. */
+export type RawHandler<
+  Method extends DescMethod,
+  Context extends object = object,
+  State extends object = object,
+  ParsedMetadata extends object = object,
+> =
+  | {
+      readonly raw: 'both';
+      readonly handler: RawMethodImpl<
+        Method,
+        Uint8Array,
+        ProtobufHandlerContext<Context, State, ParsedMetadata>
+      >;
+    }
+  | {
+      readonly raw: 'output';
+      readonly handler: RawMethodImpl<
+        Method,
+        MessageShape<Method['input']>,
+        ProtobufHandlerContext<Context, State, ParsedMetadata>
+      >;
+    };
+
 /**
  * Partial implementation shape for a protobuf service.
  *
@@ -134,6 +186,22 @@ export type ServiceImpl<
     State,
     ParsedMetadata
   >;
+};
+
+export type ServiceImplWithRawHandlers<
+  Service extends DescService,
+  Context extends object = object,
+  State extends object = object,
+  ParsedMetadata extends object = object,
+> = {
+  [MethodName in keyof Service['method']]?:
+    | ServiceImpl<Service, Context, State, ParsedMetadata>[MethodName]
+    | RawHandler<
+        Service['method'][MethodName] & DescMethod,
+        Context,
+        State,
+        ParsedMetadata
+      >;
 };
 
 /**

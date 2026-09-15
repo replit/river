@@ -63,8 +63,8 @@ import type {
 
 type StreamId = string;
 
-type HandlerResponse<Method extends DescMethod> = Result<
-  MessageInitShape<Method['output']>,
+type HandlerResponse = Result<
+  MessageInitShape<DescMethod['output']> | Uint8Array,
   ClientError
 >;
 
@@ -73,11 +73,16 @@ interface StreamInitProps {
   readonly service: DescService;
   readonly method: DescMethod;
   readonly impl: RegisteredMethod['impl'];
+  readonly raw: RegisteredMethod['raw'];
   readonly serviceContext: object;
   readonly serviceState: object;
   readonly sessionMetadata: object;
   readonly initialSession: IdentifiedSession;
-  readonly initialRequest: MessageShape<DescMethod['input']> | null;
+  readonly initialRequest:
+    | MessageShape<DescMethod['input']>
+    | Uint8Array
+    | null;
+  readonly middlewareRequest: MessageShape<DescMethod['input']> | null;
   readonly closeRequestOnStart: boolean;
   readonly tracingCtx: PropagationContext | undefined;
 }
@@ -341,11 +346,13 @@ class ProtobufServer<
       service,
       method,
       impl,
+      raw,
       serviceContext,
       serviceState,
       sessionMetadata,
       initialSession,
       initialRequest,
+      middlewareRequest,
       closeRequestOnStart,
     } = props;
     const { to: from, loggingMetadata, id: sessionId } = initialSession;
@@ -421,7 +428,7 @@ class ProtobufServer<
     };
 
     const reqReadable = new ReadableImpl<
-      MessageShape<DescMethod['input']>,
+      MessageShape<DescMethod['input']> | Uint8Array,
       ProtocolError
     >();
     const closeReadable = () => {
@@ -438,11 +445,18 @@ class ProtobufServer<
     const procClosesWithResponse =
       method.methodKind === 'unary' || method.methodKind === 'client_streaming';
 
-    const resWritable = new WritableImpl<HandlerResponse<DescMethod>>({
+    const resWritable = new WritableImpl<HandlerResponse>({
       writeCb: (response) => {
-        const payload = response.ok
-          ? encodeMessageBytes(method.output, response.payload)
-          : Err(response.payload);
+        let payload = response.ok ? response.payload : Err(response.payload);
+        if (response.ok && raw === undefined) {
+          payload = encodeMessageBytes(
+            method.output,
+            response.payload as MessageInitShape<DescMethod['output']>,
+          );
+        }
+        if (response.ok && !(payload instanceof Uint8Array)) {
+          throw new Error('raw handler must return Uint8Array');
+        }
 
         if (!response.ok) {
           recordRiverError(span, response.payload);
@@ -583,7 +597,11 @@ class ProtobufServer<
       if (msg.payload instanceof Uint8Array) {
         try {
           reqReadable._pushValue(
-            Ok(decodeMessageBytes(method.input, msg.payload)),
+            Ok(
+              raw === 'both'
+                ? new Uint8Array(msg.payload)
+                : decodeMessageBytes(method.input, msg.payload),
+            ),
           );
         } catch {
           onServerCancel({
@@ -697,7 +715,7 @@ class ProtobufServer<
       try {
         switch (method.methodKind) {
           case 'unary': {
-            const response: HandlerResponse<DescMethod> = await handler(
+            const response: HandlerResponse = await handler(
               requireInitialRequest(initialRequest, method),
               handlerContext,
             );
@@ -716,7 +734,7 @@ class ProtobufServer<
             break;
 
           case 'client_streaming': {
-            const response: HandlerResponse<DescMethod> = await handler({
+            const response: HandlerResponse = await handler({
               ctx: handlerContext,
               reqReadable,
             });
@@ -745,7 +763,7 @@ class ProtobufServer<
         return () => {
           middleware({
             ctx: middlewareContext,
-            reqInit: initialRequest,
+            reqInit: middlewareRequest,
             next,
           });
         };
@@ -840,7 +858,7 @@ class ProtobufServer<
 
     const serviceInstance = this.serviceInstances.get(initMessage.serviceName);
 
-    let initialRequest: MessageShape<DescMethod['input']> | null = null;
+    let initialRequest: StreamInitProps['initialRequest'] = null;
     let closeRequestOnStart = false;
 
     if (
@@ -857,10 +875,10 @@ class ProtobufServer<
       }
 
       try {
-        initialRequest = decodeMessageBytes(
-          route.method.input,
-          initMessage.payload,
-        );
+        initialRequest =
+          route.raw === 'both'
+            ? new Uint8Array(initMessage.payload)
+            : decodeMessageBytes(route.method.input, initMessage.payload);
       } catch {
         sendCancel({
           code: INVALID_REQUEST_CODE,
@@ -884,10 +902,10 @@ class ProtobufServer<
     } else if (initMessage.payload instanceof Uint8Array) {
       if (initMessage.payload.byteLength > 0) {
         try {
-          initialRequest = decodeMessageBytes(
-            route.method.input,
-            initMessage.payload,
-          );
+          initialRequest =
+            route.raw === 'both'
+              ? new Uint8Array(initMessage.payload)
+              : decodeMessageBytes(route.method.input, initMessage.payload);
         } catch {
           sendCancel({
             code: INVALID_REQUEST_CODE,
@@ -913,16 +931,42 @@ class ProtobufServer<
       return null;
     }
 
+    let middlewareRequest = initialRequest;
+    if (middlewareRequest instanceof Uint8Array) {
+      middlewareRequest = null;
+      if (
+        this.middlewares.length > 0 &&
+        initMessage.payload instanceof Uint8Array
+      ) {
+        try {
+          // Decode the original payload, not the handler's mutable copy.
+          middlewareRequest = decodeMessageBytes(
+            route.method.input,
+            initMessage.payload,
+          );
+        } catch {
+          sendCancel({
+            code: INVALID_REQUEST_CODE,
+            message: 'failed to decode protobuf request payload',
+          });
+
+          return null;
+        }
+      }
+    }
+
     return {
       streamId: initMessage.streamId,
       service: route.service,
       method: route.method,
       impl: route.impl,
+      raw: route.raw,
       serviceContext: this.userContext,
       serviceState: serviceInstance?.state ?? {},
       sessionMetadata,
       initialSession: session,
       initialRequest,
+      middlewareRequest,
       closeRequestOnStart,
       tracingCtx: initMessage.tracing,
     };
@@ -947,10 +991,10 @@ class ProtobufServer<
   }
 }
 
-function requireInitialRequest<Method extends DescMethod>(
-  initialRequest: MessageShape<Method['input']> | null,
-  method: Method,
-): MessageShape<Method['input']> {
+function requireInitialRequest(
+  initialRequest: StreamInitProps['initialRequest'],
+  method: DescMethod,
+): MessageShape<DescMethod['input']> | Uint8Array {
   if (initialRequest === null) {
     throw new Error(
       `missing initial request for protobuf ${method.parent.typeName}.${method.name}`,

@@ -939,6 +939,24 @@ const transport = new WebSocketClientTransport(
 
 > **Note:** The protobuf router is experimental and its API may change.
 
+### Raw protobuf responses
+
+Use `raw: 'output'` to return already-encoded protobuf bytes:
+
+```ts
+const service = createProtoService().define(Greeter, {
+  sayHello: {
+    raw: 'output',
+    handler: (request, ctx) => Ok(encodedResponse),
+  },
+});
+```
+
+Requests stay typed. Use `raw: 'both'` to also receive request bytes as an owned `Uint8Array` copy.
+All four method kinds support both modes. Stream handlers write `Ok(bytes)` to `resWritable` and close it when finished.
+Responses must contain valid bytes for the declared protobuf message. River sends them unchanged.
+Existing typed handlers, clients, middleware, errors, and stream lifecycle rules stay unchanged.
+
 ### Further examples
 
 We've also provided an end-to-end testing environment using `Next.js`, and a simple backend connected with the WebSocket transport that you can [play with on Replit](https://replit.com/@jzhao-replit/riverbed).

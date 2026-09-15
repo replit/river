@@ -43,6 +43,8 @@ export type {
   ClientStreamingCall,
   MethodImpl,
   ServiceImpl,
+  ServiceImplWithRawHandlers,
+  RawHandler,
 } from './types';
 export { Err, Ok } from '../router/result';
 export type {
