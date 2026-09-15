@@ -15,10 +15,10 @@ import type { ClientError, ProtocolError } from './errors';
 
 type Awaitable<T> = T | PromiseLike<T>;
 
-type HandlerResult<
-  Method extends DescMethod,
-  Error extends ClientError = ClientError,
-> = Result<MessageInitShape<Method['output']>, Error>;
+type HandlerResult<Method extends DescMethod> = Result<
+  MessageInitShape<Method['output']>,
+  ClientError
+>;
 
 /**
  * Options shared by protobuf-router client calls.
@@ -120,28 +120,26 @@ export type MethodImpl<
 type RawMethodImpl<
   Method extends DescMethod,
   Request,
-  Context extends object,
-  State extends object,
-  ParsedMetadata extends object,
+  HandlerContext,
 > = Method extends DescMethodUnary
   ? (
       request: Request,
-      ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>,
+      ctx: HandlerContext,
     ) => Awaitable<Result<Uint8Array, ClientError>>
   : Method extends DescMethodServerStreaming
   ? (param: {
       readonly request: Request;
-      readonly ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>;
+      readonly ctx: HandlerContext;
       readonly resWritable: Writable<Result<Uint8Array, ClientError>>;
     }) => Awaitable<void>
   : Method extends DescMethodClientStreaming
   ? (param: {
-      readonly ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>;
+      readonly ctx: HandlerContext;
       readonly reqReadable: Readable<Request, ProtocolError>;
     }) => Awaitable<Result<Uint8Array, ClientError>>
   : Method extends DescMethodBiDiStreaming
   ? (param: {
-      readonly ctx: ProtobufHandlerContext<Context, State, ParsedMetadata>;
+      readonly ctx: HandlerContext;
       readonly reqReadable: Readable<Request, ProtocolError>;
       readonly resWritable: Writable<Result<Uint8Array, ClientError>>;
     }) => Awaitable<void>
@@ -159,9 +157,7 @@ export type RawHandler<
       readonly handler: RawMethodImpl<
         Method,
         Uint8Array,
-        Context,
-        State,
-        ParsedMetadata
+        ProtobufHandlerContext<Context, State, ParsedMetadata>
       >;
     }
   | {
@@ -169,9 +165,7 @@ export type RawHandler<
       readonly handler: RawMethodImpl<
         Method,
         MessageShape<Method['input']>,
-        Context,
-        State,
-        ParsedMetadata
+        ProtobufHandlerContext<Context, State, ParsedMetadata>
       >;
     };
 
