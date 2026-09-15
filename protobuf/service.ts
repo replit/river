@@ -48,6 +48,16 @@ interface ServiceConfiguration<Context extends object, State extends object> {
   initializeState: (ctx: Context) => MaybeDisposable<State>;
 }
 
+type ErasedHandler = (...args: Array<never>) => unknown;
+
+function normalizeHandler(
+  handler:
+    | ErasedHandler
+    | { handler: ErasedHandler; raw: RegisteredMethod['raw'] },
+) {
+  return typeof handler === 'function' ? { handler, raw: undefined } : handler;
+}
+
 function buildMethodMap<
   Service extends DescService,
   Context extends object,
@@ -75,13 +85,12 @@ function buildMethodMap<
       throw new Error(`unknown method ${methodName} on ${descriptor.typeName}`);
     }
 
+    const normalized = normalizeHandler(handler);
     methods.set(method.name, {
       service: descriptor,
       method,
-      impl: (typeof handler === 'function'
-        ? handler
-        : handler.handler) as RegisteredMethod['impl'],
-      raw: typeof handler === 'function' ? undefined : handler.raw,
+      impl: normalized.handler as RegisteredMethod['impl'],
+      raw: normalized.raw,
     });
   }
 
