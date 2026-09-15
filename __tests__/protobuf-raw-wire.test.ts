@@ -23,7 +23,7 @@ import {
   createServer,
   isSerializedClientErrorResult,
   type RawMethodImpl,
-  type ServiceHandlers,
+  type ServiceImpl,
 } from '../protobuf';
 import {
   TransportEnvelopeSchema,
@@ -53,6 +53,17 @@ import {
 
 const ProtoService = createProtoService();
 const methods = ['echo', 'countUp'] as const;
+
+test('raw handlers must be functions at definition time', () => {
+  expect(() =>
+    ProtoService.define(TestService, {
+      echo: {
+        // @ts-expect-error Raw handlers must be callable.
+        raw: 42,
+      },
+    }),
+  ).toThrow('raw handler must be a function');
+});
 
 describe.each(transports)(
   'raw protobuf wire ($name transport)',
@@ -87,7 +98,7 @@ describe.each(transports)(
       };
     });
 
-    function start(handlers: ServiceHandlers<typeof TestService>) {
+    function start(handlers: ServiceImpl<typeof TestService>) {
       const clientTransport = setup.getClientTransport('client');
       const serverTransport = setup.getServerTransport();
       const server = createServer(serverTransport, [

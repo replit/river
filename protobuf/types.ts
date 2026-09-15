@@ -147,21 +147,6 @@ export type ServiceImpl<
   State extends object = object,
   ParsedMetadata extends object = object,
 > = {
-  [MethodName in keyof Service['method']]?: MethodImpl<
-    Service['method'][MethodName] & DescMethod,
-    Context,
-    State,
-    ParsedMetadata
-  >;
-};
-
-/** Typed functions and per-method raw opt-ins can share one service. */
-export type ServiceHandlers<
-  Service extends DescService,
-  Context extends object = object,
-  State extends object = object,
-  ParsedMetadata extends object = object,
-> = {
   [MethodName in keyof Service['method']]?:
     | MethodImpl<
         Service['method'][MethodName] & DescMethod,

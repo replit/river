@@ -90,9 +90,7 @@ describe.each(transports)(
           resWritable.close();
         },
       });
-      expectTypeOf(typed).toEqualTypeOf<
-        ServiceImpl<typeof TestService, object, { calls: number }>
-      >();
+      expectTypeOf(typed.countUp).toBeFunction();
       const typedOnly: ServiceImpl<
         typeof TestService,
         object,

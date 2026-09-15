@@ -3,7 +3,7 @@ import type {
   DescService,
   MessageInitShape,
 } from '@bufbuild/protobuf';
-import type { ServiceHandlers, ServiceImpl } from './types';
+import type { ServiceImpl } from './types';
 import { decodeMessageBytes, encodeMessageBytes } from './shared';
 
 /**
@@ -71,7 +71,7 @@ function buildMethodMap<
   ParsedMetadata extends object,
 >(
   descriptor: Service,
-  handlers: ServiceHandlers<Service, Context, State, ParsedMetadata>,
+  handlers: ServiceImpl<Service, Context, State, ParsedMetadata>,
 ): Map<string, RegisteredMethod> {
   const methods = new Map<string, RegisteredMethod>();
   const typedMethods = descriptor.method as Service['method'];
@@ -104,6 +104,11 @@ function buildMethodMap<
           ),
       };
     } else {
+      if (typeof handler.raw !== 'function') {
+        throw new Error(
+          `raw handler must be a function: ${descriptor.typeName}.${method.name}`,
+        );
+      }
       if (
         method.methodKind !== 'unary' &&
         method.methodKind !== 'server_streaming'
@@ -156,15 +161,9 @@ class ProtoServiceScaffold<
    *
    * @param handlers - A partial set of method implementations.
    */
-  procedures(
-    handlers: ServiceImpl<Service, Context, State, ParsedMetadata>,
-  ): ServiceImpl<Service, Context, State, ParsedMetadata>;
-  procedures(
-    handlers: ServiceHandlers<Service, Context, State, ParsedMetadata>,
-  ): ServiceHandlers<Service, Context, State, ParsedMetadata>;
-  procedures(
-    handlers: ServiceHandlers<Service, Context, State, ParsedMetadata>,
-  ): ServiceHandlers<Service, Context, State, ParsedMetadata> {
+  procedures<H extends ServiceImpl<Service, Context, State, ParsedMetadata>>(
+    handlers: H,
+  ): H {
     return handlers;
   }
 
@@ -175,7 +174,7 @@ class ProtoServiceScaffold<
    * @param handlers - Method implementations (missing methods return
    *   UNIMPLEMENTED at runtime).
    */
-  finalize(handlers: ServiceHandlers<Service, Context, State, ParsedMetadata>) {
+  finalize(handlers: ServiceImpl<Service, Context, State, ParsedMetadata>) {
     return createProtoService<Context, ParsedMetadata>().define(
       this.descriptor,
       this.config,
@@ -286,7 +285,7 @@ export function createProtoService<
      */
     static define<S extends DescService>(
       descriptor: S,
-      handlers: ServiceHandlers<S, Context, object, ParsedMetadata>,
+      handlers: ServiceImpl<S, Context, object, ParsedMetadata>,
     ): ProtoServiceSchema<S, object>;
     /**
      * Define a stateful protobuf service with configuration and handlers.
@@ -299,19 +298,19 @@ export function createProtoService<
     static define<S extends DescService, St extends object>(
       descriptor: S,
       config: ServiceConfiguration<Context, St>,
-      handlers: ServiceHandlers<S, Context, St, ParsedMetadata>,
+      handlers: ServiceImpl<S, Context, St, ParsedMetadata>,
     ): ProtoServiceSchema<S, St>;
     static define<S extends DescService, St extends object>(
       descriptor: S,
       configOrHandlers:
         | ServiceConfiguration<Context, St>
-        | ServiceHandlers<S, Context, St, ParsedMetadata>,
-      maybeHandlers?: ServiceHandlers<S, Context, St, ParsedMetadata>,
+        | ServiceImpl<S, Context, St, ParsedMetadata>,
+      maybeHandlers?: ServiceImpl<S, Context, St, ParsedMetadata>,
     ): ProtoServiceSchema<S, St> {
       let initializeStateFn:
         | ((ctx: Context) => MaybeDisposable<St>)
         | undefined;
-      let handlers: ServiceHandlers<S, Context, St, ParsedMetadata>;
+      let handlers: ServiceImpl<S, Context, St, ParsedMetadata>;
 
       if (
         'initializeState' in configOrHandlers &&
@@ -327,7 +326,7 @@ export function createProtoService<
         handlers = maybeHandlers;
       } else {
         initializeStateFn = undefined;
-        handlers = configOrHandlers as ServiceHandlers<
+        handlers = configOrHandlers as ServiceImpl<
           S,
           Context,
           St,
