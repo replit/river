@@ -190,6 +190,7 @@ export type InheritedProperties = Pick<
   | 'seqSent'
   | 'sendBuffer'
   | 'sendBufferDrainWaiter'
+  | 'hadConnection'
   | 'telemetry'
   | 'options'
 >;
@@ -212,6 +213,7 @@ export interface IdentifiedSessionProps extends CommonSessionProps {
   seqSent: number;
   sendBuffer: Array<EncodedTransportMessage>;
   sendBufferDrainWaiter: PromiseWithResolvers<void> | undefined;
+  hadConnection: boolean;
   telemetry: TelemetryInfo;
   protocolVersion: ProtocolVersion;
   listeners: IdentifiedSessionListeners;
@@ -241,6 +243,17 @@ export abstract class IdentifiedSession extends CommonSession {
   sendBuffer: Array<EncodedTransportMessage>;
 
   /**
+   * Whether this session has ever reached the Connected state. Sent as
+   * `expectedSessionState.isReconnect` in handshake requests so the server
+   * can distinguish a reconnection attempt from a brand-new session even
+   * when the seq/ack counters are still all-zero (nothing was ever acked
+   * back). Without it, a reconnect to a server that lost the session in
+   * that window is accepted as a new session and the send-buffer replay
+   * re-executes handlers.
+   */
+  hadConnection: boolean;
+
+  /**
    * Shared promise for pending {@link waitForSendBufferDrain} calls, created
    * lazily on the first waiter of a pressure episode and cleared on drain.
    * Carried across session state transitions alongside {@link sendBuffer}.
@@ -255,6 +268,7 @@ export abstract class IdentifiedSession extends CommonSession {
       ack,
       sendBuffer,
       sendBufferDrainWaiter,
+      hadConnection,
       telemetry,
       log,
       protocolVersion,
@@ -268,6 +282,7 @@ export abstract class IdentifiedSession extends CommonSession {
     this.ack = ack;
     this.sendBuffer = sendBuffer;
     this.sendBufferDrainWaiter = sendBufferDrainWaiter;
+    this.hadConnection = hadConnection;
     this.telemetry = telemetry;
     this.log = log;
     this.protocolVersion = protocolVersion;

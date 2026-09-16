@@ -1,0 +1,9 @@
+PGenerated/
+PCheckerOutput/
+verified/PGenerated/
+PObs/PGenerated/
+PObs/build/
+PObs/river-trace.jar
+PObs/river-parser.jar
+PObs/traces/
+PObs/out/

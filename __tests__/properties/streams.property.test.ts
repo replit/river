@@ -11,6 +11,7 @@ import {
   WritableImpl,
 } from '../../router/streams';
 import { createMockTransportNetwork } from '../../testUtil/fixtures/mockTransport';
+import { traceLogFn, traceSideOf } from '../../testUtil/fixtures/trace';
 import { cleanupTransports } from '../../testUtil/fixtures/cleanup';
 import type {
   ProvidedClientTransportOptions,
@@ -117,11 +118,7 @@ async function withNetwork(
 
   const violations: Array<string> = [];
   for (const t of [clientTransport, serverTransport]) {
-    t.bindLogger((msg, ctx, level) => {
-      if (ctx?.tags?.includes('invariant-violation')) {
-        violations.push(`[${level}] ${msg}`);
-      }
-    }, 'debug');
+    t.bindLogger(traceLogFn(traceSideOf(t.clientId), violations), 'debug');
   }
 
   createServer(serverTransport, services);

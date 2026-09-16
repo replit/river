@@ -20,6 +20,7 @@ import type { Connection } from '../../transport/connection';
 import type { ServerTransport } from '../../transport/server';
 import { closeAllConnections, numberOfConnections } from '../../testUtil';
 import { createMockTransportNetwork } from '../../testUtil/fixtures/mockTransport';
+import { traceLogFn, traceSideOf } from '../../testUtil/fixtures/trace';
 import type { TestTransportOptions } from '../../testUtil/fixtures/transports';
 import {
   advanceFakeTimersByConnectionBackoff,
@@ -169,11 +170,7 @@ function setup(opts?: TestTransportOptions): {
 
   const violations: Array<string> = [];
   for (const t of [clientTransport, serverTransport]) {
-    t.bindLogger((msg, ctx, level) => {
-      if (ctx?.tags?.includes('invariant-violation')) {
-        violations.push(`[${level}] ${msg}`);
-      }
-    }, 'debug');
+    t.bindLogger(traceLogFn(traceSideOf(t.clientId), violations), 'debug');
   }
 
   createServer(serverTransport, services);
@@ -590,11 +587,10 @@ describe('re-handshake under faults', () => {
 
         const violations: Array<string> = [];
         for (const t of [clientTransport, serverTransport]) {
-          t.bindLogger((msg, ctx, level) => {
-            if (ctx?.tags?.includes('invariant-violation')) {
-              violations.push(`[${level}] ${msg}`);
-            }
-          }, 'debug');
+          t.bindLogger(
+            traceLogFn(traceSideOf(t.clientId), violations),
+            'debug',
+          );
         }
 
         createServer(serverTransport, metadataServices);

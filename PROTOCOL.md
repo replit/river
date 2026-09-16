@@ -235,6 +235,10 @@ interface ControlHandshakeRequest {
   expectedSessionState: {
     nextExpectedSeq: number; // integer
     nextSentSeq: number; // integer
+    // whether the client considers this a reconnection to a session that was
+    // previously connected. Optional for wire compatibility; servers MUST
+    // treat an absent flag as `false`.
+    isReconnect?: boolean;
   };
   metadata?: unknown;
 }
@@ -626,8 +630,11 @@ The server will send an error response if either:
   - the client wanted a reconnection to a specific session but the server doesn't know about it
   - the client is in the future (`client.nextSentSeq > server.ack`)
   - server is in the future (`server.seq > client.nextExpectedSeq`)
+  - the client marked the handshake as a reconnection (`isReconnect: true`) but the server has no session for it. The explicit flag matters in the _zero-state window_: a client that has sent messages but never received anything back still has `nextSentSeq: 0, nextExpectedSeq: 0`, which is otherwise indistinguishable from a brand-new session. Without the flag, a server that lost the session (restart or grace expiry) would accept such a reconnect as a new session, the client would replay its send buffer believing the reconnect was transparent, and handlers that already processed those messages would execute them a second time — while the original callers never learn anything went wrong. Rejecting instead yields the normal hard-reconnect semantics: the client starts a fresh session and in-flight calls resolve with `UNEXPECTED_DISCONNECT`.
 
-When the client receives a status with `ok: false`, it should consider the handshake failed and close the connection.
+When the client receives a status with `ok: false`, it should consider the handshake failed and close the connection. For the retriable code (`SESSION_STATE_MISMATCH`) the client MAY automatically reconnect, but MUST do so with a **fresh session** (a new session id and zeroed session state), resolving any in-flight calls of the old session with `UNEXPECTED_DISCONNECT`; retrying the same session would be rejected identically forever. For fatal codes the client MUST NOT reconnect automatically.
+
+Handshakes are **connection-scoped**: a handshake request or response is only meaningful on the connection that carried it. A client MUST ignore a handshake response that does not belong to its current connection attempt, and a server MUST bound the lifetime of un-handshaken connections (`handshakeTimeoutMs`), so a handshake request cannot outlive its connection. This scoping is load-bearing for the `isReconnect` guard: its correctness argument relies on a `isReconnect: false` request never being processed after the session it names has connected and transferred data (see `verification/p/verified/SessionReconnect.p`, where dropping this assumption breaks the no-duplicate-delivery proof).
 
 ### Re-handshaking (live credential refresh)
 

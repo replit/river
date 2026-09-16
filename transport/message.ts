@@ -98,6 +98,16 @@ export const ControlMessageHandshakeRequestSchema = Type.Object({
     // what the client expects the server to send next
     nextExpectedSeq: Type.Integer(),
     nextSentSeq: Type.Integer(),
+    /**
+     * Whether the client considers this a reconnection to a session that was
+     * previously connected. Lets the server reject a reconnect to a session
+     * it has lost even when both seq counters are zero (the client sent
+     * messages but never received anything back) -- otherwise such a
+     * handshake is indistinguishable from a brand-new session and the
+     * client's send-buffer replay would re-execute handlers. Optional for
+     * wire compatibility: servers treat an absent flag as `false`.
+     */
+    isReconnect: Type.Optional(Type.Boolean()),
   }),
 
   metadata: Type.Optional(Type.Unknown()),
