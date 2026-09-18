@@ -213,6 +213,8 @@ interface UnexpectedDisconnectError extends BaseError {
 
 `ProtocolError`s, just like service-level errors, are wrapped with a `Result`, which is further wrapped with `TransportMessage` and MUST have a `StreamCancelBit` flag. Please note that these are separate from user-defined errors, which should be treated just like any response message.
 
+The TypeScript protobuf server remembers the latest 200 normally closed stream IDs per session, including calls closed by client cancellation. A late frame with only `StreamCancelBit` and a valid `CANCEL` error for one of those IDs is an idempotent no-op. The service's original response or error is unchanged. Active streams still handle cancellation normally, and this history does not suppress OPEN or other messages. An accepted OPEN or a server cancellation invalidates the old retirement record for that ID. IDs outside this bounded history, including never-existing IDs, retain the existing validation behavior. The history is discarded when the session closes and is separate from server-cancellation tombstones.
+
 There are 6 `Control` payloads:
 
 ```ts

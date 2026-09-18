@@ -62,6 +62,7 @@ import type {
 } from './service';
 
 type StreamId = string;
+const MAX_RECENTLY_CLOSED_STREAMS_PER_SESSION = 200;
 
 type HandlerResponse = Result<
   MessageInitShape<DescMethod['output']> | Uint8Array,
@@ -177,6 +178,11 @@ class ProtobufServer<
     LRUSet<StreamId>
   >;
 
+  private readonly recentlyClosedStreams = new Map<
+    TransportClientId,
+    LRUSet<StreamId>
+  >();
+
   private readonly maxCancelledStreamTombstonesPerSession: number;
   private unregisterTransportListeners: () => void;
 
@@ -255,10 +261,21 @@ class ProtobufServer<
         return;
       }
 
+      if (
+        message.controlFlags === Number(ControlFlags.StreamCancelBit) &&
+        isSerializedProtocolErrorResult(message.payload) &&
+        message.payload.payload.code === CANCEL_CODE &&
+        this.recentlyClosedStreams.get(message.from)?.has(message.streamId)
+      ) {
+        return;
+      }
+
       const newStreamProps = this.validateNewProcStream(message);
       if (!newStreamProps) {
         return;
       }
+
+      this.recentlyClosedStreams.get(message.from)?.delete(message.streamId);
 
       createHandlerSpan(
         transport.tracer,
@@ -292,6 +309,7 @@ class ProtobufServer<
       }
 
       this.serverCancelledStreams.delete(disconnectedClientId);
+      this.recentlyClosedStreams.delete(disconnectedClientId);
     };
 
     const handleTransportStatus = (evt: EventMap['transportStatus']) => {
@@ -424,6 +442,14 @@ class ProtobufServer<
     const cleanup = () => {
       finishedController.abort();
       this.streams.delete(streamId);
+      if (cleanClose) {
+        let closedStreams = this.recentlyClosedStreams.get(from);
+        if (!closedStreams) {
+          closedStreams = new LRUSet(MAX_RECENTLY_CLOSED_STREAMS_PER_SESSION);
+          this.recentlyClosedStreams.set(from, closedStreams);
+        }
+        closedStreams.add(streamId);
+      }
       void runDeferredCleanups();
     };
 
@@ -978,6 +1004,7 @@ class ProtobufServer<
     streamId: StreamId,
     error: ClientError,
   ) {
+    this.recentlyClosedStreams.get(to)?.delete(streamId);
     let cancelledStreamsInSession = this.serverCancelledStreams.get(to);
     if (!cancelledStreamsInSession) {
       cancelledStreamsInSession = new LRUSet(
@@ -1024,6 +1051,10 @@ class LRUSet<T> {
 
   has(item: T) {
     return this.items.has(item);
+  }
+
+  delete(item: T) {
+    this.items.delete(item);
   }
 }
 
