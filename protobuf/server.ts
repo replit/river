@@ -530,7 +530,11 @@ class ProtobufServer<
     };
 
     const onHandlerError = (err: unknown) => {
-      if (err instanceof OutboundBufferLimitError) return;
+      if (
+        err instanceof OutboundBufferLimitError &&
+        finishedController.signal.aborted
+      )
+        return;
       const errorMsg = coerceErrorString(err);
 
       span.recordException(err instanceof Error ? err : new Error(errorMsg));
@@ -794,7 +798,14 @@ class ProtobufServer<
       () => {
         if (registerBeforeHandler && finishedController.signal.aborted) return;
         if (registerBeforeHandler) this.streams.set(streamId, procStream);
-        void runProcedureHandler();
+        void runProcedureHandler().catch((err: unknown) => {
+          if (
+            err instanceof OutboundBufferLimitError &&
+            finishedController.signal.aborted
+          )
+            return;
+          throw err;
+        });
       },
     )();
 
