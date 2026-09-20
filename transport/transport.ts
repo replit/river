@@ -175,10 +175,15 @@ export abstract class Transport<
   protected handleMsg(message: OpaqueTransportMessage) {
     if (this.getStatus() !== 'open') return;
 
+    const outboundBuffer = this.sessions.get(message.from)?.outboundBuffer;
     try {
       this.eventDispatcher.dispatchEvent('message', message);
     } catch (error) {
-      if (!(error instanceof OutboundBufferLimitError)) throw error;
+      if (
+        !(error instanceof OutboundBufferLimitError) ||
+        outboundBuffer?.overflowed !== true
+      )
+        throw error;
     }
   }
 
@@ -249,8 +254,9 @@ export abstract class Transport<
       throw new Error(msg);
     }
 
+    const outboundBuffer = session.outboundBuffer;
     this.sessions.set(session.to, session);
-    if (session.outboundBuffer)
+    if (outboundBuffer)
       session.onOutboundBufferOverflow = () =>
         this.deleteSession(session, { unhealthy: true });
     try {
@@ -259,7 +265,11 @@ export abstract class Transport<
         session: session,
       });
     } catch (error) {
-      if (!(error instanceof OutboundBufferLimitError)) throw error;
+      if (
+        !(error instanceof OutboundBufferLimitError) ||
+        outboundBuffer?.overflowed !== true
+      )
+        throw error;
     }
     if (session._isConsumed) return;
 
@@ -269,7 +279,11 @@ export abstract class Transport<
         id: session.id,
       } as EventMap['sessionTransition']);
     } catch (error) {
-      if (!(error instanceof OutboundBufferLimitError)) throw error;
+      if (
+        !(error instanceof OutboundBufferLimitError) ||
+        outboundBuffer?.overflowed !== true
+      )
+        throw error;
     }
   }
 
@@ -293,8 +307,9 @@ export abstract class Transport<
       throw new Error(msg);
     }
 
+    const outboundBuffer = session.outboundBuffer;
     this.sessions.set(session.to, session);
-    if (session.outboundBuffer)
+    if (outboundBuffer)
       session.onOutboundBufferOverflow = () =>
         this.deleteSession(session, { unhealthy: true });
     try {
@@ -303,7 +318,11 @@ export abstract class Transport<
         id: session.id,
       } as EventMap['sessionTransition']);
     } catch (error) {
-      if (!(error instanceof OutboundBufferLimitError)) throw error;
+      if (
+        !(error instanceof OutboundBufferLimitError) ||
+        outboundBuffer?.overflowed !== true
+      )
+        throw error;
     }
   }
 
