@@ -116,7 +116,9 @@ export class EventDispatcher<
       const copy = [...handlers];
       for (const handler of copy) {
         try {
-          handler(event);
+          const result = handler(event);
+          if (isolateErrors)
+            void Promise.resolve(result).catch(() => undefined);
         } catch (error) {
           if (!isolateErrors) throw error;
         }

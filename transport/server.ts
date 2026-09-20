@@ -61,10 +61,6 @@ export abstract class ServerTransport<
 
   sessions = new Map<TransportClientId, ServerSession<ConnType>>();
   pendingSessions = new Set<SessionWaitingForHandshake<ConnType>>();
-  private overflowedSessionIds = new Map<
-    string,
-    ReturnType<typeof setTimeout>
-  >();
 
   constructor(
     clientId: TransportClientId,
@@ -121,28 +117,8 @@ export abstract class ServerTransport<
     options?: DeleteSessionOptions,
   ): void {
     if (session._isConsumed) return;
-    if (
-      session.outboundBuffer?.overflowed &&
-      !this.overflowedSessionIds.has(session.id)
-    ) {
-      const id = session.id;
-      // A first-response overflow leaves the peer's reconnect counters at zero.
-      // Reject that identity for the lifetime of its reconnect attempt window.
-      this.overflowedSessionIds.set(
-        id,
-        setTimeout(() => {
-          this.overflowedSessionIds.delete(id);
-        }, this.options.sessionDisconnectGraceMs + this.options.handshakeTimeoutMs),
-      );
-    }
     this.sessionHandshakeMetadata.delete(session.to);
     super.deleteSession(session, options);
-  }
-
-  close() {
-    super.close();
-    for (const timer of this.overflowedSessionIds.values()) clearTimeout(timer);
-    this.overflowedSessionIds.clear();
   }
 
   /**
@@ -588,18 +564,6 @@ export abstract class ServerTransport<
     const clientNextExpectedSeq =
       msg.payload.expectedSessionState.nextExpectedSeq;
     const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq;
-
-    if (this.overflowedSessionIds.has(msg.payload.sessionId)) {
-      this.rejectHandshakeRequest(
-        session,
-        msg.from,
-        'session exceeded its outbound replay history limit',
-        'SESSION_STATE_MISMATCH',
-        session.loggingMetadata,
-      );
-
-      return;
-    }
 
     let oldSession = this.sessions.get(msg.from);
     if (

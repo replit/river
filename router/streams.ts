@@ -414,9 +414,12 @@ export class WritableImpl<T> implements Writable<T> {
 
     this.closed = true;
     this.writeCb = () => undefined;
-    this.closeCb();
-    this.closeCb = () => undefined;
-    this.backpressure = noBackpressure;
+    try {
+      this.closeCb();
+    } finally {
+      this.closeCb = () => undefined;
+      this.backpressure = noBackpressure;
+    }
   }
 
   /**

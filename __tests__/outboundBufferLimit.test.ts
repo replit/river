@@ -1,4 +1,4 @@
-import { afterEach, assert, expect, test, vi } from 'vitest';
+import { afterEach, assert, expect, expectTypeOf, test, vi } from 'vitest';
 import { Type } from 'typebox';
 import {
   createClient,
@@ -48,7 +48,10 @@ afterEach(async () => {
 
 async function start(options: TestTransportOptions) {
   assert(ws);
-  setup = await ws.setup(options);
+  setup = await ws.setup({
+    ...options,
+    client: { nonResumableCloseCodes: [limit.closeCode], ...options.client },
+  });
   const clientTransport = setup.getClientTransport('client');
   const serverTransport = setup.getServerTransport();
   cleanups.push(() => {
@@ -119,7 +122,7 @@ test('first synchronous response overflow aborts the handler and runs deferred c
       }),
     }),
   };
-  let reentrantResult: string | undefined = 'not called';
+  let reentrantError: unknown;
   let reentrantSend: SessionBoundSendFn | undefined;
   let closingSeq: number | undefined;
   serverTransport.addEventListener('sessionStatus', (event) => {
@@ -131,11 +134,15 @@ test('first synchronous response overflow aborts the handler and runs deferred c
     if (event.status !== 'closing' || !event.session.outboundBuffer?.overflowed)
       return;
     closingSeq = event.session.seq;
-    reentrantResult = reentrantSend?.({
-      streamId: 'observer',
-      controlFlags: 0,
-      payload: {},
-    });
+    try {
+      reentrantSend?.({
+        streamId: 'observer',
+        controlFlags: 0,
+        payload: {},
+      });
+    } catch (error) {
+      reentrantError = error;
+    }
     throw new Error('broken closing observer');
   });
   const server = createServer(serverTransport, services);
@@ -167,11 +174,11 @@ test('first synchronous response overflow aborts the handler and runs deferred c
   await waitFor(() => expect(signal?.aborted).toBe(true));
   expect(cleaned).toBe(2);
   expect(otherSignal?.aborted).toBe(true);
-  expect(writeReturned).toBe(true);
+  expect(writeReturned).toBe(false);
   expect(server.streams.size).toBe(0);
   expect(serverTransport.sessions.size).toBe(0);
   expect(closingSeq).toBe(0);
-  expect(reentrantResult).toBeUndefined();
+  expect(reentrantError).toBeInstanceOf(Error);
   await expect(closed).resolves.toMatchObject({
     code: limit.closeCode,
     reason: limit.closeReason,
@@ -230,7 +237,7 @@ test('protobuf first-write overflow closes upstream work, including late deferre
   const response = client.countUp({ limit: 1 });
   await waitFor(() => expect(signal?.aborted).toBe(true));
   expect(cleaned).toBe(2);
-  expect(escaped).toBeUndefined();
+  expect(escaped).toBeInstanceOf(Error);
   expect(server.streams.size).toBe(0);
   const results = [];
   for await (const result of response) results.push(result);
@@ -279,7 +286,9 @@ test('disconnected producers share one byte cap and overflow settles all streams
   }).byteLength;
   expect(standaloneBytes).toBeLessThan(limit.maxBytes);
   expect(standaloneBytes + counter.bytes).toBeGreaterThan(limit.maxBytes);
-  expect(() => second.reqWritable.write(payload)).not.toThrow();
+  expect(() => second.reqWritable.write(payload)).toThrow(
+    'outbound replay history limit exceeded',
+  );
   expect(closingSeq).toBe(seq);
   expect(counter).toEqual({ bytes: 0, overflowed: true });
   expect(history).toHaveLength(0);
@@ -292,6 +301,36 @@ test('disconnected producers share one byte cap and overflow settles all streams
       payload: { code: UNEXPECTED_DISCONNECT_CODE },
     });
   }
+});
+
+test('client cancellation overflow settles sibling calls without an unhandled abort callback error', async () => {
+  const { codec } = pooledCodec();
+  const { clientTransport, serverTransport } = await start({
+    client: { codec, outboundBufferLimit: limit },
+  });
+  const client = createClient<{ test: typeof TestServiceSchema }>(
+    clientTransport,
+    serverTransport.clientId,
+    { eagerlyConnect: false },
+  );
+  const controller = new AbortController();
+  const first = client.test.echo.stream({}, { signal: controller.signal });
+  const second = client.test.echo.stream({});
+  const counter = clientTransport.sessions.get(serverTransport.clientId)
+    ?.outboundBuffer;
+  assert(counter);
+  while (counter.bytes + frameBytes <= limit.maxBytes) {
+    first.reqWritable.write({ msg: 'fill', ignore: true });
+  }
+  controller.abort();
+  await vi.advanceTimersByTimeAsync(10);
+  expect(counter).toEqual({ bytes: 0, overflowed: true });
+  expect(clientTransport.sessions.size).toBe(0);
+  expect(second.reqWritable.isWritable()).toBe(false);
+  expect(await readNextResult(second.resReadable)).toMatchObject({
+    ok: false,
+    payload: { code: UNEXPECTED_DISCONNECT_CODE },
+  });
 });
 
 test('owned backing capacity is charged once across ACKs, duplicate ACKs, and transparent reconnect', async () => {
@@ -417,7 +456,7 @@ test.each(['close', 'cancel'] as const)(
     const call = client.test.stream.stream({});
     await waitFor(() => expect(signal?.aborted).toBe(true));
     expect(cleaned).toBe(1);
-    expect(escaped).toBeUndefined();
+    expect(escaped).toBeInstanceOf(Error);
     expect(server.streams.size).toBe(0);
     expect(await readNextResult(call.resReadable)).toEqual(Ok('one'));
     expect(await readNextResult(call.resReadable)).toEqual(Ok('two'));
@@ -484,6 +523,7 @@ test.each(['heartbeat', 'rehandshake'] as const)(
 );
 
 test('the entire limit is required and WebSocket close details are validated at construction', () => {
+  expectTypeOf<SessionBoundSendFn>().returns.toEqualTypeOf<string>();
   const create = (
     outboundBufferLimit: TransportOptions['outboundBufferLimit'],
   ) =>

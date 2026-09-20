@@ -5,17 +5,17 @@ import {
   getTransportConnections,
   onWsServerReady,
 } from '..';
-import { WebSocketClientTransport } from '../../transport/impls/ws/client';
+import {
+  WebSocketClientTransport,
+  type WebSocketClientTransportOptions,
+} from '../../transport/impls/ws/client';
 import { WebSocketServerTransport } from '../../transport/impls/ws/server';
 import {
   ClientHandshakeOptions,
   ServerHandshakeOptions,
 } from '../../router/handshake';
 import { createMockTransportNetwork } from './mockTransport';
-import {
-  ProvidedClientTransportOptions,
-  ProvidedServerTransportOptions,
-} from '../../transport/options';
+import { ProvidedServerTransportOptions } from '../../transport/options';
 import {
   type CustomHandshakeErrorCodeSchema,
   TransportClientId,
@@ -28,7 +28,7 @@ import type { TSchema } from 'typebox';
 export type ValidTransports = 'ws' | 'mock';
 
 export interface TestTransportOptions {
-  client?: ProvidedClientTransportOptions;
+  client?: WebSocketClientTransportOptions;
   server?: ProvidedServerTransportOptions;
 }
 

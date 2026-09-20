@@ -23,6 +23,7 @@ import {
   isStreamClose,
 } from '../transport/message';
 import { generateId } from '../transport/id';
+import { OutboundBufferLimitError } from '../transport/results';
 import { ClientHandshakeOptions } from '../router/handshake';
 import { Err, Ok, type Result } from '../router/result';
 import {
@@ -358,7 +359,11 @@ function startMethodCall<
       message: 'cancelled by client',
     };
     pushResponseError(error);
-    sessionScopedSend(cancelMessage(streamId, Err(error)));
+    try {
+      sessionScopedSend(cancelMessage(streamId, Err(error)));
+    } catch (error) {
+      if (!(error instanceof OutboundBufferLimitError)) throw error;
+    }
   }
 
   function onMessage(msg: OpaqueTransportMessage) {

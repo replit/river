@@ -688,16 +688,35 @@ entries, and retransmission does not charge entries again.
 Overflow rejects the frame without advancing its sequence. River then disposes
 the logical session, clears its history, resolves drain waiters, and aborts its
 calls. WebSocket connections close with the configured code and reason. A server
-keeps the rejected identity for `sessionDisconnectGraceMs + handshakeTimeoutMs`
-so a first-response overflow cannot restart the same call through transparent
-reconnect. Existing streams fail with `UNEXPECTED_DISCONNECT`; callers must open
-new streams on the fresh session. Throwing close observers cannot prevent other
-close observers or session cleanup from running.
+does not retain a revocation registry for disposed identities.
+
+Safe cap recovery requires a matching client configuration:
+
+```ts
+const clientTransport = new WebSocketClientTransport(getWebSocket, clientId, {
+  nonResumableCloseCodes: [closeCode],
+});
+```
+
+`nonResumableCloseCodes?: readonly number[]` has an empty default. Each entry must
+be a valid WebSocket close code, including server codes such as 1013. When the
+client receives a matching code, it disposes the logical session and fails its
+calls before any reconnect. The fresh session does not resume those calls.
+Existing streams fail with `UNEXPECTED_DISCONNECT`; callers must explicitly
+reopen them. Unconfigured clients and nonmatching closes keep legacy reconnect
+behavior, which can replay an unacknowledged opening frame, even after server
+overflow. A server-side cap alone does not prevent that replay.
+
+Throwing or rejecting close observers cannot prevent other close observers or
+session cleanup from running in terminal disposal.
 
 `Writable.write()` still reports advisory backpressure, not delivery or
-acceptance. Its `false` result does not reject a write. A session-bound send
-returns `undefined` after overflow instead of a message ID. The writable closes
-and the response stream reports disconnection.
+acceptance. Its `false` result does not reject a write. A session-bound send still
+returns a string message ID on success. An overflowing send throws after session
+disposal; it never returns `true`, `false`, `undefined`, or a fabricated ID as a
+rejection signal. Direct writable writes and closes also throw on overflow.
+Event-driven router boundaries contain this already-disposed failure without
+trying to send another error or close frame through the full history.
 
 Capped history retains scalar message metadata instead of original payloads and
 tracing objects. Buffered-send failure diagnostics therefore omit those objects.

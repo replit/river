@@ -1,5 +1,11 @@
 import { EncodedTransportMessage, OpaqueTransportMessage } from './message';
 
+export class OutboundBufferLimitError extends Error {
+  constructor() {
+    super('outbound replay history limit exceeded');
+  }
+}
+
 // internal use only, not to be used in public API
 type SessionApiResult<T> =
   | {

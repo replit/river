@@ -28,6 +28,7 @@ import { createProcTelemetryInfo, getPropagationContext } from '../tracing';
 import { ClientHandshakeOptions } from './handshake';
 import { ClientTransport } from '../transport/client';
 import { generateId } from '../transport/id';
+import { OutboundBufferLimitError } from '../transport/results';
 import { Readable, ReadableImpl, Writable, WritableImpl } from './streams';
 import { Value } from 'typebox/value';
 import { PayloadType, ValidProcType } from './procedures';
@@ -421,15 +422,19 @@ function handleProc<RejectionCodeSchema extends CustomHandshakeErrorCodeSchema>(
     }
 
     reqWritable.close();
-    sessionScopedSend(
-      cancelMessage(
-        streamId,
-        Err({
-          code: CANCEL_CODE,
-          message: 'cancelled by client',
-        }),
-      ),
-    );
+    try {
+      sessionScopedSend(
+        cancelMessage(
+          streamId,
+          Err({
+            code: CANCEL_CODE,
+            message: 'cancelled by client',
+          }),
+        ),
+      );
+    } catch (error) {
+      if (!(error instanceof OutboundBufferLimitError)) throw error;
+    }
   }
 
   function onMessage(msg: OpaqueTransportMessage) {
