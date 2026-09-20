@@ -356,6 +356,8 @@ class ProtobufServer<
       closeRequestOnStart,
     } = props;
     const { to: from, loggingMetadata, id: sessionId } = initialSession;
+    const registerBeforeHandler =
+      initialSession.options.outboundBufferLimit !== undefined;
 
     loggingMetadata.telemetry = {
       traceId: span.spanContext().traceId,
@@ -422,6 +424,7 @@ class ProtobufServer<
     };
 
     const cleanup = () => {
+      if (registerBeforeHandler && finishedController.signal.aborted) return;
       finishedController.abort();
       this.streams.delete(streamId);
       void runDeferredCleanups();
@@ -769,6 +772,7 @@ class ProtobufServer<
         };
       },
       () => {
+        if (registerBeforeHandler) this.streams.set(streamId, procStream);
         void runProcedureHandler();
       },
     )();

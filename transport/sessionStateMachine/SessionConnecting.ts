@@ -64,10 +64,13 @@ export class SessionConnecting<
     // without erroring out
     const logger = this.log;
     const metadata = this.loggingMetadata;
+    const limit = this.outboundBuffer?.overflowed
+      ? this.options.outboundBufferLimit
+      : undefined;
 
     this.connPromise
       .then((conn) => {
-        conn.close();
+        conn.close(limit?.closeCode, limit?.closeReason);
         logger?.info(
           'connection eventually resolved but session has transitioned, closed connection',
           {

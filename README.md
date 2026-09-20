@@ -660,6 +660,51 @@ const transport = new WebSocketClientTransport(
 );
 ```
 
+#### Outbound replay history limit
+
+`outboundBufferLimit` optionally caps the encoded replay history of each logical
+session. It has no default. All three fields are required:
+
+```ts
+const transport = new WebSocketServerTransport(wss, serverId, {
+  outboundBufferLimit: { maxBytes, closeCode, closeReason },
+});
+```
+
+`maxBytes` must be a positive safe integer. `closeCode` must be a WebSocket close
+code: 1000-1014 except 1004, 1005, and 1006, or 3000-4999. `WebSocketClientTransport`
+requires 1000 or 3000-4999, which also work with native browser WebSockets.
+`closeReason` must contain
+valid Unicode and encode to at most 123 UTF-8 bytes. The caller supplies these
+values, and the transport checks them at construction.
+
+In this mode, River copies each encoded frame into an exact-size owned buffer.
+The charge is its backing buffer capacity, not its message count. All sequenced
+frames share the cap, including data, heartbeats, re-handshakes, and stream
+termination. Initial connection handshakes do not enter replay history.
+Reconnects preserve history and credit. ACKs release only the charges of removed
+entries, and retransmission does not charge entries again.
+
+Overflow rejects the frame without advancing its sequence. River then disposes
+the logical session, clears its history, resolves drain waiters, and aborts its
+calls. WebSocket connections close with the configured code and reason. A server
+keeps the rejected identity for `sessionDisconnectGraceMs + handshakeTimeoutMs`
+so a first-response overflow cannot restart the same call through transparent
+reconnect. Existing streams fail with `UNEXPECTED_DISCONNECT`; callers must open
+new streams on the fresh session. Throwing close observers cannot prevent other
+close observers or session cleanup from running.
+
+`Writable.write()` still reports advisory backpressure, not delivery or
+acceptance. Its `false` result does not reject a write. A session-bound send
+returns `undefined` after overflow instead of a message ID. The writable closes
+and the response stream reports disconnection.
+
+Capped history retains scalar message metadata instead of original payloads and
+tracing objects. Buffered-send failure diagnostics therefore omit those objects.
+Without this option, history storage and diagnostics remain unchanged. The cap
+bounds retained encoded backing buffers only. It does not bound serialization
+peaks, metadata, other application queues, native socket buffers, or process RSS.
+
 #### Custom Transports
 
 You can implement custom transports by extending the base Transport classes:

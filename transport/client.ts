@@ -59,7 +59,7 @@ export abstract class ClientTransport<
   /**
    * The options for this transport.
    */
-  protected options: ClientTransportOptions;
+  protected declare options: ClientTransportOptions;
 
   retryBudget: LeakyBucketRateLimit;
 
@@ -108,6 +108,7 @@ export abstract class ClientTransport<
     this.options = {
       ...defaultClientTransportOptions,
       ...providedOptions,
+      outboundBufferLimit: this.options.outboundBufferLimit,
     };
     this.retryBudget = new LeakyBucketRateLimit(this.options);
   }

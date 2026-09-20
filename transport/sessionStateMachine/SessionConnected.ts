@@ -62,7 +62,20 @@ export class SessionConnected<
   private credentialExpiry?: number | undefined;
 
   updateBookkeeping(ack: number, seq: number) {
-    this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
+    if (this.outboundBuffer) {
+      // Old states retained by call closures share this array across reconnects.
+      let retained = 0;
+      for (const entry of this.sendBuffer) {
+        if (entry.seq >= ack) {
+          this.sendBuffer[retained++] = entry;
+        } else if (entry.byteCharge !== undefined) {
+          this.outboundBuffer.bytes -= entry.byteCharge;
+        }
+      }
+      this.sendBuffer.length = retained;
+    } else {
+      this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
+    }
     this.ack = seq + 1;
     this.lastInboundAt = Date.now();
 
@@ -84,14 +97,13 @@ export class SessionConnected<
   }
 
   send(msg: PartialTransportMessage): SendResult {
-    const encodeResult = this.encodeMsg(msg);
+    const encodeResult = this.encodeAndBuffer(msg);
     if (!encodeResult.ok) {
       return encodeResult;
     }
 
     const encodedMsg = encodeResult.value;
     this.assertSendOrdering(encodedMsg);
-    this.sendBuffer.push(encodedMsg);
 
     const sent = this.conn.send(encodedMsg.data);
     if (!sent) {
@@ -394,6 +406,9 @@ export class SessionConnected<
 
   _handleClose(): void {
     super._handleClose();
-    this.conn.close();
+    const limit = this.outboundBuffer?.overflowed
+      ? this.options.outboundBufferLimit
+      : undefined;
+    this.conn.close(limit?.closeCode, limit?.closeReason);
   }
 }

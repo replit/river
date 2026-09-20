@@ -401,17 +401,25 @@ export function cancelMessage(
 export type OpaqueTransportMessage = TransportMessage;
 export type TransportClientId = string;
 
+export type SendFailureMessage = Pick<
+  PartialTransportMessage,
+  'streamId' | 'controlFlags' | 'serviceName' | 'procedureName'
+> &
+  Partial<Pick<PartialTransportMessage, 'payload' | 'tracing'>>;
+
 /**
  * An encoded message that is ready to be sent over the transport.
  * The seq number is kept to track which messages have been
  * acked by the peer and can be dropped from the send buffer.
  */
-export interface EncodedTransportMessage {
+export type EncodedTransportMessage = {
   id: string;
   seq: number;
-  msg: PartialTransportMessage;
   data: Uint8Array;
-}
+} & (
+  | { msg: PartialTransportMessage; byteCharge?: never }
+  | { msg: Omit<SendFailureMessage, 'payload' | 'tracing'>; byteCharge: number }
+);
 
 /**
  * Checks if the given control flag (usually found in msg.controlFlag) is an ack message.

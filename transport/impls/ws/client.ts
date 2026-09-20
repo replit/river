@@ -33,6 +33,12 @@ export class WebSocketClientTransport<
     providedOptions?: ProvidedClientTransportOptions,
   ) {
     super(clientId, providedOptions);
+    const closeCode = this.options.outboundBufferLimit?.closeCode;
+    if (closeCode !== undefined && closeCode !== 1000 && closeCode < 3000) {
+      throw new Error(
+        'outboundBufferLimit.closeCode must be 1000 or 3000-4999 for WebSocket clients',
+      );
+    }
     this.wsGetter = wsGetter;
   }
 

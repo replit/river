@@ -305,6 +305,8 @@ class RiverServer<
       protocolVersion,
       id: sessionId,
     } = initialSession;
+    const registerBeforeHandler =
+      initialSession.options.outboundBufferLimit !== undefined;
 
     // dont use the session span here, we want to create a new span for the procedure
     loggingMetadata.telemetry = {
@@ -540,6 +542,7 @@ class RiverServer<
     };
 
     const cleanup = () => {
+      if (registerBeforeHandler && finishedController.signal.aborted) return;
       finishedController.abort();
       this.streams.delete(streamId);
       void runDeferredCleanups();
@@ -787,6 +790,7 @@ class RiverServer<
         };
       },
       () => {
+        if (registerBeforeHandler) this.streams.set(streamId, procStream);
         void runProcedureHandler();
       },
     )();

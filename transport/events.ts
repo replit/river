@@ -107,6 +107,7 @@ export class EventDispatcher<
   dispatchEvent<K extends T>(
     eventType: K,
     event: EventMap<HandshakeFailureCode>[K],
+    isolateErrors = false,
   ) {
     const handlers = this.eventListeners[eventType];
     if (handlers) {
@@ -114,7 +115,11 @@ export class EventDispatcher<
       // affect the current dispatch.
       const copy = [...handlers];
       for (const handler of copy) {
-        handler(event);
+        try {
+          handler(event);
+        } catch (error) {
+          if (!isolateErrors) throw error;
+        }
       }
     }
   }
