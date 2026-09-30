@@ -235,10 +235,8 @@ interface ControlHandshakeRequest {
   expectedSessionState: {
     nextExpectedSeq: number; // integer
     nextSentSeq: number; // integer
-    // whether this session was previously connected. Distinguishes a
-    // reconnect from a new session when both seq counters are still 0.
-    // Required since v2.1; if absent, servers assume `true` for v2.1+
-    // clients and `false` for older ones.
+    // whether this session was connected before. required since v2.1;
+    // if absent, `true` for v2.1+ clients and `false` for older ones
     isReconnect?: boolean;
   };
   metadata?: unknown;
