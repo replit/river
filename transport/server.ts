@@ -556,6 +556,15 @@ export abstract class ServerTransport<
     const clientNextExpectedSeq =
       msg.payload.expectedSessionState.nextExpectedSeq;
     const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq;
+    // v2.1+ clients always send isReconnect, so a missing flag fails safe to a
+    // reconnect. Older clients never send it -- not even for brand-new
+    // sessions -- so treating its absence as a reconnect would reject every
+    // session they start.
+    const { isReconnect } = msg.payload.expectedSessionState;
+    const clientIsReconnect =
+      gotVersion === 'v1.1' || gotVersion === 'v2.0'
+        ? isReconnect === true
+        : isReconnect !== false;
 
     let oldSession = this.sessions.get(msg.from);
     if (
@@ -652,9 +661,7 @@ export abstract class ServerTransport<
 
     if (
       !oldSession &&
-      (clientNextSentSeq > 0 ||
-        clientNextExpectedSeq > 0 ||
-        msg.payload.expectedSessionState.isReconnect === true)
+      (clientNextSentSeq > 0 || clientNextExpectedSeq > 0 || clientIsReconnect)
     ) {
       // we don't have a session, but the client is trying to reconnect
       // to an old session. we can't do anything about this, so we reject

@@ -1,4 +1,4 @@
-# River protocol `v2.0`
+# River protocol `v2.1`
 
 ## Abstract
 
@@ -229,15 +229,17 @@ interface ControlAck {
 
 interface ControlHandshakeRequest {
   type: 'HANDSHAKE_REQ';
-  // the current implementation sends 'v2.0' and accepts 'v1.1' | 'v2.0'
-  protocolVersion: 'v1.1' | 'v2.0';
+  // the current implementation sends 'v2.1' and accepts 'v1.1' | 'v2.0' | 'v2.1'
+  protocolVersion: 'v1.1' | 'v2.0' | 'v2.1';
   sessionId: string;
   expectedSessionState: {
     nextExpectedSeq: number; // integer
     nextSentSeq: number; // integer
     // whether the client considers this a reconnection to a session that was
-    // previously connected. Optional for wire compatibility; servers MUST
-    // treat an absent flag as `false`.
+    // previously connected. Added in v2.1: v2.1+ clients MUST send it.
+    // Servers MUST treat an absent flag as `true` from v2.1+ clients and as
+    // `false` from older clients (which never send it, including for
+    // brand-new sessions).
     isReconnect?: boolean;
   };
   metadata?: unknown;
@@ -630,7 +632,7 @@ The server will send an error response if either:
   - the client wanted a reconnection to a specific session but the server doesn't know about it
   - the client is in the future (`client.nextSentSeq > server.ack`)
   - server is in the future (`server.seq > client.nextExpectedSeq`)
-  - the client marked the handshake as a reconnection (`isReconnect: true`) but the server has no session for it. The explicit flag matters in the _zero-state window_: a client that has sent messages but never received anything back still has `nextSentSeq: 0, nextExpectedSeq: 0`, which is otherwise indistinguishable from a brand-new session. Without the flag, a server that lost the session (restart or grace expiry) would accept such a reconnect as a new session, the client would replay its send buffer believing the reconnect was transparent, and handlers that already processed those messages would execute them a second time — while the original callers never learn anything went wrong. Rejecting instead yields the normal hard-reconnect semantics: the client starts a fresh session and in-flight calls resolve with `UNEXPECTED_DISCONNECT`.
+  - the client marked the handshake as a reconnection (`isReconnect: true`, or absent from a v2.1+ client) but the server has no session for it. The explicit flag matters in the _zero-state window_: a client that has sent messages but never received anything back still has `nextSentSeq: 0, nextExpectedSeq: 0`, which is otherwise indistinguishable from a brand-new session. Without the flag, a server that lost the session (restart or grace expiry) would accept such a reconnect as a new session, the client would replay its send buffer believing the reconnect was transparent, and handlers that already processed those messages would execute them a second time — while the original callers never learn anything went wrong. Rejecting instead yields the normal hard-reconnect semantics: the client starts a fresh session and in-flight calls resolve with `UNEXPECTED_DISCONNECT`.
 
 When the client receives a status with `ok: false`, it should consider the handshake failed and close the connection. For the retriable code (`SESSION_STATE_MISMATCH`) the client MAY automatically reconnect, but MUST do so with a **fresh session** (a new session id and zeroed session state), resolving any in-flight calls of the old session with `UNEXPECTED_DISCONNECT`; retrying the same session would be rejected identically forever. For fatal codes the client MUST NOT reconnect automatically.
 

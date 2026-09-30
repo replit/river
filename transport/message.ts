@@ -76,9 +76,13 @@ export const ControlMessageCloseSchema = Type.Object({
   type: Type.Literal('CLOSE'),
 });
 
-export type ProtocolVersion = 'v1.1' | 'v2.0';
-export const currentProtocolVersion = 'v2.0' satisfies ProtocolVersion;
-export const acceptedProtocolVersions = ['v1.1', currentProtocolVersion];
+export type ProtocolVersion = 'v1.1' | 'v2.0' | 'v2.1';
+export const currentProtocolVersion = 'v2.1' satisfies ProtocolVersion;
+export const acceptedProtocolVersions = [
+  'v1.1',
+  'v2.0',
+  currentProtocolVersion,
+];
 export function isAcceptedProtocolVersion(
   version: string,
 ): version is ProtocolVersion {
@@ -104,8 +108,10 @@ export const ControlMessageHandshakeRequestSchema = Type.Object({
      * it has lost even when both seq counters are zero (the client sent
      * messages but never received anything back) -- otherwise such a
      * handshake is indistinguishable from a brand-new session and the
-     * client's send-buffer replay would re-execute handlers. Optional for
-     * wire compatibility: servers treat an absent flag as `false`.
+     * client's send-buffer replay would re-execute handlers. Required since
+     * v2.1; optional in the schema because older clients never send it.
+     * Servers treat an absent flag as `true` from v2.1+ clients and as
+     * `false` from older ones.
      */
     isReconnect: Type.Optional(Type.Boolean()),
   }),
@@ -293,9 +299,9 @@ export function handshakeRequestMessage({
   from: TransportClientId;
   to: TransportClientId;
   sessionId: string;
-  expectedSessionState: Static<
-    typeof ControlMessageHandshakeRequestSchema
-  >['expectedSessionState'];
+  expectedSessionState: Required<
+    Static<typeof ControlMessageHandshakeRequestSchema>['expectedSessionState']
+  >;
   metadata?: unknown;
   tracing?: PropagationContext;
 }): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {

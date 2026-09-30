@@ -1655,6 +1655,7 @@ describe('session state machine', () => {
             expectedSessionState: {
               nextExpectedSeq: 0,
               nextSentSeq: 0,
+              isReconnect: false,
             },
           }),
         ),
@@ -1776,6 +1777,7 @@ describe('session state machine', () => {
             expectedSessionState: {
               nextExpectedSeq: 0,
               nextSentSeq: 0,
+              isReconnect: false,
             },
           }),
         ),
@@ -1834,6 +1836,7 @@ describe('session state machine', () => {
         expectedSessionState: {
           nextExpectedSeq: 0,
           nextSentSeq: 0,
+          isReconnect: false,
         },
       });
 
@@ -1892,6 +1895,7 @@ describe('session state machine', () => {
         expectedSessionState: {
           nextExpectedSeq: 0,
           nextSentSeq: 0,
+          isReconnect: false,
         },
       });
 
