@@ -68,6 +68,7 @@ describe('message helpers', () => {
       expectedSessionState: {
         nextExpectedSeq: 0,
         nextSentSeq: 0,
+        isReconnect: false,
       },
       sessionId: 'sess',
     });

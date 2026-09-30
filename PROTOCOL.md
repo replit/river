@@ -1,4 +1,4 @@
-# River protocol `v2.0`
+# River protocol `v2.1`
 
 ## Abstract
 
@@ -229,12 +229,15 @@ interface ControlAck {
 
 interface ControlHandshakeRequest {
   type: 'HANDSHAKE_REQ';
-  // the current implementation sends 'v2.0' and accepts 'v1.1' | 'v2.0'
-  protocolVersion: 'v1.1' | 'v2.0';
+  // the current implementation sends 'v2.1' and accepts 'v1.1' | 'v2.0' | 'v2.1'
+  protocolVersion: 'v1.1' | 'v2.0' | 'v2.1';
   sessionId: string;
   expectedSessionState: {
     nextExpectedSeq: number; // integer
     nextSentSeq: number; // integer
+    // whether this session was connected before. required since v2.1;
+    // if absent, `true` for v2.1+ clients and `false` for older ones
+    isReconnect?: boolean;
   };
   metadata?: unknown;
 }
@@ -623,11 +626,13 @@ The server will send an error response if either:
 - the handshake request is malformed (i.e. doesn't conform to the schema)
 - the protocol version in the request does not match the protocol version of the server
 - the expected session state does not match the server's session state. examples:
-  - the client wanted a reconnection to a specific session but the server doesn't know about it
+  - the client wanted a reconnection to a specific session (`isReconnect` or non-zero seq counters) but the server doesn't know about it
   - the client is in the future (`client.nextSentSeq > server.ack`)
   - server is in the future (`server.seq > client.nextExpectedSeq`)
 
-When the client receives a status with `ok: false`, it should consider the handshake failed and close the connection.
+When the client receives a status with `ok: false`, it should consider the handshake failed and close the connection. On `SESSION_STATE_MISMATCH` the client MAY reconnect, but only with a fresh session (new id, zeroed state); in-flight calls on the old session resolve with `UNEXPECTED_DISCONNECT`. On fatal codes it MUST NOT reconnect automatically.
+
+Handshakes are connection-scoped: a client MUST ignore a handshake response that isn't for its current connection attempt, and a server MUST close connections that don't handshake within `handshakeTimeoutMs`. This ensures a stale `isReconnect: false` request is never processed after its session has connected.
 
 ### Re-handshaking (live credential refresh)
 

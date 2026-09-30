@@ -76,9 +76,13 @@ export const ControlMessageCloseSchema = Type.Object({
   type: Type.Literal('CLOSE'),
 });
 
-export type ProtocolVersion = 'v1.1' | 'v2.0';
-export const currentProtocolVersion = 'v2.0' satisfies ProtocolVersion;
-export const acceptedProtocolVersions = ['v1.1', currentProtocolVersion];
+export type ProtocolVersion = 'v1.1' | 'v2.0' | 'v2.1';
+export const currentProtocolVersion = 'v2.1' satisfies ProtocolVersion;
+export const acceptedProtocolVersions = [
+  'v1.1',
+  'v2.0',
+  currentProtocolVersion,
+];
 export function isAcceptedProtocolVersion(
   version: string,
 ): version is ProtocolVersion {
@@ -98,6 +102,12 @@ export const ControlMessageHandshakeRequestSchema = Type.Object({
     // what the client expects the server to send next
     nextExpectedSeq: Type.Integer(),
     nextSentSeq: Type.Integer(),
+    /**
+     * Whether this session was previously connected. Distinguishes a
+     * reconnect from a new session when both seq counters are still 0.
+     * Required since v2.1; optional here because older clients never send it.
+     */
+    isReconnect: Type.Optional(Type.Boolean()),
   }),
 
   metadata: Type.Optional(Type.Unknown()),
@@ -283,9 +293,9 @@ export function handshakeRequestMessage({
   from: TransportClientId;
   to: TransportClientId;
   sessionId: string;
-  expectedSessionState: Static<
-    typeof ControlMessageHandshakeRequestSchema
-  >['expectedSessionState'];
+  expectedSessionState: Required<
+    Static<typeof ControlMessageHandshakeRequestSchema>['expectedSessionState']
+  >;
   metadata?: unknown;
   tracing?: PropagationContext;
 }): TransportMessage<Static<typeof ControlMessageHandshakeRequestSchema>> {

@@ -237,6 +237,7 @@ describe('should handle incompatabilities', async () => {
       expectedSessionState: {
         nextExpectedSeq: 0,
         nextSentSeq: 0,
+        isReconnect: false,
       },
       sessionId: 'sessionId',
     });
@@ -324,6 +325,90 @@ describe('should handle incompatabilities', async () => {
     await testFinishesCleanly({
       clientTransports: [],
       serverTransport,
+    });
+  });
+
+  describe('handshake without isReconnect', () => {
+    const rawHandshake = (protocolVersion: string) => ({
+      id: generateId(),
+      from: 'client',
+      to: 'SERVER',
+      seq: 0,
+      ack: 0,
+      streamId: generateId(),
+      controlFlags: 0,
+      payload: {
+        type: 'HANDSHAKE_REQ',
+        protocolVersion,
+        sessionId: 'sessionId',
+        expectedSessionState: {
+          nextExpectedSeq: 0,
+          nextSentSeq: 0,
+        },
+      } satisfies Static<typeof ControlMessageHandshakeRequestSchema>,
+    });
+
+    test('from a pre-v2.1 client starts a new session', async () => {
+      const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
+      const spy = vi.fn();
+      const errMock = vi.fn();
+      serverTransport.addEventListener('sessionStatus', spy);
+      serverTransport.addEventListener('protocolError', errMock);
+      addPostTestCleanup(async () => {
+        serverTransport.removeEventListener('sessionStatus', spy);
+        serverTransport.removeEventListener('protocolError', errMock);
+        await cleanupTransports([serverTransport]);
+      });
+
+      const ws = createLocalWebSocketClient(port);
+      await new Promise((resolve) => (ws.onopen = resolve));
+      ws.send(NaiveJsonCodec.toBuffer(rawHandshake('v2.0')));
+
+      await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'created' }),
+      );
+      expect(errMock).toHaveBeenCalledTimes(0);
+
+      ws.close();
+      await waitFor(() => expect(numberOfConnections(serverTransport)).toBe(0));
+      await testFinishesCleanly({
+        clientTransports: [],
+        serverTransport,
+      });
+    });
+
+    test('from a v2.1 client is rejected as a reconnect to an unknown session', async () => {
+      const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
+      const spy = vi.fn();
+      const errMock = vi.fn();
+      serverTransport.addEventListener('sessionStatus', spy);
+      serverTransport.addEventListener('protocolError', errMock);
+      addPostTestCleanup(async () => {
+        serverTransport.removeEventListener('sessionStatus', spy);
+        serverTransport.removeEventListener('protocolError', errMock);
+        await cleanupTransports([serverTransport]);
+      });
+
+      const ws = createLocalWebSocketClient(port);
+      await new Promise((resolve) => (ws.onopen = resolve));
+      ws.send(NaiveJsonCodec.toBuffer(rawHandshake('v2.1')));
+
+      await waitFor(() => expect(ws.readyState).toBe(ws.CLOSED));
+      expect(numberOfConnections(serverTransport)).toBe(0);
+      expect(spy).toHaveBeenCalledTimes(0);
+      expect(errMock).toHaveBeenCalledTimes(1);
+      expect(errMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: ProtocolError.HandshakeFailed,
+          code: 'SESSION_STATE_MISMATCH',
+        }),
+      );
+
+      await testFinishesCleanly({
+        clientTransports: [],
+        serverTransport,
+      });
     });
   });
 

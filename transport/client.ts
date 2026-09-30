@@ -734,6 +734,7 @@ export abstract class ClientTransport<
       expectedSessionState: {
         nextExpectedSeq: session.ack,
         nextSentSeq: session.nextSeq(),
+        isReconnect: session.hadConnection,
       },
       metadata,
       tracing: getPropagationContext(session.telemetry.ctx),

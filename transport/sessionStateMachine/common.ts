@@ -190,6 +190,7 @@ export type InheritedProperties = Pick<
   | 'seqSent'
   | 'sendBuffer'
   | 'sendBufferDrainWaiter'
+  | 'hadConnection'
   | 'telemetry'
   | 'options'
 >;
@@ -212,6 +213,7 @@ export interface IdentifiedSessionProps extends CommonSessionProps {
   seqSent: number;
   sendBuffer: Array<EncodedTransportMessage>;
   sendBufferDrainWaiter: PromiseWithResolvers<void> | undefined;
+  hadConnection: boolean;
   telemetry: TelemetryInfo;
   protocolVersion: ProtocolVersion;
   listeners: IdentifiedSessionListeners;
@@ -241,6 +243,12 @@ export abstract class IdentifiedSession extends CommonSession {
   sendBuffer: Array<EncodedTransportMessage>;
 
   /**
+   * Whether this session has ever been connected. Sent as
+   * `expectedSessionState.isReconnect` in handshake requests.
+   */
+  hadConnection: boolean;
+
+  /**
    * Shared promise for pending {@link waitForSendBufferDrain} calls, created
    * lazily on the first waiter of a pressure episode and cleared on drain.
    * Carried across session state transitions alongside {@link sendBuffer}.
@@ -255,6 +263,7 @@ export abstract class IdentifiedSession extends CommonSession {
       ack,
       sendBuffer,
       sendBufferDrainWaiter,
+      hadConnection,
       telemetry,
       log,
       protocolVersion,
@@ -268,6 +277,7 @@ export abstract class IdentifiedSession extends CommonSession {
     this.ack = ack;
     this.sendBuffer = sendBuffer;
     this.sendBufferDrainWaiter = sendBufferDrainWaiter;
+    this.hadConnection = hadConnection;
     this.telemetry = telemetry;
     this.log = log;
     this.protocolVersion = protocolVersion;

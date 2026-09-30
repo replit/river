@@ -562,6 +562,10 @@ export abstract class ServerTransport<
     const clientNextExpectedSeq =
       msg.payload.expectedSessionState.nextExpectedSeq;
     const clientNextSentSeq = msg.payload.expectedSessionState.nextSentSeq;
+    // v2.1+ clients always send isReconnect; older clients never do
+    const isLegacyClient = gotVersion === 'v1.1' || gotVersion === 'v2.0';
+    const clientIsReconnect =
+      msg.payload.expectedSessionState.isReconnect ?? !isLegacyClient;
 
     let oldSession = this.sessions.get(msg.from);
     if (
@@ -656,7 +660,10 @@ export abstract class ServerTransport<
       oldSession = undefined;
     }
 
-    if (!oldSession && (clientNextSentSeq > 0 || clientNextExpectedSeq > 0)) {
+    if (
+      !oldSession &&
+      (clientNextSentSeq > 0 || clientNextExpectedSeq > 0 || clientIsReconnect)
+    ) {
       // we don't have a session, but the client is trying to reconnect
       // to an old session. we can't do anything about this, so we reject
       connectCase = 'unknown session';
