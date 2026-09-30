@@ -235,11 +235,10 @@ interface ControlHandshakeRequest {
   expectedSessionState: {
     nextExpectedSeq: number; // integer
     nextSentSeq: number; // integer
-    // whether the client considers this a reconnection to a session that was
-    // previously connected. Added in v2.1: v2.1+ clients MUST send it.
-    // Servers MUST treat an absent flag as `true` from v2.1+ clients and as
-    // `false` from older clients (which never send it, including for
-    // brand-new sessions).
+    // whether this session was previously connected. Distinguishes a
+    // reconnect from a new session when both seq counters are still 0.
+    // Required since v2.1; if absent, servers assume `true` for v2.1+
+    // clients and `false` for older ones.
     isReconnect?: boolean;
   };
   metadata?: unknown;
@@ -629,14 +628,13 @@ The server will send an error response if either:
 - the handshake request is malformed (i.e. doesn't conform to the schema)
 - the protocol version in the request does not match the protocol version of the server
 - the expected session state does not match the server's session state. examples:
-  - the client wanted a reconnection to a specific session but the server doesn't know about it
+  - the client wanted a reconnection to a specific session (`isReconnect` or non-zero seq counters) but the server doesn't know about it
   - the client is in the future (`client.nextSentSeq > server.ack`)
   - server is in the future (`server.seq > client.nextExpectedSeq`)
-  - the client marked the handshake as a reconnection (`isReconnect: true`, or absent from a v2.1+ client) but the server has no session for it. The explicit flag matters in the _zero-state window_: a client that has sent messages but never received anything back still has `nextSentSeq: 0, nextExpectedSeq: 0`, which is otherwise indistinguishable from a brand-new session. Without the flag, a server that lost the session (restart or grace expiry) would accept such a reconnect as a new session, the client would replay its send buffer believing the reconnect was transparent, and handlers that already processed those messages would execute them a second time — while the original callers never learn anything went wrong. Rejecting instead yields the normal hard-reconnect semantics: the client starts a fresh session and in-flight calls resolve with `UNEXPECTED_DISCONNECT`.
 
-When the client receives a status with `ok: false`, it should consider the handshake failed and close the connection. For the retriable code (`SESSION_STATE_MISMATCH`) the client MAY automatically reconnect, but MUST do so with a **fresh session** (a new session id and zeroed session state), resolving any in-flight calls of the old session with `UNEXPECTED_DISCONNECT`; retrying the same session would be rejected identically forever. For fatal codes the client MUST NOT reconnect automatically.
+When the client receives a status with `ok: false`, it should consider the handshake failed and close the connection. On `SESSION_STATE_MISMATCH` the client MAY reconnect, but only with a fresh session (new id, zeroed state); in-flight calls on the old session resolve with `UNEXPECTED_DISCONNECT`. On fatal codes it MUST NOT reconnect automatically.
 
-Handshakes are **connection-scoped**: a handshake request or response is only meaningful on the connection that carried it. A client MUST ignore a handshake response that does not belong to its current connection attempt, and a server MUST bound the lifetime of un-handshaken connections (`handshakeTimeoutMs`), so a handshake request cannot outlive its connection. This scoping is load-bearing for the `isReconnect` guard: its correctness argument relies on a `isReconnect: false` request never being processed after the session it names has connected and transferred data.
+Handshakes are connection-scoped: a client MUST ignore a handshake response that isn't for its current connection attempt, and a server MUST close connections that don't handshake within `handshakeTimeoutMs`. This ensures a stale `isReconnect: false` request is never processed after its session has connected.
 
 ### Re-handshaking (live credential refresh)
 

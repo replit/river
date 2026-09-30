@@ -243,13 +243,8 @@ export abstract class IdentifiedSession extends CommonSession {
   sendBuffer: Array<EncodedTransportMessage>;
 
   /**
-   * Whether this session has ever reached the Connected state. Sent as
-   * `expectedSessionState.isReconnect` in handshake requests so the server
-   * can distinguish a reconnection attempt from a brand-new session even
-   * when the seq/ack counters are still all-zero (nothing was ever acked
-   * back). Without it, a reconnect to a server that lost the session in
-   * that window is accepted as a new session and the send-buffer replay
-   * re-executes handlers.
+   * Whether this session has ever been connected. Sent as
+   * `expectedSessionState.isReconnect` in handshake requests.
    */
   hadConnection: boolean;
 

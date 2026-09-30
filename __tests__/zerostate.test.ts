@@ -17,22 +17,10 @@ import {
 } from '../testUtil/fixtures/cleanup';
 
 /**
- * The "zero-state window": a client that has sent messages the server accepted
- * and DELIVERED TO HANDLERS, but that has received nothing back (no response,
- * no heartbeat -- so its session still reads `nextSentSeq: 0,
- * nextExpectedSeq: 0`), reconnects after the server lost the session (restart
- * or grace expiry). Such a handshake is indistinguishable from a brand-new
- * session by the seq counters alone, so without an explicit reconnect marker
- * the server accepts it as new, the client replays its send buffer, and the
- * handler executes the same request a second time -- while the original call
- * never resolves.
- *
- * This scenario was found by model checking the protocol. The expected behavior asserted here
- * is that of a client that marks reconnection attempts: the server rejects
- * the unknown session with SESSION_STATE_MISMATCH, the client starts a fresh
- * session, and the in-flight call resolves with UNEXPECTED_DISCONNECT --
- * exactly the documented hard-reconnect semantics, and never a duplicate
- * handler execution.
+ * A client that sent a request but never heard back still has zeroed seq
+ * counters. If the server loses the session, the reconnect must be rejected
+ * (hard reconnect) rather than accepted as new, or the replayed request runs
+ * the handler twice.
  */
 function collectViolations(violations: Array<string>): LogFn {
   return (msg, ctx, level) => {
