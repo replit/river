@@ -63,10 +63,10 @@ export class WebSocketConnection extends Connection {
     }
   }
 
-  close() {
+  close(code = WS_HEALTHY_CLOSE_CODE, reason?: string) {
     // we close with 1000 normal even if its not really healthy at the river level
     // if we don't specify this, it defaults to 1005 which
     // some proxies/loggers detect as an error
-    this.ws.close(WS_HEALTHY_CLOSE_CODE);
+    this.ws.close(code, reason);
   }
 }

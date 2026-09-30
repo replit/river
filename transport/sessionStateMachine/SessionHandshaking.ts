@@ -115,6 +115,9 @@ export class SessionHandshaking<
 
   _handleClose(): void {
     super._handleClose();
-    this.conn.close();
+    const limit = this.outboundBuffer?.overflowed
+      ? this.options.outboundBufferLimit
+      : undefined;
+    this.conn.close(limit?.closeCode, limit?.closeReason);
   }
 }

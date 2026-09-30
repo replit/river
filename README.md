@@ -660,6 +660,70 @@ const transport = new WebSocketClientTransport(
 );
 ```
 
+#### Outbound replay history limit
+
+`outboundBufferLimit` optionally caps the encoded replay history of each logical
+session. It has no default. All three fields are required:
+
+```ts
+const transport = new WebSocketServerTransport(wss, serverId, {
+  outboundBufferLimit: { maxBytes, closeCode, closeReason },
+});
+```
+
+`maxBytes` must be a positive safe integer. `closeCode` must be a WebSocket close
+code: 1000-1014 except 1004, 1005, and 1006, or 3000-4999. `WebSocketClientTransport`
+requires 1000 or 3000-4999, which also work with native browser WebSockets.
+`closeReason` must contain
+valid Unicode and encode to at most 123 UTF-8 bytes. The caller supplies these
+values, and the transport checks them at construction.
+
+In this mode, River copies each encoded frame into an exact-size owned buffer.
+The charge is its backing buffer capacity, not its message count. All sequenced
+frames share the cap, including data, heartbeats, re-handshakes, and stream
+termination. Initial connection handshakes do not enter replay history.
+Reconnects preserve history and credit. ACKs release only the charges of removed
+entries, and retransmission does not charge entries again.
+
+Overflow rejects the frame without advancing its sequence. River then disposes
+the logical session, clears its history, resolves drain waiters, and aborts its
+calls. WebSocket connections close with the configured code and reason. A server
+does not retain a revocation registry for disposed identities.
+
+Safe cap recovery requires a matching client configuration:
+
+```ts
+const clientTransport = new WebSocketClientTransport(getWebSocket, clientId, {
+  nonResumableCloseCodes: [closeCode],
+});
+```
+
+`nonResumableCloseCodes?: readonly number[]` has an empty default. Each entry must
+be a valid WebSocket close code, including server codes such as 1013. When the
+client receives a matching code, it disposes the logical session and fails its
+calls before any reconnect. The fresh session does not resume those calls.
+Existing streams fail with `UNEXPECTED_DISCONNECT`; callers must explicitly
+reopen them. Unconfigured clients and nonmatching closes keep legacy reconnect
+behavior, which can replay an unacknowledged opening frame, even after server
+overflow. A server-side cap alone does not prevent that replay.
+
+Throwing or rejecting close observers cannot prevent other close observers or
+session cleanup from running in terminal disposal.
+
+`Writable.write()` still reports advisory backpressure, not delivery or
+acceptance. Its `false` result does not reject a write. A session-bound send still
+returns a string message ID on success. An overflowing send throws after session
+disposal; it never returns `true`, `false`, `undefined`, or a fabricated ID as a
+rejection signal. Direct writable writes and closes also throw on overflow.
+Event-driven router boundaries contain this already-disposed failure without
+trying to send another error or close frame through the full history.
+
+Capped history retains scalar message metadata instead of original payloads and
+tracing objects. Buffered-send failure diagnostics therefore omit those objects.
+Without this option, history storage and diagnostics remain unchanged. The cap
+bounds retained encoded backing buffers only. It does not bound serialization
+peaks, metadata, other application queues, native socket buffers, or process RSS.
+
 #### Custom Transports
 
 You can implement custom transports by extending the base Transport classes:

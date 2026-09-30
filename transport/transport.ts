@@ -22,6 +22,7 @@ import {
   ProvidedTransportOptions,
   TransportOptions,
   defaultTransportOptions,
+  isValidWebSocketCloseCode,
 } from './options';
 import {
   SessionConnected,
@@ -36,6 +37,7 @@ import { Session, SessionStateGraph } from './sessionStateMachine/transitions';
 import { SessionId } from './sessionStateMachine/common';
 import { Tracer } from '@opentelemetry/api';
 import { getTracer } from '../tracing';
+import { OutboundBufferLimitError } from './results';
 
 /**
  * Represents the possible states of a transport.
@@ -46,6 +48,7 @@ export type TransportStatus = 'open' | 'closed';
 
 export interface DeleteSessionOptions {
   unhealthy: boolean;
+  nonResumable?: boolean;
 }
 
 export type SessionBoundSendFn = (msg: PartialTransportMessage) => string;
@@ -118,6 +121,30 @@ export abstract class Transport<
     providedOptions?: ProvidedTransportOptions,
   ) {
     this.options = { ...defaultTransportOptions, ...providedOptions };
+    const limit = this.options.outboundBufferLimit;
+    if (limit !== undefined) {
+      if (!Number.isSafeInteger(limit.maxBytes) || limit.maxBytes <= 0) {
+        throw new Error(
+          'outboundBufferLimit.maxBytes must be a positive safe integer',
+        );
+      }
+      const code = limit.closeCode;
+      if (!isValidWebSocketCloseCode(code)) {
+        throw new Error(
+          'outboundBufferLimit.closeCode must be a valid WebSocket close code',
+        );
+      }
+      if (
+        typeof limit.closeReason !== 'string' ||
+        new TextEncoder().encode(limit.closeReason).byteLength > 123 ||
+        /[\uD800-\uDFFF]/u.test(limit.closeReason)
+      ) {
+        throw new Error(
+          'outboundBufferLimit.closeReason must be valid UTF-8 of at most 123 bytes',
+        );
+      }
+      this.options.outboundBufferLimit = Object.freeze({ ...limit });
+    }
     this.eventDispatcher = new EventDispatcher<
       EventTypes,
       HandshakeFailureCode
@@ -148,7 +175,16 @@ export abstract class Transport<
   protected handleMsg(message: OpaqueTransportMessage) {
     if (this.getStatus() !== 'open') return;
 
-    this.eventDispatcher.dispatchEvent('message', message);
+    const outboundBuffer = this.sessions.get(message.from)?.outboundBuffer;
+    try {
+      this.eventDispatcher.dispatchEvent('message', message);
+    } catch (error) {
+      if (
+        !(error instanceof OutboundBufferLimitError) ||
+        outboundBuffer?.overflowed !== true
+      )
+        throw error;
+    }
   }
 
   /**
@@ -218,16 +254,37 @@ export abstract class Transport<
       throw new Error(msg);
     }
 
+    const outboundBuffer = session.outboundBuffer;
     this.sessions.set(session.to, session);
-    this.eventDispatcher.dispatchEvent('sessionStatus', {
-      status: 'created',
-      session: session,
-    });
+    if (outboundBuffer)
+      session.onOutboundBufferOverflow = () =>
+        this.deleteSession(session, { unhealthy: true });
+    try {
+      this.eventDispatcher.dispatchEvent('sessionStatus', {
+        status: 'created',
+        session: session,
+      });
+    } catch (error) {
+      if (
+        !(error instanceof OutboundBufferLimitError) ||
+        outboundBuffer?.overflowed !== true
+      )
+        throw error;
+    }
+    if (session._isConsumed) return;
 
-    this.eventDispatcher.dispatchEvent('sessionTransition', {
-      state: session.state,
-      id: session.id,
-    } as EventMap['sessionTransition']);
+    try {
+      this.eventDispatcher.dispatchEvent('sessionTransition', {
+        state: session.state,
+        id: session.id,
+      } as EventMap['sessionTransition']);
+    } catch (error) {
+      if (
+        !(error instanceof OutboundBufferLimitError) ||
+        outboundBuffer?.overflowed !== true
+      )
+        throw error;
+    }
   }
 
   protected updateSession<S extends Session<ConnType>>(session: S): void {
@@ -250,11 +307,23 @@ export abstract class Transport<
       throw new Error(msg);
     }
 
+    const outboundBuffer = session.outboundBuffer;
     this.sessions.set(session.to, session);
-    this.eventDispatcher.dispatchEvent('sessionTransition', {
-      state: session.state,
-      id: session.id,
-    } as EventMap['sessionTransition']);
+    if (outboundBuffer)
+      session.onOutboundBufferOverflow = () =>
+        this.deleteSession(session, { unhealthy: true });
+    try {
+      this.eventDispatcher.dispatchEvent('sessionTransition', {
+        state: session.state,
+        id: session.id,
+      } as EventMap['sessionTransition']);
+    } catch (error) {
+      if (
+        !(error instanceof OutboundBufferLimitError) ||
+        outboundBuffer?.overflowed !== true
+      )
+        throw error;
+    }
   }
 
   protected deleteSession(
@@ -263,6 +332,35 @@ export abstract class Transport<
   ) {
     // ensure idempotency esp re: dispatching events
     if (session._isConsumed) return;
+
+    if (
+      session.outboundBuffer?.overflowed === true ||
+      options?.nonResumable === true
+    ) {
+      const { id, to } = session;
+      if (this.sessions.get(to) !== session) return;
+      // Remove the identity before callbacks; observers cannot revive or re-send it.
+      this.sessions.delete(to);
+      try {
+        this.eventDispatcher.dispatchEvent(
+          'sessionStatus',
+          { status: 'closing', session },
+          true,
+        );
+      } finally {
+        try {
+          session.close();
+        } finally {
+          this.eventDispatcher.dispatchEvent(
+            'sessionStatus',
+            { status: 'closed', session: { id, to } },
+            true,
+          );
+        }
+      }
+
+      return;
+    }
 
     const loggingMetadata = session.loggingMetadata;
     if (loggingMetadata.tags && options?.unhealthy) {
@@ -371,6 +469,8 @@ export abstract class Transport<
    * Session objects themselves can become stale as they transition between
    * states. As stale sessions cannot be used again (and will throw), holding
    * onto a session object is not recommended.
+   * With outboundBufferLimit, overflow throws after disposing the logical
+   * session. Subsequent calls on that send closure also throw.
    */
   getSessionBoundSendFn(
     to: TransportClientId,
@@ -380,7 +480,14 @@ export abstract class Transport<
       throw new Error('cannot get a bound send function on a closed transport');
     }
 
+    const initialSession = this.sessions.get(to);
+    const outboundBuffer =
+      initialSession?.id === sessionId
+        ? initialSession.outboundBuffer
+        : undefined;
+
     return (msg: PartialTransportMessage) => {
+      if (outboundBuffer?.overflowed) throw new OutboundBufferLimitError();
       const session = this.sessions.get(to);
       if (!session) {
         throw new Error(
@@ -397,6 +504,7 @@ export abstract class Transport<
 
       const res = session.send(msg);
       if (!res.ok) {
+        if (outboundBuffer?.overflowed) throw new OutboundBufferLimitError();
         throw new Error(res.reason);
       }
 

@@ -28,6 +28,7 @@ import {
 import { ServerTransport } from '../transport/server';
 import { coerceErrorString } from '../transport/stringifyError';
 import type { SessionBoundSendFn } from '../transport/transport';
+import { OutboundBufferLimitError } from '../transport/results';
 import type { IdentifiedSession } from '../transport/sessionStateMachine/common';
 import {
   PropagationContext,
@@ -280,18 +281,29 @@ class ProtobufServer<
       }
 
       const disconnectedClientId = evt.session.to;
-      this.log?.info(
-        `got session disconnect from ${disconnectedClientId}, cleaning up protobuf streams`,
-        evt.session.loggingMetadata,
-      );
+      const overflowed = evt.session.outboundBuffer?.overflowed;
+      if (!overflowed)
+        this.log?.info(
+          `got session disconnect from ${disconnectedClientId}, cleaning up protobuf streams`,
+          evt.session.loggingMetadata,
+        );
 
       for (const stream of this.streams.values()) {
         if (stream.from === disconnectedClientId) {
-          stream.handleSessionDisconnect();
+          try {
+            stream.handleSessionDisconnect();
+          } catch (error) {
+            if (!overflowed) throw error;
+          }
         }
       }
 
       this.serverCancelledStreams.delete(disconnectedClientId);
+      if (overflowed)
+        this.log?.warn('closed overflowing protobuf session streams', {
+          sessionId: evt.session.id,
+          connectedTo: disconnectedClientId,
+        });
     };
 
     const handleTransportStatus = (evt: EventMap['transportStatus']) => {
@@ -356,6 +368,8 @@ class ProtobufServer<
       closeRequestOnStart,
     } = props;
     const { to: from, loggingMetadata, id: sessionId } = initialSession;
+    const registerBeforeHandler =
+      initialSession.options.outboundBufferLimit !== undefined;
 
     loggingMetadata.telemetry = {
       traceId: span.spanContext().traceId,
@@ -422,9 +436,13 @@ class ProtobufServer<
     };
 
     const cleanup = () => {
-      finishedController.abort();
-      this.streams.delete(streamId);
-      void runDeferredCleanups();
+      if (registerBeforeHandler && finishedController.signal.aborted) return;
+      try {
+        finishedController.abort();
+      } finally {
+        this.streams.delete(streamId);
+        void runDeferredCleanups();
+      }
     };
 
     const reqReadable = new ReadableImpl<
@@ -512,6 +530,11 @@ class ProtobufServer<
     };
 
     const onHandlerError = (err: unknown) => {
+      if (
+        err instanceof OutboundBufferLimitError &&
+        finishedController.signal.aborted
+      )
+        return;
       const errorMsg = coerceErrorString(err);
 
       span.recordException(err instanceof Error ? err : new Error(errorMsg));
@@ -642,10 +665,14 @@ class ProtobufServer<
       handleMsg: onMessage,
       handleSessionDisconnect: () => {
         cleanClose = false;
-        pushRequestError({
-          code: UNEXPECTED_DISCONNECT_CODE,
-          message: 'client unexpectedly disconnected',
-        });
+        try {
+          pushRequestError({
+            code: UNEXPECTED_DISCONNECT_CODE,
+            message: 'client unexpectedly disconnected',
+          });
+        } finally {
+          if (registerBeforeHandler) cleanup();
+        }
       },
     };
 
@@ -769,7 +796,16 @@ class ProtobufServer<
         };
       },
       () => {
-        void runProcedureHandler();
+        if (registerBeforeHandler && finishedController.signal.aborted) return;
+        if (registerBeforeHandler) this.streams.set(streamId, procStream);
+        void runProcedureHandler().catch((err: unknown) => {
+          if (
+            err instanceof OutboundBufferLimitError &&
+            finishedController.signal.aborted
+          )
+            return;
+          throw err;
+        });
       },
     )();
 

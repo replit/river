@@ -4,6 +4,7 @@ import {
   EncodedTransportMessage,
   PartialTransportMessage,
   ProtocolVersion,
+  SendFailureMessage,
   TransportClientId,
 } from '../message';
 import { Codec, CodecMessageAdapter } from '../../codec';
@@ -147,6 +148,16 @@ export interface SessionOptions {
    */
   sendBufferHighWaterMark: number;
   /**
+   * Optional hard cap on retained encoded replay history per logical session.
+   * Overflow disposes the session, failing its calls rather than retrying them.
+   * This post-encode check does not bound serialization peaks or socket buffers.
+   */
+  outboundBufferLimit?: {
+    maxBytes: number;
+    closeCode: number;
+    closeReason: string;
+  };
+  /**
    * The codec to use for encoding/decoding messages over the wire
    */
   codec: Codec;
@@ -190,6 +201,7 @@ export type InheritedProperties = Pick<
   | 'seqSent'
   | 'sendBuffer'
   | 'sendBufferDrainWaiter'
+  | 'outboundBuffer'
   | 'telemetry'
   | 'options'
 >;
@@ -198,7 +210,7 @@ export type SessionId = string;
 
 export interface IdentifiedSessionListeners {
   onMessageSendFailure: (
-    msg: PartialTransportMessage & { seq: number },
+    msg: SendFailureMessage & { seq: number },
     reason: string,
   ) => void;
 }
@@ -212,6 +224,7 @@ export interface IdentifiedSessionProps extends CommonSessionProps {
   seqSent: number;
   sendBuffer: Array<EncodedTransportMessage>;
   sendBufferDrainWaiter: PromiseWithResolvers<void> | undefined;
+  outboundBuffer?: { bytes: number; overflowed: boolean };
   telemetry: TelemetryInfo;
   protocolVersion: ProtocolVersion;
   listeners: IdentifiedSessionListeners;
@@ -239,6 +252,8 @@ export abstract class IdentifiedSession extends CommonSession {
    */
   ack: number;
   sendBuffer: Array<EncodedTransportMessage>;
+  readonly outboundBuffer: IdentifiedSessionProps['outboundBuffer'];
+  onOutboundBufferOverflow?: () => void;
 
   /**
    * Shared promise for pending {@link waitForSendBufferDrain} calls, created
@@ -267,6 +282,11 @@ export abstract class IdentifiedSession extends CommonSession {
     this.seq = seq;
     this.ack = ack;
     this.sendBuffer = sendBuffer;
+    this.outboundBuffer =
+      props.outboundBuffer ??
+      (props.options.outboundBufferLimit
+        ? { bytes: 0, overflowed: false }
+        : undefined);
     this.sendBufferDrainWaiter = sendBufferDrainWaiter;
     this.telemetry = telemetry;
     this.log = log;
@@ -293,7 +313,12 @@ export abstract class IdentifiedSession extends CommonSession {
     return metadata;
   }
 
-  encodeMsg(partialMsg: PartialTransportMessage): EncodeResult {
+  protected encodeAndBuffer(partialMsg: PartialTransportMessage): EncodeResult {
+    const outboundBuffer = this.outboundBuffer;
+    const limit = this.options.outboundBufferLimit;
+    if (outboundBuffer?.overflowed) {
+      return { ok: false, reason: 'outbound replay history limit exceeded' };
+    }
     const msg = {
       ...partialMsg,
       id: generateId(),
@@ -315,17 +340,47 @@ export abstract class IdentifiedSession extends CommonSession {
       return encoded;
     }
 
-    this.seq++;
+    let entry: EncodedTransportMessage;
+    if (outboundBuffer && limit) {
+      if (encoded.value.byteLength > limit.maxBytes - outboundBuffer.bytes) {
+        outboundBuffer.overflowed = true;
+        if (this.onOutboundBufferOverflow) {
+          this.onOutboundBufferOverflow();
+        } else {
+          this.close();
+        }
 
-    return {
-      ok: true,
-      value: {
+        return { ok: false, reason: 'outbound replay history limit exceeded' };
+      }
+
+      // Codecs can return borrowed views, pooled buffers, or oversized backing stores.
+      const data = new Uint8Array(encoded.value);
+      entry = {
+        id: msg.id,
+        seq: msg.seq,
+        msg: {
+          streamId: partialMsg.streamId,
+          controlFlags: partialMsg.controlFlags,
+          serviceName: partialMsg.serviceName,
+          procedureName: partialMsg.procedureName,
+        },
+        data,
+        byteCharge: data.buffer.byteLength,
+      };
+      outboundBuffer.bytes += entry.byteCharge;
+    } else {
+      entry = {
         id: msg.id,
         seq: msg.seq,
         msg: partialMsg,
         data: encoded.value,
-      },
-    };
+      };
+    }
+
+    this.sendBuffer.push(entry);
+    this.seq++;
+
+    return { ok: true, value: entry };
   }
 
   nextSeq(): number {
@@ -358,12 +413,10 @@ export abstract class IdentifiedSession extends CommonSession {
   }
 
   send(msg: PartialTransportMessage): SendResult {
-    const encodeResult = this.encodeMsg(msg);
+    const encodeResult = this.encodeAndBuffer(msg);
     if (!encodeResult.ok) {
       return encodeResult;
     }
-
-    this.sendBuffer.push(encodeResult.value);
 
     return {
       ok: true,
@@ -378,6 +431,7 @@ export abstract class IdentifiedSession extends CommonSession {
   _handleClose(): void {
     // zero out the buffer
     this.sendBuffer.length = 0;
+    if (this.outboundBuffer) this.outboundBuffer.bytes = 0;
     // wake any producers waiting for drain so they don't hang forever,
     // they should check isWritable/isSendBufferFull before writing again
     this.notifySendBufferDrain();

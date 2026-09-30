@@ -105,5 +105,5 @@ export abstract class Connection {
   /**
    * Closes the connection.
    */
-  abstract close(): void;
+  abstract close(code?: number, reason?: string): void;
 }

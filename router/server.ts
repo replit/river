@@ -50,6 +50,7 @@ import { ServerTransport } from '../transport/server';
 import { ReadableImpl, WritableImpl } from './streams';
 import { IdentifiedSession } from '../transport/sessionStateMachine/common';
 import { SessionBoundSendFn } from '../transport/transport';
+import { OutboundBufferLimitError } from '../transport/results';
 
 type StreamId = string;
 
@@ -250,18 +251,29 @@ class RiverServer<
       if (evt.status !== 'closing') return;
 
       const disconnectedClientId = evt.session.to;
-      this.log?.info(
-        `got session disconnect from ${disconnectedClientId}, cleaning up streams`,
-        evt.session.loggingMetadata,
-      );
+      const overflowed = evt.session.outboundBuffer?.overflowed;
+      if (!overflowed)
+        this.log?.info(
+          `got session disconnect from ${disconnectedClientId}, cleaning up streams`,
+          evt.session.loggingMetadata,
+        );
 
       for (const stream of this.streams.values()) {
         if (stream.from === disconnectedClientId) {
-          stream.handleSessionDisconnect();
+          try {
+            stream.handleSessionDisconnect();
+          } catch (error) {
+            if (!overflowed) throw error;
+          }
         }
       }
 
       this.serverCancelledStreams.delete(disconnectedClientId);
+      if (overflowed)
+        this.log?.warn('closed overflowing session streams', {
+          sessionId: evt.session.id,
+          connectedTo: disconnectedClientId,
+        });
     };
     const handleTransportStatus = (evt: EventMap['transportStatus']) => {
       if (evt.status !== 'closed') return;
@@ -305,6 +317,8 @@ class RiverServer<
       protocolVersion,
       id: sessionId,
     } = initialSession;
+    const registerBeforeHandler =
+      initialSession.options.outboundBufferLimit !== undefined;
 
     // dont use the session span here, we want to create a new span for the procedure
     loggingMetadata.telemetry = {
@@ -448,12 +462,16 @@ class RiverServer<
           message: 'client unexpectedly disconnected',
         } as const;
 
-        if (!reqReadable.isClosed()) {
-          reqReadable._pushValue(Err(errPayload));
-          closeReadable();
-        }
+        try {
+          if (!reqReadable.isClosed()) {
+            reqReadable._pushValue(Err(errPayload));
+            closeReadable();
+          }
 
-        resWritable.close();
+          resWritable.close();
+        } finally {
+          if (registerBeforeHandler) cleanup();
+        }
       },
     };
 
@@ -540,9 +558,13 @@ class RiverServer<
     };
 
     const cleanup = () => {
-      finishedController.abort();
-      this.streams.delete(streamId);
-      void runDeferredCleanups();
+      if (registerBeforeHandler && finishedController.signal.aborted) return;
+      try {
+        finishedController.abort();
+      } finally {
+        this.streams.delete(streamId);
+        void runDeferredCleanups();
+      }
     };
 
     const procClosesWithResponse =
@@ -622,6 +644,11 @@ class RiverServer<
     });
 
     const onHandlerError = (err: unknown, span: Span) => {
+      if (
+        err instanceof OutboundBufferLimitError &&
+        finishedController.signal.aborted
+      )
+        return;
       const errorMsg = coerceErrorString(err);
 
       span.recordException(err instanceof Error ? err : new Error(errorMsg));
@@ -787,7 +814,16 @@ class RiverServer<
         };
       },
       () => {
-        void runProcedureHandler();
+        if (registerBeforeHandler && finishedController.signal.aborted) return;
+        if (registerBeforeHandler) this.streams.set(streamId, procStream);
+        void runProcedureHandler().catch((err: unknown) => {
+          if (
+            err instanceof OutboundBufferLimitError &&
+            finishedController.signal.aborted
+          )
+            return;
+          throw err;
+        });
       },
     )();
 

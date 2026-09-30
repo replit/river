@@ -6,6 +6,15 @@ export type TransportOptions = SessionOptions;
 
 export type ProvidedTransportOptions = Partial<TransportOptions>;
 
+export function isValidWebSocketCloseCode(code: unknown): code is number {
+  return (
+    typeof code === 'number' &&
+    Number.isInteger(code) &&
+    ((code >= 1000 && code <= 1014 && ![1004, 1005, 1006].includes(code)) ||
+      (code >= 3000 && code <= 4999))
+  );
+}
+
 export const defaultTransportOptions: TransportOptions = {
   heartbeatIntervalMs: 1_000,
   heartbeatsUntilDead: 2,

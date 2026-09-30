@@ -39,6 +39,7 @@ import {
 import { SessionState } from './sessionStateMachine/common';
 import { SessionNoConnection } from './sessionStateMachine/SessionNoConnection';
 import { SessionBackingOff } from './sessionStateMachine/SessionBackingOff';
+import { OutboundBufferLimitError } from './results';
 
 /**
  * Outcome of constructing client handshake metadata, kept as a value (rather than a
@@ -59,7 +60,7 @@ export abstract class ClientTransport<
   /**
    * The options for this transport.
    */
-  protected options: ClientTransportOptions;
+  protected declare options: ClientTransportOptions;
 
   retryBudget: LeakyBucketRateLimit;
 
@@ -108,6 +109,7 @@ export abstract class ClientTransport<
     this.options = {
       ...defaultClientTransportOptions,
       ...providedOptions,
+      outboundBufferLimit: this.options.outboundBufferLimit,
     };
     this.retryBudget = new LeakyBucketRateLimit(this.options);
   }
@@ -181,6 +183,7 @@ export abstract class ClientTransport<
       const send = this.getSessionBoundSendFn(to, sessionId);
       send(rehandshakeResponseMessage(metadata));
     } catch (err) {
+      if (err instanceof OutboundBufferLimitError) return;
       const reason = coerceErrorString(err);
       this.log?.error(
         `failed to send re-handshake metadata to ${to}: ${reason}`,
@@ -265,6 +268,7 @@ export abstract class ClientTransport<
     error?: unknown,
   ) {
     const noConnectionSession = super.onConnectingFailed(session);
+    if (noConnectionSession._isConsumed) return noConnectionSession;
 
     if (error instanceof Error && this.options.isFatalConnectionError(error)) {
       this.reconnectOnConnectionDrop = false;
@@ -282,6 +286,7 @@ export abstract class ClientTransport<
     session: SessionHandshaking<ConnType> | SessionConnected<ConnType>,
   ) {
     const noConnectionSession = super.onConnClosed(session);
+    if (noConnectionSession._isConsumed) return noConnectionSession;
     this.tryReconnecting(noConnectionSession.to);
 
     return noConnectionSession;
@@ -353,7 +358,8 @@ export abstract class ClientTransport<
       );
 
     this.updateSession(handshakingSession);
-    void this.sendHandshake(handshakingSession);
+    if (!handshakingSession._isConsumed)
+      void this.sendHandshake(handshakingSession);
 
     return handshakingSession;
   }
@@ -504,7 +510,7 @@ export abstract class ClientTransport<
     }
 
     this.updateSession(connectedSession);
-    this.retryBudget.startRestoringBudget();
+    if (!connectedSession._isConsumed) this.retryBudget.startRestoringBudget();
   }
 
   /**
@@ -521,6 +527,7 @@ export abstract class ClientTransport<
     }
 
     const session = this.sessions.get(to) ?? this.createUnconnectedSession(to);
+    if (session._isConsumed) return;
     if (session.state !== SessionState.NoConnection) {
       // already trying to connect
       this.log?.debug(

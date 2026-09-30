@@ -43,7 +43,7 @@ export abstract class ServerTransport<
   /**
    * The options for this transport.
    */
-  protected options: ServerTransportOptions;
+  protected declare options: ServerTransportOptions;
 
   /**
    * Optional handshake options for the server.
@@ -71,6 +71,7 @@ export abstract class ServerTransport<
     this.options = {
       ...defaultServerTransportOptions,
       ...providedOptions,
+      outboundBufferLimit: this.options.outboundBufferLimit,
     };
     this.log?.info(`initiated server transport`, {
       clientId: this.clientId,
@@ -115,6 +116,7 @@ export abstract class ServerTransport<
     session: ServerSession<ConnType>,
     options?: DeleteSessionOptions,
   ): void {
+    if (session._isConsumed) return;
     this.sessionHandshakeMetadata.delete(session.to);
     super.deleteSession(session, options);
   }
@@ -793,6 +795,6 @@ export abstract class ServerTransport<
       this.createSession(connectedSession);
     }
 
-    connectedSession.startActiveHeartbeat();
+    if (!connectedSession._isConsumed) connectedSession.startActiveHeartbeat();
   }
 }
