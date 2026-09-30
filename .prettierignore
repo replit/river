@@ -3,3 +3,8 @@ node_modules
 .claude
 protobuf/gen
 testUtil/fixtures/gen
+verification/p/PGenerated/
+verification/p/PCheckerOutput/
+verification/p/PObs/PGenerated/
+verification/p/verified/PGenerated/
+flake.lock

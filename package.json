@@ -71,7 +71,9 @@
     "test": "vitest",
     "test:single": "vitest run --reporter=dot",
     "test:flake": "./flake.sh",
-    "bench": "vitest bench"
+    "bench": "vitest bench",
+    "model:check": "bash verification/p/check.sh",
+    "model:observe": "bash verification/p/observe.sh"
   },
   "engines": {
     "node": ">=20.11.0"

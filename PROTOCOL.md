@@ -632,7 +632,7 @@ The server will send an error response if either:
 
 When the client receives a status with `ok: false`, it should consider the handshake failed and close the connection. On `SESSION_STATE_MISMATCH` the client MAY reconnect, but only with a fresh session (new id, zeroed state); in-flight calls on the old session resolve with `UNEXPECTED_DISCONNECT`. On fatal codes it MUST NOT reconnect automatically.
 
-Handshakes are connection-scoped: a client MUST ignore a handshake response that isn't for its current connection attempt, and a server MUST close connections that don't handshake within `handshakeTimeoutMs`. This ensures a stale `isReconnect: false` request is never processed after its session has connected.
+Handshakes are connection-scoped: a client MUST ignore a handshake response that isn't for its current connection attempt, and a server MUST close connections that don't handshake within `handshakeTimeoutMs`. This ensures a stale `isReconnect: false` request is never processed after its session has connected (proved in `verification/p/verified/SessionReconnect.p`).
 
 ### Re-handshaking (live credential refresh)
 

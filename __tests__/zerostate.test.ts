@@ -9,7 +9,7 @@ import {
 import { createClient } from '../router/client';
 import { createServer } from '../router/server';
 import { createMockTransportNetwork } from '../testUtil/fixtures/mockTransport';
-import type { LogFn } from '../logging';
+import { traceLogFn, traceSideOf } from '../testUtil/fixtures/trace';
 import {
   advanceFakeTimersByConnectionBackoff,
   cleanupTransports,
@@ -22,14 +22,6 @@ import {
  * (hard reconnect) rather than accepted as new, or the replayed request runs
  * the handler twice.
  */
-function collectViolations(violations: Array<string>): LogFn {
-  return (msg, ctx, level) => {
-    if (ctx?.tags?.includes('invariant-violation')) {
-      violations.push(`[${level}] ${msg}`);
-    }
-  };
-}
-
 describe('zero-state reconnect to a server that lost the session', () => {
   test('does not re-execute handlers; in-flight calls resolve with UNEXPECTED_DISCONNECT', async () => {
     const invocations: Array<string> = [];
@@ -75,7 +67,7 @@ describe('zero-state reconnect to a server that lost the session', () => {
     const serverTransport = network.getServerTransport('SERVER');
     const violations: Array<string> = [];
     for (const t of [clientTransport, serverTransport]) {
-      t.bindLogger(collectViolations(violations), 'debug');
+      t.bindLogger(traceLogFn(traceSideOf(t.clientId), violations), 'debug');
     }
 
     createServer(serverTransport, services);
@@ -90,7 +82,7 @@ describe('zero-state reconnect to a server that lost the session', () => {
       // buffer holding the request) survives within its grace period
       await network.restartServer();
       const secondServer = network.getServerTransport('SERVER');
-      secondServer.bindLogger(collectViolations(violations), 'debug');
+      secondServer.bindLogger(traceLogFn('server', violations), 'debug');
       createServer(secondServer, services);
 
       await advanceFakeTimersByConnectionBackoff();
