@@ -51,6 +51,8 @@ The protocol specification defines semantics around:
 
 Note that this protocol specification does NOT detail the language-level specifics of how the client returns results to the caller and how the server executes the procedure invocations but rather the wire-level protocol that the client and server must adhere to.
 
+[`spec/river.qnt`](./spec/README.md) is an executable [Quint](https://quint-lang.org) model of this document, and the test suite checks the implementation against it.
+
 ## Clients, servers, and RPCs
 
 - A 'client' can initiate remote procedure calls to the server

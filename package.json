@@ -38,10 +38,12 @@
   "devDependencies": {
     "@bufbuild/buf": "^1.67.0",
     "@hegeldev/hegel": "^0.4.5",
+    "@informalsystems/quint": "^0.33.0",
     "@opentelemetry/api": "^1.7.0",
     "@opentelemetry/context-async-hooks": "^1.26.0",
     "@opentelemetry/core": "^1.7.0",
     "@opentelemetry/sdk-trace-base": "^1.24.1",
+    "@sinonjs/fake-timers": "^15.4.0",
     "@stylistic/eslint-plugin": "^2.6.4",
     "@types/ws": "^8.5.5",
     "@typescript-eslint/eslint-plugin": "^7.8.0",
@@ -71,7 +73,11 @@
     "test": "vitest",
     "test:single": "vitest run --reporter=dot",
     "test:flake": "./flake.sh",
-    "bench": "vitest bench"
+    "bench": "vitest bench",
+    "spec:typecheck": "quint typecheck spec/river.qnt && quint typecheck spec/river_test.qnt",
+    "spec:test": "quint test spec/river_test.qnt --max-samples 1",
+    "spec:check": "quint run spec/river.qnt --invariant safety --max-samples 2000 --max-steps 80",
+    "spec:hunt": "QUINT_SEED=random QUINT_TRACES=2000 QUINT_STEPS=80 QUINT_BACKEND=rust QUINT_VERBOSE=1 vitest run __tests__/conformance"
   },
   "engines": {
     "node": ">=20.11.0"
