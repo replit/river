@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
 import FakeTimers from '@sinonjs/fake-timers';
+import type { Codec } from '../../codec/types';
 import { Harness } from './harness';
 import {
   describeAction,
@@ -48,6 +49,7 @@ export type Outcome =
 export async function replay(
   trace: Trace,
   knownBugs: ReadonlyArray<KnownBug> = [],
+  codec?: Codec,
 ): Promise<Outcome> {
   // a clock of our own rather than vitest's: its next() fires exactly one timer
   vi.useRealTimers();
@@ -66,7 +68,7 @@ export async function replay(
   const onRejection = (reason: unknown) => rejections.push(reason);
   process.on('unhandledRejection', onRejection);
 
-  const harness = new Harness(trace.steps[0].st.cfg, clock);
+  const harness = new Harness(trace.steps[0].st.cfg, clock, codec);
   const history: Array<string> = [];
   try {
     for (const [i, { st, action }] of trace.steps.entries()) {

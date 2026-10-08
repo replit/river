@@ -4,6 +4,7 @@ import { Ok, Procedure, createServiceSchema, type Result } from '../../router';
 import { createClient } from '../../router/client';
 import { createServer } from '../../router/server';
 import { NaiveJsonCodec } from '../../codec/json';
+import type { Codec } from '../../codec/types';
 import {
   ControlFlags,
   type OpaqueTransportMessage,
@@ -247,6 +248,7 @@ export class Harness {
   private readonly client: ReturnType<typeof createClient<Services>>;
   private server: ReturnType<typeof createServer>;
   private readonly sessionOptions;
+  private readonly codec: Codec;
   private readonly clock: Clock;
   private readonly t0 = Date.now();
 
@@ -263,9 +265,11 @@ export class Harness {
   private readonly clientRecords = new Map<number, ClientRecord>();
   private serverRecords = new Map<number, ServerRecord>();
 
-  constructor(cfg: QCfg, clock: Clock) {
+  constructor(cfg: QCfg, clock: Clock, codec: Codec = NaiveJsonCodec) {
     this.clock = clock;
+    this.codec = codec;
     this.sessionOptions = {
+      codec,
       heartbeatIntervalMs: cfg.heartbeat,
       heartbeatsUntilDead: cfg.heartbeatsUntilDead,
       sessionDisconnectGraceMs: cfg.grace,
@@ -525,7 +529,7 @@ export class Harness {
   }
 
   private decode(bytes: Uint8Array): OpaqueTransportMessage {
-    return NaiveJsonCodec.fromBuffer(bytes) as OpaqueTransportMessage;
+    return this.codec.fromBuffer(bytes) as OpaqueTransportMessage;
   }
 
   private projectBody(msg: OpaqueTransportMessage, toServer: boolean): Body {

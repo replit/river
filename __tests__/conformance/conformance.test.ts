@@ -1,11 +1,14 @@
 import { beforeAll, describe, expect, test } from 'vitest';
+import { BinaryCodec, NaiveJsonCodec, type Codec } from '../../codec';
+import { ProtoCodec } from '../../protobuf/codec';
 import { some, type QState, type Trace } from './model';
 import { generateTraces, scenarioTraces } from './quint';
 import { formatOutcome, replay, type KnownBug } from './replay';
 
 /**
  * Replays traces of spec/river.qnt against the real transports, router, and
- * client, failing on the first step where the two disagree. See spec/README.md.
+ * client over each codec, failing on the first step where the two disagree.
+ * See spec/README.md.
  *
  *   QUINT_SEED      seed for the random traces (default 0x5eed); `random`
  *                   picks a fresh one, shown in the test name
@@ -53,13 +56,21 @@ const KNOWN_BUGS: Array<KnownBug> = [
   },
 ];
 
+/** Every trace is replayed over each codec the transports can use. */
+const CODECS: Array<{ name: string; codec: Codec }> = [
+  { name: 'json', codec: NaiveJsonCodec },
+  { name: 'binary', codec: BinaryCodec },
+  { name: 'proto', codec: ProtoCodec },
+];
+
 async function failuresOf(
   traces: Array<Trace>,
+  codec: Codec,
   tally?: Record<string, number>,
 ): Promise<Array<string>> {
   const failures: Array<string> = [];
   for (const trace of traces) {
-    const outcome = await replay(trace, KNOWN_BUGS);
+    const outcome = await replay(trace, KNOWN_BUGS, codec);
     if (tally) {
       const key = outcome.kind === 'known-bug' ? outcome.bug.id : outcome.kind;
       tally[key] = (tally[key] ?? 0) + 1;
@@ -74,38 +85,42 @@ async function failuresOf(
   return failures;
 }
 
-describe('the implementation conforms to spec/river.qnt', () => {
-  let scenarios: Array<Trace> = [];
-  beforeAll(() => {
-    scenarios = scenarioTraces();
-  }, 60_000);
-
-  test('every scenario in spec/river_test.qnt replays identically', async () => {
-    expect(scenarios.length).toBeGreaterThan(0);
-    expect((await failuresOf(scenarios)).join('\n\n')).toBe('');
-  }, 60_000);
-
-  test.each(KNOWN_BUGS)('known bug $id still reproduces', async (bug) => {
-    const trace = scenarios.find((t) => t.name.includes(`${bug.scenario}_`));
-    if (!trace) throw new Error(`no scenario named ${bug.scenario}`);
-
-    const outcome = await replay(trace);
-    expect(
-      outcome.kind === 'diverged' || outcome.kind === 'error',
-      `${bug.id} no longer reproduces: remove it from KNOWN_BUGS`,
-    ).toBe(true);
+let scenarios: Array<Trace> = [];
+let randomTraces: Array<Trace> = [];
+beforeAll(() => {
+  scenarios = scenarioTraces();
+  randomTraces = generateTraces({
+    seed: SEED,
+    count: TRACES,
+    maxSteps: STEPS,
   });
+}, 120_000);
 
-  test(`${TRACES} random traces (seed ${SEED}) replay identically`, async () => {
-    const traces = generateTraces({
-      seed: SEED,
-      count: TRACES,
-      maxSteps: STEPS,
+describe.each(CODECS)(
+  'the implementation conforms to spec/river.qnt over the $name codec',
+  ({ codec }) => {
+    test('every scenario in spec/river_test.qnt replays identically', async () => {
+      expect(scenarios.length).toBeGreaterThan(0);
+      expect((await failuresOf(scenarios, codec)).join('\n\n')).toBe('');
+    }, 60_000);
+
+    test.each(KNOWN_BUGS)('known bug $id still reproduces', async (bug) => {
+      const trace = scenarios.find((t) => t.name.includes(`${bug.scenario}_`));
+      if (!trace) throw new Error(`no scenario named ${bug.scenario}`);
+
+      const outcome = await replay(trace, [], codec);
+      expect(
+        outcome.kind === 'diverged' || outcome.kind === 'error',
+        `${bug.id} no longer reproduces: remove it from KNOWN_BUGS`,
+      ).toBe(true);
     });
-    const tally: Record<string, number> = {};
-    const failures = await failuresOf(traces, tally);
-    if (process.env.QUINT_VERBOSE) console.log(tally);
 
-    expect(failures.join('\n\n')).toBe('');
-  }, 300_000);
-});
+    test(`${TRACES} random traces (seed ${SEED}) replay identically`, async () => {
+      const tally: Record<string, number> = {};
+      const failures = await failuresOf(randomTraces, codec, tally);
+      if (process.env.QUINT_VERBOSE) console.log(tally);
+
+      expect(failures.join('\n\n')).toBe('');
+    }, 300_000);
+  },
+);

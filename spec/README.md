@@ -17,7 +17,7 @@ One client and one server carry up to three procedures of any kind (rpc, stream,
 - stream lifecycles: writes, half-closes, cancellation from either side, handler errors, and teardown when a session ends
 - faults: frame loss, undecodable frames, broken connections whose close events reach each side at different times, failed dials, server restarts, `ServerTransport.close()`, and `hardDisconnect()`
 
-Codecs, version negotiation, handshake metadata, re-handshaking, and multiple clients are out of scope. Frames on a connection arrive in order or not at all, which is what River's transports guarantee. Timers are explicit deadlines, and time moves only when a timer fires or `tickBy` advances it.
+The model does not distinguish codecs; instead, the conformance suite replays every trace over each of them. Version negotiation, handshake metadata, re-handshaking, and multiple clients are out of scope. Frames on a connection arrive in order or not at all, which is what River's transports guarantee. Timers are explicit deadlines, and time moves only when a timer fires or `tickBy` advances it.
 
 ## Invariants
 
@@ -60,7 +60,7 @@ The suite in `__tests__/conformance` replays model traces against a real `Client
 2. The harness performs each step against the implementation. A scripted in-memory network (`network.ts`) holds frames until the trace delivers, drops, or garbles them. A fake clock from `@sinonjs/fake-timers` advances only when the trace fires a timer or advances time, and timers due at the same moment fire one per step in scheduling order, as in the model.
 3. After each step, both sides are projected onto the same observable state: session states, seq/ack, send buffers, frames in flight, stream states, delivered values, protocol errors, and the number of pending timers. The first difference fails the test with a diff and the steps that led to it.
 
-The suite runs every scenario, checks that each known bug still reproduces, and replays 100 random traces of 60 steps. Environment variables tune the random part:
+The traces are generated once and replayed over each codec the transports support: JSON, binary, and proto. For each codec, the suite runs every scenario, checks that each known bug still reproduces, and replays 100 random traces of 60 steps. Environment variables tune the random part:
 
 | Variable        | Default      | Meaning                                                      |
 | --------------- | ------------ | ------------------------------------------------------------ |
