@@ -79,6 +79,11 @@
     "spec:check": "quint run spec/river.qnt --invariant safety --max-samples 2000 --max-steps 80",
     "spec:hunt": "QUINT_SEED=random QUINT_TRACES=2000 QUINT_STEPS=80 QUINT_BACKEND=rust QUINT_VERBOSE=1 vitest run __tests__/conformance"
   },
+  "overrides": {
+    "@informalsystems/quint": {
+      "adm-zip": "^0.6.1"
+    }
+  },
   "engines": {
     "node": ">=20.11.0"
   },
