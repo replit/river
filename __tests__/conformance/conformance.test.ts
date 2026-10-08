@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from 'vitest';
 import { BinaryCodec, NaiveJsonCodec, type Codec } from '../../codec';
 import { ProtoCodec } from '../../protobuf/codec';
 import type { Trace } from './model';
-import { generateTraces, scenarioTraces } from './quint';
+import { scenarioTraces, traceBatches } from './quint';
 import { formatOutcome, replay, type KnownBug } from './replay';
 
 /**
@@ -61,14 +61,8 @@ async function failuresOf(
 }
 
 let scenarios: Array<Trace> = [];
-let randomTraces: Array<Trace> = [];
 beforeAll(() => {
   scenarios = scenarioTraces();
-  randomTraces = generateTraces({
-    seed: SEED,
-    count: TRACES,
-    maxSteps: STEPS,
-  });
 }, 120_000);
 
 describe.each(CODECS)(
@@ -93,13 +87,27 @@ describe.each(CODECS)(
         ).toBe(true);
       });
     }
-
-    test(`${TRACES} random traces (seed ${SEED}) replay identically`, async () => {
-      const tally: Record<string, number> = {};
-      const failures = await failuresOf(randomTraces, codec, tally);
-      if (process.env.QUINT_VERBOSE) console.log(tally);
-
-      expect(failures.join('\n\n')).toBe('');
-    }, 300_000);
   },
 );
+
+test(`${TRACES} random traces (seed ${SEED}) replay identically over every codec`, async () => {
+  const failures: Array<string> = [];
+  const tallies = new Map(
+    CODECS.map(({ name }) => [name, {} as Record<string, number>]),
+  );
+  for (const batch of traceBatches({
+    seed: SEED,
+    count: TRACES,
+    maxSteps: STEPS,
+  })) {
+    for (const { name, codec } of CODECS) {
+      const found = await failuresOf(batch, codec, tallies.get(name));
+      failures.push(...found.map((failure) => `[${name} codec] ${failure}`));
+    }
+
+    if (failures.length > 0) break;
+  }
+
+  if (process.env.QUINT_VERBOSE) console.log(Object.fromEntries(tallies));
+  expect(failures.slice(0, 3).join('\n\n')).toBe('');
+}, 1_800_000);

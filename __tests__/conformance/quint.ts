@@ -136,8 +136,30 @@ export function generateTraces(opts: {
       '--invariant',
       opts.invariant ?? 'safety',
     ],
-    `seed ${opts.seed}`,
+    `seed ${opts.seed} (max ${opts.maxSteps} steps)`,
   );
+}
+
+/** Traces per quint run: quint holds all of a run's traces in memory. */
+const BATCH_SIZE = 100;
+
+/**
+ * `count` random traces in batches, so memory stays bounded however many are
+ * asked for. Batch i uses the seed plus i, which its traces' names show.
+ */
+export function* traceBatches(opts: {
+  seed: string;
+  count: number;
+  maxSteps: number;
+}): Generator<Array<Trace>> {
+  const base = BigInt(opts.seed);
+  for (let i = 0; i * BATCH_SIZE < opts.count; i++) {
+    yield generateTraces({
+      seed: `0x${(base + BigInt(i)).toString(16)}`,
+      count: Math.min(BATCH_SIZE, opts.count - i * BATCH_SIZE),
+      maxSteps: opts.maxSteps,
+    });
+  }
 }
 
 /** The fixed scenarios written as `run` definitions in spec/river_test.qnt. */
