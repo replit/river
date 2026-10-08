@@ -63,6 +63,8 @@ export interface ServerStreamView {
   r: boolean | null;
   w: boolean | null;
   inMap: boolean;
+  /** Handler invocations for this stream id since the server started. */
+  runs: number;
   values: Array<Res> | null;
 }
 

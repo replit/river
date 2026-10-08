@@ -3,7 +3,7 @@
 [`river.qnt`](./river.qnt) is an executable model of [PROTOCOL.md](../PROTOCOL.md), written in [Quint](https://quint-lang.org). The test suite replays the model's traces against the TypeScript implementation and compares the two after every step, so any disagreement means one of them is wrong.
 
 - `river.qnt`: the model's state, transitions, `step` actions, invariants, and witnesses
-- `river_test.qnt`: scenarios, one per protocol behavior or known bug
+- `river_test.qnt`: scenarios, one per protocol behavior or bug the model found
 - [`__tests__/conformance`](../__tests__/conformance): the harness that replays traces against the implementation
 
 ## What it models
@@ -38,17 +38,17 @@ The model does not distinguish codecs; instead, the conformance suite replays ev
 | `closeIsFinal`            | after a side closes a stream, it sends nothing more on it except a cancel                         |
 | `closedServerIsEmpty`     | a closed server transport holds no sessions and no pending handshakes                             |
 
-`cancelIsFinal` (nothing is sent on a stream after its cancel arrives) is kept out of `safety` because the implementation breaks it; see [Known bugs](#known-bugs). The `w*` values are witnesses: `quint run --witnesses wTransparentReconnect wServerRestarted ...` reports how many traces reach each one, which shows whether simulation actually exercises a path.
+`cancelIsFinal` (nothing is sent on a stream after its cancel arrives) is kept out of `safety` because the implementation breaks it; see [Bugs found](#bugs-found). The `w*` values are witnesses: `quint run --witnesses wTransparentReconnect wServerRestarted ...` reports how many traces reach each one, which shows whether simulation actually exercises a path.
 
 ## Running it
 
-| Command                  | What it does                                                    |
-| ------------------------ | --------------------------------------------------------------- |
-| `npm run spec:typecheck` | typecheck the model and its scenarios                           |
-| `npm run spec:test`      | run the scenarios in `river_test.qnt`                           |
-| `npm run spec:check`     | simulate 2,000 random traces of 80 steps and check `safety`     |
-| `npm test`               | includes the conformance suite                                  |
-| `npm run spec:hunt`      | replay 2,000 random traces of 80 steps from a fresh random seed |
+| Command                  | What it does                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------- |
+| `npm run spec:typecheck` | typecheck the model and its scenarios                                                             |
+| `npm run spec:test`      | run the scenarios in `river_test.qnt`                                                             |
+| `npm run spec:check`     | simulate 2,000 random traces of 80 steps and check `safety`                                       |
+| `npm test`               | includes the conformance suite                                                                    |
+| `npm run spec:hunt`      | replay 2,000 random traces of 80 steps over every codec, from a fresh random seed (a few minutes) |
 
 `spec:check` and `spec:hunt` use Quint's Rust simulator, which downloads a binary the first time it runs. Everything in `npm test` uses the TypeScript simulator, so it needs nothing beyond `node_modules`.
 
@@ -58,7 +58,7 @@ The suite in `__tests__/conformance` replays model traces against a real `Client
 
 1. `quint run` generates random traces of the weighted `step` action, checking `safety` on every state along the way, and `quint test` produces one trace per scenario.
 2. The harness performs each step against the implementation. A scripted in-memory network (`network.ts`) holds frames until the trace delivers, drops, or garbles them. A fake clock from `@sinonjs/fake-timers` advances only when the trace fires a timer or advances time, and timers due at the same moment fire one per step in scheduling order, as in the model.
-3. After each step, both sides are projected onto the same observable state: session states, seq/ack, send buffers, frames in flight, stream states, delivered values, protocol errors, and the number of pending timers. The first difference fails the test with a diff and the steps that led to it.
+3. After each step, both sides are projected onto the same observable state: session states, seq/ack, send buffers, frames in flight, stream states, delivered values, how many times each handler ran, upload results once `finalize()` is called, protocol errors, and the number of pending timers. The first difference fails the test with a diff and the steps that led to it.
 
 The traces are generated once and replayed over each codec the transports support: JSON, binary, and proto. For each codec, the suite runs every scenario, checks that each known bug still reproduces, and replays 100 random traces of 60 steps. Environment variables tune the random part:
 
@@ -77,11 +77,14 @@ Rerun with the printed seed to reproduce, then decide which side is wrong:
 - If the implementation's behavior is intended or PROTOCOL.md allows it, fix the model.
 - If the implementation breaks the protocol, add a scenario that reproduces the bug to `river_test.qnt` and an entry to `KNOWN_BUGS` in `conformance.test.ts`. Random traces then stop just before the bug's trigger, so they keep finding other divergences. Once the bug is fixed, its scenario stops reproducing, and the suite fails until the entry is removed.
 
-## Known bugs
+## Bugs found
 
-- **`invalid-handshake-response`** (`invalidHandshakeResponseTest`): an undecodable handshake response makes `ClientTransport` throw from the connection's data listener instead of tearing the session down, because `onInvalidHandshake` deletes the `SessionConnecting` state that the handshake already consumed. No protocol error is emitted, and the session stays in `Handshaking` until the handshake timeout.
-- **`server-close-keeps-pending-handshakes`** (`serverCloseDuringHandshakeTest`): `ServerTransport.close()` leaves connections that are still handshaking open. If one of those handshakes completes, the closed transport creates a session that keeps sending heartbeats while dropping every message, so the client stays connected and its calls are never answered.
-- **`cancelIsFinal`** (`serverClosesAfterClientCancelTest`): the server answers a client's cancel of a stream or subscription with a `ControlClose`, although a cancel is an immediate full close. The model follows the implementation here so the conformance suite stays green, and `quint run spec/river.qnt --invariant cancelIsFinal` finds the violation in seconds.
+The model found two implementation bugs. Both are fixed, and their scenarios stay as regression tests:
+
+- `invalidHandshakeResponseTest`: an undecodable handshake response made `ClientTransport` throw from the connection's data listener instead of tearing the session down, because `onInvalidHandshake` deleted the `SessionConnecting` state the handshake had already consumed.
+- `serverCloseDuringHandshakeTest`: `ServerTransport.close()` left connections that were still handshaking open. One that completed afterwards created a session on the closed transport that kept sending heartbeats while dropping every message.
+
+One deviation from PROTOCOL.md is still open (`serverClosesAfterClientCancelTest`): the server answers a client's cancel of a stream or subscription with a `ControlClose`, although a cancel is an immediate full close. The model follows the implementation here so the conformance suite stays green, and `quint run spec/river.qnt --invariant cancelIsFinal` finds the violation in seconds.
 
 Exactly-once delivery holds within a server process, not across restarts (`serverRestartBeforeFirstReplyReplaysTest`). If the server restarts before the client hears anything from it, the client's reconnect looks like a brand-new session because both sequence numbers are still 0. The new server accepts it, and the replayed call runs a second time.
 

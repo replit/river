@@ -100,6 +100,7 @@ interface ClientRecord {
   writable?: () => boolean;
   readableClosed?: () => boolean;
   results: Array<Res>;
+  finalize?: () => void;
   /** The awaited result of an rpc, or of an upload once finalized. */
   single?: { settled: boolean; value: Res | null };
 }
@@ -264,6 +265,8 @@ export class Harness {
 
   private readonly clientRecords = new Map<number, ClientRecord>();
   private serverRecords = new Map<number, ServerRecord>();
+  /** Handler invocations per stream id since the server started. */
+  private serverRuns = new Map<number, number>();
 
   constructor(cfg: QCfg, clock: Clock, codec: Codec = NaiveJsonCodec) {
     this.clock = clock;
@@ -324,6 +327,7 @@ export class Harness {
   }
 
   registerServer(sid: number, record: ServerRecord) {
+    this.serverRuns.set(sid, (this.serverRuns.get(sid) ?? 0) + 1);
     this.serverRecords.set(sid, record);
   }
 
@@ -355,6 +359,9 @@ export class Harness {
         break;
       case 'AClose':
         (this.clientRecord(action.value).close ?? unexpected)();
+        break;
+      case 'AFinalize':
+        (this.clientRecord(action.value).finalize ?? unexpected)();
         break;
       case 'ACancel':
         this.clientRecord(action.value).abort.abort();
@@ -458,6 +465,9 @@ export class Harness {
           reqWritable.write({ v });
         };
         record.close = () => {
+          reqWritable.close();
+        };
+        record.finalize = () => {
           record.single = { settled: false, value: null };
           void finalize().then(settle);
         };
@@ -496,6 +506,7 @@ export class Harness {
     this.network.crashServer();
     this.serverTransport.crash();
     this.serverRecords = new Map();
+    this.serverRuns = new Map();
     const { transport, server } = this.startServer();
     this.serverTransport = transport;
     this.server = server;
@@ -721,6 +732,7 @@ export class Harness {
         r: record.readableClosed ? !record.readableClosed() : null,
         w: record.writable?.() ?? null,
         inMap: router.streams.has(realId),
+        runs: this.serverRuns.get(sid) ?? 0,
         values: record.values ? [...record.values] : null,
       };
     }

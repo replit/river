@@ -106,6 +106,7 @@ export interface QCStream {
   results: Array<QRes>;
   written: Array<number>;
   gotCancel: boolean;
+  finalized: boolean;
   sentClose: boolean;
 }
 
@@ -117,6 +118,7 @@ export interface QSStream {
   clean: boolean;
   inMap: boolean;
   handlerDone: boolean;
+  runs: number;
   values: Array<QRes>;
   written: Array<number>;
   gotCancel: boolean;
@@ -183,6 +185,7 @@ export type QAction =
   | Variant<'AInvoke', { sid: number; pt: QProcType }>
   | Variant<'AWrite', { sid: number; v: number }>
   | Variant<'AClose', number>
+  | Variant<'AFinalize', number>
   | Variant<'ACancel', number>
   | Variant<'ARespond', { sid: number; v: number }>
   | Variant<'ASWrite', { sid: number; v: number }>
@@ -392,6 +395,7 @@ export function projectModel(st: QState): Projection {
       r: x.r,
       w: x.w,
       inMap: x.inMap,
+      runs: x.runs,
       values: x.values.map(projectRes),
     };
   }

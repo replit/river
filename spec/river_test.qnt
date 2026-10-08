@@ -127,6 +127,34 @@ module river_test {
         not(st.sStreams.get(1).inMap),
       })
 
+  /// An upload can be finalized after it was cancelled: the result is the
+  /// cancellation.
+  run uploadFinalizedAfterCancelTest =
+    init
+      .then(connectWith(PUpload))
+      .then(cancelOn(1))
+      .then(finalizeOn(1))
+      .expect(all {
+        st.cStreams.get(1).finalized,
+        st.cStreams.get(1).results == [RErr("CANCEL")],
+      })
+
+  /// An upload can be finalized after its session ended: the result is
+  /// UNEXPECTED_DISCONNECT.
+  run uploadFinalizedAfterDisconnectTest =
+    init
+      .then(connectWith(PUpload))
+      .then(breakOn(1))
+      .then(closeEventOn(1, false))
+      .then(closeEventOn(1, true))
+      .then(7.reps(_ => fireTimer))
+      .then(finalizeOn(1))
+      .expect(all {
+        st.client.session == None,
+        st.cStreams.get(1).finalized,
+        st.cStreams.get(1).results == [RErr("UNEXPECTED_DISCONNECT")],
+      })
+
   /// "Detecting phantom disconnects": when nothing arrives for
   /// heartbeatsUntilDead heartbeat intervals, the watchdog closes the connection.
   run watchdogClosesSilentConnectionTest =

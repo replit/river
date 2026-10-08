@@ -135,6 +135,8 @@ module river {
     clean: bool,
     listening: bool,
     aborted: bool,
+    // upload only: finalize() was called, so its result is observable
+    finalized: bool,
     results: List[Res],
     written: List[int],
     gotCancel: bool,
@@ -150,6 +152,8 @@ module river {
     clean: bool,
     inMap: bool,
     handlerDone: bool,
+    // handler invocations for this stream id in this server process
+    runs: int,
     values: List[Res],
     written: List[int],
     gotCancel: bool,
@@ -204,6 +208,7 @@ module river {
     | AInvoke({ sid: int, pt: ProcType })
     | AWrite({ sid: int, v: int })
     | AClose(int)
+    | AFinalize(int)
     | ACancel(int)
     | ARespond({ sid: int, v: int })
     | ASWrite({ sid: int, v: int })
@@ -534,6 +539,8 @@ module river {
       | Some(ss) => ss.sess
       | None => 0
     }
+    // a stream id can open again in the same process after its session ends
+    val runs = if (s.sStreams.keys().contains(sid)) s.sStreams.get(sid).runs else 0
     val x = {
       pt: pt,
       sess: sess,
@@ -542,6 +549,7 @@ module river {
       clean: true,
       inMap: true,
       handlerDone: false,
+      runs: runs + 1,
       values: [],
       written: [],
       gotCancel: false,
@@ -1085,6 +1093,7 @@ module river {
           r: true,
           clean: true,
           listening: true,
+          finalized: false,
           aborted: false,
           results: [],
           written: [],
@@ -1222,6 +1231,21 @@ module river {
     st' = clientClose(st, sid),
     lastAction' = AClose(sid),
     rng' = nextRng(rng),
+  }
+
+  /// An upload's finalize(): closes the writable if it is still open, then
+  /// awaits the result. Allowed once, whatever state the stream is in.
+  action finalizeOn(sid: int): bool = all {
+    st.cStreams.keys().contains(sid),
+    val c = st.cStreams.get(sid)
+    all {
+      c.pt == PUpload,
+      not(c.finalized),
+      val s1 = if (c.w) clientClose(st, sid) else st
+      st' = setCStream(s1, sid, { ...s1.cStreams.get(sid), finalized: true }),
+      lastAction' = AFinalize(sid),
+      rng' = nextRng(rng),
+    },
   }
 
   action cancelOn(sid: int): bool = all {
@@ -1410,6 +1434,7 @@ module river {
     any {
       writeOn(sid),
       closeOn(sid),
+      finalizeOn(sid),
       cancelOn(sid),
       respondOn(sid),
       serverWriteOn(sid),
@@ -1679,6 +1704,12 @@ module river {
   }
 
   val wServerClosed = st.server.closed
+
+  /// An upload finalized after it failed: cancelled, or its session ended.
+  val wUploadFinalizedAfterError = st.cStreams.keys().exists(sid => {
+    val c = st.cStreams.get(sid)
+    c.pt == PUpload and c.finalized and c.results.length() > 0 and oks(c.results).length() == 0
+  })
 
   val safety = all {
     closedServerIsEmpty,
