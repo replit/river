@@ -151,8 +151,8 @@ module river_test {
         st.conns.get(1).toClient.length() == 1,
       })
 
-  /// Known bug: an undecodable handshake response must destroy the session
-  /// ("Handshaking -> x"); the implementation throws instead.
+  /// An undecodable handshake response destroys the session
+  /// ("Handshaking -> x"). The implementation used to throw here instead.
   run invalidHandshakeResponseTest =
     init
       .then(invokeAs(PRpc))
@@ -165,8 +165,8 @@ module river_test {
         st.cStreams.get(1).results == [RErr("UNEXPECTED_DISCONNECT")],
       })
 
-  /// Known bug: a closed server transport must not complete a handshake that
-  /// was still in flight when it closed.
+  /// A closed server transport does not complete a handshake that was still in
+  /// flight when it closed. The implementation used to create a session here.
   run serverCloseDuringHandshakeTest =
     init
       .then(invokeAs(PRpc))

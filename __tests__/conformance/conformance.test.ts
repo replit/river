@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from 'vitest';
 import { BinaryCodec, NaiveJsonCodec, type Codec } from '../../codec';
 import { ProtoCodec } from '../../protobuf/codec';
-import { some, type QState, type Trace } from './model';
+import type { Trace } from './model';
 import { generateTraces, scenarioTraces } from './quint';
 import { formatOutcome, replay, type KnownBug } from './replay';
 
@@ -24,37 +24,12 @@ const SEED =
 const TRACES = Number(process.env.QUINT_TRACES ?? '100');
 const STEPS = Number(process.env.QUINT_STEPS ?? '60');
 
-function clientHandshakingOn(st: QState, conn: number): boolean {
-  const cs = some(st.client.session);
-
-  return cs?.st.tag === 'CHandshaking' && cs.st.value === conn;
-}
-
 /**
  * Divergences the model has found that are not fixed yet. Random traces stop
  * just before a known bug's trigger; once a bug is fixed, its scenario stops
  * reproducing and the entry has to go.
  */
-const KNOWN_BUGS: Array<KnownBug> = [
-  {
-    id: 'invalid-handshake-response',
-    summary:
-      'An undecodable handshake response makes ClientTransport throw from the connection data listener (deleteSession reads the consumed Connecting state) instead of tearing the session down',
-    scenario: 'invalidHandshakeResponseTest',
-    matches: (before, action) =>
-      action.tag === 'AGarbage' &&
-      !action.value.server &&
-      clientHandshakingOn(before, action.value.conn),
-  },
-  {
-    id: 'server-close-keeps-pending-handshakes',
-    summary:
-      'ServerTransport.close() leaves connections that are still handshaking open; a handshake that completes afterwards creates a session on the closed transport that heartbeats forever while every message is dropped',
-    scenario: 'serverCloseDuringHandshakeTest',
-    matches: (before, action) =>
-      action.tag === 'AServerClose' && before.server.pending.size > 0,
-  },
-];
+const KNOWN_BUGS: Array<KnownBug> = [];
 
 /** Every trace is replayed over each codec the transports can use. */
 const CODECS: Array<{ name: string; codec: Codec }> = [
@@ -104,16 +79,20 @@ describe.each(CODECS)(
       expect((await failuresOf(scenarios, codec)).join('\n\n')).toBe('');
     }, 60_000);
 
-    test.each(KNOWN_BUGS)('known bug $id still reproduces', async (bug) => {
-      const trace = scenarios.find((t) => t.name.includes(`${bug.scenario}_`));
-      if (!trace) throw new Error(`no scenario named ${bug.scenario}`);
+    if (KNOWN_BUGS.length > 0) {
+      test.each(KNOWN_BUGS)('known bug $id still reproduces', async (bug) => {
+        const trace = scenarios.find((t) =>
+          t.name.includes(`${bug.scenario}_`),
+        );
+        if (!trace) throw new Error(`no scenario named ${bug.scenario}`);
 
-      const outcome = await replay(trace, [], codec);
-      expect(
-        outcome.kind === 'diverged' || outcome.kind === 'error',
-        `${bug.id} no longer reproduces: remove it from KNOWN_BUGS`,
-      ).toBe(true);
-    });
+        const outcome = await replay(trace, [], codec);
+        expect(
+          outcome.kind === 'diverged' || outcome.kind === 'error',
+          `${bug.id} no longer reproduces: remove it from KNOWN_BUGS`,
+        ).toBe(true);
+      });
+    }
 
     test(`${TRACES} random traces (seed ${SEED}) replay identically`, async () => {
       const tally: Record<string, number> = {};
