@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseTrace, type Trace } from './model';
+import { describeAction, parseTrace, type Trace } from './model';
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -58,10 +58,54 @@ function readTraces(dir: string, label: string): Array<Trace> {
     );
 }
 
-function withTempDir<T>(fn: (dir: string) => T): T {
+/** The command line that reruns a quint invocation, printing every state. */
+function reproduce(args: Array<string>): string {
+  const shown = args.map((arg) =>
+    path.isAbsolute(arg) ? path.relative(repoRoot, arg) : arg,
+  );
+
+  return `npx quint ${[...shown, '--backend', BACKEND, '--verbosity', '3'].join(
+    ' ',
+  )}`;
+}
+
+/**
+ * Runs quint with ITF output in a fresh directory and parses the traces. On
+ * failure the directory is kept, and the error names it, lists the steps of
+ * the first trace (the counterexample or failing scenario), and gives the
+ * command that reproduces the run.
+ */
+function quintTraces(args: Array<string>, label: string): Array<Trace> {
   const dir = mkdtempSync(path.join(tmpdir(), 'river-quint-'));
+  const itf = path.join(
+    dir,
+    label === 'scenario' ? '{test}_{seq}.itf.json' : 'trace_{seq}.itf.json',
+  );
   try {
-    return fn(dir);
+    quint([...args, '--verbosity', '1', '--out-itf', itf]);
+  } catch (err) {
+    const lines = [(err as Error).message.trimEnd()];
+    try {
+      const traces = readTraces(dir, label);
+      if (traces.length > 0) {
+        const first = traces[0];
+        lines.push(
+          `steps of ${first.name}:`,
+          ...first.steps
+            .slice(1)
+            .map((step, n) => `  ${n + 1}. ${describeAction(step.action)}`),
+        );
+      }
+    } catch {
+      // quint may have stopped before writing a complete trace
+    }
+
+    lines.push(`traces kept in ${dir}`, `reproduce: ${reproduce(args)}`);
+    throw new Error(lines.join('\n'));
+  }
+
+  try {
+    return readTraces(dir, label);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -69,15 +113,16 @@ function withTempDir<T>(fn: (dir: string) => T): T {
 
 /**
  * Random traces of the model's `step` relation, reproducible from the seed.
- * The same run checks the model's `safety` invariant on every state it visits.
+ * The same run checks an invariant (`safety` by default) on every state.
  */
 export function generateTraces(opts: {
   seed: string;
   count: number;
   maxSteps: number;
+  invariant?: string;
 }): Array<Trace> {
-  return withTempDir((dir) => {
-    quint([
+  return quintTraces(
+    [
       'run',
       SPEC,
       '--max-samples',
@@ -89,33 +134,23 @@ export function generateTraces(opts: {
       '--seed',
       opts.seed,
       '--invariant',
-      'safety',
-      '--verbosity',
-      '1',
-      '--out-itf',
-      path.join(dir, 'trace_{seq}.itf.json'),
-    ]);
-
-    return readTraces(dir, `seed ${opts.seed}`);
-  });
+      opts.invariant ?? 'safety',
+    ],
+    `seed ${opts.seed}`,
+  );
 }
 
 /** The fixed scenarios written as `run` definitions in spec/river_test.qnt. */
 export function scenarioTraces(match?: string): Array<Trace> {
-  return withTempDir((dir) => {
-    quint([
+  return quintTraces(
+    [
       'test',
       SPEC_TESTS,
       ...(match ? ['--match', match] : []),
       // scenarios are deterministic apart from the fault generator's seed
       '--max-samples',
       '1',
-      '--verbosity',
-      '0',
-      '--out-itf',
-      path.join(dir, '{test}_{seq}.itf.json'),
-    ]);
-
-    return readTraces(dir, 'scenario');
-  });
+    ],
+    'scenario',
+  );
 }
