@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { createClient } from '../router/client';
 import { createServer } from '../router/server';
 import { readNextResult } from '../testUtil';
@@ -14,6 +14,7 @@ describe.each(
   'receiver ACKs: $enabled ($transport.name, $codec.name)',
   ({ transport, codec, enabled }) => {
     test('an opt-in receiver drains one-way traffic with a legacy-mode peer', async () => {
+      vi.useRealTimers();
       const receiverAck = { maxMessages: 3, maxDelayMs: 20 };
       const common = {
         codec: codec.codec,
@@ -58,6 +59,7 @@ describe.each(
       } finally {
         await cleanupTransports([clientTransport, serverTransport]);
         await setup.cleanup();
+        vi.useFakeTimers({ shouldAdvanceTime: true });
       }
     });
   },

@@ -91,6 +91,9 @@ export class SessionConnected<
     this.assertSendOrdering(encodedMsg);
     this.bufferMessage(encodedMsg);
 
+    // A synchronous connection can deliver more inbound messages during send.
+    // Only clear the batch covered by the ACK we just encoded.
+    this.clearReceiverAck();
     const sent = this.conn.send(encodedMsg.data);
     if (!sent) {
       const reason = 'failed to send message';
@@ -103,7 +106,6 @@ export class SessionConnected<
     }
 
     this.seqSent = encodedMsg.seq;
-    this.clearReceiverAck();
 
     return { ok: true, value: encodedMsg.id };
   }
@@ -234,6 +236,7 @@ export class SessionConnected<
     this.pendingReceiverAckMessages++;
     if (this.pendingReceiverAckMessages >= options.maxMessages) {
       this.sendHeartbeat();
+
       return;
     }
     this.receiverAckTimer ??= setTimeout(() => {

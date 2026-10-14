@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import * as hegel from '@hegeldev/hegel';
 import * as gs from '@hegeldev/hegel/generators';
 import { createClient } from '../../router/client';
@@ -13,6 +13,7 @@ test(
   () =>
     hegel.testAsync(
       async (tc) => {
+        vi.useRealTimers();
         const mark = tc.draw(gs.integers({ minValue: 3, maxValue: 12 }));
         const count = tc.draw(
           gs.integers({ minValue: mark, maxValue: mark * 3 }),
@@ -30,6 +31,14 @@ test(
         });
         const clientTransport = network.getClientTransport('client');
         const serverTransport = network.getServerTransport();
+        const violations: Array<string> = [];
+        for (const transport of [clientTransport, serverTransport]) {
+          transport.bindLogger((text, meta) => {
+            if (meta?.tags?.includes('invariant-violation')) {
+              violations.push(text);
+            }
+          }, 'debug');
+        }
         const services = { test: TestServiceSchema };
         createServer(serverTransport, services);
         const client = createClient<typeof services>(
@@ -63,9 +72,11 @@ test(
           }
           heavy.reqWritable.close();
           quiet.reqWritable.close();
+          expect(violations).toEqual([]);
         } finally {
           await cleanupTransports([clientTransport, serverTransport]);
           await network.cleanup();
+          vi.useFakeTimers({ shouldAdvanceTime: true });
         }
       },
       { testCases: 20 },

@@ -261,6 +261,7 @@ export abstract class IdentifiedSession extends CommonSession {
     string,
     PromiseWithResolvers<void>
   >;
+
   private readonly streamSendBufferSizes = new Map<string, number>();
 
   constructor(props: IdentifiedSessionProps) {
@@ -285,7 +286,8 @@ export abstract class IdentifiedSession extends CommonSession {
     this.sendBuffer = sendBuffer;
     this.sendBufferDrainWaiter = sendBufferDrainWaiter;
     this.streamSendBufferDrainWaiters =
-      props.streamSendBufferDrainWaiters ?? new Map();
+      props.streamSendBufferDrainWaiters ??
+      new Map<string, PromiseWithResolvers<void>>();
     for (const msg of sendBuffer) {
       this.addStreamBufferEntry(msg);
     }
@@ -363,6 +365,7 @@ export abstract class IdentifiedSession extends CommonSession {
         this.options.streamSendBufferHighWaterMark
       );
     }
+
     return this.sendBuffer.length >= this.options.sendBufferHighWaterMark;
   }
 
@@ -386,6 +389,7 @@ export abstract class IdentifiedSession extends CommonSession {
         waiter = createPromiseWithResolvers();
         this.streamSendBufferDrainWaiters.set(streamId, waiter);
       }
+
       return waiter.promise;
     }
 
@@ -438,6 +442,7 @@ export abstract class IdentifiedSession extends CommonSession {
       } else {
         this.streamSendBufferSizes.set(streamId, remaining);
       }
+
       return false;
     });
     this.notifySendBufferDrain();

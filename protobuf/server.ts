@@ -371,6 +371,7 @@ class ProtobufServer<
     const sessionBackpressure = this.transport.getSessionBackpressure(
       from,
       sessionId,
+      streamId,
     );
 
     const deferredCleanups: Array<() => void | Promise<void>> = [];

@@ -59,6 +59,7 @@ function connected(options: ProvidedTransportOptions = {}) {
     if (!data.ok) throw new Error(data.reason);
     session.onMessageData(data.value);
   };
+
   return { session, conn, receive };
 }
 
@@ -130,6 +131,26 @@ describe('receiver-driven ACKs', () => {
     vi.advanceTimersByTime(50);
     expect(disabled.conn.send).not.toHaveBeenCalled();
     disabled.session._handleClose();
+  });
+
+  test('inbound messages arriving during a synchronous send keep their ACK deadline', () => {
+    const { session, conn, receive } = connected({
+      receiverAck: { maxMessages: 10, maxDelayMs: 50 },
+    });
+    receive();
+    conn.send.mockImplementationOnce(() => {
+      receive();
+
+      return true;
+    });
+    session.send({ streamId: 'reply', controlFlags: 0, payload: {} });
+    vi.advanceTimersByTime(50);
+    expect(conn.send).toHaveBeenCalledTimes(2);
+    expect(session.codec.fromBuffer(session.sendBuffer[1].data)).toMatchObject({
+      ok: true,
+      value: { ack: 2 },
+    });
+    session._handleClose();
   });
 });
 
