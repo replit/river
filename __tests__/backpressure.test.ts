@@ -19,12 +19,19 @@ import { TestSetupHelpers } from '../testUtil/fixtures/transports';
 
 const HIGH_WATER_MARK = 4;
 
-describe.each(testMatrix())(
-  'writable backpressure ($transport.name transport, $codec.name codec)',
-  async ({ transport, codec }) => {
+describe.each(
+  testMatrix().flatMap((entry) =>
+    ['session', 'stream'].map((mode) => ({ ...entry, mode })),
+  ),
+)(
+  '$mode writable backpressure ($transport.name transport, $codec.name codec)',
+  async ({ transport, codec, mode }) => {
     const opts = {
       codec: codec.codec,
       sendBufferHighWaterMark: HIGH_WATER_MARK,
+      ...(mode === 'stream'
+        ? { streamSendBufferHighWaterMark: HIGH_WATER_MARK }
+        : {}),
     };
 
     const { addPostTestCleanup, postTestCleanup } = createPostTestCleanups();
@@ -194,6 +201,40 @@ describe.each(testMatrix())(
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         payload: expect.objectContaining({ code: UNEXPECTED_DISCONNECT_CODE }),
       });
+    });
+
+    test('a heavy stream only pressures a quiet stream in session mode', async () => {
+      const clientTransport = getClientTransport('client');
+      const serverTransport = getServerTransport();
+      const services = { test: TestServiceSchema };
+      createServer(serverTransport, services);
+      const client = createClient<typeof services>(
+        clientTransport,
+        serverTransport.clientId,
+      );
+      addPostTestCleanup(async () => {
+        await cleanupTransports([clientTransport, serverTransport]);
+      });
+      const heavy = client.test.echo.stream({});
+      const quiet = client.test.echo.stream({});
+      for (let i = 0; i < HIGH_WATER_MARK + 1; i++) {
+        heavy.reqWritable.write({ msg: 'heavy', ignore: true });
+      }
+      expect(heavy.reqWritable.write({ msg: 'heavy', ignore: true })).toBe(
+        false,
+      );
+      expect(quiet.reqWritable.write({ msg: 'quiet', ignore: false })).toBe(
+        mode === 'stream',
+      );
+      if (mode === 'stream') {
+        await quiet.reqWritable.waitForWriteReady();
+      }
+      expect(await readNextResult(quiet.resReadable)).toStrictEqual({
+        ok: true,
+        payload: { response: 'quiet' },
+      });
+      heavy.reqWritable.close();
+      quiet.reqWritable.close();
     });
   },
 );
