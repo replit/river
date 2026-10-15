@@ -51,6 +51,8 @@ The protocol specification defines semantics around:
 
 Note that this protocol specification does NOT detail the language-level specifics of how the client returns results to the caller and how the server executes the procedure invocations but rather the wire-level protocol that the client and server must adhere to.
 
+[`spec/river.qnt`](./spec/README.md) is an executable [Quint](https://quint-lang.org) model of this document, and the test suite checks the implementation against it.
+
 ## Clients, servers, and RPCs
 
 - A 'client' can initiate remote procedure calls to the server
@@ -474,26 +476,26 @@ server:          !
 
 ##### Subscription
 
-A `subscription` procedure starts with the client sending a single message with the `StreamOpenBit` set and remains open until either side ends the stream by sending a `ControlClose` message. The party receiving the `ControlClose` message must respond with a final `ControlClose` message. If the client initiates the closing, it MUST continue to accept data until the other side sends a `ControlClose` message.
-
-Client initiated close:
-
-```
-client: >       {
-server:  -  -- - -- {
-```
+A `subscription` procedure starts with the client sending a single message with `StreamOpenBit` and `StreamClosedBit` set, so the client sends nothing else on the stream. The server may send any number of messages and ends the stream by sending a `ControlClose` message. The client ends a subscription early by cancelling it, which is an immediate full close.
 
 Server initiated close:
 
 ```
-client: >         {
+client: x
 server:  -  -- - {
+```
+
+Client cancellation:
+
+```
+client: x       !
+server:  -  -- -
 ```
 
 Protocol error (abrupt close):
 
 ```
-client: >       (any further messages are ignored)
+client: x       (any further messages are ignored)
 server:  -  -- !
 ```
 

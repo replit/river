@@ -111,6 +111,16 @@ export abstract class ServerTransport<
     this.pendingSessions.delete(pendingSession);
   }
 
+  close() {
+    // a connection still waiting for its handshake would otherwise complete it
+    // and create a session on the closed transport
+    for (const pendingSession of Array.from(this.pendingSessions)) {
+      this.deletePendingSession(pendingSession);
+    }
+
+    super.close();
+  }
+
   protected deleteSession(
     session: ServerSession<ConnType>,
     options?: DeleteSessionOptions,

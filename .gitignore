@@ -7,3 +7,6 @@ example
 
 # Nix
 /.direnv/
+
+# quint verify (Apalache) output
+/_apalache-out/

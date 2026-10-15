@@ -320,7 +320,7 @@ export abstract class ClientTransport<
               `invalid handshake: ${reason}`,
               handshakingSession.loggingMetadata,
             );
-            this.deleteSession(session, { unhealthy: true });
+            this.deleteSession(handshakingSession, { unhealthy: true });
             this.protocolError({
               type: ProtocolError.HandshakeFailed,
               code,
