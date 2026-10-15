@@ -64,9 +64,23 @@ export class SessionConnected<
   private pendingReceiverAckMessages = 0;
 
   updateBookkeeping(ack: number, seq: number) {
-    this.acknowledgeSendBuffer(ack);
+    this.sendBuffer = this.sendBuffer.filter((msg) => {
+      if (msg.seq >= ack) return true;
+      const stream = this.streamSendBuffers.get(msg.msg.streamId);
+      if (stream) {
+        stream.size--;
+        if (!this.isSendBufferFull(msg.msg.streamId)) {
+          stream.waiter?.resolve();
+          stream.waiter = undefined;
+        }
+        if (stream.size === 0) this.streamSendBuffers.delete(msg.msg.streamId);
+      }
+
+      return false;
+    });
     this.ack = seq + 1;
     this.lastInboundAt = Date.now();
+    if (!this.isSendBufferFull()) this.notifySendBufferDrain();
   }
 
   private assertSendOrdering(encodedMsg: EncodedTransportMessage) {

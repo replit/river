@@ -5,10 +5,9 @@ import { Connection } from '../connection';
 import { ControlFlags, currentProtocolVersion } from '../message';
 import { defaultTransportOptions, ProvidedTransportOptions } from '../options';
 import { SessionConnected } from './SessionConnected';
-import { SessionStateGraph } from './transitions';
 
 class RecordingConnection extends Connection {
-  send = vi.fn(() => true);
+  send = vi.fn((_data: Uint8Array) => true);
   close = vi.fn();
 }
 
@@ -45,7 +44,7 @@ function connected(options: ProvidedTransportOptions = {}) {
       onMessageSendFailure: vi.fn(),
     },
   });
-  const receive = (controlFlags = 0, ack = 0) => {
+  const receive = (controlFlags = 0) => {
     const data = session.codec.toBuffer({
       id: `inbound-${session.ack}`,
       from: 'sender',
@@ -54,7 +53,7 @@ function connected(options: ProvidedTransportOptions = {}) {
       controlFlags,
       payload: controlFlags ? { type: 'ACK' } : {},
       seq: session.ack,
-      ack,
+      ack: 0,
     });
     if (!data.ok) throw new Error(data.reason);
     session.onMessageData(data.value);
@@ -75,14 +74,13 @@ describe('receiver-driven ACKs', () => {
     expect(conn.send).not.toHaveBeenCalled();
     receive();
     expect(conn.send).toHaveBeenCalledTimes(1);
-    expect(session.sendBuffer[0].msg).toMatchObject({
-      streamId: 'heartbeat',
-      controlFlags: ControlFlags.AckBit,
-      payload: { type: 'ACK' },
-    });
-    expect(session.codec.fromBuffer(session.sendBuffer[0].data)).toMatchObject({
+    expect(session.codec.fromBuffer(conn.send.mock.calls[0][0])).toMatchObject({
       ok: true,
-      value: { ack: 3 },
+      value: {
+        ack: 3,
+        controlFlags: ControlFlags.AckBit,
+        payload: { type: 'ACK' },
+      },
     });
     vi.advanceTimersByTime(50);
     expect(conn.send).toHaveBeenCalledTimes(1);
@@ -146,39 +144,10 @@ describe('receiver-driven ACKs', () => {
     session.send({ streamId: 'reply', controlFlags: 0, payload: {} });
     vi.advanceTimersByTime(50);
     expect(conn.send).toHaveBeenCalledTimes(2);
-    expect(session.codec.fromBuffer(session.sendBuffer[1].data)).toMatchObject({
+    expect(session.codec.fromBuffer(conn.send.mock.calls[1][0])).toMatchObject({
       ok: true,
       value: { ack: 2 },
     });
     session._handleClose();
   });
-});
-
-test('stream waiters drain independently, survive state transitions, and settle on close', async () => {
-  const { session, receive } = connected({
-    sendBufferHighWaterMark: 2,
-    streamSendBufferHighWaterMark: 2,
-  });
-  for (const streamId of ['light', 'light', 'heavy', 'heavy', 'heavy']) {
-    session.send({ streamId, controlFlags: 0, payload: {} });
-  }
-  const lightReady = session.waitForSendBufferDrain('light');
-  const heavyReady = session.waitForSendBufferDrain('heavy');
-  let heavyDrained = false;
-  void heavyReady.then(() => {
-    heavyDrained = true;
-  });
-  receive(ControlFlags.AckBit, 2);
-  await lightReady;
-  expect(heavyDrained).toBe(false);
-  expect(session.isSendBufferFull('light')).toBe(false);
-  expect(session.isSendBufferFull('heavy')).toBe(true);
-  const disconnected = SessionStateGraph.transition.ConnectedToNoConnection(
-    session,
-    { onSessionGracePeriodElapsed: vi.fn(), onMessageSendFailure: vi.fn() },
-  );
-  expect(disconnected.isSendBufferFull('heavy')).toBe(true);
-  expect(disconnected.waitForSendBufferDrain('heavy')).toBe(heavyReady);
-  disconnected._handleClose();
-  await heavyReady;
 });

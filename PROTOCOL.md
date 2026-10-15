@@ -672,38 +672,19 @@ This ensures exactly-once delivery semantics.
 #### Optional receiver-driven acknowledgements
 
 A receiver MAY send an explicit ACK after a configured number of inbound
-non-ACK messages or a maximum delay, whichever occurs first. The TypeScript
-implementation enables this with `receiverAck: { maxMessages, maxDelayMs }`;
-it is disabled by default. An outgoing message carries the current cumulative
-ACK and cancels the pending batch. Replayed messages retain their original
-ACK field and do not cancel a pending batch.
-
-These ACKs use the existing `heartbeat` stream, `AckBit`, and `{ type: 'ACK' }`
-payload. They participate in sequencing and replay exactly like heartbeat
-ACKs. There is no new wire field, capability negotiation, or protocol version.
-An older active-heartbeat peer consumes them without replying; an older
-passive-heartbeat peer responds with its normal heartbeat ACK. ACK messages
-MUST NOT count toward the receiver-driven threshold or arm its timer. The
-existing active/passive heartbeat roles remain unchanged, avoiding ACK loops.
-Either endpoint may enable receiver-driven ACKs independently. Timers are
-cancelled when a connected state exits; heartbeat ACKs still guarantee progress
-after reconnect and when receiver-driven ACKs are disabled.
+non-ACK messages or a delay: `receiverAck: { maxMessages, maxDelayMs }`.
+This is disabled by default. Piggybacked ACKs cancel pending batches; ACK
+frames do not schedule batches. These are existing heartbeat ACK frames, so
+either peer can opt in without negotiation or a protocol version change.
+Existing active/passive heartbeat behavior and reconnect guarantees remain.
 
 #### Optional per-stream advisory backpressure
 
-`streamSendBufferHighWaterMark` opts the TypeScript router's writers into a
-per-stream message-count watermark instead of the shared session watermark.
-Each writer counts all unacknowledged messages on its stream, including open
-and close frames. A busy stream does not consume another stream's allowance.
-Cumulative session ACKs free the corresponding stream slots; reconnect carries
-both buffered messages and pending drain waiters. Session destruction releases
-all waiters.
-
-This is a local producer policy, not a wire change or a hard memory limit.
-Writes remain accepted even when they return `false`. Many streams may
-collectively exceed the session watermark in this mode; callers must bound
-stream concurrency and retained bytes separately. Unscoped transport accessors
-and transports without the option retain session-level backpressure.
+`streamSendBufferHighWaterMark` makes router writers use their own unacknowledged
+message count instead of the shared session watermark. It is disabled by default.
+ACKs release slots; reconnect preserves pending waiters and close releases them.
+Writes remain advisory and accepted. This is not a memory cap: aggregate occupancy
+can exceed the session watermark. Unscoped accessors retain session behavior.
 
 #### On disconnect
 

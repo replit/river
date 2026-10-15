@@ -146,15 +146,9 @@ export interface SessionOptions {
    * session close.
    */
   sendBufferHighWaterMark: number;
-  /**
-   * Optional per-stream advisory watermark. When set, stream writers use
-   * this limit instead of the session watermark. This is not a memory cap.
-   */
+  /** Opt-in per-stream advisory watermark instead of the session watermark. */
   streamSendBufferHighWaterMark?: number;
-  /**
-   * Opt-in ACK batching for inbound non-ACK messages. Outbound messages
-   * already carry an ACK and cancel any pending batch.
-   */
+  /** Opt-in ACK batching for inbound non-ACK messages. */
   receiverAck?: { maxMessages: number; maxDelayMs: number };
   /**
    * The codec to use for encoding/decoding messages over the wire
@@ -213,6 +207,11 @@ export interface IdentifiedSessionListeners {
   ) => void;
 }
 
+interface StreamSendBuffer {
+  size: number;
+  waiter?: PromiseWithResolvers<void>;
+}
+
 // all sessions where we know the other side's client id
 export interface IdentifiedSessionProps extends CommonSessionProps {
   id: SessionId;
@@ -222,7 +221,7 @@ export interface IdentifiedSessionProps extends CommonSessionProps {
   seqSent: number;
   sendBuffer: Array<EncodedTransportMessage>;
   sendBufferDrainWaiter: PromiseWithResolvers<void> | undefined;
-  streamSendBufferDrainWaiters?: Map<string, PromiseWithResolvers<void>>;
+  streamSendBuffers?: Map<string, StreamSendBuffer>;
   telemetry: TelemetryInfo;
   protocolVersion: ProtocolVersion;
   listeners: IdentifiedSessionListeners;
@@ -257,12 +256,7 @@ export abstract class IdentifiedSession extends CommonSession {
    * Carried across session state transitions alongside {@link sendBuffer}.
    */
   sendBufferDrainWaiter: PromiseWithResolvers<void> | undefined;
-  readonly streamSendBufferDrainWaiters: Map<
-    string,
-    PromiseWithResolvers<void>
-  >;
-
-  private readonly streamSendBufferSizes = new Map<string, number>();
+  readonly streamSendBuffers: Map<string, StreamSendBuffer>;
 
   constructor(props: IdentifiedSessionProps) {
     const {
@@ -285,11 +279,17 @@ export abstract class IdentifiedSession extends CommonSession {
     this.ack = ack;
     this.sendBuffer = sendBuffer;
     this.sendBufferDrainWaiter = sendBufferDrainWaiter;
-    this.streamSendBufferDrainWaiters =
-      props.streamSendBufferDrainWaiters ??
-      new Map<string, PromiseWithResolvers<void>>();
-    for (const msg of sendBuffer) {
-      this.addStreamBufferEntry(msg);
+    this.streamSendBuffers =
+      props.streamSendBuffers ?? new Map<string, StreamSendBuffer>();
+    if (
+      !props.streamSendBuffers &&
+      this.options.streamSendBufferHighWaterMark
+    ) {
+      for (const { msg } of sendBuffer) {
+        const stream = this.streamSendBuffers.get(msg.streamId) ?? { size: 0 };
+        stream.size++;
+        this.streamSendBuffers.set(msg.streamId, stream);
+      }
     }
     this.telemetry = telemetry;
     this.log = log;
@@ -361,7 +361,7 @@ export abstract class IdentifiedSession extends CommonSession {
       this.options.streamSendBufferHighWaterMark !== undefined
     ) {
       return (
-        (this.streamSendBufferSizes.get(streamId) ?? 0) >=
+        (this.streamSendBuffers.get(streamId)?.size ?? 0) >=
         this.options.streamSendBufferHighWaterMark
       );
     }
@@ -380,17 +380,12 @@ export abstract class IdentifiedSession extends CommonSession {
       return Promise.resolve();
     }
 
-    if (
-      streamId !== undefined &&
-      this.options.streamSendBufferHighWaterMark !== undefined
-    ) {
-      let waiter = this.streamSendBufferDrainWaiters.get(streamId);
-      if (!waiter) {
-        waiter = createPromiseWithResolvers();
-        this.streamSendBufferDrainWaiters.set(streamId, waiter);
-      }
+    const stream =
+      streamId === undefined ? undefined : this.streamSendBuffers.get(streamId);
+    if (stream) {
+      stream.waiter ??= createPromiseWithResolvers();
 
-      return waiter.promise;
+      return stream.waiter.promise;
     }
 
     this.sendBufferDrainWaiter ??= createPromiseWithResolvers();
@@ -399,53 +394,19 @@ export abstract class IdentifiedSession extends CommonSession {
   }
 
   protected notifySendBufferDrain(): void {
-    if (!this.isSendBufferFull()) {
-      this.sendBufferDrainWaiter?.resolve();
-      this.sendBufferDrainWaiter = undefined;
-    }
-    for (const [streamId, waiter] of this.streamSendBufferDrainWaiters) {
-      if (!this.isSendBufferFull(streamId)) {
-        waiter.resolve();
-        this.streamSendBufferDrainWaiters.delete(streamId);
-      }
-    }
-  }
-
-  private addStreamBufferEntry(msg: EncodedTransportMessage): void {
-    if (this.options.streamSendBufferHighWaterMark === undefined) {
-      return;
-    }
-    const streamId = msg.msg.streamId;
-    this.streamSendBufferSizes.set(
-      streamId,
-      (this.streamSendBufferSizes.get(streamId) ?? 0) + 1,
-    );
+    this.sendBufferDrainWaiter?.resolve();
+    this.sendBufferDrainWaiter = undefined;
   }
 
   protected bufferMessage(msg: EncodedTransportMessage): void {
     this.sendBuffer.push(msg);
-    this.addStreamBufferEntry(msg);
-  }
-
-  protected acknowledgeSendBuffer(ack: number): void {
-    this.sendBuffer = this.sendBuffer.filter((msg) => {
-      if (msg.seq >= ack) {
-        return true;
-      }
-      if (this.options.streamSendBufferHighWaterMark === undefined) {
-        return false;
-      }
-      const streamId = msg.msg.streamId;
-      const remaining = (this.streamSendBufferSizes.get(streamId) ?? 1) - 1;
-      if (remaining === 0) {
-        this.streamSendBufferSizes.delete(streamId);
-      } else {
-        this.streamSendBufferSizes.set(streamId, remaining);
-      }
-
-      return false;
-    });
-    this.notifySendBufferDrain();
+    if (this.options.streamSendBufferHighWaterMark !== undefined) {
+      const stream = this.streamSendBuffers.get(msg.msg.streamId) ?? {
+        size: 0,
+      };
+      stream.size++;
+      this.streamSendBuffers.set(msg.msg.streamId, stream);
+    }
   }
 
   send(msg: PartialTransportMessage): SendResult {
@@ -469,7 +430,9 @@ export abstract class IdentifiedSession extends CommonSession {
   _handleClose(): void {
     // zero out the buffer
     this.sendBuffer.length = 0;
-    this.streamSendBufferSizes.clear();
+    for (const stream of this.streamSendBuffers.values())
+      stream.waiter?.resolve();
+    this.streamSendBuffers.clear();
     // wake any producers waiting for drain so they don't hang forever,
     // they should check isWritable/isSendBufferFull before writing again
     this.notifySendBufferDrain();

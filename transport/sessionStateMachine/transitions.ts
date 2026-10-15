@@ -60,7 +60,7 @@ function inheritSharedSession(
     seqSent: session.seqSent,
     sendBuffer: session.sendBuffer,
     sendBufferDrainWaiter: session.sendBufferDrainWaiter,
-    streamSendBufferDrainWaiters: session.streamSendBufferDrainWaiters,
+    streamSendBuffers: session.streamSendBuffers,
     telemetry: session.telemetry,
     options: session.options,
     log: session.log,
