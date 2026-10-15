@@ -118,6 +118,26 @@ export abstract class Transport<
     providedOptions?: ProvidedTransportOptions,
   ) {
     this.options = { ...defaultTransportOptions, ...providedOptions };
+    const streamMark = this.options.streamSendBufferHighWaterMark;
+    if (
+      streamMark !== undefined &&
+      (!Number.isSafeInteger(streamMark) || streamMark < 1)
+    ) {
+      throw new Error(
+        'streamSendBufferHighWaterMark must be a positive integer',
+      );
+    }
+    const receiverAck = this.options.receiverAck;
+    if (
+      receiverAck &&
+      (!Number.isSafeInteger(receiverAck.maxMessages) ||
+        receiverAck.maxMessages < 1 ||
+        !Number.isFinite(receiverAck.maxDelayMs) ||
+        receiverAck.maxDelayMs <= 0 ||
+        receiverAck.maxDelayMs > 2_147_483_647)
+    ) {
+      throw new Error('receiverAck requires positive message and delay limits');
+    }
     this.eventDispatcher = new EventDispatcher<
       EventTypes,
       HandshakeFailureCode
@@ -414,6 +434,7 @@ export abstract class Transport<
   getSessionBackpressure(
     to: TransportClientId,
     sessionId: SessionId,
+    streamId?: string,
   ): SessionBackpressure {
     const currentSession = () => {
       const session = this.sessions.get(to);
@@ -425,9 +446,10 @@ export abstract class Transport<
     };
 
     return {
-      isSendBufferFull: () => currentSession()?.isSendBufferFull() ?? false,
+      isSendBufferFull: () =>
+        currentSession()?.isSendBufferFull(streamId) ?? false,
       waitForSendBufferDrain: () =>
-        currentSession()?.waitForSendBufferDrain() ?? Promise.resolve(),
+        currentSession()?.waitForSendBufferDrain(streamId) ?? Promise.resolve(),
     };
   }
 }

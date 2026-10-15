@@ -60,15 +60,27 @@ export class SessionConnected<
   private isActivelyHeartbeating = false;
   private rehandshakeTimer?: ReturnType<typeof setTimeout> | undefined;
   private credentialExpiry?: number | undefined;
+  private receiverAckTimer?: ReturnType<typeof setTimeout>;
+  private pendingReceiverAckMessages = 0;
 
   updateBookkeeping(ack: number, seq: number) {
-    this.sendBuffer = this.sendBuffer.filter((unacked) => unacked.seq >= ack);
+    this.sendBuffer = this.sendBuffer.filter((msg) => {
+      if (msg.seq >= ack) return true;
+      const stream = this.streamSendBuffers.get(msg.msg.streamId);
+      if (stream) {
+        stream.size--;
+        if (!this.isSendBufferFull(msg.msg.streamId)) {
+          stream.waiter?.resolve();
+          stream.waiter = undefined;
+        }
+        if (stream.size === 0) this.streamSendBuffers.delete(msg.msg.streamId);
+      }
+
+      return false;
+    });
     this.ack = seq + 1;
     this.lastInboundAt = Date.now();
-
-    if (this.sendBuffer.length < this.options.sendBufferHighWaterMark) {
-      this.notifySendBufferDrain();
-    }
+    if (!this.isSendBufferFull()) this.notifySendBufferDrain();
   }
 
   private assertSendOrdering(encodedMsg: EncodedTransportMessage) {
@@ -91,8 +103,11 @@ export class SessionConnected<
 
     const encodedMsg = encodeResult.value;
     this.assertSendOrdering(encodedMsg);
-    this.sendBuffer.push(encodedMsg);
+    this.bufferMessage(encodedMsg);
 
+    // A synchronous connection can deliver more inbound messages during send.
+    // Only clear the batch covered by the ACK we just encoded.
+    this.clearReceiverAck();
     const sent = this.conn.send(encodedMsg.data);
     if (!sent) {
       const reason = 'failed to send message';
@@ -216,6 +231,32 @@ export class SessionConnected<
     } satisfies PartialTransportMessage;
 
     this.send(heartbeat);
+  }
+
+  private clearReceiverAck(): void {
+    if (this.receiverAckTimer !== undefined) {
+      clearTimeout(this.receiverAckTimer);
+      this.receiverAckTimer = undefined;
+    }
+    this.pendingReceiverAckMessages = 0;
+  }
+
+  private scheduleReceiverAck(): void {
+    const options = this.options.receiverAck;
+    if (!options) {
+      return;
+    }
+
+    this.pendingReceiverAckMessages++;
+    if (this.pendingReceiverAckMessages >= options.maxMessages) {
+      this.sendHeartbeat();
+
+      return;
+    }
+    this.receiverAckTimer ??= setTimeout(() => {
+      this.receiverAckTimer = undefined;
+      this.sendHeartbeat();
+    }, options.maxDelayMs);
   }
 
   /**
@@ -351,6 +392,7 @@ export class SessionConnected<
 
     // dispatch directly if its not an explicit ack
     if (!isAck(parsedMsg.controlFlags)) {
+      this.scheduleReceiverAck();
       // re-handshake frames ride a reserved stream and are consumed by the
       // transport, never surfaced to the router (same as the acks handled below)
       if (parsedMsg.streamId === RehandshakeStreamId) {
@@ -390,6 +432,7 @@ export class SessionConnected<
 
     this.clearHeartbeatWatchdog();
     this.clearRehandshakeTimer();
+    this.clearReceiverAck();
   }
 
   _handleClose(): void {

@@ -92,7 +92,7 @@ export interface Writable<T> {
   /**
    * {@link write} writes a value to the pipe. An error is thrown if writing to a closed {@link Writable}.
    *
-   * Returns `false` if the underlying session's send buffer is at or above
+   * Returns `false` if the underlying session or stream send buffer is at or above
    * its high-water mark, signalling that the producer should stop writing
    * until {@link waitForWriteReady} resolves. This is purely advisory —
    * the value is still buffered and will be delivered, exactly like
@@ -100,7 +100,7 @@ export interface Writable<T> {
    */
   write(value: T): boolean;
   /**
-   * {@link waitForWriteReady} resolves once the underlying session's send
+   * {@link waitForWriteReady} resolves once the underlying session or stream send
    * buffer has drained back below its high-water mark and it is productive
    * to call {@link write} again.
    *

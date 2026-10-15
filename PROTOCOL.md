@@ -669,6 +669,23 @@ When sending messages to the other side, the session associated with the connect
 When receiving messages, the transport MUST ensure that the only messages it validates are those that have a `seq` that is exactly equal to the `ack` of the session.
 This ensures exactly-once delivery semantics.
 
+#### Optional receiver-driven acknowledgements
+
+A receiver MAY send an explicit ACK after a configured number of inbound
+non-ACK messages or a delay: `receiverAck: { maxMessages, maxDelayMs }`.
+This is disabled by default. Piggybacked ACKs cancel pending batches; ACK
+frames do not schedule batches. These are existing heartbeat ACK frames, so
+either peer can opt in without negotiation or a protocol version change.
+Existing active/passive heartbeat behavior and reconnect guarantees remain.
+
+#### Optional per-stream advisory backpressure
+
+`streamSendBufferHighWaterMark` makes router writers use their own unacknowledged
+message count instead of the shared session watermark. It is disabled by default.
+ACKs release slots; reconnect preserves pending waiters and close releases them.
+Writes remain advisory and accepted. This is not a memory cap: aggregate occupancy
+can exceed the session watermark. Unscoped accessors retain session behavior.
+
 #### On disconnect
 
 Handling close events is detailed in the 'Creating Connections and Sessions' section above.

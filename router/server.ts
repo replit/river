@@ -464,6 +464,7 @@ class RiverServer<
     const sessionBackpressure = this.transport.getSessionBackpressure(
       from,
       sessionId,
+      streamId,
     );
 
     const cancelStream = (

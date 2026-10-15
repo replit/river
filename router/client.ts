@@ -342,13 +342,13 @@ function handleProc<RejectionCodeSchema extends CustomHandshakeErrorCodeSchema>(
     serverId,
     session.id,
   );
+  const procClosesWithInit = procType === 'rpc' || procType === 'subscription';
+  const streamId = generateId();
   const sessionBackpressure = transport.getSessionBackpressure(
     serverId,
     session.id,
+    streamId,
   );
-
-  const procClosesWithInit = procType === 'rpc' || procType === 'subscription';
-  const streamId = generateId();
   const { span, ctx } = createProcTelemetryInfo(
     transport.tracer,
     session,
