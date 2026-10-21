@@ -40,6 +40,7 @@ import {
   validationErrorToRiverErrors,
 } from './errors';
 import { SessionState } from '../transport/sessionStateMachine/common';
+import { MAX_TIMER_DELAY_MS } from '../transport/transport';
 
 export interface CallOptions {
   signal?: AbortSignal;
@@ -267,10 +268,9 @@ export function createClient<
   if (
     resend &&
     (!Number.isSafeInteger(resend.maxResends) ||
-      resend.maxResends < 0 ||
       !Number.isFinite(resend.newSessionWaitMs) ||
       resend.newSessionWaitMs < 0 ||
-      resend.newSessionWaitMs > 2_147_483_647)
+      resend.newSessionWaitMs > MAX_TIMER_DELAY_MS)
   ) {
     throw new RangeError('Invalid resendRefusedCalls limits');
   }
@@ -343,7 +343,7 @@ export function createClient<
         limits.newSessionWaitMs,
         signal,
       );
-      if (!ready || signal?.aborted) return result;
+      if (!ready) return result;
     }
   }
 

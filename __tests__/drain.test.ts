@@ -110,7 +110,6 @@ function setup(
     server,
     transport,
     client,
-    clientTransport,
     gate,
     uploadGate,
     effects,
@@ -227,6 +226,16 @@ test('successive refusals stop after a positive resend budget', async () => {
   await vi.advanceTimersByTimeAsync(20);
   expect(f.attempts).toHaveLength(3);
   expect(await result).toEqual(refusal);
+  expect(f.effects).toEqual(['hold']);
+});
+
+test('a negative resend budget returns the first refusal', async () => {
+  // Risk: a finite resend budget is rejected instead of disabling resend.
+  const f = setup(-1);
+  await f.block();
+  void f.server.drain({ budgetMs: 10000 });
+  expect(await f.client.test.rpc.rpc(false)).toEqual(refusal);
+  expect(f.attempts).toHaveLength(1);
   expect(f.effects).toEqual(['hold']);
 });
 

@@ -37,6 +37,8 @@ import { SessionId } from './sessionStateMachine/common';
 import { Tracer } from '@opentelemetry/api';
 import { getTracer } from '../tracing';
 
+export const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
 /**
  * Represents the possible states of a transport.
  * @property {'open'} open - The transport is open and operational (note that this doesn't mean it is actively connected)
@@ -134,7 +136,7 @@ export abstract class Transport<
         receiverAck.maxMessages < 1 ||
         !Number.isFinite(receiverAck.maxDelayMs) ||
         receiverAck.maxDelayMs <= 0 ||
-        receiverAck.maxDelayMs > 2_147_483_647)
+        receiverAck.maxDelayMs > MAX_TIMER_DELAY_MS)
     ) {
       throw new Error('receiverAck requires positive message and delay limits');
     }

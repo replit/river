@@ -50,7 +50,7 @@ import { Connection } from '../transport/connection';
 import { ServerTransport } from '../transport/server';
 import { ReadableImpl, WritableImpl } from './streams';
 import { IdentifiedSession } from '../transport/sessionStateMachine/common';
-import { SessionBoundSendFn } from '../transport/transport';
+import { MAX_TIMER_DELAY_MS, SessionBoundSendFn } from '../transport/transport';
 import { createPromiseWithResolvers } from '../transport/promises';
 
 type StreamId = string;
@@ -1089,7 +1089,7 @@ class RiverServer<
     if (
       !Number.isFinite(budgetMs) ||
       budgetMs < 0 ||
-      budgetMs > 2_147_483_647
+      budgetMs > MAX_TIMER_DELAY_MS
     ) {
       throw new RangeError('budgetMs must be between 0 and 2147483647');
     }

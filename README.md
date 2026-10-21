@@ -172,12 +172,7 @@ return Err({ code: 'INVALID_INPUT', message: 'Value must be positive' });
 
 #### Graceful server drain
 
-`server.drain({ budgetMs })` refuses all new procedures with `SERVER_DRAINING`
-(`SERVER_DRAINING_CODE`) before middleware or handlers run. Handlers must not emit it.
-Drain waits only for admitted RPCs and uploads, until they finish or the budget expires.
-It then closes the whole transport, ends streams, and deletes sessions so they cannot resume.
-The promise resolves after close. Use one router per draining transport.
-Call `server.close()` separately to dispose services.
+`server.drain({ budgetMs })` refuses new calls with `SERVER_DRAINING` before handlers run. It waits for in-flight RPCs and uploads up to `budgetMs`, then closes the transport.
 
 ```ts
 const client = createClient<ServiceSurface>(transport, 'SERVER', {
@@ -185,14 +180,7 @@ const client = createClient<ServiceSurface>(transport, 'SERVER', {
 });
 ```
 
-Resend is off by default and applies only to RPCs refused with `SERVER_DRAINING`.
-Each resend waits for a connected session with a new ID. Other errors and disconnects are not retried.
-Resends stop at `maxResends`. Each wait stops at `newSessionWaitMs`.
-An abort before resend dispatch returns the original refusal without resending, while an abort after dispatch follows normal call cancellation.
-Wait expiry or transport close also returns the refusal.
-`maxResends` must be a non-negative safe integer. Both time limits must be finite, non-negative, and at most 2147483647 ms.
-The protobuf router is excluded.
-`ReaderErrorSchema` gains a code. Exhaustive TypeScript error switches need a new case.
+Resend is off by default. It only resends RPCs refused with `SERVER_DRAINING` on a new session, bounded by `maxResends` and `newSessionWaitMs`. `ReaderErrorSchema` gains a code. Exhaustive TypeScript error switches need a new case.
 
 #### Custom Error Types
 
