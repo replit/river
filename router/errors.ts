@@ -35,6 +35,7 @@ export const INVALID_REQUEST_CODE = 'INVALID_REQUEST';
  * {@link CANCEL_CODE} is the code used when either server or client cancels the stream.
  */
 export const CANCEL_CODE = 'CANCEL';
+export const SERVER_DRAINING_CODE = 'SERVER_DRAINING';
 
 type TLiteralString = TLiteral<string>;
 
@@ -122,6 +123,10 @@ export const CancelResultSchema = ErrResultSchema(CancelErrorSchema);
  * on the client).
  */
 export const ReaderErrorSchema = Type.Union([
+  Type.Object({
+    code: Type.Literal(SERVER_DRAINING_CODE),
+    message: Type.String(),
+  }),
   Type.Object({
     code: Type.Literal(UNCAUGHT_ERROR_CODE),
     message: Type.String(),

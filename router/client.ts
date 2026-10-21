@@ -34,10 +34,12 @@ import { PayloadType, ValidProcType } from './procedures';
 import {
   BaseErrorSchemaType,
   CANCEL_CODE,
+  SERVER_DRAINING_CODE,
   ReaderErrorResultSchema,
   UNEXPECTED_DISCONNECT_CODE,
   validationErrorToRiverErrors,
 } from './errors';
+import { SessionState } from '../transport/sessionStateMachine/common';
 
 export interface CallOptions {
   signal?: AbortSignal;
@@ -205,6 +207,7 @@ function _createRecursiveProxy(
 }
 
 export interface ClientOptions {
+  resendRefusedCalls?: { maxResends: number; newSessionWaitMs: number };
   connectOnInvoke: boolean;
   eagerlyConnect: boolean;
   /**
@@ -260,6 +263,16 @@ export function createClient<
   }
 
   const clientOptions = { ...defaultClientOptions, ...providedClientOptions };
+  const resend = clientOptions.resendRefusedCalls;
+  if (
+    resend &&
+    (!Number.isSafeInteger(resend.maxResends) ||
+      resend.maxResends < 0 ||
+      !Number.isFinite(resend.newSessionWaitMs) ||
+      resend.newSessionWaitMs < 0)
+  ) {
+    throw new RangeError('Invalid resendRefusedCalls limits');
+  }
   if (clientOptions.eagerlyConnect) {
     transport.connect(serverId);
   }
@@ -294,15 +307,68 @@ export function createClient<
       callOptions as CallOptions | undefined,
     );
 
-    return handleProc(
-      procMethod === 'subscribe' ? 'subscription' : procMethod,
-      transport,
-      serverId,
-      init,
-      serviceName,
-      procName,
-      merged.signal,
-    );
+    const invoke = () =>
+      handleProc(
+        procMethod === 'subscribe' ? 'subscription' : procMethod,
+        transport,
+        serverId,
+        init,
+        serviceName,
+        procName,
+        merged.signal,
+      );
+    if (procMethod !== 'rpc' || !resend) return invoke();
+
+    return (async () => {
+      for (let attempt = 0; ; attempt++) {
+        const response = invoke() as ReturnType<RpcFn<AnyService, string>>;
+        const sessionId = transport.sessions.get(serverId)?.id;
+        const result = await response;
+        const waitForNewSession = (): Promise<boolean> => {
+          return new Promise((resolve) => {
+            const finish = (ready: boolean) => {
+              clearTimeout(timer);
+              transport.removeEventListener('sessionTransition', check);
+              transport.removeEventListener('transportStatus', check);
+              merged.signal?.removeEventListener('abort', aborted);
+              resolve(ready);
+            };
+            const aborted = () => finish(false);
+            const check = () => {
+              const session = transport.sessions.get(serverId);
+              if (
+                merged.signal?.aborted === true ||
+                transport.getStatus() === 'closed'
+              ) {
+                finish(false);
+              } else if (
+                session &&
+                session.id !== sessionId &&
+                session.state === SessionState.Connected
+              ) {
+                finish(true);
+              }
+            };
+            const timer = setTimeout(
+              () => finish(false),
+              resend.newSessionWaitMs,
+            );
+            transport.addEventListener('sessionTransition', check);
+            transport.addEventListener('transportStatus', check);
+            merged.signal?.addEventListener('abort', aborted, { once: true });
+            check();
+          });
+        };
+        if (
+          result.ok ||
+          result.payload.code !== SERVER_DRAINING_CODE ||
+          attempt >= resend.maxResends ||
+          !(await waitForNewSession())
+        ) {
+          return result;
+        }
+      }
+    })();
   }, []) as Client<ServiceSchemaMap>;
 }
 

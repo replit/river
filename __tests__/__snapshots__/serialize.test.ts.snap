@@ -22,6 +22,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
               {
                 "properties": {
                   "code": {
+                    "const": "SERVER_DRAINING",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
                     "const": "UNCAUGHT_ERROR",
                     "type": "string",
                   },
@@ -145,6 +161,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
               {
                 "properties": {
                   "code": {
+                    "const": "SERVER_DRAINING",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
                     "const": "UNCAUGHT_ERROR",
                     "type": "string",
                   },
@@ -260,6 +292,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
         "arrayStream": {
           "errors": {
             "anyOf": [
+              {
+                "properties": {
+                  "code": {
+                    "const": "SERVER_DRAINING",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
               {
                 "properties": {
                   "code": {
@@ -382,6 +430,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
         "echo": {
           "errors": {
             "anyOf": [
+              {
+                "properties": {
+                  "code": {
+                    "const": "SERVER_DRAINING",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
               {
                 "properties": {
                   "code": {
@@ -514,6 +578,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
           "description": "Echos back whatever we sent",
           "errors": {
             "anyOf": [
+              {
+                "properties": {
+                  "code": {
+                    "const": "SERVER_DRAINING",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
               {
                 "properties": {
                   "code": {
@@ -678,6 +758,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
               {
                 "properties": {
                   "code": {
+                    "const": "SERVER_DRAINING",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
                     "const": "UNCAUGHT_ERROR",
                     "type": "string",
                   },
@@ -816,6 +912,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
               {
                 "properties": {
                   "code": {
+                    "const": "SERVER_DRAINING",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
+              {
+                "properties": {
+                  "code": {
                     "const": "UNCAUGHT_ERROR",
                     "type": "string",
                   },
@@ -922,6 +1034,22 @@ exports[`serialize server to jsonschema > serialize entire service schema 1`] = 
         "unimplementedUpload": {
           "errors": {
             "anyOf": [
+              {
+                "properties": {
+                  "code": {
+                    "const": "SERVER_DRAINING",
+                    "type": "string",
+                  },
+                  "message": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "code",
+                  "message",
+                ],
+                "type": "object",
+              },
               {
                 "properties": {
                   "code": {
@@ -1047,6 +1175,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
           {
             "properties": {
               "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
                 "const": "UNCAUGHT_ERROR",
                 "type": "string",
               },
@@ -1170,6 +1314,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
           {
             "properties": {
               "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
                 "const": "UNCAUGHT_ERROR",
                 "type": "string",
               },
@@ -1285,6 +1445,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
     "arrayStream": {
       "errors": {
         "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
           {
             "properties": {
               "code": {
@@ -1407,6 +1583,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
     "echo": {
       "errors": {
         "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
           {
             "properties": {
               "code": {
@@ -1539,6 +1731,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
       "description": "Echos back whatever we sent",
       "errors": {
         "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
           {
             "properties": {
               "code": {
@@ -1703,6 +1911,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
           {
             "properties": {
               "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
                 "const": "UNCAUGHT_ERROR",
                 "type": "string",
               },
@@ -1841,6 +2065,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
           {
             "properties": {
               "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
                 "const": "UNCAUGHT_ERROR",
                 "type": "string",
               },
@@ -1947,6 +2187,22 @@ exports[`serialize service to jsonschema > serialize backwards compatible with v
     "unimplementedUpload": {
       "errors": {
         "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
           {
             "properties": {
               "code": {
@@ -2070,6 +2326,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
           {
             "properties": {
               "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
                 "const": "UNCAUGHT_ERROR",
                 "type": "string",
               },
@@ -2193,6 +2465,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
           {
             "properties": {
               "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
                 "const": "UNCAUGHT_ERROR",
                 "type": "string",
               },
@@ -2308,6 +2596,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
     "arrayStream": {
       "errors": {
         "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
           {
             "properties": {
               "code": {
@@ -2430,6 +2734,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
     "echo": {
       "errors": {
         "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
           {
             "properties": {
               "code": {
@@ -2562,6 +2882,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
       "description": "Echos back whatever we sent",
       "errors": {
         "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
           {
             "properties": {
               "code": {
@@ -2726,6 +3062,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
           {
             "properties": {
               "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
                 "const": "UNCAUGHT_ERROR",
                 "type": "string",
               },
@@ -2864,6 +3216,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
           {
             "properties": {
               "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
                 "const": "UNCAUGHT_ERROR",
                 "type": "string",
               },
@@ -2970,6 +3338,22 @@ exports[`serialize service to jsonschema > serialize basic service 1`] = `
     "unimplementedUpload": {
       "errors": {
         "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
           {
             "properties": {
               "code": {
@@ -3090,6 +3474,22 @@ exports[`serialize service to jsonschema > serialize service with binary 1`] = `
     "getFile": {
       "errors": {
         "anyOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
           {
             "properties": {
               "code": {
@@ -3267,6 +3667,22 @@ exports[`serialize service to jsonschema > serialize service with errors 1`] = `
           {
             "properties": {
               "code": {
+                "const": "SERVER_DRAINING",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
                 "const": "UNCAUGHT_ERROR",
                 "type": "string",
               },
@@ -3395,6 +3811,22 @@ exports[`serialize service to jsonschema > serialize service with errors 1`] = `
             "properties": {
               "code": {
                 "const": "STREAM_ERROR",
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "SERVER_DRAINING",
                 "type": "string",
               },
               "message": {

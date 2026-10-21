@@ -170,6 +170,45 @@ return Ok({ result: 42 });
 return Err({ code: 'INVALID_INPUT', message: 'Value must be positive' });
 ```
 
+#### Graceful server drain
+
+The TypeBox router server exposes `server.drain({ budgetMs: number }): Promise<void>`.
+The budget must be finite and non-negative. Drain immediately stops accepting new
+procedure invocations. RPCs, uploads, subscriptions, and streams receive an error
+result with the reserved code `SERVER_DRAINING` (exported as
+`SERVER_DRAINING_CODE`). This code guarantees that the handler and middleware did
+not run. Application handlers must not emit this reserved code.
+
+Existing calls may finish until the budget expires. Drain then closes the entire
+server transport and deletes its sessions; these sessions cannot be resumed.
+The promise resolves when the transport has closed. Repeated calls share the
+first drain's budget and promise. An idle server closes immediately.
+Closing the transport cancels unfinished calls but cannot force JavaScript
+handlers to stop; handlers should observe their cancellation signal.
+Call `server.close()` separately to dispose service and extended-context resources.
+Do not share a draining transport with another router.
+
+Clients can opt in to resending refused unary RPCs:
+
+```ts
+const client = createClient<ServiceSurface>(transport, 'SERVER', {
+  resendRefusedCalls: { maxResends: 3, newSessionWaitMs: 30_000 },
+});
+```
+
+This option is off by default. Only `SERVER_DRAINING` results are retried.
+Each retry waits for a connected session with a different session ID, not just
+a new connection on the old session. The transport's existing reconnection policy
+still applies; route reconnects to a healthy server. Each wait has its own timeout.
+The original refusal is returned if the retry budget or wait expires, the
+transport closes, or the caller aborts while waiting. Normal call cancellation
+applies during an attempt. Limits must be finite and non-negative, and
+`maxResends` must be a safe integer.
+
+Uploads, subscriptions, and streams are never replayed. There is no unbounded
+backoff after exhaustion. These APIs do not currently apply to the experimental
+protobuf router.
+
 #### Custom Error Types
 
 You can define custom error schemas for your procedures:

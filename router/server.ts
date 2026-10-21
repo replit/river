@@ -6,6 +6,7 @@ import {
   UNEXPECTED_DISCONNECT_CODE,
   CANCEL_CODE,
   INVALID_REQUEST_CODE,
+  SERVER_DRAINING_CODE,
   BaseErrorSchemaType,
   ValidationErrors,
   castTypeboxValueErrors,
@@ -72,6 +73,7 @@ export interface Server<
   streams: Map<StreamId, ProcStream<ParsedMetadata>>;
 
   close: () => Promise<void>;
+  drain: (options: { budgetMs: number }) => Promise<void>;
 }
 
 interface StreamInitProps<Context, ParsedMetadata> {
@@ -146,6 +148,10 @@ class RiverServer<
   >;
 
   private unregisterTransportListeners: () => void;
+  private drainState:
+    | { status: 'accepting' }
+    | { status: 'draining'; promise: Promise<void>; finish: () => void }
+    | { status: 'drained'; promise: Promise<void> } = { status: 'accepting' };
 
   constructor(
     transport: ServerTransport<
@@ -228,6 +234,21 @@ class RiverServer<
       // and tell the client to cancel
       const newStreamProps = this.validateNewProcStream(message);
       if (!newStreamProps) {
+        return;
+      }
+
+      if (this.drainState.status !== 'accepting') {
+        const session = newStreamProps.initialSession;
+        this.cancelStream(
+          message.from,
+          transport.getSessionBoundSendFn(message.from, session.id),
+          streamId,
+          Err({
+            code: SERVER_DRAINING_CODE,
+            message: 'Server is draining; the procedure was not run',
+          }),
+        );
+
         return;
       }
 
@@ -543,6 +564,9 @@ class RiverServer<
     const cleanup = () => {
       finishedController.abort();
       this.streams.delete(streamId);
+      if (this.streams.size === 0 && this.drainState.status === 'draining') {
+        this.drainState.finish();
+      }
       void runDeferredCleanups();
     };
 
@@ -776,6 +800,10 @@ class RiverServer<
       }
     };
 
+    if (!finishedController.signal.aborted) {
+      this.streams.set(streamId, procStream);
+    }
+
     // Start the middleware chain, which will eventually call runProcedureHandler
     this.middlewares.reduceRight(
       (next: () => void, middleware: Middleware) => {
@@ -791,10 +819,6 @@ class RiverServer<
         void runProcedureHandler();
       },
     )();
-
-    if (!finishedController.signal.aborted) {
-      this.streams.set(streamId, procStream);
-    }
   }
 
   private getContext(service: AnyService, serviceName: string) {
@@ -1050,6 +1074,33 @@ class RiverServer<
     cancelledStreamsInSession.add(streamId);
     const msg = cancelMessage(streamId, payload);
     sessionScopedSend(msg);
+  }
+
+  drain({ budgetMs }: { budgetMs: number }): Promise<void> {
+    if (!Number.isFinite(budgetMs) || budgetMs < 0) {
+      throw new RangeError('budgetMs must be a finite non-negative number');
+    }
+    switch (this.drainState.status) {
+      case 'draining':
+      case 'drained':
+        return this.drainState.promise;
+      case 'accepting': {
+        let finish!: () => void;
+        const waiting = new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+        const timer = setTimeout(finish, budgetMs);
+        const promise = waiting.then(() => {
+          clearTimeout(timer);
+          this.drainState = { status: 'drained', promise };
+          this.transport.close();
+        });
+        this.drainState = { status: 'draining', promise, finish };
+        if (this.streams.size === 0) finish();
+
+        return promise;
+      }
+    }
   }
 
   async close() {
