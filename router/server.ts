@@ -566,7 +566,7 @@ class RiverServer<
     const cleanup = () => {
       finishedController.abort();
       this.streams.delete(streamId);
-      if (!this.hasPendingResponse() && this.drainState.status === 'draining') {
+      if (this.drainState.status === 'draining' && !this.hasPendingResponse()) {
         this.drainState.finish();
       }
       void runDeferredCleanups();

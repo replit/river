@@ -269,12 +269,82 @@ export function createClient<
     (!Number.isSafeInteger(resend.maxResends) ||
       resend.maxResends < 0 ||
       !Number.isFinite(resend.newSessionWaitMs) ||
-      resend.newSessionWaitMs < 0)
+      resend.newSessionWaitMs < 0 ||
+      resend.newSessionWaitMs > 2_147_483_647)
   ) {
     throw new RangeError('Invalid resendRefusedCalls limits');
   }
   if (clientOptions.eagerlyConnect) {
     transport.connect(serverId);
+  }
+
+  function waitForNewSession(
+    sessionId: string | undefined,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    return new Promise((resolve) => {
+      const finish = (ready: boolean) => {
+        clearTimeout(timer);
+        transport.removeEventListener('sessionTransition', check);
+        transport.removeEventListener('transportStatus', check);
+        signal?.removeEventListener('abort', aborted);
+        resolve(ready);
+      };
+      const aborted = () => finish(false);
+      const check = () => {
+        const session = transport.sessions.get(serverId);
+        if (signal?.aborted === true || transport.getStatus() === 'closed') {
+          finish(false);
+        } else if (
+          session &&
+          session.id !== sessionId &&
+          session.state === SessionState.Connected
+        ) {
+          finish(true);
+        }
+      };
+      const timer = setTimeout(() => finish(false), timeoutMs);
+      transport.addEventListener('sessionTransition', check);
+      transport.addEventListener('transportStatus', check);
+      signal?.addEventListener('abort', aborted, { once: true });
+      check();
+    });
+  }
+
+  async function rpcWithResends(
+    init: Static<PayloadType>,
+    serviceName: string,
+    procedureName: string,
+    limits: NonNullable<ClientOptions['resendRefusedCalls']>,
+    signal?: AbortSignal,
+  ) {
+    for (let attempt = 0; ; attempt++) {
+      const response = handleProc(
+        'rpc',
+        transport,
+        serverId,
+        init,
+        serviceName,
+        procedureName,
+        signal,
+      );
+      const sessionId = transport.sessions.get(serverId)?.id;
+      const result = await response;
+      if (
+        result.ok ||
+        result.payload.code !== SERVER_DRAINING_CODE ||
+        attempt >= limits.maxResends
+      ) {
+        return result;
+      }
+      const ready = await waitForNewSession(
+        sessionId,
+        limits.newSessionWaitMs,
+        signal,
+      );
+      if (!ready || signal?.aborted) return result;
+    }
   }
 
   return _createRecursiveProxy((opts) => {
@@ -307,68 +377,19 @@ export function createClient<
       callOptions as CallOptions | undefined,
     );
 
-    const invoke = () =>
-      handleProc(
-        procMethod === 'subscribe' ? 'subscription' : procMethod,
-        transport,
-        serverId,
-        init,
-        serviceName,
-        procName,
-        merged.signal,
-      );
-    if (procMethod !== 'rpc' || !resend) return invoke();
+    if (procMethod === 'rpc' && resend) {
+      return rpcWithResends(init, serviceName, procName, resend, merged.signal);
+    }
 
-    return (async () => {
-      for (let attempt = 0; ; attempt++) {
-        const response = invoke() as ReturnType<RpcFn<AnyService, string>>;
-        const sessionId = transport.sessions.get(serverId)?.id;
-        const result = await response;
-        const waitForNewSession = (): Promise<boolean> => {
-          return new Promise((resolve) => {
-            const finish = (ready: boolean) => {
-              clearTimeout(timer);
-              transport.removeEventListener('sessionTransition', check);
-              transport.removeEventListener('transportStatus', check);
-              merged.signal?.removeEventListener('abort', aborted);
-              resolve(ready);
-            };
-            const aborted = () => finish(false);
-            const check = () => {
-              const session = transport.sessions.get(serverId);
-              if (
-                merged.signal?.aborted === true ||
-                transport.getStatus() === 'closed'
-              ) {
-                finish(false);
-              } else if (
-                session &&
-                session.id !== sessionId &&
-                session.state === SessionState.Connected
-              ) {
-                finish(true);
-              }
-            };
-            const timer = setTimeout(
-              () => finish(false),
-              resend.newSessionWaitMs,
-            );
-            transport.addEventListener('sessionTransition', check);
-            transport.addEventListener('transportStatus', check);
-            merged.signal?.addEventListener('abort', aborted, { once: true });
-            check();
-          });
-        };
-        if (
-          result.ok ||
-          result.payload.code !== SERVER_DRAINING_CODE ||
-          attempt >= resend.maxResends ||
-          !(await waitForNewSession())
-        ) {
-          return result;
-        }
-      }
-    })();
+    return handleProc(
+      procMethod === 'subscribe' ? 'subscription' : procMethod,
+      transport,
+      serverId,
+      init,
+      serviceName,
+      procName,
+      merged.signal,
+    );
   }, []) as Client<ServiceSchemaMap>;
 }
 
@@ -388,6 +409,24 @@ type AnyProcReturn =
   | ReturnType<StreamFn<AnyService, string>>
   | ReturnType<SubscriptionFn<AnyService, string>>;
 
+function handleProc<RejectionCodeSchema extends CustomHandshakeErrorCodeSchema>(
+  procType: 'rpc',
+  transport: ClientTransport<Connection, RejectionCodeSchema>,
+  serverId: TransportClientId,
+  init: Static<PayloadType>,
+  serviceName: string,
+  procedureName: string,
+  abortSignal?: AbortSignal,
+): ReturnType<RpcFn<AnyService, string>>;
+function handleProc<RejectionCodeSchema extends CustomHandshakeErrorCodeSchema>(
+  procType: ValidProcType,
+  transport: ClientTransport<Connection, RejectionCodeSchema>,
+  serverId: TransportClientId,
+  init: Static<PayloadType>,
+  serviceName: string,
+  procedureName: string,
+  abortSignal?: AbortSignal,
+): AnyProcReturn;
 function handleProc<RejectionCodeSchema extends CustomHandshakeErrorCodeSchema>(
   procType: ValidProcType,
   transport: ClientTransport<Connection, RejectionCodeSchema>,
