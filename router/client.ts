@@ -34,10 +34,13 @@ import { PayloadType, ValidProcType } from './procedures';
 import {
   BaseErrorSchemaType,
   CANCEL_CODE,
+  SERVER_DRAINING_CODE,
   ReaderErrorResultSchema,
   UNEXPECTED_DISCONNECT_CODE,
   validationErrorToRiverErrors,
 } from './errors';
+import { SessionState } from '../transport/sessionStateMachine/common';
+import { MAX_TIMER_DELAY_MS } from '../transport/transport';
 
 export interface CallOptions {
   signal?: AbortSignal;
@@ -205,6 +208,7 @@ function _createRecursiveProxy(
 }
 
 export interface ClientOptions {
+  resendRefusedCalls?: { maxResends: number; newSessionWaitMs: number };
   connectOnInvoke: boolean;
   eagerlyConnect: boolean;
   /**
@@ -260,8 +264,87 @@ export function createClient<
   }
 
   const clientOptions = { ...defaultClientOptions, ...providedClientOptions };
+  const resend = clientOptions.resendRefusedCalls;
+  if (
+    resend &&
+    (!Number.isSafeInteger(resend.maxResends) ||
+      !Number.isFinite(resend.newSessionWaitMs) ||
+      resend.newSessionWaitMs < 0 ||
+      resend.newSessionWaitMs > MAX_TIMER_DELAY_MS)
+  ) {
+    throw new RangeError('Invalid resendRefusedCalls limits');
+  }
   if (clientOptions.eagerlyConnect) {
     transport.connect(serverId);
+  }
+
+  function waitForNewSession(
+    sessionId: string | undefined,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    return new Promise((resolve) => {
+      const finish = (ready: boolean) => {
+        clearTimeout(timer);
+        transport.removeEventListener('sessionTransition', check);
+        transport.removeEventListener('transportStatus', check);
+        signal?.removeEventListener('abort', aborted);
+        resolve(ready);
+      };
+      const aborted = () => finish(false);
+      const check = () => {
+        const session = transport.sessions.get(serverId);
+        if (signal?.aborted === true || transport.getStatus() === 'closed') {
+          finish(false);
+        } else if (
+          session &&
+          session.id !== sessionId &&
+          session.state === SessionState.Connected
+        ) {
+          finish(true);
+        }
+      };
+      const timer = setTimeout(() => finish(false), timeoutMs);
+      transport.addEventListener('sessionTransition', check);
+      transport.addEventListener('transportStatus', check);
+      signal?.addEventListener('abort', aborted, { once: true });
+      check();
+    });
+  }
+
+  async function rpcWithResends(
+    init: Static<PayloadType>,
+    serviceName: string,
+    procedureName: string,
+    limits: NonNullable<ClientOptions['resendRefusedCalls']>,
+    signal?: AbortSignal,
+  ) {
+    for (let attempt = 0; ; attempt++) {
+      const response = handleProc(
+        'rpc',
+        transport,
+        serverId,
+        init,
+        serviceName,
+        procedureName,
+        signal,
+      );
+      const sessionId = transport.sessions.get(serverId)?.id;
+      const result = await response;
+      if (
+        result.ok ||
+        result.payload.code !== SERVER_DRAINING_CODE ||
+        attempt >= limits.maxResends
+      ) {
+        return result;
+      }
+      const ready = await waitForNewSession(
+        sessionId,
+        limits.newSessionWaitMs,
+        signal,
+      );
+      if (!ready) return result;
+    }
   }
 
   return _createRecursiveProxy((opts) => {
@@ -294,6 +377,10 @@ export function createClient<
       callOptions as CallOptions | undefined,
     );
 
+    if (procMethod === 'rpc' && resend) {
+      return rpcWithResends(init, serviceName, procName, resend, merged.signal);
+    }
+
     return handleProc(
       procMethod === 'subscribe' ? 'subscription' : procMethod,
       transport,
@@ -322,6 +409,24 @@ type AnyProcReturn =
   | ReturnType<StreamFn<AnyService, string>>
   | ReturnType<SubscriptionFn<AnyService, string>>;
 
+function handleProc<RejectionCodeSchema extends CustomHandshakeErrorCodeSchema>(
+  procType: 'rpc',
+  transport: ClientTransport<Connection, RejectionCodeSchema>,
+  serverId: TransportClientId,
+  init: Static<PayloadType>,
+  serviceName: string,
+  procedureName: string,
+  abortSignal?: AbortSignal,
+): ReturnType<RpcFn<AnyService, string>>;
+function handleProc<RejectionCodeSchema extends CustomHandshakeErrorCodeSchema>(
+  procType: ValidProcType,
+  transport: ClientTransport<Connection, RejectionCodeSchema>,
+  serverId: TransportClientId,
+  init: Static<PayloadType>,
+  serviceName: string,
+  procedureName: string,
+  abortSignal?: AbortSignal,
+): AnyProcReturn;
 function handleProc<RejectionCodeSchema extends CustomHandshakeErrorCodeSchema>(
   procType: ValidProcType,
   transport: ClientTransport<Connection, RejectionCodeSchema>,

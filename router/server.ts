@@ -6,6 +6,7 @@ import {
   UNEXPECTED_DISCONNECT_CODE,
   CANCEL_CODE,
   INVALID_REQUEST_CODE,
+  SERVER_DRAINING_CODE,
   BaseErrorSchemaType,
   ValidationErrors,
   castTypeboxValueErrors,
@@ -49,7 +50,8 @@ import { Connection } from '../transport/connection';
 import { ServerTransport } from '../transport/server';
 import { ReadableImpl, WritableImpl } from './streams';
 import { IdentifiedSession } from '../transport/sessionStateMachine/common';
-import { SessionBoundSendFn } from '../transport/transport';
+import { MAX_TIMER_DELAY_MS, SessionBoundSendFn } from '../transport/transport';
+import { createPromiseWithResolvers } from '../transport/promises';
 
 type StreamId = string;
 
@@ -72,6 +74,7 @@ export interface Server<
   streams: Map<StreamId, ProcStream<ParsedMetadata>>;
 
   close: () => Promise<void>;
+  drain: (options: { budgetMs: number }) => Promise<void>;
 }
 
 interface StreamInitProps<Context, ParsedMetadata> {
@@ -146,6 +149,11 @@ class RiverServer<
   >;
 
   private unregisterTransportListeners: () => void;
+  private drainState:
+    | { status: 'accepting' }
+    | { status: 'draining'; promise: Promise<void>; finish: () => void } = {
+    status: 'accepting',
+  };
 
   constructor(
     transport: ServerTransport<
@@ -228,6 +236,21 @@ class RiverServer<
       // and tell the client to cancel
       const newStreamProps = this.validateNewProcStream(message);
       if (!newStreamProps) {
+        return;
+      }
+
+      if (this.drainState.status !== 'accepting') {
+        const session = newStreamProps.initialSession;
+        this.cancelStream(
+          message.from,
+          transport.getSessionBoundSendFn(message.from, session.id),
+          streamId,
+          Err({
+            code: SERVER_DRAINING_CODE,
+            message: 'Server is draining; the procedure was not run',
+          }),
+        );
+
         return;
       }
 
@@ -543,6 +566,9 @@ class RiverServer<
     const cleanup = () => {
       finishedController.abort();
       this.streams.delete(streamId);
+      if (this.drainState.status === 'draining' && !this.hasPendingResponse()) {
+        this.drainState.finish();
+      }
       void runDeferredCleanups();
     };
 
@@ -776,6 +802,10 @@ class RiverServer<
       }
     };
 
+    if (!finishedController.signal.aborted) {
+      this.streams.set(streamId, procStream);
+    }
+
     // Start the middleware chain, which will eventually call runProcedureHandler
     this.middlewares.reduceRight(
       (next: () => void, middleware: Middleware) => {
@@ -791,10 +821,6 @@ class RiverServer<
         void runProcedureHandler();
       },
     )();
-
-    if (!finishedController.signal.aborted) {
-      this.streams.set(streamId, procStream);
-    }
   }
 
   private getContext(service: AnyService, serviceName: string) {
@@ -1050,6 +1076,40 @@ class RiverServer<
     cancelledStreamsInSession.add(streamId);
     const msg = cancelMessage(streamId, payload);
     sessionScopedSend(msg);
+  }
+
+  private hasPendingResponse(): boolean {
+    return [...this.streams.values()].some(
+      ({ procedure }) =>
+        procedure.type === 'rpc' || procedure.type === 'upload',
+    );
+  }
+
+  drain({ budgetMs }: { budgetMs: number }): Promise<void> {
+    if (
+      !Number.isFinite(budgetMs) ||
+      budgetMs < 0 ||
+      budgetMs > MAX_TIMER_DELAY_MS
+    ) {
+      throw new RangeError('budgetMs must be between 0 and 2147483647');
+    }
+    switch (this.drainState.status) {
+      case 'draining':
+        return this.drainState.promise;
+      case 'accepting': {
+        const { promise: waiting, resolve: finish } =
+          createPromiseWithResolvers<void>();
+        const timer = setTimeout(finish, budgetMs);
+        const promise = waiting.then(() => {
+          clearTimeout(timer);
+          this.transport.close();
+        });
+        this.drainState = { status: 'draining', promise, finish };
+        if (!this.hasPendingResponse()) finish();
+
+        return promise;
+      }
+    }
   }
 
   async close() {

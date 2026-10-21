@@ -39,6 +39,7 @@ export {
   UNEXPECTED_DISCONNECT_CODE,
   INVALID_REQUEST_CODE,
   CANCEL_CODE,
+  SERVER_DRAINING_CODE,
   ReaderErrorSchema,
   BaseErrorSchemaType,
 } from './errors';

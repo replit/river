@@ -170,6 +170,18 @@ return Ok({ result: 42 });
 return Err({ code: 'INVALID_INPUT', message: 'Value must be positive' });
 ```
 
+#### Graceful server drain
+
+`server.drain({ budgetMs })` refuses new calls with `SERVER_DRAINING` before handlers run. It waits for in-flight RPCs and uploads up to `budgetMs`, then closes the transport.
+
+```ts
+const client = createClient<ServiceSurface>(transport, 'SERVER', {
+  resendRefusedCalls: { maxResends: 3, newSessionWaitMs: 30_000 },
+});
+```
+
+Resend is off by default. It only resends RPCs refused with `SERVER_DRAINING` on a new session, bounded by `maxResends` and `newSessionWaitMs`. `ReaderErrorSchema` gains a code. Exhaustive TypeScript error switches need a new case.
+
 #### Custom Error Types
 
 You can define custom error schemas for your procedures:
