@@ -3,9 +3,12 @@ import {
   createClient,
   createProtoService,
   createServer,
+  Err,
   Middleware,
   Ok,
   ProtoCodec,
+  SERVER_DRAINING_CODE,
+  UNCAUGHT_ERROR_CODE,
 } from '../protobuf';
 import { createMockTransportNetwork, readNextResult } from '../testUtil';
 import { TestService } from '../testUtil/fixtures/protobuf';
@@ -34,6 +37,8 @@ function setup(
     echo: async ({ text }) => {
       effects.push(text);
       if (text === 'hold') await gate.promise;
+      if (text === 'claim')
+        return Err({ code: SERVER_DRAINING_CODE, message: 'upstream' });
 
       return Ok({ text: 'ok' });
     },
@@ -206,6 +211,21 @@ test('a refused client-streaming call is never resent', async () => {
   void f.server.drain({ budgetMs: 10000 });
   expect(await f.client.sum().finalize()).toMatchObject(refusal);
   expect(f.effects).toEqual(['hold']);
+});
+
+test('a handler that returns the reserved drain code is not resent', async () => {
+  // Risk: a handler that already ran is replayed on the next session.
+  const f = setup(1);
+  const result = f.client.echo({ text: 'claim' });
+  await waitFor(() => expect(f.attempts).toHaveLength(1));
+  await vi.advanceTimersByTimeAsync(10);
+  f.reconnect();
+  await vi.advanceTimersByTimeAsync(20);
+  expect(f.effects).toEqual(['claim']);
+  expect(await result).toMatchObject({
+    ok: false,
+    payload: { code: UNCAUGHT_ERROR_CODE, message: 'upstream' },
+  });
 });
 
 test('drain called from middleware waits for its admitted unary call', async () => {
