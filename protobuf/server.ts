@@ -9,6 +9,7 @@ import { Value } from 'typebox/value';
 import { context as otelContext, trace, type Span } from '@opentelemetry/api';
 import { Logger } from '../logging';
 import { ServerHandshakeOptions } from '../router/handshake';
+import { DrainController } from '../router/drain';
 import { Err, Ok, type Result } from '../router/result';
 import { ReadableImpl, WritableImpl } from '../router/streams';
 import { Connection } from '../transport/connection';
@@ -45,6 +46,7 @@ import {
 import {
   CANCEL_CODE,
   INVALID_REQUEST_CODE,
+  SERVER_DRAINING_CODE,
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
 } from '../router/errors';
@@ -101,6 +103,7 @@ interface ProcStream {
  */
 export interface Server {
   readonly streams: Map<StreamId, ProcStream>;
+  drain(options: { budgetMs: number }): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -179,6 +182,15 @@ class ProtobufServer<
 
   private readonly maxCancelledStreamTombstonesPerSession: number;
   private unregisterTransportListeners: () => void;
+  private readonly drainController = new DrainController(
+    () =>
+      [...this.streams.values()].some(
+        ({ method }) =>
+          method.methodKind === 'unary' ||
+          method.methodKind === 'client_streaming',
+      ),
+    () => this.transport.close(),
+  );
 
   constructor(
     transport: ServerTransport<
@@ -260,6 +272,23 @@ class ProtobufServer<
         return;
       }
 
+      if (!this.drainController.accepting) {
+        this.cancelStream(
+          message.from,
+          transport.getSessionBoundSendFn(
+            message.from,
+            newStreamProps.initialSession.id,
+          ),
+          message.streamId,
+          {
+            code: SERVER_DRAINING_CODE,
+            message: 'Server is draining; the procedure was not run',
+          },
+        );
+
+        return;
+      }
+
       createHandlerSpan(
         transport.tracer,
         newStreamProps.initialSession,
@@ -312,6 +341,10 @@ class ProtobufServer<
     this.transport.addEventListener('message', handleCreatingNewStreams);
     this.transport.addEventListener('sessionStatus', handleSessionStatus);
     this.transport.addEventListener('transportStatus', handleTransportStatus);
+  }
+
+  drain(options: { budgetMs: number }): Promise<void> {
+    return this.drainController.drain(options);
   }
 
   async close() {
@@ -425,6 +458,7 @@ class ProtobufServer<
     const cleanup = () => {
       finishedController.abort();
       this.streams.delete(streamId);
+      this.drainController.responseFinished();
       void runDeferredCleanups();
     };
 
@@ -759,6 +793,8 @@ class ProtobufServer<
     };
     /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any */
 
+    this.streams.set(streamId, procStream);
+
     this.middlewares.reduceRight(
       (next: () => void, middleware: Middleware<ParsedMetadata>) => {
         return () => {
@@ -773,10 +809,6 @@ class ProtobufServer<
         void runProcedureHandler();
       },
     )();
-
-    if (!finishedController.signal.aborted) {
-      this.streams.set(streamId, procStream);
-    }
   }
 
   private validateNewProcStream(

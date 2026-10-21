@@ -174,6 +174,8 @@ return Err({ code: 'INVALID_INPUT', message: 'Value must be positive' });
 
 `server.drain({ budgetMs })` refuses new calls with `SERVER_DRAINING` before handlers run. It waits for in-flight RPCs and uploads up to `budgetMs`, then closes the transport.
 
+Both the TypeBox and protobuf routers support drain and opt-in refused-call resend. For protobuf, drain waits for unary and client-streaming calls; only unary calls can be resent.
+
 ```ts
 const client = createClient<ServiceSurface>(transport, 'SERVER', {
   resendRefusedCalls: { maxResends: 3, newSessionWaitMs: 30_000 },

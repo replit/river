@@ -1,6 +1,7 @@
 import {
   CANCEL_CODE,
   INVALID_REQUEST_CODE,
+  SERVER_DRAINING_CODE,
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
 } from '../router/errors';
@@ -40,6 +41,7 @@ export enum RiverErrorCode {
 export type ProtocolErrorCode =
   | typeof CANCEL_CODE
   | typeof INVALID_REQUEST_CODE
+  | typeof SERVER_DRAINING_CODE
   | typeof UNCAUGHT_ERROR_CODE
   | typeof UNEXPECTED_DISCONNECT_CODE;
 
@@ -52,6 +54,7 @@ const riverErrorCodeSet = new Set<string>(Object.values(RiverErrorCode));
 const protocolErrorCodeSet = new Set<string>([
   CANCEL_CODE,
   INVALID_REQUEST_CODE,
+  SERVER_DRAINING_CODE,
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
 ]);

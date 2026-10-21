@@ -59,6 +59,7 @@ export { ReadableBrokenError } from '../router/streams';
 export {
   CANCEL_CODE,
   INVALID_REQUEST_CODE,
+  SERVER_DRAINING_CODE,
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
 } from '../router/errors';

@@ -50,8 +50,8 @@ import { Connection } from '../transport/connection';
 import { ServerTransport } from '../transport/server';
 import { ReadableImpl, WritableImpl } from './streams';
 import { IdentifiedSession } from '../transport/sessionStateMachine/common';
-import { MAX_TIMER_DELAY_MS, SessionBoundSendFn } from '../transport/transport';
-import { createPromiseWithResolvers } from '../transport/promises';
+import { SessionBoundSendFn } from '../transport/transport';
+import { DrainController } from './drain';
 
 type StreamId = string;
 
@@ -149,11 +149,10 @@ class RiverServer<
   >;
 
   private unregisterTransportListeners: () => void;
-  private drainState:
-    | { status: 'accepting' }
-    | { status: 'draining'; promise: Promise<void>; finish: () => void } = {
-    status: 'accepting',
-  };
+  private readonly drainController = new DrainController(
+    () => this.hasPendingResponse(),
+    () => this.transport.close(),
+  );
 
   constructor(
     transport: ServerTransport<
@@ -239,7 +238,7 @@ class RiverServer<
         return;
       }
 
-      if (this.drainState.status !== 'accepting') {
+      if (!this.drainController.accepting) {
         const session = newStreamProps.initialSession;
         this.cancelStream(
           message.from,
@@ -566,9 +565,7 @@ class RiverServer<
     const cleanup = () => {
       finishedController.abort();
       this.streams.delete(streamId);
-      if (this.drainState.status === 'draining' && !this.hasPendingResponse()) {
-        this.drainState.finish();
-      }
+      this.drainController.responseFinished();
       void runDeferredCleanups();
     };
 
@@ -1086,30 +1083,7 @@ class RiverServer<
   }
 
   drain({ budgetMs }: { budgetMs: number }): Promise<void> {
-    if (
-      !Number.isFinite(budgetMs) ||
-      budgetMs < 0 ||
-      budgetMs > MAX_TIMER_DELAY_MS
-    ) {
-      throw new RangeError('budgetMs must be between 0 and 2147483647');
-    }
-    switch (this.drainState.status) {
-      case 'draining':
-        return this.drainState.promise;
-      case 'accepting': {
-        const { promise: waiting, resolve: finish } =
-          createPromiseWithResolvers<void>();
-        const timer = setTimeout(finish, budgetMs);
-        const promise = waiting.then(() => {
-          clearTimeout(timer);
-          this.transport.close();
-        });
-        this.drainState = { status: 'draining', promise, finish };
-        if (!this.hasPendingResponse()) finish();
-
-        return promise;
-      }
-    }
+    return this.drainController.drain({ budgetMs });
   }
 
   async close() {

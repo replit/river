@@ -39,8 +39,11 @@ import {
   UNEXPECTED_DISCONNECT_CODE,
   validationErrorToRiverErrors,
 } from './errors';
-import { SessionState } from '../transport/sessionStateMachine/common';
-import { MAX_TIMER_DELAY_MS } from '../transport/transport';
+import {
+  ResendRefusedCallsOptions,
+  validateResendLimits,
+  waitForNewSession,
+} from './drain';
 
 export interface CallOptions {
   signal?: AbortSignal;
@@ -208,7 +211,7 @@ function _createRecursiveProxy(
 }
 
 export interface ClientOptions {
-  resendRefusedCalls?: { maxResends: number; newSessionWaitMs: number };
+  resendRefusedCalls?: ResendRefusedCallsOptions;
   connectOnInvoke: boolean;
   eagerlyConnect: boolean;
   /**
@@ -265,51 +268,9 @@ export function createClient<
 
   const clientOptions = { ...defaultClientOptions, ...providedClientOptions };
   const resend = clientOptions.resendRefusedCalls;
-  if (
-    resend &&
-    (!Number.isSafeInteger(resend.maxResends) ||
-      !Number.isFinite(resend.newSessionWaitMs) ||
-      resend.newSessionWaitMs < 0 ||
-      resend.newSessionWaitMs > MAX_TIMER_DELAY_MS)
-  ) {
-    throw new RangeError('Invalid resendRefusedCalls limits');
-  }
+  validateResendLimits(resend);
   if (clientOptions.eagerlyConnect) {
     transport.connect(serverId);
-  }
-
-  function waitForNewSession(
-    sessionId: string | undefined,
-    timeoutMs: number,
-    signal?: AbortSignal,
-  ): Promise<boolean> {
-    return new Promise((resolve) => {
-      const finish = (ready: boolean) => {
-        clearTimeout(timer);
-        transport.removeEventListener('sessionTransition', check);
-        transport.removeEventListener('transportStatus', check);
-        signal?.removeEventListener('abort', aborted);
-        resolve(ready);
-      };
-      const aborted = () => finish(false);
-      const check = () => {
-        const session = transport.sessions.get(serverId);
-        if (signal?.aborted === true || transport.getStatus() === 'closed') {
-          finish(false);
-        } else if (
-          session &&
-          session.id !== sessionId &&
-          session.state === SessionState.Connected
-        ) {
-          finish(true);
-        }
-      };
-      const timer = setTimeout(() => finish(false), timeoutMs);
-      transport.addEventListener('sessionTransition', check);
-      transport.addEventListener('transportStatus', check);
-      signal?.addEventListener('abort', aborted, { once: true });
-      check();
-    });
   }
 
   async function rpcWithResends(
@@ -339,6 +300,8 @@ export function createClient<
         return result;
       }
       const ready = await waitForNewSession(
+        transport,
+        serverId,
         sessionId,
         limits.newSessionWaitMs,
         signal,
