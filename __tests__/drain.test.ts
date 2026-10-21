@@ -5,80 +5,72 @@ import {
   createClient,
   createServer,
   createServiceSchema,
+  Middleware,
   Ok,
   Procedure,
-  SERVER_DRAINING_CODE,
 } from '../router';
 import { createMockTransportNetwork, readNextResult } from '../testUtil';
 import { waitFor } from '../testUtil/fixtures/cleanup';
+import { createPromiseWithResolvers } from '../transport/promises';
 
 const cleanups: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
-async function setup(options: Partial<ClientOptions> = {}) {
-  const network = createMockTransportNetwork();
-  cleanups.push(() => network.cleanup());
-  const clientTransport = network.getClientTransport('client');
-  cleanups.push(() => clientTransport.close());
-  const ran = vi.fn();
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
+function setup(
+  maxResends?: number,
+  newSessionWaitMs = 1000,
+  middlewares: Array<Middleware> = [],
+) {
+  const network = createMockTransportNetwork({
+    client: { baseIntervalMs: 1, maxJitterMs: 0 },
   });
+  const gate = createPromiseWithResolvers<void>();
+  const uploadGate = createPromiseWithResolvers<void>();
+  const effects: Array<string> = [];
+  const attempts: Array<string | undefined> = [];
+  const init = Type.Object({});
+  const responseData = Type.Null();
   const services = {
     test: createServiceSchema().define({
-      hold: Procedure.rpc({
-        requestInit: Type.Object({}),
-        responseData: Type.Null(),
-        async handler() {
-          await gate;
-
-          return Ok(null);
-        },
-      }),
       rpc: Procedure.rpc({
-        requestInit: Type.Object({}),
-        responseData: Type.Null(),
-        async handler() {
-          ran();
+        requestInit: Type.Boolean(),
+        responseData,
+        async handler({ reqInit }) {
+          effects.push(reqInit ? 'hold' : 'rpc');
+          if (reqInit) await gate.promise;
 
           return Ok(null);
         },
       }),
       upload: Procedure.upload({
-        requestInit: Type.Object({}),
+        requestInit: init,
         requestData: Type.Null(),
-        responseData: Type.Null(),
+        responseData,
         async handler() {
-          ran();
+          effects.push('upload');
+          await uploadGate.promise;
 
           return Ok(null);
         },
       }),
       subscription: Procedure.subscription({
-        requestInit: Type.Object({}),
-        responseData: Type.Null(),
+        requestInit: init,
+        responseData,
         async handler({ resWritable }) {
-          ran();
-          resWritable.close();
-        },
-      }),
-      stream: Procedure.stream({
-        requestInit: Type.Object({}),
-        requestData: Type.Null(),
-        responseData: Type.Null(),
-        async handler({ resWritable }) {
-          ran();
-          resWritable.close();
+          resWritable.write(Ok(null));
         },
       }),
     }),
   };
   function startServer() {
     const transport = network.getServerTransport();
-    const server = createServer(transport, services);
+    const server = createServer(transport, services, { middlewares });
+    transport.addEventListener('message', (message) => {
+      if (message.procedureName === 'rpc' && message.payload === false)
+        attempts.push(transport.sessions.get(message.from)?.id);
+    });
     cleanups.push(async () => {
       transport.close();
       await server.close();
@@ -86,171 +78,195 @@ async function setup(options: Partial<ClientOptions> = {}) {
 
     return { server, transport };
   }
+  cleanups.push(() => network.cleanup());
+  const blocker = network.getClientTransport('blocker');
+  const clientTransport = network.getClientTransport('client');
+  clientTransport.reconnectOnConnectionDrop = false;
+  cleanups.push(() => {
+    gate.resolve();
+    uploadGate.resolve();
+    blocker.close();
+    clientTransport.close();
+  });
   const { server, transport } = startServer();
+  const options: Partial<ClientOptions> = {};
+  if (maxResends !== undefined)
+    options.resendRefusedCalls = { maxResends, newSessionWaitMs };
   const client = createClient<typeof services>(
     clientTransport,
     'SERVER',
     options,
   );
-  const held = client.test.hold.rpc({});
-  await waitFor(() => expect(server.streams.size).toBe(1));
-  cleanups.push(release);
+  async function block() {
+    void createClient<typeof services>(blocker, 'SERVER').test.rpc.rpc(true);
+    await waitFor(() => expect(effects).toContain('hold'));
+  }
+  function reconnect() {
+    clientTransport.hardDisconnect();
+    clientTransport.connect('SERVER');
+  }
 
   return {
-    client,
-    clientTransport,
     server,
     transport,
-    release,
-    held,
-    ran,
+    client,
+    clientTransport,
+    gate,
+    uploadGate,
+    effects,
+    attempts,
     startServer,
+    block,
+    reconnect,
   };
 }
 
 const refusal = {
   ok: false,
   payload: {
-    code: SERVER_DRAINING_CODE,
+    code: 'SERVER_DRAINING',
     message: 'Server is draining; the procedure was not run',
   },
 };
 
-test.each(['rpc', 'upload', 'subscription', 'stream'] as const)(
-  'drain refuses new %s calls without running the handler',
-  async (kind) => {
-    const f = await setup();
-    const draining = f.server.drain({ budgetMs: 10_000 });
-    switch (kind) {
-      case 'rpc':
-        expect(await f.client.test.rpc.rpc({})).toEqual(refusal);
-        break;
-      case 'upload':
-        expect(await f.client.test.upload.upload({}).finalize()).toEqual(
-          refusal,
-        );
-        break;
-      case 'subscription':
-        expect(
-          await readNextResult(
-            f.client.test.subscription.subscribe({}).resReadable,
-          ),
-        ).toEqual(refusal);
-        break;
-      case 'stream':
-        expect(
-          await readNextResult(f.client.test.stream.stream({}).resReadable),
-        ).toEqual(refusal);
-        break;
-    }
-    expect(f.ran).not.toHaveBeenCalled();
-    f.release();
-    await draining;
-  },
-);
+test('drain refuses calls before middleware or handler runs', async () => {
+  // Risk: a refused call that ran would be unsafe to resend.
+  const middlewareEffects: Array<string> = [];
+  const f = setup(undefined, 1000, [
+    ({ next }) => {
+      middlewareEffects.push('middleware');
+      next();
+    },
+  ]);
+  await f.block();
+  middlewareEffects.length = 0;
+  void f.server.drain({ budgetMs: 10000 });
+  expect(await f.client.test.rpc.rpc(false)).toEqual(refusal);
+  expect(middlewareEffects).toEqual([]);
+  expect(f.effects).toEqual(['hold']);
+});
 
-test('drain lets an existing RPC finish and removes its session', async () => {
-  const f = await setup();
-  const done = vi.fn();
-  const draining = f.server.drain({ budgetMs: 10_000 }).then(done);
-  await vi.advanceTimersByTimeAsync(50);
-  expect(done).not.toHaveBeenCalled();
-  f.release();
-  expect(await f.held).toEqual(Ok(null));
-  await draining;
-  expect(f.transport.sessions.size).toBe(0);
+test('drain inside middleware waits for its admitted rpc result', async () => {
+  // Risk: an accepted call is closed as if the server were idle.
+  const f = setup(undefined, 1000, [
+    ({ next }) => {
+      void f.server.drain({ budgetMs: 10000 });
+      next();
+    },
+  ]);
+  const result = f.client.test.rpc.rpc(true);
+  await waitFor(() => expect(f.effects).toContain('hold'));
+  expect(f.transport.getStatus()).not.toBe('closed');
+  f.gate.resolve();
+  expect(await result).toEqual(Ok(null));
+  await f.server.drain({ budgetMs: 10000 });
   expect(f.transport.getStatus()).toBe('closed');
 });
 
-test('drain closes at the budget even when a handler is still running', async () => {
-  const f = await setup();
-  const draining = f.server.drain({ budgetMs: 1_000 });
-  await vi.advanceTimersByTimeAsync(1_000);
-  await draining;
+test('a subscription does not hold drain after rpc and upload finish', async () => {
+  // Risk: long streams keep clients on the old server for the whole budget.
+  const f = setup();
+  expect(
+    await readNextResult(f.client.test.subscription.subscribe({}).resReadable),
+  ).toEqual(Ok(null));
+  const rpc = f.client.test.rpc.rpc(true);
+  const upload = f.client.test.upload.upload({}).finalize();
+  await waitFor(() => expect(f.effects).toEqual(['hold', 'upload']));
+  const draining = f.server.drain({ budgetMs: 10000 });
+  f.gate.resolve();
+  expect(await rpc).toEqual(Ok(null));
+  expect(f.transport.getStatus()).not.toBe('closed');
+  f.uploadGate.resolve();
+  expect(await upload).toEqual(Ok(null));
   expect(f.transport.getStatus()).toBe('closed');
+  await draining;
   expect(f.transport.sessions.size).toBe(0);
+  expect(f.server.streams.size).toBe(0);
 });
 
-test('repeated drains share the same completion', async () => {
-  const f = await setup();
-  const first = f.server.drain({ budgetMs: 1_000 });
-  expect(f.server.drain({ budgetMs: 0 })).toBe(first);
-  f.release();
-  await first;
-  expect(f.server.drain({ budgetMs: 0 })).toBe(first);
-});
-
-test('opt-in RPC resend waits for a different session', async () => {
-  const f = await setup({
-    resendRefusedCalls: { maxResends: 1, newSessionWaitMs: 30_000 },
-  });
-  const previous = f.clientTransport.sessions.get('SERVER')?.id;
-  const draining = f.server.drain({ budgetMs: 10_000 });
-  const done = vi.fn();
-  const result = f.client.test.rpc.rpc({}).then((value) => {
-    done();
-
-    return value;
-  });
+test('the drain budget closes a server whose rpc never returns', async () => {
+  // Risk: shutdown hangs.
+  const f = setup();
+  await f.block();
+  const draining = f.server.drain({ budgetMs: 100 });
   await vi.advanceTimersByTimeAsync(100);
-  expect(done).not.toHaveBeenCalled();
-  f.release();
+  expect(f.transport.getStatus()).toBe('closed');
+  await draining;
+});
+
+test('a refused rpc waits for a connected session with a new id', async () => {
+  // Risk: replaying work on the draining server.
+  const f = setup(2);
+  await f.block();
+  const draining = f.server.drain({ budgetMs: 10000 });
+  const result = f.client.test.rpc.rpc(false);
+  await waitFor(() => expect(f.attempts).toHaveLength(1));
+  await vi.advanceTimersByTimeAsync(20);
+  expect(f.attempts).toHaveLength(1);
+  f.gate.resolve();
   await draining;
   f.startServer();
+  f.reconnect();
   expect(await result).toEqual(Ok(null));
-  expect(f.clientTransport.sessions.get('SERVER')?.id).not.toBe(previous);
-  expect(f.ran).toHaveBeenCalledTimes(1);
+  expect(f.attempts).toHaveLength(2);
+  expect(f.attempts[1]).not.toBe(f.attempts[0]);
+  expect(f.effects).toEqual(['hold', 'rpc']);
 });
 
-test('resend wait timeout surfaces the original refusal', async () => {
-  const f = await setup({
-    resendRefusedCalls: { maxResends: 1, newSessionWaitMs: 100 },
-  });
-  void f.server.drain({ budgetMs: 10_000 });
-  const done = vi.fn();
-  const result = f.client.test.rpc.rpc({}).then((value) => {
-    done();
-
-    return value;
-  });
-  await vi.advanceTimersByTimeAsync(30);
-  expect(done).not.toHaveBeenCalled();
+test('successive refusals stop after a positive resend budget', async () => {
+  // Risk: unbounded replay.
+  const f = setup(2);
+  await f.block();
+  void f.server.drain({ budgetMs: 10000 });
+  const result = f.client.test.rpc.rpc(false);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await waitFor(() => expect(f.attempts).toHaveLength(attempt));
+    await vi.advanceTimersByTimeAsync(10);
+    f.reconnect();
+  }
+  await vi.advanceTimersByTimeAsync(20);
+  expect(f.attempts).toHaveLength(3);
   expect(await result).toEqual(refusal);
-  expect(f.ran).not.toHaveBeenCalled();
+  expect(f.effects).toEqual(['hold']);
 });
 
-test('zero resend budget surfaces the refusal without waiting', async () => {
-  const f = await setup({
-    resendRefusedCalls: { maxResends: 0, newSessionWaitMs: 30_000 },
-  });
-  void f.server.drain({ budgetMs: 10_000 });
-  expect(await f.client.test.rpc.rpc({})).toEqual(refusal);
-});
-
-test('abort stops waiting for a new session and preserves the refusal', async () => {
-  const f = await setup({
-    resendRefusedCalls: { maxResends: 1, newSessionWaitMs: 30_000 },
-  });
-  void f.server.drain({ budgetMs: 10_000 });
-  const controller = new AbortController();
-  const done = vi.fn();
-  const result = f.client.test.rpc
-    .rpc({}, { signal: controller.signal })
-    .then((value) => {
-      done();
-
-      return value;
-    });
+test('the session wait deadline returns the original refusal', async () => {
+  // Risk: the rpc stays pending forever.
+  const f = setup(2, 100);
+  await f.block();
+  void f.server.drain({ budgetMs: 10000 });
+  const result = f.client.test.rpc.rpc(false);
+  await waitFor(() => expect(f.attempts).toHaveLength(1));
   await vi.advanceTimersByTimeAsync(100);
-  expect(done).not.toHaveBeenCalled();
+  expect(await result).toEqual(refusal);
+  expect(f.effects).toEqual(['hold']);
+});
+
+test('abort while waiting preserves the refusal and removes the waiter', async () => {
+  // Risk: cancelled work still runs.
+  const f = setup(2, 30000);
+  await f.block();
+  const draining = f.server.drain({ budgetMs: 10000 });
+  const controller = new AbortController();
+  const result = f.client.test.rpc.rpc(false, { signal: controller.signal });
+  await waitFor(() => expect(f.attempts).toHaveLength(1));
+  await vi.advanceTimersByTimeAsync(10);
   controller.abort();
   expect(await result).toEqual(refusal);
+  f.gate.resolve();
+  await draining;
+  f.startServer();
+  f.reconnect();
+  await vi.advanceTimersByTimeAsync(50);
+  expect(f.effects).toEqual(['hold']);
+  expect(f.attempts).toHaveLength(1);
 });
 
-test('opt-in does not replay an upload refusal', async () => {
-  const f = await setup({
-    resendRefusedCalls: { maxResends: 1, newSessionWaitMs: 30_000 },
-  });
-  void f.server.drain({ budgetMs: 10_000 });
+test('a refused upload is returned without replay', async () => {
+  // Risk: replaying a consumed upload.
+  const f = setup(2);
+  await f.block();
+  void f.server.drain({ budgetMs: 10000 });
   expect(await f.client.test.upload.upload({}).finalize()).toEqual(refusal);
+  expect(f.effects).toEqual(['hold']);
 });
