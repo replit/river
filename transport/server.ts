@@ -509,6 +509,10 @@ export abstract class ServerTransport<
           session.conn.extras,
         );
       } catch (err) {
+        if (session._isConsumed) {
+          return;
+        }
+
         this.rejectHandshakeRequest(
           session,
           msg.from,
