@@ -604,6 +604,17 @@ class RiverServer<
       Result<Static<PayloadType>, Static<BaseErrorSchemaType>>
     >({
       writeCb: (response) => {
+        if (!response.ok && response.payload.code === SERVER_DRAINING_CODE) {
+          this.log?.warn(
+            `${serviceName}.${procedureName} handler returned the reserved ${SERVER_DRAINING_CODE} code`,
+            loggingMetadata,
+          );
+          response = Err({
+            code: UNCAUGHT_ERROR_CODE,
+            message: response.payload.message,
+          });
+        }
+
         if (!response.ok) {
           recordRiverError(span, response.payload);
         }

@@ -5,9 +5,11 @@ import {
   createClient,
   createServer,
   createServiceSchema,
+  Err,
   Middleware,
   Ok,
   Procedure,
+  UNCAUGHT_ERROR_CODE,
 } from '../router';
 import { createMockTransportNetwork, readNextResult } from '../testUtil';
 import { waitFor } from '../testUtil/fixtures/cleanup';
@@ -60,6 +62,19 @@ function setup(
         responseData,
         async handler({ resWritable }) {
           resWritable.write(Ok(null));
+        },
+      }),
+      claim: Procedure.rpc({
+        requestInit: init,
+        responseData,
+        responseError: Type.Object({
+          code: Type.Literal('SERVER_DRAINING'),
+          message: Type.String(),
+        }),
+        async handler() {
+          effects.push('claim');
+
+          return Err({ code: 'SERVER_DRAINING', message: 'upstream' });
         },
       }),
     }),
@@ -278,4 +293,19 @@ test('a refused upload is returned without replay', async () => {
   void f.server.drain({ budgetMs: 10000 });
   expect(await f.client.test.upload.upload({}).finalize()).toEqual(refusal);
   expect(f.effects).toEqual(['hold']);
+});
+
+test('a handler that returns the reserved drain code is not resent', async () => {
+  // Risk: a handler that already ran is replayed on the next session.
+  const f = setup(1);
+  const result = f.client.test.claim.rpc({});
+  await waitFor(() => expect(f.effects).toEqual(['claim']));
+  await vi.advanceTimersByTimeAsync(10);
+  f.reconnect();
+  await vi.advanceTimersByTimeAsync(20);
+  expect(f.effects).toEqual(['claim']);
+  expect(await result).toMatchObject({
+    ok: false,
+    payload: { code: UNCAUGHT_ERROR_CODE, message: 'upstream' },
+  });
 });
