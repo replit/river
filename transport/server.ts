@@ -111,6 +111,13 @@ export abstract class ServerTransport<
     this.pendingSessions.delete(pendingSession);
   }
 
+  close() {
+    for (const session of this.pendingSessions) {
+      this.deletePendingSession(session);
+    }
+    super.close();
+  }
+
   protected deleteSession(
     session: ServerSession<ConnType>,
     options?: DeleteSessionOptions,
