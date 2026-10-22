@@ -41,20 +41,22 @@ export enum RiverErrorCode {
 export type ProtocolErrorCode =
   | typeof CANCEL_CODE
   | typeof INVALID_REQUEST_CODE
-  | typeof SERVER_DRAINING_CODE
   | typeof UNCAUGHT_ERROR_CODE
   | typeof UNEXPECTED_DISCONNECT_CODE;
 
 /**
- * Error codes visible from the protobuf client surface.
+ * Error codes visible from the protobuf client surface. `SERVER_DRAINING` is
+ * sent only by the runtime, before middleware or handlers run.
  */
-export type ClientErrorCode = RiverErrorCode | ProtocolErrorCode;
+export type ClientErrorCode =
+  | RiverErrorCode
+  | ProtocolErrorCode
+  | typeof SERVER_DRAINING_CODE;
 
 const riverErrorCodeSet = new Set<string>(Object.values(RiverErrorCode));
 const protocolErrorCodeSet = new Set<string>([
   CANCEL_CODE,
   INVALID_REQUEST_CODE,
-  SERVER_DRAINING_CODE,
   UNCAUGHT_ERROR_CODE,
   UNEXPECTED_DISCONNECT_CODE,
 ]);
@@ -86,6 +88,14 @@ export interface ClientError extends ErrorPayload {
  */
 export interface ProtocolError extends ClientError {
   readonly code: ProtocolErrorCode;
+}
+
+/**
+ * An error a handler may return. Excludes `SERVER_DRAINING`, which tells
+ * clients the call never ran and is safe to resend.
+ */
+export interface HandlerError extends ClientError {
+  readonly code: RiverErrorCode | ProtocolErrorCode;
 }
 
 /**
@@ -123,7 +133,11 @@ export function isProtocolError(value: unknown): value is ProtocolError {
  * Returns true when the given value is any client-visible error.
  */
 export function isClientError(value: unknown): value is ClientError {
-  return isRiverError(value) || isProtocolError(value);
+  return (
+    isRiverError(value) ||
+    isProtocolError(value) ||
+    isServerDrainingError(value)
+  );
 }
 
 /**
@@ -150,6 +164,19 @@ export function isSerializedProtocolErrorResult(
 
 function isRiverErrorCode(value: unknown): value is RiverErrorCode {
   return typeof value === 'string' && riverErrorCodeSet.has(value);
+}
+
+function isServerDrainingError(value: unknown): value is ClientError {
+  if (!(typeof value === 'object' && value !== null)) {
+    return false;
+  }
+
+  const candidate = value as Partial<ClientError>;
+
+  return (
+    candidate.code === SERVER_DRAINING_CODE &&
+    typeof candidate.message === 'string'
+  );
 }
 
 function isProtocolErrorCode(value: unknown): value is ProtocolErrorCode {

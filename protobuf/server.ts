@@ -482,17 +482,6 @@ class ProtobufServer<
 
     const resWritable = new WritableImpl<HandlerResponse>({
       writeCb: (response) => {
-        if (!response.ok && response.payload.code === SERVER_DRAINING_CODE) {
-          this.log?.warn(
-            `${service.typeName}.${method.name} handler returned the reserved ${SERVER_DRAINING_CODE} code`,
-            loggingMetadata,
-          );
-          response = Err({
-            code: UNCAUGHT_ERROR_CODE,
-            message: response.payload.message,
-          });
-        }
-
         let payload = response.ok ? response.payload : Err(response.payload);
         if (response.ok && raw === undefined) {
           payload = encodeMessageBytes(

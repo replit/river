@@ -13,6 +13,7 @@ export {
 export type {
   ClientError,
   ClientErrorCode,
+  HandlerError,
   ProtocolError,
   ProtocolErrorCode,
   RiverErrorDetail,

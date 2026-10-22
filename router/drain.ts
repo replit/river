@@ -7,6 +7,8 @@ import {
 import { createPromiseWithResolvers } from '../transport/promises';
 import { SessionState } from '../transport/sessionStateMachine/common';
 import { MAX_TIMER_DELAY_MS } from '../transport/transport';
+import { SERVER_DRAINING_CODE } from './errors';
+import { type ErrorPayload, type Result } from './result';
 
 export interface ResendRefusedCallsOptions {
   maxResends: number;
@@ -27,7 +29,40 @@ export function validateResendLimits(
   }
 }
 
-export function waitForNewSession<
+export async function withRefusedCallResends<
+  T,
+  E extends ErrorPayload,
+  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
+>(
+  call: () => Promise<Result<T, E>>,
+  transport: ClientTransport<Connection, RejectionCodeSchema>,
+  serverId: TransportClientId,
+  limits: ResendRefusedCallsOptions,
+  signal?: AbortSignal,
+): Promise<Result<T, E>> {
+  for (let attempt = 0; ; attempt++) {
+    const response = call();
+    const sessionId = transport.sessions.get(serverId)?.id;
+    const result = await response;
+    if (
+      result.ok ||
+      result.payload.code !== SERVER_DRAINING_CODE ||
+      attempt >= limits.maxResends
+    ) {
+      return result;
+    }
+    const ready = await waitForNewSession(
+      transport,
+      serverId,
+      sessionId,
+      limits.newSessionWaitMs,
+      signal,
+    );
+    if (!ready) return result;
+  }
+}
+
+function waitForNewSession<
   RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
 >(
   transport: ClientTransport<Connection, RejectionCodeSchema>,

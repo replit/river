@@ -11,13 +11,13 @@ import type {
 import type { Result } from '../router/result';
 import type { Readable, Writable } from '../router/streams';
 import type { ProtobufHandlerContext } from './context';
-import type { ClientError, ProtocolError } from './errors';
+import type { ClientError, HandlerError, ProtocolError } from './errors';
 
 type Awaitable<T> = T | PromiseLike<T>;
 
 type HandlerResult<Method extends DescMethod> = Result<
   MessageInitShape<Method['output']>,
-  ClientError
+  HandlerError
 >;
 
 /**
@@ -125,23 +125,23 @@ type RawMethodImpl<
   ? (
       request: Request,
       ctx: HandlerContext,
-    ) => Awaitable<Result<Uint8Array, ClientError>>
+    ) => Awaitable<Result<Uint8Array, HandlerError>>
   : Method extends DescMethodServerStreaming
   ? (param: {
       readonly request: Request;
       readonly ctx: HandlerContext;
-      readonly resWritable: Writable<Result<Uint8Array, ClientError>>;
+      readonly resWritable: Writable<Result<Uint8Array, HandlerError>>;
     }) => Awaitable<void>
   : Method extends DescMethodClientStreaming
   ? (param: {
       readonly ctx: HandlerContext;
       readonly reqReadable: Readable<Request, ProtocolError>;
-    }) => Awaitable<Result<Uint8Array, ClientError>>
+    }) => Awaitable<Result<Uint8Array, HandlerError>>
   : Method extends DescMethodBiDiStreaming
   ? (param: {
       readonly ctx: HandlerContext;
       readonly reqReadable: Readable<Request, ProtocolError>;
-      readonly resWritable: Writable<Result<Uint8Array, ClientError>>;
+      readonly resWritable: Writable<Result<Uint8Array, HandlerError>>;
     }) => Awaitable<void>
   : never;
 

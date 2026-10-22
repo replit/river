@@ -34,7 +34,6 @@ import { PayloadType, ValidProcType } from './procedures';
 import {
   BaseErrorSchemaType,
   CANCEL_CODE,
-  SERVER_DRAINING_CODE,
   ReaderErrorResultSchema,
   UNEXPECTED_DISCONNECT_CODE,
   validationErrorToRiverErrors,
@@ -42,7 +41,7 @@ import {
 import {
   ResendRefusedCallsOptions,
   validateResendLimits,
-  waitForNewSession,
+  withRefusedCallResends,
 } from './drain';
 
 export interface CallOptions {
@@ -273,43 +272,6 @@ export function createClient<
     transport.connect(serverId);
   }
 
-  async function rpcWithResends(
-    init: Static<PayloadType>,
-    serviceName: string,
-    procedureName: string,
-    limits: NonNullable<ClientOptions['resendRefusedCalls']>,
-    signal?: AbortSignal,
-  ) {
-    for (let attempt = 0; ; attempt++) {
-      const response = handleProc(
-        'rpc',
-        transport,
-        serverId,
-        init,
-        serviceName,
-        procedureName,
-        signal,
-      );
-      const sessionId = transport.sessions.get(serverId)?.id;
-      const result = await response;
-      if (
-        result.ok ||
-        result.payload.code !== SERVER_DRAINING_CODE ||
-        attempt >= limits.maxResends
-      ) {
-        return result;
-      }
-      const ready = await waitForNewSession(
-        transport,
-        serverId,
-        sessionId,
-        limits.newSessionWaitMs,
-        signal,
-      );
-      if (!ready) return result;
-    }
-  }
-
   return _createRecursiveProxy((opts) => {
     const [serviceName, procName, procMethod] = [...opts.path];
     if (!(serviceName && procName && procMethod)) {
@@ -341,7 +303,22 @@ export function createClient<
     );
 
     if (procMethod === 'rpc' && resend) {
-      return rpcWithResends(init, serviceName, procName, resend, merged.signal);
+      return withRefusedCallResends(
+        () =>
+          handleProc(
+            'rpc',
+            transport,
+            serverId,
+            init,
+            serviceName,
+            procName,
+            merged.signal,
+          ),
+        transport,
+        serverId,
+        resend,
+        merged.signal,
+      );
     }
 
     return handleProc(

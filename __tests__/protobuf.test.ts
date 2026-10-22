@@ -4,6 +4,7 @@ import { Type } from 'typebox';
 import { BinaryCodec, NaiveJsonCodec } from '../codec';
 import {
   type ClientError,
+  type ProtocolError,
   Err,
   type Middleware,
   Ok,
@@ -39,9 +40,9 @@ const protobufRouterMatrix = transports.flatMap((transport) =>
   ].map((codec) => ({ transport, codec })),
 );
 
-function coerceReadableError(
-  error: ClientError | typeof ReadableBrokenError,
-): ClientError {
+function coerceReadableError<E extends ClientError>(
+  error: E | typeof ReadableBrokenError,
+): E | ProtocolError {
   return error.code === ReadableBrokenError.code
     ? { code: UNEXPECTED_DISCONNECT_CODE, message: error.message }
     : error;

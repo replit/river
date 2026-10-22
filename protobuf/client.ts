@@ -27,7 +27,7 @@ import { ClientHandshakeOptions } from '../router/handshake';
 import {
   ResendRefusedCallsOptions,
   validateResendLimits,
-  waitForNewSession,
+  withRefusedCallResends,
 } from '../router/drain';
 import { Err, Ok, type Result } from '../router/result';
 import {
@@ -42,7 +42,6 @@ import { type ClientError, isSerializedClientErrorResult } from './errors';
 import {
   CANCEL_CODE,
   INVALID_REQUEST_CODE,
-  SERVER_DRAINING_CODE,
   UNEXPECTED_DISCONNECT_CODE,
 } from '../router/errors';
 import {
@@ -151,13 +150,30 @@ function createMethodCaller<
 
         connectOnInvokeIfNeeded(clientOptions, transport, serverId);
 
-        return unaryWithResends(
-          service,
-          method,
+        const requestBytes = encodeMessageBytes(method.input, request);
+        const call = () =>
+          getSingleMessage(
+            startMethodCall(
+              service,
+              method,
+              transport,
+              serverId,
+              requestBytes,
+              true,
+              options?.signal,
+            ).resReadable,
+            transport.log,
+          );
+        const resend = clientOptions.resendRefusedCalls;
+        if (!resend) {
+          return call();
+        }
+
+        return withRefusedCallResends(
+          call,
           transport,
           serverId,
-          encodeMessageBytes(method.input, request),
-          clientOptions.resendRefusedCalls,
+          resend,
           options?.signal,
         );
       }) as unknown as ClientMethod<Method>;
@@ -247,49 +263,6 @@ function createMethodCaller<
           options?.signal,
         ) satisfies BiDiStreamingCall<DescMethodBiDiStreaming>;
       }) as unknown as ClientMethod<Method>;
-  }
-}
-
-async function unaryWithResends<
-  Method extends DescMethod,
-  RejectionCodeSchema extends CustomHandshakeErrorCodeSchema,
->(
-  service: DescService,
-  method: Method,
-  transport: ClientTransport<Connection, RejectionCodeSchema>,
-  serverId: TransportClientId,
-  request: Uint8Array,
-  limits: ResendRefusedCallsOptions | undefined,
-  signal?: AbortSignal,
-): Promise<Result<MessageShape<Method['output']>, ClientError>> {
-  for (let attempt = 0; ; attempt++) {
-    const { resReadable } = startMethodCall(
-      service,
-      method,
-      transport,
-      serverId,
-      request,
-      true,
-      signal,
-    );
-    const sessionId = transport.sessions.get(serverId)?.id;
-    const result = await getSingleMessage(resReadable, transport.log);
-    if (
-      !limits ||
-      result.ok ||
-      result.payload.code !== SERVER_DRAINING_CODE ||
-      attempt >= limits.maxResends
-    ) {
-      return result;
-    }
-    const ready = await waitForNewSession(
-      transport,
-      serverId,
-      sessionId,
-      limits.newSessionWaitMs,
-      signal,
-    );
-    if (!ready) return result;
   }
 }
 

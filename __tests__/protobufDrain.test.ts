@@ -7,8 +7,8 @@ import {
   Middleware,
   Ok,
   ProtoCodec,
+  type ProtobufClientOptions,
   SERVER_DRAINING_CODE,
-  UNCAUGHT_ERROR_CODE,
 } from '../protobuf';
 import { createMockTransportNetwork, readNextResult } from '../testUtil';
 import { TestService } from '../testUtil/fixtures/protobuf';
@@ -20,11 +20,13 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
-function setup(
-  maxResends?: number,
-  newSessionWaitMs = 1000,
-  middlewares: Array<Middleware> = [],
-) {
+function setup({
+  resendRefusedCalls,
+  middlewares = [],
+}: {
+  resendRefusedCalls?: ResendRefusedCalls;
+  middlewares?: Array<Middleware>;
+} = {}) {
   const network = createMockTransportNetwork({
     client: { codec: ProtoCodec, baseIntervalMs: 1, maxJitterMs: 0 },
     server: { codec: ProtoCodec },
@@ -37,8 +39,6 @@ function setup(
     echo: async ({ text }) => {
       effects.push(text);
       if (text === 'hold') await gate.promise;
-      if (text === 'claim')
-        return Err({ code: SERVER_DRAINING_CODE, message: 'upstream' });
 
       return Ok({ text: 'ok' });
     },
@@ -77,14 +77,9 @@ function setup(
     clientTransport.close();
   });
   const { server, transport } = startServer();
-  const client = createClient(
-    TestService,
-    clientTransport,
-    'SERVER',
-    maxResends === undefined
-      ? {}
-      : { resendRefusedCalls: { maxResends, newSessionWaitMs } },
-  );
+  const client = createClient(TestService, clientTransport, 'SERVER', {
+    resendRefusedCalls,
+  });
   async function block() {
     void createClient(TestService, blocker, 'SERVER').echo({ text: 'hold' });
     await waitFor(() => expect(effects).toContain('hold'));
@@ -108,18 +103,22 @@ function setup(
   };
 }
 
+type ResendRefusedCalls = ProtobufClientOptions['resendRefusedCalls'];
+const resendTwice = { maxResends: 2, newSessionWaitMs: 1000 };
+
 const refusal = { ok: false, payload: { code: 'SERVER_DRAINING' } };
 const success = { ok: true, payload: { text: 'ok' } };
 
 test('drain refuses calls before middleware and handler run', async () => {
-  // Risk: a refused call that ran would be unsafe to resend.
   const middlewareEffects: Array<string> = [];
-  const f = setup(undefined, 1000, [
-    ({ next }) => {
-      middlewareEffects.push('ran');
-      next();
-    },
-  ]);
+  const f = setup({
+    middlewares: [
+      ({ next }) => {
+        middlewareEffects.push('ran');
+        next();
+      },
+    ],
+  });
   await f.block();
   middlewareEffects.length = 0;
   void f.server.drain({ budgetMs: 10000 });
@@ -129,7 +128,6 @@ test('drain refuses calls before middleware and handler run', async () => {
 });
 
 test('drain waits for unary and client-streaming calls but not a server stream', async () => {
-  // Risk: drain drops accepted calls or waits for a long stream.
   const f = setup();
   await readNextResult(f.client.countUp({ limit: 1 }));
   const unary = f.client.echo({ text: 'hold' });
@@ -147,7 +145,6 @@ test('drain waits for unary and client-streaming calls but not a server stream',
 });
 
 test('the drain budget closes a server whose unary call never returns', async () => {
-  // Risk: shutdown hangs.
   const f = setup();
   await f.block();
   const draining = f.server.drain({ budgetMs: 100 });
@@ -157,8 +154,7 @@ test('the drain budget closes a server whose unary call never returns', async ()
 });
 
 test('a refused unary call succeeds only on a new session', async () => {
-  // Risk: replaying work on the draining session.
-  const f = setup(2);
+  const f = setup({ resendRefusedCalls: resendTwice });
   await f.block();
   const draining = f.server.drain({ budgetMs: 10000 });
   const result = f.client.echo({ text: 'run' });
@@ -176,8 +172,7 @@ test('a refused unary call succeeds only on a new session', async () => {
 });
 
 test('successive refusals stop at maxResends', async () => {
-  // Risk: unbounded replay.
-  const f = setup(2);
+  const f = setup({ resendRefusedCalls: resendTwice });
   await f.block();
   void f.server.drain({ budgetMs: 10000 });
   const result = f.client.echo({ text: 'run' });
@@ -193,8 +188,9 @@ test('successive refusals stop at maxResends', async () => {
 });
 
 test('the session wait deadline returns the refusal', async () => {
-  // Risk: a refused call stays pending forever.
-  const f = setup(2, 100);
+  const f = setup({
+    resendRefusedCalls: { maxResends: 2, newSessionWaitMs: 100 },
+  });
   await f.block();
   void f.server.drain({ budgetMs: 10000 });
   const result = f.client.echo({ text: 'run' });
@@ -205,37 +201,29 @@ test('the session wait deadline returns the refusal', async () => {
 });
 
 test('a refused client-streaming call is never resent', async () => {
-  // Risk: replaying a consumed request stream.
-  const f = setup(2);
+  const f = setup({ resendRefusedCalls: resendTwice });
   await f.block();
   void f.server.drain({ budgetMs: 10000 });
   expect(await f.client.sum().finalize()).toMatchObject(refusal);
   expect(f.effects).toEqual(['hold']);
 });
 
-test('a handler that returns the reserved drain code is not resent', async () => {
-  // Risk: a handler that already ran is replayed on the next session.
-  const f = setup(1);
-  const result = f.client.echo({ text: 'claim' });
-  await waitFor(() => expect(f.attempts).toHaveLength(1));
-  await vi.advanceTimersByTimeAsync(10);
-  f.reconnect();
-  await vi.advanceTimersByTimeAsync(20);
-  expect(f.effects).toEqual(['claim']);
-  expect(await result).toMatchObject({
-    ok: false,
-    payload: { code: UNCAUGHT_ERROR_CODE, message: 'upstream' },
+test('handlers cannot return the reserved drain code', () => {
+  createProtoService().define(TestService, {
+    // @ts-expect-error only the runtime may send SERVER_DRAINING
+    echo: () => Err({ code: SERVER_DRAINING_CODE, message: 'upstream' }),
   });
 });
 
 test('drain called from middleware waits for its admitted unary call', async () => {
-  // Risk: drain closes a call before middleware admits its handler.
-  const f = setup(undefined, 1000, [
-    ({ next }) => {
-      void f.server.drain({ budgetMs: 10000 });
-      next();
-    },
-  ]);
+  const f = setup({
+    middlewares: [
+      ({ next }) => {
+        void f.server.drain({ budgetMs: 10000 });
+        next();
+      },
+    ],
+  });
   const result = f.client.echo({ text: 'hold' });
   await waitFor(() => expect(f.effects).toContain('hold'));
   expect(f.transport.getStatus()).not.toBe('closed');
@@ -245,8 +233,9 @@ test('drain called from middleware waits for its admitted unary call', async () 
 });
 
 test('abort while waiting preserves the refusal without a later resend', async () => {
-  // Risk: cancelled work still runs after reconnect.
-  const f = setup(2, 30000);
+  const f = setup({
+    resendRefusedCalls: { maxResends: 2, newSessionWaitMs: 30000 },
+  });
   await f.block();
   const draining = f.server.drain({ budgetMs: 10000 });
   const controller = new AbortController();
