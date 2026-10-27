@@ -427,11 +427,11 @@ export const ClientSessionStateGraph = {
     HandshakingToConnected: transitions.HandshakingToConnected,
 
     // disconnect paths
-    // BackingOff -> NoConnection: unused
+    // BackingOff -> NoConnection: connection attempts paused
     BackingOffToNoConnection: transitions.BackingOffToNoConnection,
-    // Connecting -> NoConnection: connection failed or connection timeout
+    // Connecting -> NoConnection: connection failed, connection timeout, or connection attempts paused
     ConnectingToNoConnection: transitions.ConnectingToNoConnection,
-    // Handshaking -> NoConnection: connection closed or handshake timeout
+    // Handshaking -> NoConnection: connection closed, handshake timeout, or connection attempts paused
     HandshakingToNoConnection: transitions.HandshakingToNoConnection,
     // Connected -> NoConnection: connection closed
     ConnectedToNoConnection: transitions.ConnectedToNoConnection,
