@@ -594,7 +594,12 @@ export abstract class ClientTransport<
     this.updateSession(backingOffSession);
   }
 
-  private connectNow(to: TransportClientId) {
+  /**
+   * Like {@link connect}, but dials right away instead of waiting for a
+   * backoff, including one that is already pending for this session.
+   * @param to The client ID of the node to connect to.
+   */
+  connectNow(to: TransportClientId) {
     this.connect(to);
     const session = this.sessions.get(to);
     if (session?.state === SessionState.BackingOff) {
@@ -619,6 +624,8 @@ export abstract class ClientTransport<
       // are disabled, unlike the client overrides
       switch (session.state) {
         case SessionState.BackingOff:
+          // connect() consumed budget for a dial that never started
+          this.retryBudget.refundBudget();
           this.onBackoffCancelled(session);
           break;
         case SessionState.Connecting:

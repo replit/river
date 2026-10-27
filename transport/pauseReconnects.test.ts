@@ -179,6 +179,49 @@ describe.each(testMatrix(['all', 'naive']))(
       });
     });
 
+    test('a dial cancelled by pausing does not use retry budget', () => {
+      const { clientTransport, serverTransport } = getTransports();
+      clientTransport.connect(serverTransport.clientId);
+      expect(clientTransport.retryBudget.getBudgetConsumed()).toBe(1);
+
+      clientTransport.pauseReconnects();
+
+      expect(clientTransport.retryBudget.getBudgetConsumed()).toBe(0);
+    });
+
+    test('connectNow skips a pending backoff and dials exactly once', async () => {
+      const { clientTransport, serverTransport } = getTransports();
+      clientTransport.connect(serverTransport.clientId);
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
+
+      let dials = 0;
+      clientTransport.addEventListener('sessionTransition', (evt) => {
+        if (evt.state === SessionState.Connecting) {
+          dials++;
+        }
+      });
+      closeAllConnections(clientTransport);
+      await waitFor(() =>
+        expect(
+          clientTransport.sessions.get(serverTransport.clientId)?.state,
+        ).toBe(SessionState.BackingOff),
+      );
+
+      clientTransport.connectNow(serverTransport.clientId);
+
+      expect(
+        clientTransport.sessions.get(serverTransport.clientId)?.state,
+      ).toBe(SessionState.Connecting);
+      await advanceFakeTimersByConnectionBackoff();
+      await waitFor(() => expect(numberOfConnections(clientTransport)).toBe(1));
+      expect(dials).toBe(1);
+
+      await testFinishesCleanly({
+        clientTransports: [clientTransport],
+        serverTransport,
+      });
+    });
+
     test('a paused session is still closed when its grace period elapses', async () => {
       const { clientTransport, serverTransport } = getTransports();
       const closedSessionIds: Array<string> = [];
