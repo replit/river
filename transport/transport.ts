@@ -340,9 +340,7 @@ export abstract class Transport<
     };
   }
 
-  protected onBackoffCancelled(
-    session: SessionBackingOff,
-  ): SessionNoConnection {
+  protected onBackoffCancelled(session: SessionBackingOff) {
     // transition to no connection
     const noConnectionSession: SessionNoConnection =
       SessionStateGraph.transition.BackingOffToNoConnection(
@@ -351,8 +349,6 @@ export abstract class Transport<
       );
 
     this.updateSession(noConnectionSession);
-
-    return noConnectionSession;
   }
 
   protected onConnectingFailed(
