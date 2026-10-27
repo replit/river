@@ -33,6 +33,7 @@ import {
 } from './sessionStateMachine';
 import { Connection } from './connection';
 import { Session, SessionStateGraph } from './sessionStateMachine/transitions';
+import { SessionBackingOff } from './sessionStateMachine/SessionBackingOff';
 import { SessionId } from './sessionStateMachine/common';
 import { Tracer } from '@opentelemetry/api';
 import { getTracer } from '../tracing';
@@ -316,28 +317,53 @@ export abstract class Transport<
     this.deleteSession(session);
   }
 
+  private noConnectionListeners(
+    getSession: () => SessionNoConnection,
+  ): SessionNoConnectionListeners {
+    return {
+      onSessionGracePeriodElapsed: () => {
+        this.onSessionGracePeriodElapsed(getSession());
+      },
+      onMessageSendFailure: (msg, reason) => {
+        const session = getSession();
+        this.log?.error(`failed to send message: ${reason}`, {
+          ...session.loggingMetadata,
+          transportMessage: msg,
+        });
+
+        this.protocolError({
+          type: ProtocolError.MessageSendFailure,
+          message: reason,
+        });
+        this.deleteSession(session, { unhealthy: true });
+      },
+    };
+  }
+
+  protected onBackoffCancelled(
+    session: SessionBackingOff,
+  ): SessionNoConnection {
+    // transition to no connection
+    const noConnectionSession: SessionNoConnection =
+      SessionStateGraph.transition.BackingOffToNoConnection(
+        session,
+        this.noConnectionListeners(() => noConnectionSession),
+      );
+
+    this.updateSession(noConnectionSession);
+
+    return noConnectionSession;
+  }
+
   protected onConnectingFailed(
     session: SessionConnecting<ConnType>,
   ): SessionNoConnection {
     // transition to no connection
-    const noConnectionSession =
-      SessionStateGraph.transition.ConnectingToNoConnection(session, {
-        onSessionGracePeriodElapsed: () => {
-          this.onSessionGracePeriodElapsed(noConnectionSession);
-        },
-        onMessageSendFailure: (msg, reason) => {
-          this.log?.error(`failed to send message: ${reason}`, {
-            ...noConnectionSession.loggingMetadata,
-            transportMessage: msg,
-          });
-
-          this.protocolError({
-            type: ProtocolError.MessageSendFailure,
-            message: reason,
-          });
-          this.deleteSession(noConnectionSession, { unhealthy: true });
-        },
-      });
+    const noConnectionSession: SessionNoConnection =
+      SessionStateGraph.transition.ConnectingToNoConnection(
+        session,
+        this.noConnectionListeners(() => noConnectionSession),
+      );
 
     this.updateSession(noConnectionSession);
 
@@ -349,23 +375,7 @@ export abstract class Transport<
   ): SessionNoConnection {
     // transition to no connection
     let noConnectionSession: SessionNoConnection;
-    const listeners: SessionNoConnectionListeners = {
-      onSessionGracePeriodElapsed: () => {
-        this.onSessionGracePeriodElapsed(noConnectionSession);
-      },
-      onMessageSendFailure: (msg, reason) => {
-        this.log?.error(`failed to send message: ${reason}`, {
-          ...noConnectionSession.loggingMetadata,
-          transportMessage: msg,
-        });
-
-        this.protocolError({
-          type: ProtocolError.MessageSendFailure,
-          message: reason,
-        });
-        this.deleteSession(noConnectionSession, { unhealthy: true });
-      },
-    };
+    const listeners = this.noConnectionListeners(() => noConnectionSession);
 
     if (session.state === SessionState.Handshaking) {
       noConnectionSession =
