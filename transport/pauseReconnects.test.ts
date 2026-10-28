@@ -222,6 +222,24 @@ describe.each(testMatrix(['all', 'naive']))(
       });
     });
 
+    test('pausing from a session listener during connect stops the dial', async () => {
+      const { clientTransport, serverTransport } = getTransports();
+      clientTransport.addEventListener('sessionStatus', (evt) => {
+        if (evt.status === 'created') {
+          clientTransport.pauseReconnects();
+        }
+      });
+
+      clientTransport.connect(serverTransport.clientId);
+      await advanceFakeTimersByConnectionBackoff();
+
+      expect(
+        clientTransport.sessions.get(serverTransport.clientId)?.state,
+      ).toBe(SessionState.NoConnection);
+      expect(serverTransport.pendingSessions.size).toBe(0);
+      expect(serverTransport.sessions.size).toBe(0);
+    });
+
     test('a paused session is still closed when its grace period elapses', async () => {
       const { clientTransport, serverTransport } = getTransports();
       const closedSessionIds: Array<string> = [];

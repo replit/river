@@ -525,15 +525,18 @@ export abstract class ClientTransport<
       return;
     }
 
+    const session = this.sessions.get(to) ?? this.createUnconnectedSession(to);
+
+    // checked after creation since session listeners can pause during it
     if (this.reconnectsPaused) {
       this.log?.info(
         `connection attempts are paused, skipping attempt to connect to ${to}`,
+        session.loggingMetadata,
       );
 
       return;
     }
 
-    const session = this.sessions.get(to) ?? this.createUnconnectedSession(to);
     if (session.state !== SessionState.NoConnection) {
       // already trying to connect
       this.log?.debug(
@@ -612,7 +615,7 @@ export abstract class ClientTransport<
    * Sessions that are backing off, connecting, or handshaking move back to
    * having no connection and keep their buffered messages. Connected sessions
    * stay connected. While paused, {@link connect} and automatic reconnects do
-   * nothing, and a session is still closed once its grace period elapses.
+   * not dial, and a session is still closed once its grace period elapses.
    */
   pauseReconnects() {
     this.reconnectsPaused = true;
