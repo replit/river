@@ -2,7 +2,7 @@ import { Span } from '@opentelemetry/api';
 import { TransportClientId } from '../transport/message';
 import { SessionId } from '../transport/sessionStateMachine/common';
 import { ErrResult } from './result';
-import { CancelErrorSchema } from './errors';
+import { CancelErrorSchema, ReaderErrorSchema } from './errors';
 import type { Static } from 'typebox';
 
 /**
@@ -40,6 +40,12 @@ export type ProcedureHandlerContext<State, Context, ParsedMetadata> =
      * the river documentation to understand the difference between the two concepts.
      */
     cancel: (message?: string) => ErrResult<Static<typeof CancelErrorSchema>>;
+    /**
+     * End the procedure with an uncaught server error and notify the client.
+     * This is useful for errors raised by callbacks or background tasks that
+     * run after the handler has returned control to the event loop.
+     */
+    uncaught: (error: unknown) => ErrResult<Static<typeof ReaderErrorSchema>>;
     /**
      * Register a cleanup function that will run after the procedure handler
      * completes (whether it returns normally, throws, or is cancelled).
