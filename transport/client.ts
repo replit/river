@@ -525,15 +525,14 @@ export abstract class ClientTransport<
       return;
     }
 
+    if (this.skipIfPaused(to)) {
+      return;
+    }
+
     const session = this.sessions.get(to) ?? this.createUnconnectedSession(to);
 
-    // checked after creation since session listeners can pause during it
-    if (this.reconnectsPaused) {
-      this.log?.info(
-        `connection attempts are paused, skipping attempt to connect to ${to}`,
-        session.loggingMetadata,
-      );
-
+    // session listeners can pause during creation
+    if (this.skipIfPaused(to)) {
       return;
     }
 
@@ -595,6 +594,16 @@ export abstract class ClientTransport<
       );
 
     this.updateSession(backingOffSession);
+  }
+
+  private skipIfPaused(to: TransportClientId) {
+    if (this.reconnectsPaused) {
+      this.log?.info(
+        `connection attempts are paused, skipping attempt to connect to ${to}`,
+      );
+    }
+
+    return this.reconnectsPaused;
   }
 
   /**

@@ -222,6 +222,15 @@ describe.each(testMatrix(['all', 'naive']))(
       });
     });
 
+    test('connect while paused does not create a session', () => {
+      const { clientTransport, serverTransport } = getTransports();
+      clientTransport.pauseReconnects();
+
+      clientTransport.connect(serverTransport.clientId);
+
+      expect(clientTransport.sessions.size).toBe(0);
+    });
+
     test('pausing from a session listener during connect stops the dial', async () => {
       const { clientTransport, serverTransport } = getTransports();
       clientTransport.addEventListener('sessionStatus', (evt) => {
