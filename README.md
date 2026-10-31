@@ -848,6 +848,8 @@ const transport = new WebSocketServerTransport(
 
 The extras factory is synchronous. Complete asynchronous authentication before the WebSocket connection event, then read its result in the factory.
 
+Connection extras are not attached to log lines directly, since they can carry credentials. Log metadata gets a copy with the `cookie`, `authorization`, and `proxy-authorization` header values replaced by `[redacted]`; every other key is logged unchanged, so a custom extras factory should not place secrets elsewhere in the extras.
+
 `createClientHandshakeOptions` also takes an optional third `eager` argument. When set, the
 client constructs handshake metadata as soon as it starts dialing, so a slow `construct`
 (e.g. fetching a fresh token) overlaps establishing the connection instead of running after
