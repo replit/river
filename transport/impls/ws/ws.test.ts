@@ -1,4 +1,5 @@
 import http from 'node:http';
+import net from 'node:net';
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { Type } from 'typebox';
 import {
@@ -27,6 +28,52 @@ import { PartialTransportMessage } from '../../message';
 import type NodeWs from 'ws';
 import { createPostTestCleanups } from '../../../testUtil/fixtures/cleanup';
 import { createClientHandshakeOptions } from '../../../router/handshake';
+import { SessionState } from '../../sessionStateMachine/common';
+
+// A TCP proxy in front of a port whose live connections can be black-holed:
+// packets are silently dropped in both directions with no FIN or RST, which is
+// what a peer sees after a laptop sleep, a wifi switch, or a NAT timeout. New
+// connections through the proxy still succeed, so a reconnect can complete.
+function startBlackholeProxy(targetPort: number) {
+  const pairs: Array<{ a: net.Socket; b: net.Socket; dead: boolean }> = [];
+  const server = net.createServer((a) => {
+    const b = net.connect(targetPort, 'localhost');
+    const pair = { a, b, dead: false };
+    pairs.push(pair);
+    a.on('data', (d) => {
+      if (!pair.dead) b.write(d);
+    });
+    b.on('data', (d) => {
+      if (!pair.dead) a.write(d);
+    });
+    a.on('close', () => b.destroy());
+    b.on('close', () => a.destroy());
+    a.on('error', () => undefined);
+    b.on('error', () => undefined);
+  });
+
+  return new Promise<{
+    port: number;
+    blackhole: () => void;
+    close: () => void;
+  }>((resolve) => {
+    server.listen(0, () => {
+      resolve({
+        port: (server.address() as net.AddressInfo).port,
+        blackhole: () => {
+          for (const p of pairs) p.dead = true;
+        },
+        close: () => {
+          for (const p of pairs) {
+            p.a.destroy();
+            p.b.destroy();
+          }
+          server.close();
+        },
+      });
+    });
+  });
+}
 
 describe('sending and receiving across websockets works', async () => {
   let server: http.Server;
@@ -307,6 +354,71 @@ describe('sending and receiving across websockets works', async () => {
     }
 
     // by this point the client should have reconnected
+    const msg2Id = clientSendFn(msg2);
+    await expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
+    ).resolves.toStrictEqual(msg2.payload);
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
+  });
+
+  test('reconnects as soon as the heartbeat watchdog detects a dead connection', async () => {
+    const proxy = await startBlackholeProxy(port);
+    const opts = {
+      heartbeatIntervalMs: 100,
+      heartbeatsUntilDead: 2,
+      sessionDisconnectGraceMs: 60_000,
+    };
+    const clientTransport = new WebSocketClientTransport(
+      () => Promise.resolve(createLocalWebSocketClient(proxy.port)),
+      'client',
+      opts,
+    );
+    const serverTransport = new WebSocketServerTransport(wss, 'SERVER', opts);
+
+    clientTransport.connect(serverTransport.clientId);
+    const clientSendFn = getClientSendFn(clientTransport, serverTransport);
+
+    addPostTestCleanup(async () => {
+      proxy.close();
+      await cleanupTransports([clientTransport, serverTransport]);
+    });
+
+    const msg1 = createDummyTransportMessage();
+    const msg1Id = clientSendFn(msg1);
+    await expect(
+      waitForMessage(serverTransport, (recv) => recv.id === msg1Id),
+    ).resolves.toStrictEqual(msg1.payload);
+    const sessionId = clientTransport.sessions.get('SERVER')?.id;
+    const oldConnId = getTransportConnections(clientTransport)[0].id;
+
+    // kill the link without closing it: no close event will arrive, so only the
+    // watchdog can notice
+    proxy.blackhole();
+    const start = Date.now();
+    await waitFor(() =>
+      expect(clientTransport.sessions.get('SERVER')?.state).not.toBe(
+        SessionState.Connected,
+      ),
+    );
+    expect(Date.now() - start).toBeLessThan(
+      (opts.heartbeatsUntilDead + 1) * opts.heartbeatIntervalMs + 1000,
+    );
+
+    // transparent reconnect: same session on a new connection, and messages
+    // flow again
+    await waitFor(() =>
+      expect(clientTransport.sessions.get('SERVER')?.state).toBe(
+        SessionState.Connected,
+      ),
+    );
+    expect(clientTransport.sessions.get('SERVER')?.id).toBe(sessionId);
+    expect(getTransportConnections(clientTransport)[0].id).not.toBe(oldConnId);
+
+    const msg2 = createDummyTransportMessage();
     const msg2Id = clientSendFn(msg2);
     await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg2Id),

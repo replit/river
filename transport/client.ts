@@ -466,6 +466,9 @@ export abstract class ClientTransport<
           );
           this.onConnClosed(connectedSession);
         },
+        onHeartbeatTimeout: () => {
+          this.onConnClosed(connectedSession);
+        },
         onMessage: (msg) => {
           this.handleMsg(msg);
         },
