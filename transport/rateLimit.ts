@@ -104,12 +104,10 @@ export class LeakyBucketRateLimit {
         return;
       }
 
-      const newBudget = currentBudget - 1;
-      if (newBudget === 0) {
-        return;
+      this.budgetConsumed = currentBudget - 1;
+      if (this.budgetConsumed === 0) {
+        this.stopLeak();
       }
-
-      this.budgetConsumed = newBudget;
     };
 
     this.intervalHandle = setInterval(

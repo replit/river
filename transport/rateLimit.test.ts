@@ -49,6 +49,18 @@ describe('LeakyBucketRateLimit', () => {
     expect(rateLimit.getBudgetConsumed()).toBe(1);
   });
 
+  test('restores budget all the way to zero and stops the interval', () => {
+    const rateLimit = new LeakyBucketRateLimit(options);
+    rateLimit.consumeBudget();
+    rateLimit.consumeBudget();
+    rateLimit.startRestoringBudget();
+
+    vi.advanceTimersByTime(options.budgetRestoreIntervalMs * 2);
+    expect(rateLimit.getBudgetConsumed()).toBe(0);
+    expect(rateLimit.getBackoffMs()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   test('stops restoring budget when we consume budget again', () => {
     const rateLimit = new LeakyBucketRateLimit(options);
     rateLimit.consumeBudget();
