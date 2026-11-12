@@ -34,6 +34,12 @@ export interface SessionConnectedListeners extends IdentifiedSessionListeners {
    * session down rather than keep serving a credential past its expiry.
    */
   onRehandshakeTimeout?: () => void;
+  /**
+   * Nothing arrived from the peer for `heartbeatsUntilDead` heartbeats. The
+   * transport tears the connection down right away rather than waiting for the
+   * socket's close event, which a dead link may not deliver for a long time.
+   */
+  onHeartbeatTimeout: () => void;
   onInvalidMessage: (reason: string) => void;
 }
 
@@ -202,7 +208,7 @@ export class SessionConnected<
         'closing connection due to missing heartbeat',
       );
 
-      this.conn.close();
+      this.listeners.onHeartbeatTimeout();
     }, this.options.heartbeatIntervalMs);
   }
 

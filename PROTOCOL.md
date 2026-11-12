@@ -718,7 +718,7 @@ The `seq` and `ack` of the message should match that of the session itself and o
 
 Clients SHOULD echo back a heartbeat in the same format as soon as it receives a server heartbeat.
 
-Both sides run a liveness watchdog over the connection. Each side records when it last received _any_ message from its peer, and closes the connection once that timestamp falls further behind than `heartbeatsUntilDead * heartbeatIntervalMs` (both parameters of the transport). See the 'On disconnect' section above for more details on how to handle this.
+Both sides run a liveness watchdog over the connection. Each side records when it last received _any_ message from its peer, and once that timestamp falls further behind than `heartbeatsUntilDead * heartbeatIntervalMs` (both parameters of the transport) it treats the connection as dead immediately: it closes the connection and tears it down without waiting for the socket's own close event, which a dead link may not deliver for a long time. See the 'On disconnect' section above for more details on how to handle this.
 
 The TypeScript implementation runs this as a single interval for the lifetime of the connection that compares wall-clock time against the last inbound message, rather than arming a timer per sent heartbeat. Since it measures elapsed wall-clock time, a throttled or suspended timer can only delay detection of a dead connection — it can never report a heartbeat as missed while messages are still arriving.
 
