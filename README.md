@@ -303,6 +303,20 @@ transport.addEventListener('sessionTransition', (evt) => {
 });
 ```
 
+A client can pause its connection attempts without losing its sessions, for example while the device is offline:
+
+```ts
+// sessions that are backing off, connecting, or handshaking move to NoConnection.
+// connected sessions stay connected, and the session grace period keeps running.
+transport.pauseReconnects();
+
+// dial every disconnected session right away, without waiting for a backoff
+transport.resumeReconnects();
+
+// dial one session right away, skipping any pending backoff
+transport.connectNow('SERVER');
+```
+
 ### Advanced Patterns
 
 #### All Procedure Types
