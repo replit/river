@@ -250,6 +250,17 @@ if (!result.ok && result.payload.code === 'UNCAUGHT_ERROR') {
 }
 ```
 
+For errors raised later by a callback or background task, use `ctx.uncaught(error)` to end the
+procedure with the same built-in error:
+
+```ts
+async handler({ ctx }) {
+  setTimeout(() => {
+    ctx.uncaught(new Error('Something went wrong!'));
+  }, 1000);
+}
+```
+
 ### Logging
 
 To add logging, you can bind a logging function to a transport.
