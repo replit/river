@@ -131,7 +131,15 @@ function rekey(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const key of Object.keys(obj)) {
-    out[rename(key)] = obj[key];
+    // Assignment treats `__proto__` as a prototype mutation instead of an own
+    // data property. Define the property explicitly so arbitrary payload keys
+    // survive marker escaping and unescaping.
+    Object.defineProperty(out, rename(key), {
+      configurable: true,
+      enumerable: true,
+      value: obj[key],
+      writable: true,
+    });
   }
 
   return out;
