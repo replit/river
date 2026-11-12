@@ -703,6 +703,11 @@ export abstract class ClientTransport<
       this.pendingHandshakeMetadata.delete(session.to);
       const result = await (pending ?? this.constructHandshakeMetadata());
 
+      // The session can close or transition while metadata is pending.
+      if (session._isConsumed) {
+        return;
+      }
+
       if (!result.ok) {
         this.log?.error(
           `failed to construct handshake metadata for session to ${session.to}: ${result.reason}`,
