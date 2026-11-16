@@ -126,7 +126,7 @@ describe.each(testMatrix())(
       // setup
       const clientTransport = getClientTransport('client');
       const clientMockLogger = vi.fn<LogFn>();
-      clientTransport.bindLogger(clientMockLogger);
+      clientTransport.bindLogger(clientMockLogger, 'debug');
       const serverTransport = getServerTransport();
       const serverMockLogger = vi.fn<LogFn>();
       serverTransport.bindLogger(serverMockLogger);
@@ -182,6 +182,7 @@ describe.each(testMatrix())(
         (call) => call[0] === 'fallible.echo handler threw an uncaught error',
       );
       expect(clientInvokeCall?.[1]).toBeTruthy();
+      expect(clientInvokeCall?.[2]).toBe('debug');
       expect(serverInvokeFail?.[1]).toBeTruthy();
       expect(clientInvokeCall?.[1]?.telemetry?.traceId).toStrictEqual(
         serverInvokeFail?.[1]?.telemetry?.traceId,
