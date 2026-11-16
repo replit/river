@@ -15,6 +15,10 @@ import {
   ServerHandshakeOptions,
 } from '../../router/handshake';
 
+// pipes that have been phantom-disconnected: like a black-holed socket, they
+// never answer a close, so closing them emits no close event
+const deadPipes = new WeakSet<Duplex>();
+
 export class InMemoryConnection extends Connection {
   conn: Duplex;
 
@@ -45,6 +49,10 @@ export class InMemoryConnection extends Connection {
   }
 
   close(): void {
+    if (deadPipes.has(this.conn)) {
+      return;
+    }
+
     setImmediate(() => {
       this.conn.end();
       this.conn.emit('close');
@@ -192,6 +200,8 @@ export function createMockTransportNetwork(
       for (const conn of Object.values(connections.get())) {
         conn.serverToClient.pause();
         conn.clientToServer.pause();
+        deadPipes.add(conn.serverToClient);
+        deadPipes.add(conn.clientToServer);
       }
     },
     async restartServer() {

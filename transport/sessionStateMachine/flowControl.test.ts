@@ -40,6 +40,7 @@ function connected(options: ProvidedTransportOptions = {}) {
       onRehandshake: vi.fn(),
       onConnectionErrored: vi.fn(),
       onConnectionClosed: vi.fn(),
+      onHeartbeatTimeout: vi.fn(),
       onInvalidMessage: vi.fn(),
       onMessageSendFailure: vi.fn(),
     },

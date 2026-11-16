@@ -143,6 +143,7 @@ function createSessionConnectedListeners(): SessionConnectedListeners {
     onRehandshake: vi.fn(),
     onConnectionClosed: vi.fn(),
     onConnectionErrored: vi.fn(),
+    onHeartbeatTimeout: vi.fn(),
     onInvalidMessage: vi.fn(),
     onMessageSendFailure: vi.fn(),
   };
@@ -2050,18 +2051,19 @@ describe('session state machine', () => {
       });
     });
 
-    test('closes the connection once nothing arrives before the deadline', async () => {
+    test('reports a heartbeat timeout once nothing arrives before the deadline', async () => {
       const sessionHandle = await createSessionConnected();
 
       // a heartbeat of silence is still well inside the deadline
       await advanceFakeTimersByHeartbeat();
-      expect(sessionHandle.onConnectionClosed).not.toHaveBeenCalled();
+      expect(sessionHandle.onHeartbeatTimeout).not.toHaveBeenCalled();
 
       await advanceFakeTimersByDisconnectGrace();
 
       // the watchdog stops itself once it fires, so the peer is only declared
       // dead once rather than on every subsequent check
-      expect(sessionHandle.onConnectionClosed).toHaveBeenCalledTimes(1);
+      expect(sessionHandle.onHeartbeatTimeout).toHaveBeenCalledTimes(1);
+      expect(sessionHandle.onConnectionClosed).not.toHaveBeenCalled();
     });
 
     test('inbound messages keep the connection past the deadline', async () => {

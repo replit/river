@@ -752,6 +752,9 @@ export abstract class ServerTransport<
             );
             this.onConnClosed(connectedSession);
           },
+          onHeartbeatTimeout: () => {
+            this.onConnClosed(connectedSession);
+          },
           onMessage: (msg) => {
             this.handleMsg(msg);
           },
