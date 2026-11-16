@@ -132,7 +132,7 @@ export function createProcTelemetryInfo(
     };
   }
 
-  session.log?.info(`invoked ${serviceName}.${procedureName}`, metadata);
+  session.log?.debug(`invoked ${serviceName}.${procedureName}`, metadata);
 
   return { span, ctx };
 }
