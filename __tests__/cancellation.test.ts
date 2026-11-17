@@ -159,6 +159,50 @@ describe.each(testMatrix())(
         });
       });
 
+      test('stream can report uncaught errors from background tasks', async () => {
+        const clientTransport = getClientTransport('client');
+        const serverTransport = getServerTransport();
+        addPostTestCleanup(async () => {
+          await cleanupTransports([clientTransport, serverTransport]);
+        });
+
+        let signal: AbortSignal | undefined;
+        const services = {
+          service: ServiceSchema.define({
+            stream: Procedure.stream({
+              requestInit: Type.Object({}),
+              requestData: Type.Object({}),
+              responseData: Type.Object({}),
+              handler: async ({ ctx }) => {
+                signal = ctx.signal;
+                setTimeout(() => {
+                  ctx.uncaught(new Error('background task failed'));
+                }, 0);
+              },
+            }),
+          }),
+        };
+
+        const server = createServer(serverTransport, services);
+        const client = createClient<typeof services>(
+          clientTransport,
+          serverTransport.clientId,
+        );
+
+        const { resReadable } = client.service.stream.stream({});
+
+        await expect(resReadable.collect()).resolves.toEqual([
+          Err({ code: UNCAUGHT_ERROR_CODE, message: 'background task failed' }),
+        ]);
+        expect(signal?.aborted).toEqual(true);
+
+        await testFinishesCleanly({
+          clientTransports: [clientTransport],
+          serverTransport,
+          server,
+        });
+      });
+
       test('upload', async () => {
         const clientTransport = getClientTransport('client');
         const serverTransport = getServerTransport();

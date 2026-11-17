@@ -730,6 +730,16 @@ class RiverServer<
 
         return Err(errRes);
       },
+      uncaught: (error: unknown) => {
+        const errRes = {
+          code: UNCAUGHT_ERROR_CODE,
+          message: coerceErrorString(error),
+        } as const;
+
+        onServerCancel(errRes);
+
+        return Err(errRes);
+      },
       deferCleanup,
       signal: finishedController.signal,
     };
@@ -1217,7 +1227,10 @@ function getStreamCloseBackwardsCompat(protocolVersion: ProtocolVersion) {
 
 export interface MiddlewareContext
   extends Readonly<
-    Omit<ProcedureHandlerContext<unknown, unknown, unknown>, 'cancel'>
+    Omit<
+      ProcedureHandlerContext<unknown, unknown, unknown>,
+      'cancel' | 'uncaught'
+    >
   > {
   readonly streamId: StreamId;
   readonly procedureName: string;
