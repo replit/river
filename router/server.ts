@@ -958,7 +958,12 @@ class RiverServer<
       return null;
     }
 
-    if (!(initMessage.serviceName in this.services)) {
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        this.services,
+        initMessage.serviceName,
+      )
+    ) {
       const errMessage = `couldn't find service ${initMessage.serviceName}`;
       this.log?.warn(errMessage, {
         ...session.loggingMetadata,
@@ -979,7 +984,12 @@ class RiverServer<
     }
 
     const service = this.services[initMessage.serviceName];
-    if (!(initMessage.procedureName in service.procedures)) {
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        service.procedures,
+        initMessage.procedureName,
+      )
+    ) {
       const errMessage = `couldn't find a matching procedure for ${initMessage.serviceName}.${initMessage.procedureName}`;
       this.log?.warn(errMessage, {
         ...session.loggingMetadata,
