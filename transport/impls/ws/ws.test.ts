@@ -25,6 +25,7 @@ import {
 } from '../../../testUtil/fixtures/cleanup';
 import { PartialTransportMessage } from '../../message';
 import type NodeWs from 'ws';
+import { WebSocket as RawWs } from 'ws';
 import { createPostTestCleanups } from '../../../testUtil/fixtures/cleanup';
 import { createClientHandshakeOptions } from '../../../router/handshake';
 
@@ -311,6 +312,67 @@ describe('sending and receiving across websockets works', async () => {
     await expect(
       waitForMessage(serverTransport, (recv) => recv.id === msg2Id),
     ).resolves.toStrictEqual(msg2.payload);
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
+  });
+
+  test('credential headers are redacted in log metadata but not in connection extras', async () => {
+    const schema = Type.Object({ token: Type.String() });
+    const validate = vi.fn(
+      async (
+        metadata: { token: string },
+        _previousMetadata: { token: string } | undefined,
+        _from: string | undefined,
+        _connectionExtras: Record<string, unknown> | undefined,
+      ) => ({ token: metadata.token }),
+    );
+    const serverTransport = new WebSocketServerTransport<
+      typeof schema,
+      { token: string }
+    >(wss, 'SERVER');
+    serverTransport.extendHandshake({ schema, validate });
+    const clientTransport = new WebSocketClientTransport(
+      () =>
+        Promise.resolve(
+          new RawWs(`ws://localhost:${port}`, {
+            headers: {
+              cookie: 'session=supersecret',
+              authorization: 'Bearer supersecret',
+              'user-agent': 'river-test',
+            },
+          }),
+        ),
+      'client',
+    );
+    clientTransport.extendHandshake({
+      schema,
+      construct: async () => ({ token: 'token' }),
+    });
+
+    clientTransport.connect(serverTransport.clientId);
+    addPostTestCleanup(async () => {
+      await cleanupTransports([clientTransport, serverTransport]);
+    });
+
+    await waitFor(() => expect(validate).toHaveBeenCalledTimes(1));
+    const headersOf = (extras: unknown) =>
+      (extras as { headers: Record<string, string> } | undefined)?.headers;
+
+    // handshake validation sees the real upgrade headers
+    const validatorHeaders = headersOf(validate.mock.calls[0][3]);
+    expect(validatorHeaders?.cookie).toBe('session=supersecret');
+    expect(validatorHeaders?.authorization).toBe('Bearer supersecret');
+
+    // log metadata sees them redacted, and keeps the other headers
+    const conn = getTransportConnections(serverTransport)[0];
+    const logged = headersOf(conn.loggingMetadata.extras);
+    expect(logged?.cookie).toBe('[redacted]');
+    expect(logged?.authorization).toBe('[redacted]');
+    expect(logged?.['user-agent']).toBe('river-test');
+    expect(headersOf(conn.extras)?.cookie).toBe('session=supersecret');
 
     await testFinishesCleanly({
       clientTransports: [clientTransport],
