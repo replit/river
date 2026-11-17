@@ -72,6 +72,11 @@ export abstract class ClientTransport<
   reconnectOnConnectionDrop = true;
 
   /**
+   * Set by {@link pauseReconnects} and cleared by {@link resumeReconnects}.
+   */
+  private reconnectsPaused = false;
+
+  /**
    * Optional handshake options for this client.
    */
   handshakeExtensions?: ClientHandshakeOptions<TSchema, RejectionCodeSchema>;
@@ -520,7 +525,17 @@ export abstract class ClientTransport<
       return;
     }
 
+    if (this.skipIfPaused(to)) {
+      return;
+    }
+
     const session = this.sessions.get(to) ?? this.createUnconnectedSession(to);
+
+    // session listeners can pause during creation
+    if (this.skipIfPaused(to)) {
+      return;
+    }
+
     if (session.state !== SessionState.NoConnection) {
       // already trying to connect
       this.log?.debug(
@@ -579,6 +594,80 @@ export abstract class ClientTransport<
       );
 
     this.updateSession(backingOffSession);
+  }
+
+  private skipIfPaused(to: TransportClientId) {
+    if (this.reconnectsPaused) {
+      this.log?.info(
+        `connection attempts are paused, skipping attempt to connect to ${to}`,
+      );
+    }
+
+    return this.reconnectsPaused;
+  }
+
+  /**
+   * Like {@link connect}, but dials right away instead of waiting for a
+   * backoff, including one that is already pending for this session.
+   * @param to The client ID of the node to connect to.
+   */
+  connectNow(to: TransportClientId) {
+    this.connect(to);
+    const session = this.sessions.get(to);
+    if (session?.state === SessionState.BackingOff) {
+      this.onBackoffFinished(session);
+    }
+  }
+
+  /**
+   * Stops all connection attempts until {@link resumeReconnects} is called.
+   * Sessions that are backing off, connecting, or handshaking move back to
+   * having no connection and keep their buffered messages. Connected sessions
+   * stay connected. While paused, {@link connect} and automatic reconnects do
+   * not dial, and a session is still closed once its grace period elapses.
+   */
+  pauseReconnects() {
+    this.reconnectsPaused = true;
+
+    // create a copy of the sessions to avoid modifying the map while iterating
+    const sessions = Array.from(this.sessions.values());
+    for (const session of sessions) {
+      // the base transitions keep the session even when transparent reconnects
+      // are disabled, unlike the client overrides
+      switch (session.state) {
+        case SessionState.BackingOff:
+          // connect() consumed budget for a dial that never started
+          this.retryBudget.refundBudget();
+          this.onBackoffCancelled(session);
+          break;
+        case SessionState.Connecting:
+          this.pendingHandshakeMetadata.delete(session.to);
+          super.onConnectingFailed(session);
+          break;
+        case SessionState.Handshaking:
+          super.onConnClosed(session);
+          break;
+      }
+    }
+  }
+
+  /**
+   * Resumes connection attempts after {@link pauseReconnects}. When
+   * {@link reconnectOnConnectionDrop} is set, every session without a
+   * connection is dialed right away, without waiting for a backoff.
+   */
+  resumeReconnects() {
+    this.reconnectsPaused = false;
+    if (!this.reconnectOnConnectionDrop) {
+      return;
+    }
+
+    const sessions = Array.from(this.sessions.values());
+    for (const session of sessions) {
+      if (session.state === SessionState.NoConnection) {
+        this.connectNow(session.to);
+      }
+    }
   }
 
   /**

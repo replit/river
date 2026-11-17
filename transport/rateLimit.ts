@@ -83,6 +83,14 @@ export class LeakyBucketRateLimit {
     this.budgetConsumed = this.getBudgetConsumed() + 1;
   }
 
+  /**
+   * Gives back the budget taken by one {@link consumeBudget} call whose
+   * connection attempt was cancelled before it dialed.
+   */
+  refundBudget() {
+    this.budgetConsumed = Math.max(0, this.getBudgetConsumed() - 1);
+  }
+
   getBudgetConsumed() {
     return this.budgetConsumed;
   }
