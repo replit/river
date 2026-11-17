@@ -35,6 +35,7 @@ import {
 import { ProcedureHandlerContext } from './context';
 import { Logger } from '../logging/log';
 import { Value } from 'typebox/value';
+import { Compile, type Validator } from 'typebox/compile';
 import { Err, Result, Ok, ErrResult } from './result';
 import { EventMap } from '../transport/events';
 import { coerceErrorString } from '../transport/stringifyError';
@@ -130,6 +131,7 @@ class RiverServer<
   private extendedContext?: Context;
   private log?: Logger;
   private middlewares: Array<Middleware>;
+  private requestValidators = new WeakMap<TSchema, Validator>();
 
   /**
    * We create a tombstones for streams cancelled by the server
@@ -396,7 +398,7 @@ class RiverServer<
       // normal request data for upload or stream
       if (
         'requestData' in procedure &&
-        Value.Check(procedure.requestData, msg.payload)
+        this.checkRequest(procedure.requestData, msg.payload)
       ) {
         reqReadable._pushValue(Ok(msg.payload));
 
@@ -1020,8 +1022,8 @@ class RiverServer<
     if (
       session.protocolVersion === 'v1.1' &&
       (procedure.type === 'upload' || procedure.type === 'stream') &&
-      Value.Check(procedure.requestData, initMessage.payload) &&
-      Value.Check(procedure.requestInit, {})
+      this.checkRequest(procedure.requestData, initMessage.payload) &&
+      this.checkRequest(procedure.requestInit, {})
     ) {
       // TODO remove once clients migrate to v2
       // In v1.1 sometimes the first message is not `init`, but instead it's the `input`
@@ -1031,7 +1033,7 @@ class RiverServer<
       // are easy to hit, we'll err on the side of caution and treat it as a request, servers
       // that expect v1.1 clients should handle this case themselves.
       passInitAsDataForBackwardsCompat = true;
-    } else if (!Value.Check(procedure.requestInit, initMessage.payload)) {
+    } else if (!this.checkRequest(procedure.requestInit, initMessage.payload)) {
       const errMessage = `procedure init failed validation`;
       this.log?.warn(errMessage, {
         ...session.loggingMetadata,
@@ -1067,6 +1069,19 @@ class RiverServer<
       ),
       passInitAsDataForBackwardsCompat,
     };
+  }
+
+  private checkRequest<Schema extends TSchema>(
+    schema: Schema,
+    value: unknown,
+  ): value is Static<Schema> {
+    let validator = this.requestValidators.get(schema);
+    if (!validator) {
+      validator = Compile(schema);
+      this.requestValidators.set(schema, validator);
+    }
+
+    return validator.Check(value);
   }
 
   cancelStream(
