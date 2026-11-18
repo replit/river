@@ -24,7 +24,7 @@ import {
   waitFor,
 } from '../../../testUtil/fixtures/cleanup';
 import { PartialTransportMessage } from '../../message';
-import type NodeWs from 'ws';
+import NodeWs from 'ws';
 import { createPostTestCleanups } from '../../../testUtil/fixtures/cleanup';
 import { createClientHandshakeOptions } from '../../../router/handshake';
 
@@ -147,6 +147,53 @@ describe('sending and receiving across websockets works', async () => {
       { verifiedUserId: 'user-1' },
       { verifiedUserId: 'user-2' },
     ]);
+
+    await testFinishesCleanly({
+      clientTransports: [clientTransport],
+      serverTransport,
+    });
+  });
+
+  test('default connection extras preserve __proto__ upgrade headers', async () => {
+    const headers = {} as Record<string, string>;
+    Object.defineProperty(headers, '__proto__', {
+      configurable: true,
+      enumerable: true,
+      value: 'river-test',
+      writable: true,
+    });
+
+    const ws = new NodeWs(`ws://localhost:${port}`, { headers });
+    ws.binaryType = 'arraybuffer';
+
+    let receivedHeaders: Record<string, string> | undefined;
+    const schema = Type.Object({});
+    const serverTransport = new WebSocketServerTransport(wss, 'SERVER');
+    serverTransport.extendHandshake({
+      schema,
+      validate: (_metadata, _previousMetadata, _from, connectionExtras) => {
+        receivedHeaders = connectionExtras?.headers as
+          | Record<string, string>
+          | undefined;
+        return {};
+      },
+    });
+
+    const clientTransport = new WebSocketClientTransport(() => ws, 'client');
+    clientTransport.extendHandshake({ schema, construct: async () => ({}) });
+    clientTransport.connect(serverTransport.clientId);
+
+    addPostTestCleanup(async () => {
+      await cleanupTransports([clientTransport, serverTransport]);
+    });
+
+    await waitFor(() => {
+      expect(receivedHeaders).toBeDefined();
+      expect(
+        Object.prototype.hasOwnProperty.call(receivedHeaders, '__proto__'),
+      ).toBe(true);
+      expect(receivedHeaders?.['__proto__']).toBe('river-test');
+    });
 
     await testFinishesCleanly({
       clientTransports: [clientTransport],
