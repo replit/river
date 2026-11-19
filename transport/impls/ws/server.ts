@@ -12,15 +12,31 @@ import type { TSchema } from 'typebox';
 import type { ConnectionExtras } from '../../connection';
 
 function cleanHeaders(
-  headers: IncomingMessage['headers'],
+  rawHeaders: IncomingMessage['rawHeaders'],
 ): Record<string, string> {
   const cleanedHeaders: Record<string, string> = {};
 
-  for (const [key, value] of Object.entries(headers)) {
-    if (!key.startsWith('sec-') && value) {
-      const cleanedValue = Array.isArray(value) ? value[0] : value;
-      cleanedHeaders[key] = cleanedValue;
+  // Avoid req.headersDistinct: Node builds it lazily and can throw when a
+  // request contains a header named "__proto__".
+  for (let i = 0; i < rawHeaders.length; i += 2) {
+    const key = rawHeaders[i].toLowerCase();
+
+    // Match headersDistinct's first-value behavior for duplicate headers.
+    if (
+      key.startsWith('sec-') ||
+      Object.prototype.hasOwnProperty.call(cleanedHeaders, key)
+    ) {
+      continue;
     }
+
+    // Define an own data property so "__proto__" cannot invoke the legacy
+    // prototype setter or disappear from the returned headers.
+    Object.defineProperty(cleanedHeaders, key, {
+      configurable: true,
+      enumerable: true,
+      value: rawHeaders[i + 1],
+      writable: true,
+    });
   }
 
   return cleanedHeaders;
@@ -34,7 +50,7 @@ export type WebSocketConnectionExtrasFactory = (
 const defaultConnectionExtrasFactory: WebSocketConnectionExtrasFactory = (
   _ws,
   req,
-) => ({ headers: cleanHeaders(req.headersDistinct) });
+) => ({ headers: cleanHeaders(req.rawHeaders) });
 
 export class WebSocketServerTransport<
   MetadataSchema extends TSchema = TSchema,
